@@ -27,7 +27,6 @@ function renderStars(avg, count, interactive = false, businessId = '') {
 window.submitRating = async function (businessId, score) {
   const res = await apiPost(`/business/${businessId}/rate`, { score });
   if (res.avg !== undefined) {
-    // Update star display in detail modal
     const starsEl = document.getElementById(`stars-${businessId}`);
     if (starsEl) {
       starsEl.querySelectorAll('.star-btn').forEach(btn => {
@@ -36,7 +35,6 @@ window.submitRating = async function (businessId, score) {
       const countEl = starsEl.nextElementSibling;
       if (countEl) countEl.textContent = `${res.count} rating${res.count !== 1 ? 's' : ''} · avg ${res.avg}`;
     }
-    // Update card in directory list
     const cardStars = document.getElementById(`card-stars-${businessId}`);
     if (cardStars) {
       cardStars.innerHTML = renderStars(res.avg, res.count);
@@ -126,7 +124,7 @@ function renderDirectory(businesses) {
     return;
   }
 
-  let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+  let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-full">';
   businesses.forEach(b => {
     const avg = b.avgRating || 0;
     const count = b.ratings ? b.ratings.length : 0;
@@ -136,7 +134,7 @@ function renderDirectory(businesses) {
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300 w-full">
+           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300 w-full max-w-full">
         <!-- Color band header -->
         <div class="h-2 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-50'}"></div>
         <div class="p-5">
@@ -213,30 +211,21 @@ function showBusinessDetail(id) {
          class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center">
       <div onclick="event.stopImmediatePropagation()" 
            class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
-        <!-- Drag handle / header bar -->
         <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
           <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
         </div>
-
-        <!-- Colored stripe -->
         <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
-
         <div class="p-6">
-          <!-- Title row -->
           <div class="flex items-start justify-between mb-1">
             <h1 class="text-3xl font-bold leading-tight">${business.name}</h1>
             ${isOwned ? `<span class="text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full mt-1">✓ Verified Owner</span>` : ''}
           </div>
           <p class="text-emerald-600 text-sm mb-1">${business.category?.name || ''}</p>
           <p class="text-gray-500 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
-
-          <!-- Rating section -->
           <div class="bg-gray-50 rounded-2xl p-4 mb-6">
             <p class="text-sm font-semibold text-gray-700 mb-2">Rate this business:</p>
             ${renderStars(avg, count, true, business._id)}
           </div>
-
-          <!-- Contact -->
           <div class="space-y-3 mb-6">
             ${business.phone ? `
               <a href="tel:${business.phone}" class="flex items-center gap-3 bg-emerald-50 hover:bg-emerald-100 transition p-4 rounded-2xl text-emerald-700 font-semibold">
@@ -247,10 +236,7 @@ function showBusinessDetail(id) {
                 <span class="text-2xl">🌐</span> Visit Website
               </a>` : ''}
           </div>
-
           ${business.description ? `<p class="text-gray-600 leading-relaxed mb-6">${business.description}</p>` : ''}
-
-          <!-- Actions -->
           <div class="space-y-3">
             ${!isOwned && currentUser ? `
               <button onclick="hideBusinessModal();showClaimModal('${business._id}')" 
@@ -294,7 +280,6 @@ window.showClaimModal = function (businessId) {
             <h2 class="text-2xl font-bold">Claim "${business.name}"</h2>
             <p class="text-gray-500 text-sm mt-2">Provide your info so we can verify you're the owner. Our admin will review and approve your request.</p>
           </div>
-
           <div class="space-y-3">
             <input id="claimOwnerName" type="text" placeholder="Your full name (owner)" 
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
@@ -305,11 +290,9 @@ window.showClaimModal = function (businessId) {
             <textarea id="claimMessage" rows="3" placeholder="Anything else to verify? (optional)" 
                       class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50 resize-none"></textarea>
           </div>
-
           <div id="claimStatus" class="hidden mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-sm text-center">
             ⏳ Your claim has been submitted! You'll be notified once approved.
           </div>
-
           <div class="space-y-3 mt-6" id="claimActions">
             <button onclick="submitClaim('${businessId}')" 
                     class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
@@ -342,7 +325,6 @@ window.submitClaim = async function (businessId) {
     document.getElementById('claimStatus').classList.remove('hidden');
     document.getElementById('claimActions').innerHTML = `
       <button onclick="closeClaimModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>`;
-    // Start polling for approval
     startVerificationPoll(businessId);
   } else {
     showToast(res.message || 'Something went wrong', 'error');
@@ -414,14 +396,10 @@ async function loadOwnerDashboard(content) {
         <textarea id="ownerDescription" rows="3" placeholder="Description" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white"></textarea>
         <button onclick="saveOwnerListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold">Save Changes</button>
       </div>
-
-      <!-- Tabs -->
       <div class="flex border-b border-white/20 mb-6">
         <button onclick="switchOwnerTab(0)" id="otab0" class="flex-1 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white">Deals</button>
         <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">Events</button>
       </div>
-
-      <!-- Deals Tab -->
       <div id="otabContent0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Deal</h3>
@@ -432,8 +410,6 @@ async function loadOwnerDashboard(content) {
         </div>
         <div id="ownerDealsList"></div>
       </div>
-
-      <!-- Events Tab -->
       <div id="otabContent1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Event</h3>
@@ -456,7 +432,6 @@ window.switchOwnerTab = function (tab) {
     const tabBtn = document.getElementById(`otab${i}`);
     const tabContent = document.getElementById(`otabContent${i}`);
     if (!tabBtn || !tabContent) return;
-
     const active = i === tab;
     tabContent.classList.toggle('hidden', !active);
     tabBtn.classList.toggle('border-b-2', active);
@@ -472,7 +447,6 @@ window.saveOwnerListing = async function () {
   const phone = document.getElementById('ownerPhone').value.trim();
   const website = document.getElementById('ownerWebsite').value.trim();
   const description = document.getElementById('ownerDescription').value.trim();
-
   const res = await apiPost('/owner/business', { name, address, phone, website, description }, 'PUT');
   if (res._id) {
     currentUser.verifiedBusiness = res;
@@ -580,8 +554,6 @@ async function loadAdminPage(content) {
   content.innerHTML = `
     <div class="px-4">
       <h2 class="text-3xl font-bold mb-6">🔧 Admin Panel</h2>
-
-      <!-- Tabs -->
       <div class="flex border-b border-white/20 mb-6 overflow-x-auto">
         <button onclick="switchAdminTab(0)" id="tab0" class="flex-shrink-0 flex-1 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white">Add / Edit</button>
         <button onclick="switchAdminTab(1)" id="tab1" class="flex-shrink-0 flex-1 py-4 text-center font-semibold text-white/70">Manage</button>
@@ -589,8 +561,6 @@ async function loadAdminPage(content) {
           Claims <span id="claimBadge" class="hidden ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full"></span>
         </button>
       </div>
-
-      <!-- Add / Edit Tab -->
       <div id="adminTab0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
           <h3 id="adminFormTitle" class="font-semibold mb-4 text-lg">Add New Business</h3>
@@ -608,15 +578,11 @@ async function loadAdminPage(content) {
           </div>
         </div>
       </div>
-
-      <!-- Manage Tab -->
       <div id="adminTab1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
           <div id="manageList"></div>
         </div>
       </div>
-
-      <!-- Claims Tab -->
       <div id="adminTab2" class="hidden">
         <div id="claimsList"></div>
       </div>
@@ -652,8 +618,6 @@ async function loadAdminClaims() {
   const container = document.getElementById('claimsList');
   if (!container) return;
   const claims = await apiGet('/admin/claims');
-
-  // Update badge
   const badge = document.getElementById('claimBadge');
   if (badge) {
     if (claims.length > 0) {
@@ -663,12 +627,10 @@ async function loadAdminClaims() {
       badge.classList.add('hidden');
     }
   }
-
   if (!claims.length) {
     container.innerHTML = `<div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 text-center text-white/60">No pending claim requests</div>`;
     return;
   }
-
   container.innerHTML = claims.map(c => `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4" id="claim-${c._id}">
       <div class="flex items-start justify-between mb-4">
@@ -696,7 +658,6 @@ async function loadAdminClaims() {
 window.adminClaimDecision = async function (claimId, decision) {
   const label = decision === 'approved' ? 'Approve' : 'Reject';
   if (!confirm(`${label} this claim?`)) return;
-
   const res = await apiPost(`/admin/claims/${claimId}/decision`, { decision });
   if (res.message) {
     showToast(decision === 'approved' ? '✅ Claim approved! User is now a verified business owner.' : '❌ Claim rejected.');
@@ -706,7 +667,7 @@ window.adminClaimDecision = async function (claimId, decision) {
       el.style.pointerEvents = 'none';
       el.querySelector('.flex.gap-3').innerHTML = `<div class="w-full text-center py-4 font-semibold text-white/60">${decision.toUpperCase()}</div>`;
     }
-    loadAdminClaims(); // refresh count badge
+    loadAdminClaims();
   } else {
     showToast(res.message || 'Error', 'error');
   }
@@ -751,7 +712,6 @@ async function saveBusiness() {
     const url = currentEditingBusiness ? `/admin/business/${currentEditingBusiness._id}` : '/admin/business';
     const method = currentEditingBusiness ? 'PUT' : 'POST';
     const result = await apiPost(url, { name, address, phone, website, description, categoryId }, method);
-
     if (result.message && result.message.includes('success')) {
       showToast('✅ Saved successfully!');
       currentEditingBusiness = null;
@@ -784,7 +744,6 @@ window.editBusiness = async function (id) {
   const data = await apiGet('/directory');
   currentEditingBusiness = data.businesses.find(b => b._id === id);
   if (!currentEditingBusiness) return;
-
   switchAdminTab(0);
   document.getElementById('adminFormTitle').textContent = 'Edit Business';
   document.getElementById('saveBtn').textContent = 'Update Business';
