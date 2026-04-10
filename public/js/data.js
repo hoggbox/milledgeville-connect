@@ -581,32 +581,16 @@ function renderShoutoutCard(s) {
   const totalReplies = comments.reduce((acc, c) => acc + (c.replies ? c.replies.length : 0), 0);
   const totalActivity = commentCount + totalReplies;
 
-  // Determine preview vs full comments
-  // We show a "View X comments" button if there are comments — always collapsed by default
-  const PREVIEW_COUNT = 2; // show top 2 comments preview inline
-  const previewComments = comments.slice(-PREVIEW_COUNT); // most recent 2
-
   const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
 
-  let previewHtml = '';
-  if (comments.length > 0) {
-    previewHtml = `<div class="mt-3 space-y-2" id="preview-comments-${s._id}">`;
-    previewComments.forEach(c => {
-      previewHtml += renderCommentRow(c, s._id, true);
-    });
-    previewHtml += `</div>`;
-  }
+  // All comments — hidden by default, toggled as one unit
+  let allCommentsHtml = '';
+  comments.forEach(c => { allCommentsHtml += renderCommentRow(c, s._id); });
 
-  let fullCommentsHtml = `<div class="hidden mt-1 space-y-2" id="full-comments-${s._id}">`;
-  comments.forEach(c => {
-    fullCommentsHtml += renderCommentRow(c, s._id, false);
-  });
-  fullCommentsHtml += `</div>`;
-
-  const viewMoreLabel = commentCount > PREVIEW_COUNT
-    ? `View all ${commentCount} comment${commentCount !== 1 ? 's' : ''}`
-    : null;
+  const commentLabel = commentCount > 0
+    ? `💬 ${commentCount} Comment${commentCount !== 1 ? 's' : ''}`
+    : '💬 Comment';
 
   return `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5" id="shoutout-${s._id}">
@@ -627,76 +611,51 @@ function renderShoutoutCard(s) {
       <!-- Shoutout text -->
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
 
-      <!-- Like + comment summary bar -->
-      <div class="flex items-center justify-between border-t border-white/10 pt-3 mb-1">
-        <div class="flex items-center gap-1">
-          ${likeCount > 0 ? `<span class="text-xs text-white/40">❤️ ${likeCount}</span>` : ''}
-        </div>
-        ${totalActivity > 0 ? `
-          <button onclick="toggleAllComments('${s._id}', ${commentCount})"
-                  class="text-xs text-white/40 hover:text-white/70 transition">
-            ${totalActivity} comment${totalActivity !== 1 ? 's' : ''}
-          </button>` : ''}
-      </div>
+      <!-- Like count summary (tiny, above action bar) -->
+      ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
 
-      <!-- Action buttons (Facebook-style) -->
-      <div class="flex items-center gap-1 border-t border-white/10 pt-2 mb-2">
+      <!-- Action buttons -->
+      <div class="flex items-center gap-1 border-t border-white/10 pt-2">
         <button onclick="toggleLike('${s._id}')" id="like-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
           <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
-          <span>Like${likeCount > 0 ? ' · ' + likeCount : ''}</span>
+          <span id="like-label-${s._id}">Like</span>
         </button>
-        <button onclick="focusCommentBox('${s._id}')"
+        <button onclick="toggleCommentSection('${s._id}')" id="comment-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
-          💬 Comment
+          ${commentLabel}
         </button>
       </div>
 
-      <!-- Preview of last 2 comments (collapsed view) -->
-      ${previewHtml}
-
-      <!-- "View all comments" expander -->
-      ${viewMoreLabel ? `
-        <button onclick="toggleAllComments('${s._id}', ${commentCount})" id="view-more-btn-${s._id}"
-                class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold mt-2 ml-1 transition">
-          ${viewMoreLabel}
-        </button>` : ''}
-
-      <!-- Full expanded comments (hidden by default) -->
-      ${fullCommentsHtml}
-
-      <!-- Comment input box -->
-      ${currentUser ? `
-        <div id="commentbox-${s._id}" class="mt-3 flex items-start gap-2">
-          <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
-          <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
-            <input id="commentinput-${s._id}" type="text"
-              class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
-              placeholder="Write a comment… (Enter to post)"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitComment('${s._id}');}">
-            <button onclick="submitComment('${s._id}')" class="text-emerald-400 hover:text-emerald-300 transition flex-shrink-0 text-sm font-semibold">Post</button>
-          </div>
-        </div>` : ''}
+      <!-- Collapsible comment section (hidden by default) -->
+      <div id="comment-section-${s._id}" class="hidden mt-3 border-t border-white/10 pt-3 space-y-2">
+        ${allCommentsHtml}
+        ${currentUser ? `
+          <div class="flex items-start gap-2 ${commentCount > 0 ? 'mt-3' : ''}">
+            <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+            <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
+              <input id="commentinput-${s._id}" type="text"
+                class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
+                placeholder="Write a comment… (Enter to post)"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitComment('${s._id}');}">
+              <button onclick="submitComment('${s._id}')" class="text-emerald-400 hover:text-emerald-300 transition flex-shrink-0 text-sm font-semibold">Post</button>
+            </div>
+          </div>` : ''}
+      </div>
     </div>`;
 }
 
-function renderCommentRow(c, shoutoutId, isPreview = false) {
+function renderCommentRow(c, shoutoutId) {
   const cLetter = c.author ? c.author[0].toUpperCase() : '?';
   const replies = c.replies || [];
   const replyCount = replies.length;
   const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
   const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
 
-  // Show last 1 reply in preview, all in full
-  const previewReplies = replies.slice(-1);
-  const hasMoreReplies = replyCount > 1;
-
   let repliesHtml = '';
   if (replyCount > 0) {
-    repliesHtml = `<div class="ml-9 mt-1 space-y-1" id="replies-preview-${c._id}">`;
-    // In preview mode show last 1, otherwise show all
-    const displayReplies = isPreview ? previewReplies : replies;
-    displayReplies.forEach(r => {
+    repliesHtml = `<div class="ml-9 mt-1 space-y-1">`;
+    replies.forEach(r => {
       const rLetter = r.author ? r.author[0].toUpperCase() : '?';
       repliesHtml += `
         <div class="flex items-start gap-2" id="reply-${r._id}">
@@ -710,12 +669,6 @@ function renderCommentRow(c, shoutoutId, isPreview = false) {
           </div>
         </div>`;
     });
-    if (isPreview && hasMoreReplies) {
-      repliesHtml += `<button onclick="expandReplies('${shoutoutId}','${c._id}',${replyCount})" 
-                              class="ml-8 text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition">
-        View ${replyCount - 1} more repl${replyCount - 1 !== 1 ? 'ies' : 'y'}
-      </button>`;
-    }
     repliesHtml += `</div>`;
   }
 
@@ -762,43 +715,21 @@ window.toggleLike = async function (shoutoutId) {
   const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
   if (res.likes !== undefined) {
     const icon = document.getElementById(`like-icon-${shoutoutId}`);
-    const btn = document.getElementById(`like-btn-${shoutoutId}`);
+    const label = document.getElementById(`like-label-${shoutoutId}`);
     if (icon) icon.textContent = res.liked ? '❤️' : '🤍';
-    if (btn) {
-      const count = res.likes > 0 ? ` · ${res.likes}` : '';
-      btn.querySelector('span:last-child').textContent = `Like${count}`;
-    }
+    if (label) label.textContent = 'Like';
   }
 };
 
-window.focusCommentBox = function (shoutoutId) {
-  const input = document.getElementById(`commentinput-${shoutoutId}`);
-  if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-};
-
-window.toggleAllComments = function (shoutoutId, commentCount) {
-  const preview = document.getElementById(`preview-comments-${shoutoutId}`);
-  const full = document.getElementById(`full-comments-${shoutoutId}`);
-  const btn = document.getElementById(`view-more-btn-${shoutoutId}`);
-
-  if (!full) return;
-  const isExpanded = !full.classList.contains('hidden');
-
-  if (isExpanded) {
-    full.classList.add('hidden');
-    if (preview) preview.classList.remove('hidden');
-    if (btn) btn.textContent = `View all ${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
-  } else {
-    full.classList.remove('hidden');
-    if (preview) preview.classList.add('hidden');
-    if (btn) btn.textContent = `Hide comments`;
+window.toggleCommentSection = function (shoutoutId) {
+  const section = document.getElementById(`comment-section-${shoutoutId}`);
+  if (!section) return;
+  const isHidden = section.classList.contains('hidden');
+  section.classList.toggle('hidden', !isHidden);
+  if (isHidden) {
+    const input = document.getElementById(`commentinput-${shoutoutId}`);
+    if (input) setTimeout(() => { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 50);
   }
-};
-
-window.expandReplies = async function (shoutoutId, commentId, replyCount) {
-  // Re-render that comment's reply section with all replies visible
-  // Reload whole shoutout section for simplicity
-  await loadShoutoutsPage(document.getElementById('content'));
 };
 
 window.submitComment = async function (shoutoutId) {
