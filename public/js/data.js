@@ -60,7 +60,6 @@ async function loadPage(page) {
     return;
   }
 
-  // Home, Directory, Shoutouts, Events, Deals
   if (page === 'home') {
     content.innerHTML = `
       <div class="text-center py-12 px-4">
@@ -88,7 +87,7 @@ async function loadPage(page) {
     let html = `
       <h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">Local Directory</h2>
       <div class="px-4 mb-6">
-        <input id="directorySearch" type="text" placeholder="Search businesses..." 
+        <input id="directorySearch" type="text" placeholder="Search businesses or keywords..." 
                class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400 text-base"
                onkeyup="if(event.key==='Enter') filterDirectory()">
       </div>
@@ -191,10 +190,9 @@ async function saveBusiness() {
     const result = await apiPost(url, { name, address, phone, website, description, categoryId }, method);
 
     if (result.message && result.message.includes('success')) {
-      showSuccessMessage(() => {
-        currentEditingBusiness = null;
-        switchAdminTab(1);   // automatically return to Manage tab
-      });
+      alert('✅ Saved successfully!');
+      currentEditingBusiness = null;
+      loadPage('admin');   // returns to Manage tab
     } else {
       alert('Error: ' + (result.message || 'Could not save'));
     }
@@ -217,24 +215,6 @@ function showConfirmation(message, onConfirm) {
   window.confirmAction = function(confirmed) {
     document.getElementById('confirmModal').remove();
     if (confirmed) onConfirm();
-  };
-}
-
-function showSuccessMessage(onClose) {
-  const html = `
-    <div id="successModal" class="fixed inset-0 bg-black/70 z-[13000] flex items-center justify-center">
-      <div class="bg-white text-slate-900 rounded-3xl max-w-md w-full mx-4 p-8 text-center">
-        <div class="text-6xl mb-4">✅</div>
-        <h3 class="text-2xl font-bold mb-2">Saved Successfully!</h3>
-        <p class="text-gray-600 mb-8">Your business has been updated.</p>
-        <button onclick="closeSuccessModal()" class="w-full bg-emerald-600 text-white py-5 rounded-3xl font-semibold">OK</button>
-      </div>
-    </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-  
-  window.closeSuccessModal = function() {
-    document.getElementById('successModal').remove();
-    if (onClose) onClose();
   };
 }
 

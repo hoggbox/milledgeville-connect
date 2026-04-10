@@ -129,6 +129,25 @@ router.put('/admin/business/:id', async (req, res) => {
   }
 });
 
+router.post('/admin/business', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Login required' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (user.email !== 'imhoggbox@gmail.com') return res.status(403).json({ message: 'Admin access only' });
+
+    const { name, address, phone, website, description, categoryId, keywords } = req.body;
+    const newBusiness = new Business({
+      name, address, phone, website, description, category: categoryId, keywords: keywords || [], isPremium: true
+    });
+    await newBusiness.save();
+    res.json({ message: 'Business added successfully!' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.delete('/admin/business/:id', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'Login required' });

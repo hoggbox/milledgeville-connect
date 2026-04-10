@@ -6,6 +6,7 @@ const businessSchema = new mongoose.Schema({
   phone: String,
   website: String,
   description: String,
+  keywords: [String],           // ← NEW: for smart search
   isPremium: { type: Boolean, default: false }
 });
 module.exports = mongoose.model('Business', businessSchema);
