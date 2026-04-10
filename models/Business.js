@@ -11,14 +11,20 @@ const businessSchema = new mongoose.Schema({
   isPremium: { type: Boolean, default: false },
   verified: { type: Boolean, default: false },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  
-  // ← NEW — links the verified owner (used by claim system)
   verifiedOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
-  // ←←← THIS WAS MISSING — fixes the rating 500 error
-  ratings: [{
+  hours: { type: Map, of: String, default: new Map() },
+  photos: [{ type: String }],
+  menu: [{
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    description: String
+  }],
+  reviews: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    rating: { type: Number, min: 1, max: 5 }
+    rating: { type: Number, min: 1, max: 5 },
+    text: String,
+    createdAt: { type: Date, default: Date.now }
   }]
 });
 

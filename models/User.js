@@ -6,13 +6,13 @@ const userSchema = new mongoose.Schema({
   email:           { type: String, required: true, unique: true, lowercase: true },
   password:        { type: String, required: true },
   lastLogin:       { type: Date, default: Date.now },
+  profilePicture:  { type: String, default: '' },
+  birthdate:       { type: Date },
 
-  // --- ownership / role ---
   role:            { type: String, enum: ['user', 'business_owner', 'admin'], default: 'user' },
-  verifiedOwner:   { type: Boolean, default: false },          // flipped to true by admin
+  verifiedOwner:   { type: Boolean, default: false },
   claimedBusiness: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', default: null },
 
-  // --- pending claim (before admin approves) ---
   pendingClaim: {
     businessId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Business', default: null },
     businessName: { type: String, default: '' },
@@ -21,7 +21,6 @@ const userSchema = new mongoose.Schema({
     submittedAt:  { type: Date, default: null }
   },
 
-  // --- "not listed" submission (before admin adds + verifies) ---
   pendingNewBusiness: {
     businessName:    { type: String, default: '' },
     businessAddress: { type: String, default: '' },
