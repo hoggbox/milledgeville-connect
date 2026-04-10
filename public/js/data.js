@@ -71,10 +71,8 @@ async function loadPage(page) {
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 async function loadHomePage(content) {
-  // Show skeleton immediately
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
-      <!-- Hero -->
       <div class="relative overflow-hidden rounded-3xl mb-6 mt-2" 
            style="background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%);">
         <div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.15) 20px, rgba(255,255,255,0.15) 21px);"></div>
@@ -95,7 +93,6 @@ async function loadHomePage(content) {
         </div>
       </div>
 
-      <!-- Quick Nav Cards -->
       <div class="grid grid-cols-4 gap-3 mb-8">
         <button onclick="navigate('directory')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
           <span class="text-2xl mb-1">📍</span>
@@ -115,7 +112,6 @@ async function loadHomePage(content) {
         </button>
       </div>
 
-      <!-- Popular This Week skeleton -->
       <div id="popularSection">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
@@ -134,7 +130,6 @@ async function loadHomePage(content) {
         </div>
       </div>
 
-      <!-- Local News skeleton -->
       <div id="newsSection" class="mt-8">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-xl">📰</span>
@@ -151,7 +146,6 @@ async function loadHomePage(content) {
       </div>
     </div>`;
 
-  // Fetch real data in parallel
   const [popularBiz, events, deals, shoutouts] = await Promise.all([
     apiGet('/popular'),
     apiGet('/events'),
@@ -159,7 +153,6 @@ async function loadHomePage(content) {
     apiGet('/shoutouts')
   ]);
 
-  // ── Popular Businesses ──
   const popSection = document.getElementById('popularSection');
   if (popularBiz && popularBiz.length > 0) {
     const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
@@ -176,9 +169,6 @@ async function loadHomePage(content) {
           </div>
           <h3 class="font-bold text-sm leading-tight mb-1 line-clamp-2">${b.name}</h3>
           <div class="flex items-center gap-1 mt-2">
-            <span style="color:#f59e0b;font-size:11px;">★★★★★</span>
-          </div>
-          <div class="flex items-center gap-1 mt-1">
             ${[1,2,3,4,5].map(s => `<span style="color:${s<=Math.round(avg)?'#f59e0b':'#374151'};font-size:13px;">★</span>`).join('')}
             <span class="text-xs text-white/50 ml-1">${avg}</span>
           </div>
@@ -206,11 +196,9 @@ async function loadHomePage(content) {
       </div>`;
   }
 
-  // ── Local News / Activity Feed ──
   const newsSection = document.getElementById('newsSection');
   const newsItems = [];
 
-  // Upcoming events as news
   const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 2);
   upcomingEvents.forEach(e => {
     const dateStr = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -225,7 +213,6 @@ async function loadHomePage(content) {
     });
   });
 
-  // Active deals as news
   const activeDeals = deals.filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 2);
   activeDeals.forEach(d => {
     newsItems.push({
@@ -239,7 +226,6 @@ async function loadHomePage(content) {
     });
   });
 
-  // Recent shoutouts as community buzz
   if (shoutouts.length > 0) {
     const recent = shoutouts[0];
     newsItems.push({
@@ -292,7 +278,6 @@ async function loadHomePage(content) {
       <div class="space-y-3">${cards}</div>`;
   }
 
-  // ── Community pulse strip at the bottom ──
   const pulse = document.createElement('div');
   pulse.className = 'mt-8 grid grid-cols-3 gap-3';
   pulse.innerHTML = `
@@ -311,13 +296,12 @@ async function loadHomePage(content) {
   content.querySelector('.max-w-2xl').appendChild(pulse);
 }
 
-// Helper to navigate to directory and open a business modal
 window.loadDirectoryAndOpen = async function (businessId) {
   await loadDirectoryPage(document.getElementById('content'));
   showBusinessDetail(businessId);
 };
 
-// ─── DIRECTORY (FULLY MOBILE-OPTIMIZED) ───────────────────────────────────────
+// ─── DIRECTORY ────────────────────────────────────────────────────────────────
 async function loadDirectoryPage(content) {
   const data = await apiGet('/directory');
   allBusinesses = data.businesses;
@@ -553,13 +537,12 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// ─── SHOUTOUTS (with comments + replies) ─────────────────────────────────────
+// ─── SHOUTOUTS — Facebook-style collapsible comments ─────────────────────────
 async function loadShoutoutsPage(content) {
   const shoutouts = await apiGet('/shoutouts');
 
-  let html = `
-    <div class="max-w-2xl mx-auto px-2">
-      <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
+  let html = `<div class="max-w-2xl mx-auto px-2">
+    <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
 
   if (currentUser) {
     html += `
@@ -582,9 +565,7 @@ async function loadShoutoutsPage(content) {
     html += `<p class="text-center text-white/50 py-12">No shoutouts yet — be the first!</p>`;
   } else {
     html += `<div class="space-y-4" id="shoutoutsFeed">`;
-    shoutouts.forEach(s => {
-      html += renderShoutoutCard(s);
-    });
+    shoutouts.forEach(s => { html += renderShoutoutCard(s); });
     html += `</div>`;
   }
 
@@ -595,108 +576,183 @@ async function loadShoutoutsPage(content) {
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
   const likeCount = s.likes ? s.likes.length : 0;
-  const commentCount = s.comments ? s.comments.length : 0;
+  const comments = s.comments || [];
+  const commentCount = comments.length;
+  const totalReplies = comments.reduce((acc, c) => acc + (c.replies ? c.replies.length : 0), 0);
+  const totalActivity = commentCount + totalReplies;
 
-  let commentsHtml = '';
-  if (s.comments && s.comments.length > 0) {
-    commentsHtml = `<div class="mt-4 space-y-3 border-t border-white/10 pt-4">`;
-    s.comments.forEach(c => {
-      const cLetter = c.author ? c.author[0].toUpperCase() : '?';
-      let repliesHtml = '';
-      if (c.replies && c.replies.length > 0) {
-        repliesHtml = `<div class="ml-8 mt-2 space-y-2">`;
-        c.replies.forEach(r => {
-          const rLetter = r.author ? r.author[0].toUpperCase() : '?';
-          repliesHtml += `
-            <div class="flex items-start gap-2">
-              <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
-              <div class="flex-1 bg-white/5 rounded-2xl px-3 py-2">
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="text-xs font-semibold text-white/80">${r.author}</span>
-                  <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
-                </div>
-                <p class="text-sm text-white/75">${r.text}</p>
-              </div>
-            </div>`;
-        });
-        repliesHtml += `</div>`;
-      }
+  // Determine preview vs full comments
+  // We show a "View X comments" button if there are comments — always collapsed by default
+  const PREVIEW_COUNT = 2; // show top 2 comments preview inline
+  const previewComments = comments.slice(-PREVIEW_COUNT); // most recent 2
 
-      commentsHtml += `
-        <div class="comment-block" id="comment-${c._id}">
-          <div class="flex items-start gap-2">
-            <div class="w-7 h-7 bg-slate-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${cLetter}</div>
-            <div class="flex-1">
-              <div class="bg-white/5 rounded-2xl px-3 py-2">
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="text-xs font-semibold text-white/80">${c.author}</span>
-                  <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
-                  ${currentUser && (c.authorId === currentUser.id || currentUser.email === 'imhoggbox@gmail.com') ? 
-                    `<button onclick="deleteComment('${s._id}','${c._id}')" class="text-[10px] text-red-400/60 hover:text-red-400 ml-auto transition">✕</button>` : ''}
-                </div>
-                <p class="text-sm text-white/75">${c.text}</p>
-              </div>
-              ${currentUser ? `
-                <button onclick="toggleReplyBox('${s._id}','${c._id}')" class="text-[11px] text-white/40 hover:text-emerald-400 mt-1 ml-2 transition font-medium">↩ Reply</button>
-                <div id="replybox-${c._id}" class="hidden mt-2 flex gap-2 items-start">
-                  <div class="w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
-                  <div class="flex-1">
-                    <textarea id="replyinput-${c._id}" rows="1"
-                      class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400 resize-none text-sm"
-                      placeholder="Write a reply..."></textarea>
-                    <div class="flex gap-2 mt-1">
-                      <button onclick="submitReply('${s._id}','${c._id}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-xl transition">Post</button>
-                      <button onclick="toggleReplyBox('${s._id}','${c._id}')" class="text-xs text-white/40 hover:text-white/70 px-2 py-1 transition">Cancel</button>
-                    </div>
-                  </div>
-                </div>` : ''}
-            </div>
-          </div>
-          ${repliesHtml}
-        </div>`;
+  const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
+
+  let previewHtml = '';
+  if (comments.length > 0) {
+    previewHtml = `<div class="mt-3 space-y-2" id="preview-comments-${s._id}">`;
+    previewComments.forEach(c => {
+      previewHtml += renderCommentRow(c, s._id, true);
     });
-    commentsHtml += `</div>`;
+    previewHtml += `</div>`;
   }
+
+  let fullCommentsHtml = `<div class="hidden mt-1 space-y-2" id="full-comments-${s._id}">`;
+  comments.forEach(c => {
+    fullCommentsHtml += renderCommentRow(c, s._id, false);
+  });
+  fullCommentsHtml += `</div>`;
+
+  const viewMoreLabel = commentCount > PREVIEW_COUNT
+    ? `View all ${commentCount} comment${commentCount !== 1 ? 's' : ''}`
+    : null;
 
   return `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5" id="shoutout-${s._id}">
       <!-- Author row -->
-      <div class="flex items-start gap-3 mb-3">
-        <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold text-sm text-white">${s.author || 'Community Member'}</div>
-          <div class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</div>
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div class="flex items-start gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm text-white">${s.author || 'Community Member'}</div>
+            <div class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</div>
+          </div>
         </div>
+        ${isAuthor || isAdmin ? `
+          <button onclick="deleteShoutout('${s._id}')" 
+                  class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
       </div>
+
       <!-- Shoutout text -->
-      <p class="text-white/85 leading-relaxed mb-4">${s.text}</p>
-      <!-- Action bar -->
-      <div class="flex items-center gap-4 text-sm">
+      <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
+
+      <!-- Like + comment summary bar -->
+      <div class="flex items-center justify-between border-t border-white/10 pt-3 mb-1">
+        <div class="flex items-center gap-1">
+          ${likeCount > 0 ? `<span class="text-xs text-white/40">❤️ ${likeCount}</span>` : ''}
+        </div>
+        ${totalActivity > 0 ? `
+          <button onclick="toggleAllComments('${s._id}', ${commentCount})"
+                  class="text-xs text-white/40 hover:text-white/70 transition">
+            ${totalActivity} comment${totalActivity !== 1 ? 's' : ''}
+          </button>` : ''}
+      </div>
+
+      <!-- Action buttons (Facebook-style) -->
+      <div class="flex items-center gap-1 border-t border-white/10 pt-2 mb-2">
         <button onclick="toggleLike('${s._id}')" id="like-btn-${s._id}"
-                class="flex items-center gap-1.5 text-white/50 hover:text-pink-400 transition font-medium text-xs">
-          <span id="like-icon-${s._id}">🤍</span>
-          <span id="like-count-${s._id}">${likeCount > 0 ? likeCount : ''}</span>
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
+          <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
+          <span>Like${likeCount > 0 ? ' · ' + likeCount : ''}</span>
         </button>
-        <button onclick="toggleCommentBox('${s._id}')"
-                class="flex items-center gap-1.5 text-white/50 hover:text-emerald-400 transition font-medium text-xs">
-          💬 <span>${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Comment'}</span>
+        <button onclick="focusCommentBox('${s._id}')"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
+          💬 Comment
         </button>
       </div>
-      ${commentsHtml}
-      <!-- Comment input -->
+
+      <!-- Preview of last 2 comments (collapsed view) -->
+      ${previewHtml}
+
+      <!-- "View all comments" expander -->
+      ${viewMoreLabel ? `
+        <button onclick="toggleAllComments('${s._id}', ${commentCount})" id="view-more-btn-${s._id}"
+                class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold mt-2 ml-1 transition">
+          ${viewMoreLabel}
+        </button>` : ''}
+
+      <!-- Full expanded comments (hidden by default) -->
+      ${fullCommentsHtml}
+
+      <!-- Comment input box -->
       ${currentUser ? `
-        <div id="commentbox-${s._id}" class="hidden mt-4 flex items-start gap-2">
+        <div id="commentbox-${s._id}" class="mt-3 flex items-start gap-2">
           <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
-          <div class="flex-1">
-            <textarea id="commentinput-${s._id}" rows="2"
-              class="w-full bg-white/10 border border-white/20 rounded-2xl px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm"
-              placeholder="Write a comment..."></textarea>
-            <div class="flex gap-2 mt-2">
-              <button onclick="submitComment('${s._id}')" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl transition font-semibold">Post</button>
-              <button onclick="toggleCommentBox('${s._id}')" class="text-sm text-white/40 hover:text-white/70 px-3 py-1.5 transition">Cancel</button>
-            </div>
+          <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
+            <input id="commentinput-${s._id}" type="text"
+              class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
+              placeholder="Write a comment… (Enter to post)"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitComment('${s._id}');}">
+            <button onclick="submitComment('${s._id}')" class="text-emerald-400 hover:text-emerald-300 transition flex-shrink-0 text-sm font-semibold">Post</button>
           </div>
         </div>` : ''}
+    </div>`;
+}
+
+function renderCommentRow(c, shoutoutId, isPreview = false) {
+  const cLetter = c.author ? c.author[0].toUpperCase() : '?';
+  const replies = c.replies || [];
+  const replyCount = replies.length;
+  const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
+
+  // Show last 1 reply in preview, all in full
+  const previewReplies = replies.slice(-1);
+  const hasMoreReplies = replyCount > 1;
+
+  let repliesHtml = '';
+  if (replyCount > 0) {
+    repliesHtml = `<div class="ml-9 mt-1 space-y-1" id="replies-preview-${c._id}">`;
+    // In preview mode show last 1, otherwise show all
+    const displayReplies = isPreview ? previewReplies : replies;
+    displayReplies.forEach(r => {
+      const rLetter = r.author ? r.author[0].toUpperCase() : '?';
+      repliesHtml += `
+        <div class="flex items-start gap-2" id="reply-${r._id}">
+          <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
+          <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-white/80">${r.author}</span>
+              <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
+            </div>
+            <p class="text-sm text-white/75">${r.text}</p>
+          </div>
+        </div>`;
+    });
+    if (isPreview && hasMoreReplies) {
+      repliesHtml += `<button onclick="expandReplies('${shoutoutId}','${c._id}',${replyCount})" 
+                              class="ml-8 text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition">
+        View ${replyCount - 1} more repl${replyCount - 1 !== 1 ? 'ies' : 'y'}
+      </button>`;
+    }
+    repliesHtml += `</div>`;
+  }
+
+  return `
+    <div class="comment-block" id="comment-${c._id}">
+      <div class="flex items-start gap-2">
+        <div class="w-7 h-7 bg-slate-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${cLetter}</div>
+        <div class="flex-1 min-w-0">
+          <div class="bg-white/5 rounded-2xl px-3 py-2 inline-block max-w-full">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-semibold text-white/80">${c.author}</span>
+              <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
+              ${isCommentAuthor || isAdmin ? `
+                <button onclick="deleteComment('${shoutoutId}','${c._id}')" 
+                        class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
+            </div>
+            <p class="text-sm text-white/80 mt-0.5">${c.text}</p>
+          </div>
+          ${currentUser ? `
+            <div class="flex items-center gap-3 mt-1 ml-2">
+              <button onclick="toggleReplyBox('${shoutoutId}','${c._id}')" 
+                      class="text-[11px] text-white/40 hover:text-emerald-400 transition font-semibold">Reply</button>
+            </div>
+            <div id="replybox-${c._id}" class="hidden mt-2 flex items-start gap-2">
+              <div class="w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+              <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-1.5">
+                <input id="replyinput-${c._id}" type="text"
+                  class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
+                  placeholder="Reply to ${c.author}…"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();submitReply('${shoutoutId}','${c._id}');}">
+                <button onclick="submitReply('${shoutoutId}','${c._id}')" 
+                        class="text-emerald-400 hover:text-emerald-300 transition text-xs font-semibold">Post</button>
+              </div>
+            </div>` : ''}
+        </div>
+      </div>
+      ${repliesHtml}
     </div>`;
 }
 
@@ -706,29 +762,52 @@ window.toggleLike = async function (shoutoutId) {
   const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
   if (res.likes !== undefined) {
     const icon = document.getElementById(`like-icon-${shoutoutId}`);
-    const count = document.getElementById(`like-count-${shoutoutId}`);
+    const btn = document.getElementById(`like-btn-${shoutoutId}`);
     if (icon) icon.textContent = res.liked ? '❤️' : '🤍';
-    if (count) count.textContent = res.likes > 0 ? res.likes : '';
+    if (btn) {
+      const count = res.likes > 0 ? ` · ${res.likes}` : '';
+      btn.querySelector('span:last-child').textContent = `Like${count}`;
+    }
   }
 };
 
-window.toggleCommentBox = function (shoutoutId) {
-  const box = document.getElementById(`commentbox-${shoutoutId}`);
-  if (!box) return;
-  const isHidden = box.classList.contains('hidden');
-  box.classList.toggle('hidden', !isHidden);
-  if (isHidden) {
-    const input = document.getElementById(`commentinput-${shoutoutId}`);
-    if (input) input.focus();
+window.focusCommentBox = function (shoutoutId) {
+  const input = document.getElementById(`commentinput-${shoutoutId}`);
+  if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+};
+
+window.toggleAllComments = function (shoutoutId, commentCount) {
+  const preview = document.getElementById(`preview-comments-${shoutoutId}`);
+  const full = document.getElementById(`full-comments-${shoutoutId}`);
+  const btn = document.getElementById(`view-more-btn-${shoutoutId}`);
+
+  if (!full) return;
+  const isExpanded = !full.classList.contains('hidden');
+
+  if (isExpanded) {
+    full.classList.add('hidden');
+    if (preview) preview.classList.remove('hidden');
+    if (btn) btn.textContent = `View all ${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
+  } else {
+    full.classList.remove('hidden');
+    if (preview) preview.classList.add('hidden');
+    if (btn) btn.textContent = `Hide comments`;
   }
+};
+
+window.expandReplies = async function (shoutoutId, commentId, replyCount) {
+  // Re-render that comment's reply section with all replies visible
+  // Reload whole shoutout section for simplicity
+  await loadShoutoutsPage(document.getElementById('content'));
 };
 
 window.submitComment = async function (shoutoutId) {
   const input = document.getElementById(`commentinput-${shoutoutId}`);
   if (!input || !input.value.trim()) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text: input.value.trim() });
+  const text = input.value.trim();
+  input.value = '';
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text });
   if (res._id) {
-    // Reload shoutouts page to show updated comments
     await loadShoutoutsPage(document.getElementById('content'));
   } else {
     showToast(res.message || 'Error posting comment', 'error');
@@ -742,14 +821,16 @@ window.toggleReplyBox = function (shoutoutId, commentId) {
   box.classList.toggle('hidden', !isHidden);
   if (isHidden) {
     const input = document.getElementById(`replyinput-${commentId}`);
-    if (input) input.focus();
+    if (input) { input.focus(); }
   }
 };
 
 window.submitReply = async function (shoutoutId, commentId) {
   const input = document.getElementById(`replyinput-${commentId}`);
   if (!input || !input.value.trim()) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies`, { text: input.value.trim() });
+  const text = input.value.trim();
+  input.value = '';
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies`, { text });
   if (res._id) {
     await loadShoutoutsPage(document.getElementById('content'));
   } else {
@@ -761,6 +842,17 @@ window.deleteComment = async function (shoutoutId, commentId) {
   if (!confirm('Delete this comment?')) return;
   const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}`, {}, 'DELETE');
   if (res.message === 'Deleted') {
+    await loadShoutoutsPage(document.getElementById('content'));
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.deleteShoutout = async function (shoutoutId) {
+  if (!confirm('Delete this shoutout?')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}`, {}, 'DELETE');
+  if (res.message) {
+    showToast('Shoutout deleted');
     await loadShoutoutsPage(document.getElementById('content'));
   } else {
     showToast(res.message || 'Error', 'error');
@@ -833,6 +925,16 @@ async function loadOwnerDashboard(content) {
 
   loadOwnerDeals();
   loadOwnerEvents();
+
+  // Pre-fill current business info
+  if (currentUser && currentUser.verifiedBusiness) {
+    const biz = currentUser.verifiedBusiness;
+    document.getElementById('ownerName').value = biz.name || '';
+    document.getElementById('ownerAddress').value = biz.address || '';
+    document.getElementById('ownerPhone').value = biz.phone || '';
+    document.getElementById('ownerWebsite').value = biz.website || '';
+    document.getElementById('ownerDescription').value = biz.description || '';
+  }
 }
 
 window.switchOwnerTab = function (tab) {
@@ -960,23 +1062,28 @@ window.deleteOwnerEvent = async function (id) {
 // ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
 async function loadAdminPage(content) {
   content.innerHTML = `
-    <div class="px-4">
+    <div class="px-2 md:px-4 max-w-4xl mx-auto">
       <h2 class="text-3xl font-bold mb-6">🔧 Admin Panel</h2>
-      <div class="flex border-b border-white/20 mb-6 overflow-x-auto">
-        <button onclick="switchAdminTab(0)" id="tab0" class="flex-shrink-0 flex-1 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white">Add / Edit</button>
-        <button onclick="switchAdminTab(1)" id="tab1" class="flex-shrink-0 flex-1 py-4 text-center font-semibold text-white/70">Manage</button>
-        <button onclick="switchAdminTab(2)" id="tab2" class="flex-shrink-0 flex-1 py-4 text-center font-semibold text-white/70">
+      <div class="flex border-b border-white/20 mb-6 overflow-x-auto hide-scrollbar">
+        <button onclick="switchAdminTab(0)" id="tab0" class="flex-shrink-0 px-5 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white whitespace-nowrap">Add / Edit</button>
+        <button onclick="switchAdminTab(1)" id="tab1" class="flex-shrink-0 px-5 py-4 text-center font-semibold text-white/70 whitespace-nowrap">Manage</button>
+        <button onclick="switchAdminTab(2)" id="tab2" class="flex-shrink-0 px-5 py-4 text-center font-semibold text-white/70 whitespace-nowrap">
           Claims <span id="claimBadge" class="hidden ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full"></span>
         </button>
+        <button onclick="switchAdminTab(3)" id="tab3" class="flex-shrink-0 px-5 py-4 text-center font-semibold text-white/70 whitespace-nowrap">
+          🛡️ Moderate
+        </button>
       </div>
+
+      <!-- Tab 0: Add/Edit Business -->
       <div id="adminTab0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
           <h3 id="adminFormTitle" class="font-semibold mb-4 text-lg">Add New Business</h3>
-          <input id="adminName" type="text" placeholder="Business Name" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="adminAddress" type="text" placeholder="Address" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="adminPhone" type="text" placeholder="Phone" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="adminWebsite" type="text" placeholder="Website (optional)" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <textarea id="adminDescription" rows="3" placeholder="Short description" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white"></textarea>
+          <input id="adminName" type="text" placeholder="Business Name" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40">
+          <input id="adminAddress" type="text" placeholder="Address" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40">
+          <input id="adminPhone" type="text" placeholder="Phone" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40">
+          <input id="adminWebsite" type="text" placeholder="Website (optional)" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40">
+          <textarea id="adminDescription" rows="3" placeholder="Short description" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40"></textarea>
           <select id="adminCategory" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-slate-800 text-white">
             <option value="">Select Category</option>
           </select>
@@ -986,13 +1093,22 @@ async function loadAdminPage(content) {
           </div>
         </div>
       </div>
+
+      <!-- Tab 1: Manage Businesses -->
       <div id="adminTab1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
           <div id="manageList"></div>
         </div>
       </div>
+
+      <!-- Tab 2: Claims -->
       <div id="adminTab2" class="hidden">
         <div id="claimsList"></div>
+      </div>
+
+      <!-- Tab 3: Moderation -->
+      <div id="adminTab3" class="hidden">
+        <div id="moderationPanel"></div>
       </div>
     </div>`;
 
@@ -1007,10 +1123,11 @@ async function loadAdminPage(content) {
 
   loadManageList();
   loadAdminClaims();
+  loadModerationPanel();
 }
 
 window.switchAdminTab = function (tab) {
-  [0, 1, 2].forEach(i => {
+  [0, 1, 2, 3].forEach(i => {
     const t = document.getElementById(`adminTab${i}`);
     const btn = document.getElementById(`tab${i}`);
     if (!t || !btn) return;
@@ -1175,6 +1292,316 @@ window.deleteBusiness = async function (id) {
   loadManageList();
 };
 
+// ─── MODERATION PANEL ─────────────────────────────────────────────────────────
+// State for moderation filters
+let modState = {
+  type: 'all',       // 'all' | 'shoutouts' | 'events' | 'deals' | 'comments'
+  search: '',
+  userFilter: '',
+  rawData: { shoutouts: [], events: [], deals: [] }
+};
+
+async function loadModerationPanel() {
+  const container = document.getElementById('moderationPanel');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="space-y-4">
+      <!-- Header -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
+        <h3 class="font-bold text-lg mb-4">🛡️ Content Moderation</h3>
+
+        <!-- Search & filter bar -->
+        <div class="flex flex-col gap-3">
+          <input id="modSearch" type="text" placeholder="Search content or author name…"
+                 class="w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 text-sm"
+                 oninput="applyModFilters()">
+          <input id="modUserFilter" type="text" placeholder="Filter by exact username or email…"
+                 class="w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 text-sm"
+                 oninput="applyModFilters()">
+          <div class="flex gap-2 flex-wrap">
+            ${['all','shoutouts','comments','events','deals'].map(t => `
+              <button onclick="setModType('${t}')" id="modtype-${t}"
+                      class="px-4 py-2 rounded-2xl text-sm font-semibold transition ${t === 'all' ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}">
+                ${{ all:'All', shoutouts:'💬 Shoutouts', comments:'🗨️ Comments', events:'📅 Events', deals:'🔥 Deals' }[t]}
+              </button>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="modResults" class="space-y-3">
+        <div class="text-center py-12 text-white/40 animate-pulse">Loading content…</div>
+      </div>
+    </div>`;
+
+  // Fetch all content in parallel
+  const [shoutouts, events, deals] = await Promise.all([
+    apiGet('/shoutouts'),
+    apiGet('/events'),
+    apiGet('/deals')
+  ]);
+
+  modState.rawData = { shoutouts, events, deals };
+  applyModFilters();
+}
+
+window.setModType = function (type) {
+  modState.type = type;
+  ['all','shoutouts','comments','events','deals'].forEach(t => {
+    const btn = document.getElementById(`modtype-${t}`);
+    if (!btn) return;
+    if (t === type) {
+      btn.className = 'px-4 py-2 rounded-2xl text-sm font-semibold transition bg-emerald-500 text-white';
+    } else {
+      btn.className = 'px-4 py-2 rounded-2xl text-sm font-semibold transition bg-white/10 text-white/70 hover:bg-white/20';
+    }
+  });
+  applyModFilters();
+};
+
+window.applyModFilters = function () {
+  const search = (document.getElementById('modSearch')?.value || '').toLowerCase();
+  const userFilter = (document.getElementById('modUserFilter')?.value || '').toLowerCase();
+  modState.search = search;
+  modState.userFilter = userFilter;
+  renderModResults();
+};
+
+function renderModResults() {
+  const container = document.getElementById('modResults');
+  if (!container) return;
+
+  const { shoutouts, events, deals } = modState.rawData;
+  const { type, search, userFilter } = modState;
+
+  const matchesSearch = (text) => !search || (text || '').toLowerCase().includes(search);
+  const matchesUser = (author, email) => {
+    if (!userFilter) return true;
+    return (author || '').toLowerCase().includes(userFilter) || (email || '').toLowerCase().includes(userFilter);
+  };
+
+  let items = [];
+
+  // ── Shoutouts ──
+  if (type === 'all' || type === 'shoutouts') {
+    shoutouts.forEach(s => {
+      if (!matchesSearch(s.text) && !matchesSearch(s.author)) return;
+      if (!matchesUser(s.author)) return;
+      items.push({
+        kind: 'shoutout',
+        id: s._id,
+        title: s.text,
+        author: s.author || 'Unknown',
+        authorId: s.authorId,
+        date: s.createdAt,
+        meta: `❤️ ${s.likes?.length || 0} likes · 💬 ${s.comments?.length || 0} comments`,
+        deleteLabel: 'Delete Shoutout',
+        deleteFn: `adminDeleteShoutout('${s._id}')`
+      });
+    });
+  }
+
+  // ── Comments (extracted from shoutouts) ──
+  if (type === 'all' || type === 'comments') {
+    shoutouts.forEach(s => {
+      (s.comments || []).forEach(c => {
+        if (!matchesSearch(c.text) && !matchesSearch(c.author)) return;
+        if (!matchesUser(c.author)) return;
+        items.push({
+          kind: 'comment',
+          id: c._id,
+          parentId: s._id,
+          title: c.text,
+          author: c.author || 'Unknown',
+          authorId: c.authorId,
+          date: c.createdAt,
+          meta: `On shoutout by ${s.author} · ${c.replies?.length || 0} repl${c.replies?.length !== 1 ? 'ies' : 'y'}`,
+          deleteLabel: 'Delete Comment',
+          deleteFn: `adminDeleteComment('${s._id}','${c._id}')`
+        });
+        // Also index replies
+        (c.replies || []).forEach(r => {
+          if (!matchesSearch(r.text) && !matchesSearch(r.author)) return;
+          if (!matchesUser(r.author)) return;
+          items.push({
+            kind: 'reply',
+            id: r._id,
+            parentId: s._id,
+            commentId: c._id,
+            title: r.text,
+            author: r.author || 'Unknown',
+            authorId: r.authorId,
+            date: r.createdAt,
+            meta: `Reply to ${c.author}'s comment on ${s.author}'s shoutout`,
+            deleteLabel: 'Delete Reply',
+            deleteFn: `adminDeleteReply('${s._id}','${c._id}','${r._id}')`
+          });
+        });
+      });
+    });
+  }
+
+  // ── Events ──
+  if (type === 'all' || type === 'events') {
+    events.forEach(e => {
+      if (!matchesSearch(e.title) && !matchesSearch(e.description) && !matchesSearch(e.location)) return;
+      const ownerName = e.owner?.name || 'Unknown';
+      const ownerEmail = e.owner?.email || '';
+      if (!matchesUser(ownerName, ownerEmail)) return;
+      items.push({
+        kind: 'event',
+        id: e._id,
+        title: e.title,
+        author: ownerName,
+        authorEmail: ownerEmail,
+        date: e.createdAt || e.date,
+        meta: `📅 ${new Date(e.date).toLocaleDateString()}${e.location ? ' · 📍 ' + e.location : ''}`,
+        description: e.description,
+        deleteLabel: 'Delete Event',
+        deleteFn: `adminDeleteEvent('${e._id}')`
+      });
+    });
+  }
+
+  // ── Deals ──
+  if (type === 'all' || type === 'deals') {
+    deals.forEach(d => {
+      if (!matchesSearch(d.title) && !matchesSearch(d.description)) return;
+      const ownerName = d.owner?.name || d.business?.name || 'Unknown';
+      const ownerEmail = d.owner?.email || '';
+      if (!matchesUser(ownerName, ownerEmail)) return;
+      items.push({
+        kind: 'deal',
+        id: d._id,
+        title: d.title,
+        author: ownerName,
+        authorEmail: ownerEmail,
+        date: d.createdAt,
+        meta: `${d.expires ? 'Expires ' + new Date(d.expires).toLocaleDateString() : 'No expiry'}${d.business?.name ? ' · ' + d.business.name : ''}`,
+        description: d.description,
+        deleteLabel: 'Delete Deal',
+        deleteFn: `adminDeleteDeal('${d._id}')`
+      });
+    });
+  }
+
+  // Sort by date desc
+  items.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  if (!items.length) {
+    container.innerHTML = `<div class="bg-white/10 border border-white/10 rounded-3xl p-8 text-center text-white/50">No content matches your filters.</div>`;
+    return;
+  }
+
+  const kindColors = {
+    shoutout: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    comment:  'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    reply:    'bg-slate-500/20 text-slate-300 border-slate-500/30',
+    event:    'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    deal:     'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  };
+  const kindLabels = { shoutout:'Shoutout', comment:'Comment', reply:'Reply', event:'Event', deal:'Deal' };
+
+  container.innerHTML = items.map(item => `
+    <div class="bg-white/10 border border-white/10 rounded-3xl p-5" id="mod-item-${item.kind}-${item.id}">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-start gap-3 flex-1 min-w-0">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full border ${kindColors[item.kind]}">${kindLabels[item.kind]}</span>
+              <span class="text-xs text-white/50">${timeAgo(item.date)}</span>
+            </div>
+            <p class="text-sm text-white/90 leading-relaxed mb-1 break-words">${item.title}</p>
+            ${item.description ? `<p class="text-xs text-white/50 mb-1 break-words">${item.description}</p>` : ''}
+            <div class="flex items-center gap-2 flex-wrap mt-2">
+              <div class="flex items-center gap-1.5">
+                <div class="w-5 h-5 bg-emerald-600 rounded-lg flex items-center justify-center text-xs font-bold">${(item.author||'?')[0].toUpperCase()}</div>
+                <span class="text-xs font-semibold text-white/70">${item.author}</span>
+                ${item.authorEmail ? `<span class="text-xs text-white/30">${item.authorEmail}</span>` : ''}
+              </div>
+              <span class="text-xs text-white/30">·</span>
+              <span class="text-xs text-white/40">${item.meta}</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="${item.deleteFn}"
+                class="flex-shrink-0 bg-red-500/20 hover:bg-red-500 border border-red-500/30 text-red-400 hover:text-white px-3 py-1.5 rounded-2xl text-xs font-semibold transition whitespace-nowrap">
+          🗑️ Delete
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+// ─── Admin moderation delete actions ─────────────────────────────────────────
+window.adminDeleteShoutout = async function (id) {
+  if (!confirm('Delete this shoutout and all its comments?')) return;
+  const res = await apiPost(`/shoutouts/${id}`, {}, 'DELETE');
+  if (res.message) {
+    showToast('Shoutout deleted');
+    const idx = modState.rawData.shoutouts.findIndex(s => s._id === id);
+    if (idx !== -1) modState.rawData.shoutouts.splice(idx, 1);
+    renderModResults();
+    // Update badge hint
+    document.getElementById(`mod-item-shoutout-${id}`)?.remove();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.adminDeleteComment = async function (shoutoutId, commentId) {
+  if (!confirm('Delete this comment and its replies?')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}`, {}, 'DELETE');
+  if (res.message === 'Deleted') {
+    showToast('Comment deleted');
+    const s = modState.rawData.shoutouts.find(s => s._id === shoutoutId);
+    if (s) { const i = s.comments.findIndex(c => c._id === commentId); if (i !== -1) s.comments.splice(i, 1); }
+    renderModResults();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.adminDeleteReply = async function (shoutoutId, commentId, replyId) {
+  if (!confirm('Delete this reply?')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`, {}, 'DELETE');
+  if (res.message === 'Deleted') {
+    showToast('Reply deleted');
+    const s = modState.rawData.shoutouts.find(s => s._id === shoutoutId);
+    if (s) {
+      const c = s.comments.find(c => c._id === commentId);
+      if (c) { const i = c.replies.findIndex(r => r._id === replyId); if (i !== -1) c.replies.splice(i, 1); }
+    }
+    renderModResults();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.adminDeleteEvent = async function (id) {
+  if (!confirm('Delete this event?')) return;
+  const res = await apiPost(`/admin/events/${id}`, {}, 'DELETE');
+  if (res.message) {
+    showToast('Event deleted');
+    modState.rawData.events = modState.rawData.events.filter(e => e._id !== id);
+    renderModResults();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.adminDeleteDeal = async function (id) {
+  if (!confirm('Delete this deal?')) return;
+  const res = await apiPost(`/admin/deals/${id}`, {}, 'DELETE');
+  if (res.message) {
+    showToast('Deal deleted');
+    modState.rawData.deals = modState.rawData.deals.filter(d => d._id !== id);
+    renderModResults();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
 async function postShoutout() {
   const input = document.getElementById('shoutoutInput');
   if (!input || !input.value.trim()) return;
@@ -1193,3 +1620,4 @@ window.hideBusinessModal = hideBusinessModal;
 window.saveBusiness = saveBusiness;
 window.switchAdminTab = switchAdminTab;
 window.renderDirectory = renderDirectory;
+window.loadModerationPanel = loadModerationPanel;
