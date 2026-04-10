@@ -102,6 +102,22 @@ router.get('/deals', async (req, res) => {
   res.json(deals);
 });
 
+// ===================== POPULAR BUSINESSES (for home page) =====================
+router.get('/popular', async (req, res) => {
+  const businesses = await Business.find().populate('category').populate('owner', 'name email');
+  // Sort by avg rating then count
+  const sorted = businesses
+    .filter(b => b.ratings && b.ratings.length > 0)
+    .sort((a, b) => {
+      const aAvg = a.avgRating || 0;
+      const bAvg = b.avgRating || 0;
+      if (bAvg !== aAvg) return bAvg - aAvg;
+      return b.ratings.length - a.ratings.length;
+    })
+    .slice(0, 5);
+  res.json(sorted);
+});
+
 // ===================== RATINGS =====================
 router.post('/business/:id/rate', async (req, res) => {
   const user = await requireAuth(req, res);
@@ -144,7 +160,6 @@ router.post('/claim/:businessId', async (req, res) => {
   if (!business) return res.status(404).json({ message: 'Business not found' });
   if (business.owner) return res.status(400).json({ message: 'This business has already been claimed' });
 
-  // Check if user already has a pending claim for this business
   const existing = await ClaimRequest.findOne({ user: user._id, business: business._id, status: 'pending' });
   if (existing) return res.status(400).json({ message: 'You already have a pending claim for this business' });
 
@@ -158,7 +173,6 @@ router.post('/claim/:businessId', async (req, res) => {
   res.json({ message: 'Claim submitted! You will be notified once approved.' });
 });
 
-// Poll endpoint — user checks if their claim was approved
 router.get('/claim/status/:businessId', async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) return;
@@ -173,9 +187,81 @@ router.post('/shoutouts', async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) return;
   const { text } = req.body;
-  const newShoutout = new Shoutout({ text, author: user.name || 'Verified User' });
+  const newShoutout = new Shoutout({ text, author: user.name || 'Verified User', authorId: user._id });
   await newShoutout.save();
   res.json(newShoutout);
+});
+
+// Like / unlike a shoutout
+router.post('/shoutouts/:id/like', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  const shoutout = await Shoutout.findById(req.params.id);
+  if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+  const idx = shoutout.likes.indexOf(user._id);
+  if (idx === -1) {
+    shoutout.likes.push(user._id);
+  } else {
+    shoutout.likes.splice(idx, 1);
+  }
+  await shoutout.save();
+  res.json({ likes: shoutout.likes.length, liked: idx === -1 });
+});
+
+// Add a comment to a shoutout
+router.post('/shoutouts/:id/comments', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ message: 'Comment text required' });
+
+  const shoutout = await Shoutout.findById(req.params.id);
+  if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+  shoutout.comments.push({ text: text.trim(), author: user.name, authorId: user._id });
+  await shoutout.save();
+  const comment = shoutout.comments[shoutout.comments.length - 1];
+  res.json(comment);
+});
+
+// Reply to a comment
+router.post('/shoutouts/:id/comments/:commentId/replies', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ message: 'Reply text required' });
+
+  const shoutout = await Shoutout.findById(req.params.id);
+  if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+  const comment = shoutout.comments.id(req.params.commentId);
+  if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+  comment.replies.push({ text: text.trim(), author: user.name, authorId: user._id });
+  await shoutout.save();
+  const reply = comment.replies[comment.replies.length - 1];
+  res.json(reply);
+});
+
+// Delete a comment (owner or admin)
+router.delete('/shoutouts/:id/comments/:commentId', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const shoutout = await Shoutout.findById(req.params.id);
+  if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+  const comment = shoutout.comments.id(req.params.commentId);
+  if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+  const isOwner = comment.authorId?.toString() === user._id.toString();
+  const isAdmin = user.email === ADMIN_EMAIL;
+  if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Not authorized' });
+
+  comment.deleteOne();
+  await shoutout.save();
+  res.json({ message: 'Deleted' });
 });
 
 // ===================== BUSINESS OWNER — DEALS =====================
@@ -278,7 +364,6 @@ router.put('/owner/business', async (req, res) => {
 });
 
 // ===================== ADMIN ONLY =====================
-// Get all claim requests
 router.get('/admin/claims', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
@@ -289,12 +374,11 @@ router.get('/admin/claims', async (req, res) => {
   res.json(claims);
 });
 
-// Approve or reject a claim
 router.post('/admin/claims/:id/decision', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const { decision } = req.body; // 'approved' or 'rejected'
+  const { decision } = req.body;
   const claim = await ClaimRequest.findById(req.params.id);
   if (!claim) return res.status(404).json({ message: 'Claim not found' });
 
@@ -302,9 +386,7 @@ router.post('/admin/claims/:id/decision', async (req, res) => {
   await claim.save();
 
   if (decision === 'approved') {
-    // Set business owner
     await Business.findByIdAndUpdate(claim.business, { owner: claim.user });
-    // Set user's verifiedBusiness
     await User.findByIdAndUpdate(claim.user, { verifiedBusiness: claim.business });
   }
 

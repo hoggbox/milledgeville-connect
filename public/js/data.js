@@ -42,6 +42,19 @@ window.submitRating = async function (businessId, score) {
   }
 };
 
+// ─── Time helper ──────────────────────────────────────────────────────────────
+function timeAgo(date) {
+  const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(date).toLocaleDateString();
+}
+
 // ─── Page Router ──────────────────────────────────────────────────────────────
 async function loadPage(page) {
   currentPage = page;
@@ -49,44 +62,260 @@ async function loadPage(page) {
 
   if (page === 'admin') { await loadAdminPage(content); return; }
   if (page === 'owner-dashboard') { await loadOwnerDashboard(content); return; }
-  if (page === 'home') { loadHomePage(content); return; }
+  if (page === 'home') { await loadHomePage(content); return; }
   if (page === 'directory') { await loadDirectoryPage(content); return; }
   if (page === 'shoutouts') { await loadShoutoutsPage(content); return; }
   if (page === 'events') { await loadItemsPage(content, 'events'); return; }
   if (page === 'deals') { await loadItemsPage(content, 'deals'); return; }
 }
 
-// ─── HOME ─────────────────────────────────────────────────────────────────────
-function loadHomePage(content) {
+// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+async function loadHomePage(content) {
+  // Show skeleton immediately
   content.innerHTML = `
-    <div class="text-center py-12 px-4">
-      <h1 class="text-5xl md:text-6xl font-bold tracking-tighter">Milledgeville Connect</h1>
-      <p class="text-2xl text-emerald-300 mt-3">Milledgeville's Local Hub</p>
-      <p class="mt-6 max-w-md mx-auto text-white/80">Business directory • Events • Shoutouts • Deals — all in one beautiful place.</p>
-      <div class="mt-10 grid grid-cols-2 gap-6 max-w-2xl mx-auto">
-        <div onclick="navigate('directory')" class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 text-left cursor-pointer">
-          <div class="text-5xl mb-4">📍</div>
-          <h3 class="text-2xl font-semibold">Directory</h3>
-          <p class="text-white/70">Find local businesses fast</p>
+    <div class="max-w-2xl mx-auto px-2 pb-8">
+      <!-- Hero -->
+      <div class="relative overflow-hidden rounded-3xl mb-6 mt-2" 
+           style="background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%);">
+        <div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.15) 20px, rgba(255,255,255,0.15) 21px);"></div>
+        <div class="relative p-7 md:p-10">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl">🏠</div>
+            <div>
+              <h1 class="text-2xl md:text-3xl font-bold leading-tight">Milledgeville Connect</h1>
+              <p class="text-emerald-200 text-sm">Your local community hub</p>
+            </div>
+          </div>
+          <p class="text-white/80 text-sm leading-relaxed mb-6 max-w-sm">Everything happening in Milledgeville — businesses, events, deals, and community shoutouts.</p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="navigate('directory')" class="bg-white text-emerald-800 font-bold px-5 py-2.5 rounded-2xl text-sm transition hover:bg-emerald-50">📍 Directory</button>
+            <button onclick="navigate('events')" class="bg-white/20 backdrop-blur-sm text-white font-semibold px-5 py-2.5 rounded-2xl text-sm transition hover:bg-white/30">📅 Events</button>
+            <button onclick="navigate('deals')" class="bg-white/20 backdrop-blur-sm text-white font-semibold px-5 py-2.5 rounded-2xl text-sm transition hover:bg-white/30">🔥 Deals</button>
+          </div>
         </div>
-        <div onclick="navigate('shoutouts')" class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 text-left cursor-pointer">
-          <div class="text-5xl mb-4">💬</div>
-          <h3 class="text-2xl font-semibold">Shoutouts</h3>
-          <p class="text-white/70">Community board</p>
+      </div>
+
+      <!-- Quick Nav Cards -->
+      <div class="grid grid-cols-4 gap-3 mb-8">
+        <button onclick="navigate('directory')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
+          <span class="text-2xl mb-1">📍</span>
+          <span class="text-xs font-medium text-white/80">Businesses</span>
+        </button>
+        <button onclick="navigate('shoutouts')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
+          <span class="text-2xl mb-1">💬</span>
+          <span class="text-xs font-medium text-white/80">Shoutouts</span>
+        </button>
+        <button onclick="navigate('events')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
+          <span class="text-2xl mb-1">📅</span>
+          <span class="text-xs font-medium text-white/80">Events</span>
+        </button>
+        <button onclick="navigate('deals')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
+          <span class="text-2xl mb-1">🔥</span>
+          <span class="text-xs font-medium text-white/80">Deals</span>
+        </button>
+      </div>
+
+      <!-- Popular This Week skeleton -->
+      <div id="popularSection">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🏆</span>
+            <h2 class="text-lg font-bold">Popular This Week</h2>
+          </div>
+          <button onclick="navigate('directory')" class="text-emerald-400 text-xs font-semibold hover:text-emerald-300">See all →</button>
         </div>
-        <div onclick="navigate('events')" class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 text-left cursor-pointer">
-          <div class="text-5xl mb-4">📅</div>
-          <h3 class="text-2xl font-semibold">Events</h3>
-          <p class="text-white/70">What's happening</p>
+        <div class="flex gap-3 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
+          ${[1,2,3].map(() => `
+            <div class="flex-shrink-0 w-52 bg-white/10 rounded-3xl p-4 animate-pulse">
+              <div class="w-10 h-10 bg-white/10 rounded-2xl mb-3"></div>
+              <div class="h-4 bg-white/10 rounded-full mb-2 w-3/4"></div>
+              <div class="h-3 bg-white/10 rounded-full w-1/2"></div>
+            </div>`).join('')}
         </div>
-        <div onclick="navigate('deals')" class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 text-left cursor-pointer">
-          <div class="text-5xl mb-4">🔥</div>
-          <h3 class="text-2xl font-semibold">Deals</h3>
-          <p class="text-white/70">Local discounts</p>
+      </div>
+
+      <!-- Local News skeleton -->
+      <div id="newsSection" class="mt-8">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-xl">📰</span>
+          <h2 class="text-lg font-bold">Local News & Updates</h2>
+        </div>
+        <div class="space-y-3">
+          ${[1,2].map(() => `
+            <div class="bg-white/10 rounded-3xl p-5 animate-pulse">
+              <div class="h-4 bg-white/10 rounded-full mb-3 w-2/3"></div>
+              <div class="h-3 bg-white/10 rounded-full w-full mb-2"></div>
+              <div class="h-3 bg-white/10 rounded-full w-3/4"></div>
+            </div>`).join('')}
         </div>
       </div>
     </div>`;
+
+  // Fetch real data in parallel
+  const [popularBiz, events, deals, shoutouts] = await Promise.all([
+    apiGet('/popular'),
+    apiGet('/events'),
+    apiGet('/deals'),
+    apiGet('/shoutouts')
+  ]);
+
+  // ── Popular Businesses ──
+  const popSection = document.getElementById('popularSection');
+  if (popularBiz && popularBiz.length > 0) {
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+    const cards = popularBiz.map((b, i) => {
+      const avg = b.avgRating || 0;
+      const count = b.ratings ? b.ratings.length : 0;
+      const icon = b.category?.icon || '🏢';
+      return `
+        <div onclick="loadDirectoryAndOpen('${b._id}')" 
+             class="flex-shrink-0 w-52 bg-white/10 hover:bg-white/20 border border-white/10 rounded-3xl p-4 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:border-emerald-500/40">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-emerald-500/30 to-teal-500/20 rounded-2xl flex items-center justify-center text-xl">${icon}</div>
+            <span class="text-base">${medals[i]}</span>
+          </div>
+          <h3 class="font-bold text-sm leading-tight mb-1 line-clamp-2">${b.name}</h3>
+          <div class="flex items-center gap-1 mt-2">
+            <span style="color:#f59e0b;font-size:11px;">★★★★★</span>
+          </div>
+          <div class="flex items-center gap-1 mt-1">
+            ${[1,2,3,4,5].map(s => `<span style="color:${s<=Math.round(avg)?'#f59e0b':'#374151'};font-size:13px;">★</span>`).join('')}
+            <span class="text-xs text-white/50 ml-1">${avg}</span>
+          </div>
+          <p class="text-xs text-white/40 mt-1">${count} rating${count !== 1 ? 's' : ''}</p>
+        </div>`;
+    }).join('');
+    popSection.innerHTML = `
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🏆</span>
+          <h2 class="text-lg font-bold">Popular This Week</h2>
+        </div>
+        <button onclick="navigate('directory')" class="text-emerald-400 text-xs font-semibold hover:text-emerald-300">See all →</button>
+      </div>
+      <div class="flex gap-3 overflow-x-auto pb-3 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">${cards}</div>`;
+  } else {
+    popSection.innerHTML = `
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xl">🏆</span>
+        <h2 class="text-lg font-bold">Popular This Week</h2>
+      </div>
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
+        <p class="text-white/50 text-sm">Rate some businesses to see what's trending!</p>
+        <button onclick="navigate('directory')" class="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-2xl text-sm font-semibold transition">Browse Directory</button>
+      </div>`;
+  }
+
+  // ── Local News / Activity Feed ──
+  const newsSection = document.getElementById('newsSection');
+  const newsItems = [];
+
+  // Upcoming events as news
+  const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 2);
+  upcomingEvents.forEach(e => {
+    const dateStr = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    newsItems.push({
+      icon: '📅',
+      badge: 'Event',
+      badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+      title: e.title,
+      body: `${dateStr}${e.location ? ' · ' + e.location : ''}`,
+      sub: e.description || '',
+      action: () => navigate('events')
+    });
+  });
+
+  // Active deals as news
+  const activeDeals = deals.filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 2);
+  activeDeals.forEach(d => {
+    newsItems.push({
+      icon: '🔥',
+      badge: 'Deal',
+      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+      title: d.title,
+      body: d.business?.name ? `From ${d.business.name}` : 'Local business deal',
+      sub: d.description || '',
+      action: () => navigate('deals')
+    });
+  });
+
+  // Recent shoutouts as community buzz
+  if (shoutouts.length > 0) {
+    const recent = shoutouts[0];
+    newsItems.push({
+      icon: '💬',
+      badge: 'Community',
+      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+      title: `"${recent.text.length > 80 ? recent.text.slice(0,80) + '…' : recent.text}"`,
+      body: `${recent.author} · ${timeAgo(recent.createdAt)}`,
+      sub: `${shoutouts.length} shoutout${shoutouts.length !== 1 ? 's' : ''} in the community`,
+      action: () => navigate('shoutouts')
+    });
+  }
+
+  if (newsItems.length === 0) {
+    newsSection.innerHTML = `
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xl">📰</span>
+        <h2 class="text-lg font-bold">Local News & Updates</h2>
+      </div>
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
+        <p class="text-4xl mb-3">🌱</p>
+        <p class="text-white/60 text-sm">Nothing posted yet — be the first to add an event, deal, or shoutout!</p>
+      </div>`;
+  } else {
+    const cards = newsItems.map(item => `
+      <div onclick="(${item.action.toString()})()" 
+           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition-all duration-200">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">${item.icon}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${item.badgeColor}">${item.badge}</span>
+            </div>
+            <p class="font-semibold text-sm leading-snug mb-1 text-white">${item.title}</p>
+            <p class="text-xs text-emerald-300">${item.body}</p>
+            ${item.sub ? `<p class="text-xs text-white/40 mt-1 line-clamp-1">${item.sub}</p>` : ''}
+          </div>
+          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
+        </div>
+      </div>`).join('');
+
+    newsSection.innerHTML = `
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">📰</span>
+          <h2 class="text-lg font-bold">Local News & Updates</h2>
+        </div>
+        <span class="text-xs text-white/40">${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+      </div>
+      <div class="space-y-3">${cards}</div>`;
+  }
+
+  // ── Community pulse strip at the bottom ──
+  const pulse = document.createElement('div');
+  pulse.className = 'mt-8 grid grid-cols-3 gap-3';
+  pulse.innerHTML = `
+    <div class="bg-gradient-to-br from-emerald-600/30 to-teal-600/20 border border-emerald-500/20 rounded-3xl p-4 text-center">
+      <div class="text-2xl font-bold">${allBusinesses.length || '?'}</div>
+      <div class="text-xs text-white/60 mt-1">Businesses</div>
+    </div>
+    <div class="bg-gradient-to-br from-blue-600/30 to-indigo-600/20 border border-blue-500/20 rounded-3xl p-4 text-center">
+      <div class="text-2xl font-bold">${events.length}</div>
+      <div class="text-xs text-white/60 mt-1">Events</div>
+    </div>
+    <div class="bg-gradient-to-br from-amber-600/30 to-orange-600/20 border border-amber-500/20 rounded-3xl p-4 text-center">
+      <div class="text-2xl font-bold">${deals.length}</div>
+      <div class="text-xs text-white/60 mt-1">Active Deals</div>
+    </div>`;
+  content.querySelector('.max-w-2xl').appendChild(pulse);
 }
+
+// Helper to navigate to directory and open a business modal
+window.loadDirectoryAndOpen = async function (businessId) {
+  await loadDirectoryPage(document.getElementById('content'));
+  showBusinessDetail(businessId);
+};
 
 // ─── DIRECTORY (FULLY MOBILE-OPTIMIZED) ───────────────────────────────────────
 async function loadDirectoryPage(content) {
@@ -139,7 +368,6 @@ function renderDirectory(businesses) {
            class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300">
         <div class="h-2 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-50'}"></div>
         <div class="p-4" style="box-sizing:border-box;">
-          <!-- Top row -->
           <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;">
             <div class="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center text-2xl" style="flex-shrink:0;">${categoryIcon}</div>
             <div style="flex:1;min-width:0;">
@@ -153,13 +381,10 @@ function renderDirectory(businesses) {
               <span class="text-xs text-white/50">${categoryName}</span>
             </div>
           </div>
-          <!-- Address -->
           <p class="text-emerald-300 text-sm mt-3 mb-2" style="display:flex;align-items:flex-start;gap:4px;min-width:0;">
             <span style="flex-shrink:0;">📍</span><span style="word-break:break-word;min-width:0;">${b.address || 'Milledgeville, GA'}</span>
           </p>
-          <!-- Description -->
           ${b.description ? `<p class="text-sm text-white/70 mb-3 line-clamp-2" style="word-break:break-word;">${b.description}</p>` : ''}
-          <!-- Stars + actions -->
           <div class="mt-3 pt-3 border-t border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;">
             <div id="card-stars-${b._id}" style="flex-shrink:0;">${renderStars(avg, count)}</div>
             <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -197,8 +422,6 @@ function showBusinessDetail(id) {
   const avg = business.avgRating || 0;
   const count = business.ratings ? business.ratings.length : 0;
   const isOwned = !!business.owner;
-  const isMyBusiness = currentUser && business.owner &&
-    ((business.owner._id || business.owner) === (currentUser.id || currentUser._id));
 
   const modalHTML = `
     <div onclick="if(event.target.id==='businessModal')hideBusinessModal()" id="businessModal" 
@@ -330,30 +553,221 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// ─── SHOUTOUTS ────────────────────────────────────────────────────────────────
+// ─── SHOUTOUTS (with comments + replies) ─────────────────────────────────────
 async function loadShoutoutsPage(content) {
   const shoutouts = await apiGet('/shoutouts');
-  let html = `<h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">Community Shoutouts</h2>`;
+
+  let html = `
+    <div class="max-w-2xl mx-auto px-2">
+      <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
+
   if (currentUser) {
     html += `
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-8 mx-4">
-        <textarea id="shoutoutInput" rows="3" class="w-full bg-transparent border border-white/30 rounded-3xl p-4 text-white placeholder:text-white/50 focus:outline-none" placeholder="What's happening in Milledgeville?"></textarea>
-        <button onclick="postShoutout()" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold">Post Shoutout</button>
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 mb-6">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+          <div class="flex-1">
+            <textarea id="shoutoutInput" rows="2" 
+              class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
+              placeholder="What's happening in Milledgeville?"></textarea>
+            <div class="flex justify-end mt-2">
+              <button onclick="postShoutout()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">Post Shoutout</button>
+            </div>
+          </div>
+        </div>
       </div>`;
   }
+
   if (!shoutouts.length) {
     html += `<p class="text-center text-white/50 py-12">No shoutouts yet — be the first!</p>`;
+  } else {
+    html += `<div class="space-y-4" id="shoutoutsFeed">`;
+    shoutouts.forEach(s => {
+      html += renderShoutoutCard(s);
+    });
+    html += `</div>`;
   }
-  shoutouts.forEach(s => {
-    html += `
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mx-4 mb-4">
-        <p class="text-white/80">${s.text}</p>
-        <p class="text-xs text-white/40 mt-3">${s.author} • ${new Date(s.createdAt).toLocaleDateString()}</p>
-      </div>`;
-  });
+
+  html += `</div>`;
   content.innerHTML = html;
 }
 
+function renderShoutoutCard(s) {
+  const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
+  const likeCount = s.likes ? s.likes.length : 0;
+  const commentCount = s.comments ? s.comments.length : 0;
+
+  let commentsHtml = '';
+  if (s.comments && s.comments.length > 0) {
+    commentsHtml = `<div class="mt-4 space-y-3 border-t border-white/10 pt-4">`;
+    s.comments.forEach(c => {
+      const cLetter = c.author ? c.author[0].toUpperCase() : '?';
+      let repliesHtml = '';
+      if (c.replies && c.replies.length > 0) {
+        repliesHtml = `<div class="ml-8 mt-2 space-y-2">`;
+        c.replies.forEach(r => {
+          const rLetter = r.author ? r.author[0].toUpperCase() : '?';
+          repliesHtml += `
+            <div class="flex items-start gap-2">
+              <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
+              <div class="flex-1 bg-white/5 rounded-2xl px-3 py-2">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-semibold text-white/80">${r.author}</span>
+                  <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
+                </div>
+                <p class="text-sm text-white/75">${r.text}</p>
+              </div>
+            </div>`;
+        });
+        repliesHtml += `</div>`;
+      }
+
+      commentsHtml += `
+        <div class="comment-block" id="comment-${c._id}">
+          <div class="flex items-start gap-2">
+            <div class="w-7 h-7 bg-slate-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${cLetter}</div>
+            <div class="flex-1">
+              <div class="bg-white/5 rounded-2xl px-3 py-2">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-semibold text-white/80">${c.author}</span>
+                  <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
+                  ${currentUser && (c.authorId === currentUser.id || currentUser.email === 'imhoggbox@gmail.com') ? 
+                    `<button onclick="deleteComment('${s._id}','${c._id}')" class="text-[10px] text-red-400/60 hover:text-red-400 ml-auto transition">✕</button>` : ''}
+                </div>
+                <p class="text-sm text-white/75">${c.text}</p>
+              </div>
+              ${currentUser ? `
+                <button onclick="toggleReplyBox('${s._id}','${c._id}')" class="text-[11px] text-white/40 hover:text-emerald-400 mt-1 ml-2 transition font-medium">↩ Reply</button>
+                <div id="replybox-${c._id}" class="hidden mt-2 flex gap-2 items-start">
+                  <div class="w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+                  <div class="flex-1">
+                    <textarea id="replyinput-${c._id}" rows="1"
+                      class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400 resize-none text-sm"
+                      placeholder="Write a reply..."></textarea>
+                    <div class="flex gap-2 mt-1">
+                      <button onclick="submitReply('${s._id}','${c._id}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-xl transition">Post</button>
+                      <button onclick="toggleReplyBox('${s._id}','${c._id}')" class="text-xs text-white/40 hover:text-white/70 px-2 py-1 transition">Cancel</button>
+                    </div>
+                  </div>
+                </div>` : ''}
+            </div>
+          </div>
+          ${repliesHtml}
+        </div>`;
+    });
+    commentsHtml += `</div>`;
+  }
+
+  return `
+    <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5" id="shoutout-${s._id}">
+      <!-- Author row -->
+      <div class="flex items-start gap-3 mb-3">
+        <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm text-white">${s.author || 'Community Member'}</div>
+          <div class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</div>
+        </div>
+      </div>
+      <!-- Shoutout text -->
+      <p class="text-white/85 leading-relaxed mb-4">${s.text}</p>
+      <!-- Action bar -->
+      <div class="flex items-center gap-4 text-sm">
+        <button onclick="toggleLike('${s._id}')" id="like-btn-${s._id}"
+                class="flex items-center gap-1.5 text-white/50 hover:text-pink-400 transition font-medium text-xs">
+          <span id="like-icon-${s._id}">🤍</span>
+          <span id="like-count-${s._id}">${likeCount > 0 ? likeCount : ''}</span>
+        </button>
+        <button onclick="toggleCommentBox('${s._id}')"
+                class="flex items-center gap-1.5 text-white/50 hover:text-emerald-400 transition font-medium text-xs">
+          💬 <span>${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Comment'}</span>
+        </button>
+      </div>
+      ${commentsHtml}
+      <!-- Comment input -->
+      ${currentUser ? `
+        <div id="commentbox-${s._id}" class="hidden mt-4 flex items-start gap-2">
+          <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+          <div class="flex-1">
+            <textarea id="commentinput-${s._id}" rows="2"
+              class="w-full bg-white/10 border border-white/20 rounded-2xl px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm"
+              placeholder="Write a comment..."></textarea>
+            <div class="flex gap-2 mt-2">
+              <button onclick="submitComment('${s._id}')" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl transition font-semibold">Post</button>
+              <button onclick="toggleCommentBox('${s._id}')" class="text-sm text-white/40 hover:text-white/70 px-3 py-1.5 transition">Cancel</button>
+            </div>
+          </div>
+        </div>` : ''}
+    </div>`;
+}
+
+// ─── Shoutout interactions ────────────────────────────────────────────────────
+window.toggleLike = async function (shoutoutId) {
+  if (!currentUser) { showToast('Login to like shoutouts', 'error'); return; }
+  const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
+  if (res.likes !== undefined) {
+    const icon = document.getElementById(`like-icon-${shoutoutId}`);
+    const count = document.getElementById(`like-count-${shoutoutId}`);
+    if (icon) icon.textContent = res.liked ? '❤️' : '🤍';
+    if (count) count.textContent = res.likes > 0 ? res.likes : '';
+  }
+};
+
+window.toggleCommentBox = function (shoutoutId) {
+  const box = document.getElementById(`commentbox-${shoutoutId}`);
+  if (!box) return;
+  const isHidden = box.classList.contains('hidden');
+  box.classList.toggle('hidden', !isHidden);
+  if (isHidden) {
+    const input = document.getElementById(`commentinput-${shoutoutId}`);
+    if (input) input.focus();
+  }
+};
+
+window.submitComment = async function (shoutoutId) {
+  const input = document.getElementById(`commentinput-${shoutoutId}`);
+  if (!input || !input.value.trim()) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text: input.value.trim() });
+  if (res._id) {
+    // Reload shoutouts page to show updated comments
+    await loadShoutoutsPage(document.getElementById('content'));
+  } else {
+    showToast(res.message || 'Error posting comment', 'error');
+  }
+};
+
+window.toggleReplyBox = function (shoutoutId, commentId) {
+  const box = document.getElementById(`replybox-${commentId}`);
+  if (!box) return;
+  const isHidden = box.classList.contains('hidden');
+  box.classList.toggle('hidden', !isHidden);
+  if (isHidden) {
+    const input = document.getElementById(`replyinput-${commentId}`);
+    if (input) input.focus();
+  }
+};
+
+window.submitReply = async function (shoutoutId, commentId) {
+  const input = document.getElementById(`replyinput-${commentId}`);
+  if (!input || !input.value.trim()) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies`, { text: input.value.trim() });
+  if (res._id) {
+    await loadShoutoutsPage(document.getElementById('content'));
+  } else {
+    showToast(res.message || 'Error posting reply', 'error');
+  }
+};
+
+window.deleteComment = async function (shoutoutId, commentId) {
+  if (!confirm('Delete this comment?')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}`, {}, 'DELETE');
+  if (res.message === 'Deleted') {
+    await loadShoutoutsPage(document.getElementById('content'));
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+// ─── EVENTS & DEALS ──────────────────────────────────────────────────────────
 async function loadItemsPage(content, type) {
   const items = await apiGet(`/${type}`);
   let html = `<h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">${type === 'events' ? 'Events' : 'Deals'}</h2>`;
