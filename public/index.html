@@ -25,11 +25,12 @@
     <div id="sidebar" class="hidden md:flex w-64 bg-white/10 backdrop-blur-xl border-r border-white/10 flex-col">
       <div class="p-6 flex items-center gap-3">
         <div class="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl">🏠</div>
-        <h1 class="text-2xl font-bold tracking-tight">Milledgeville Connect</h1>
+        <h1 class="text-xl font-bold tracking-tight">Milledgeville Connect</h1>
       </div>
       <nav id="desktop-nav" class="flex-1 px-3"></nav>
       <div class="mx-4 mb-6">
-        <div onclick="showProfileSheet()" id="sidebar-avatar" class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl font-bold text-white cursor-pointer hover:scale-110 transition-transform"></div>
+        <div onclick="showProfileSheet()" id="sidebar-avatar"
+             class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer hover:scale-110 transition-transform"></div>
       </div>
     </div>
 
@@ -38,28 +39,32 @@
       <!-- Top Bar -->
       <div class="bg-white/10 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
         <div class="flex items-center gap-3 md:hidden">
-          <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl">🏠</div>
-          <h1 class="text-2xl font-bold">Milledgeville Connect</h1>
+          <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl">🏠</div>
+          <h1 class="text-xl font-bold">Milledgeville Connect</h1>
         </div>
         <div class="flex-1 max-w-md mx-4 md:mx-0">
-          <input id="searchInput" type="text" placeholder="Search businesses, events..." class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-3 text-sm focus:outline-none focus:border-emerald-400 placeholder:text-white/50">
+          <input id="searchInput" type="text" placeholder="Search businesses, events..."
+                 class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-3 text-sm focus:outline-none focus:border-emerald-400 placeholder:text-white/50">
         </div>
-        <div onclick="showProfileSheet()" id="mobile-avatar" class="md:hidden w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl font-bold text-white cursor-pointer hover:scale-110 transition-transform"></div>
+        <div onclick="showProfileSheet()" id="mobile-avatar"
+             class="md:hidden w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer hover:scale-110 transition-transform"></div>
       </div>
 
-      <!-- MOBILE CONTENT WRAPPER (THIS FIXES THE STRETCHING) -->
-      <div id="mobileContentWrapper" class="flex-1 md:mx-0 mx-auto max-w-md w-full overflow-auto">
+      <!-- CONTENT WRAPPER -->
+      <div id="mobileContentWrapper" class="flex-1 md:mx-0 mx-auto max-w-2xl w-full overflow-auto">
         <div id="content" class="p-4 md:p-6"></div>
       </div>
 
       <!-- MOBILE BOTTOM NAV -->
-      <div id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white/10 backdrop-blur-xl border-t border-white/10 flex justify-around py-2"></div>
+      <div id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white/10 backdrop-blur-xl border-t border-white/10 flex justify-around py-2 z-40"></div>
     </div>
   </div>
 
   <!-- PROFILE SLIDE-UP SHEET -->
-  <div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet" class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
-    <div onclick="event.stopImmediatePropagation()" class="bg-white text-slate-900 w-full rounded-t-3xl max-h-[85vh] overflow-auto transition-transform duration-300 translate-y-full">
+  <div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet"
+       class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
+    <div onclick="event.stopImmediatePropagation()"
+         class="bg-white text-slate-900 w-full rounded-t-3xl max-h-[85vh] overflow-auto transition-transform duration-300 translate-y-full">
       <div class="sticky top-0 bg-white pt-4 pb-2 flex justify-center">
         <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
       </div>
@@ -70,27 +75,37 @@
   </div>
 
   <!-- AUTH MODAL -->
-  <div id="authModal" onclick="if(event.target.id==='authModal')hideAuthModal()" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[10000]">
-    <div onclick="event.stopImmediatePropagation()" class="bg-white text-slate-900 rounded-3xl max-w-md w-full mx-4 shadow-2xl">
+  <div id="authModal" onclick="if(event.target.id==='authModal')hideAuthModal()"
+       class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[10000]">
+    <div onclick="event.stopImmediatePropagation()"
+         class="bg-white text-slate-900 rounded-3xl max-w-md w-full mx-4 shadow-2xl">
       <div class="p-8">
         <h2 id="modalTitle" class="text-3xl font-bold mb-6 text-center">Welcome back</h2>
         <div id="loginForm">
-          <input id="loginEmail" type="email" placeholder="Email" class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
-          <input id="loginPassword" type="password" placeholder="Password" class="w-full mb-6 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
-          <button onclick="handleLogin()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Log In</button>
+          <input id="loginEmail" type="email" placeholder="Email"
+                 class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+          <input id="loginPassword" type="password" placeholder="Password"
+                 class="w-full mb-6 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+          <button onclick="handleLogin()"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Log In</button>
           <p onclick="switchToRegister()" class="text-center text-sm mt-6 text-emerald-600 cursor-pointer">Don't have an account? Register</p>
         </div>
         <div id="registerForm" class="hidden">
-          <input id="regName" type="text" placeholder="Full Name" class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
-          <input id="regEmail" type="email" placeholder="Email" class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
-          <input id="regPassword" type="password" placeholder="Password" class="w-full mb-6 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
-          <button onclick="handleRegister()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Create Account</button>
+          <input id="regName" type="text" placeholder="Full Name"
+                 class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+          <input id="regEmail" type="email" placeholder="Email"
+                 class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+          <input id="regPassword" type="password" placeholder="Password"
+                 class="w-full mb-6 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+          <button onclick="handleRegister()"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Create Account</button>
           <p onclick="switchToLogin()" class="text-center text-sm mt-6 text-emerald-600 cursor-pointer">Already have an account? Log in</p>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Scripts — order matters -->
   <script src="/js/api.js"></script>
   <script src="/js/data.js"></script>
   <script src="/js/nav.js"></script>

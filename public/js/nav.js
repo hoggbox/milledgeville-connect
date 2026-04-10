@@ -7,11 +7,18 @@ const pages = [
 ];
 
 function renderNav() {
+  const isOwner = currentUser && currentUser.verifiedBusiness;
+
+  const navPages = [...pages];
+  if (isOwner) {
+    navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
+  }
+
   // Desktop sidebar
   let desktopHTML = '';
-  pages.forEach(page => {
+  navPages.forEach(page => {
     desktopHTML += `
-      <button onclick="navigate('${page.id}')" 
+      <button onclick="navigate('${page.id}')"
               class="flex items-center gap-3 w-full text-left px-6 py-4 rounded-3xl hover:bg-white/10 transition text-white">
         <span class="text-3xl">${page.icon}</span>
         <span class="font-medium">${page.label}</span>
@@ -21,7 +28,7 @@ function renderNav() {
 
   // Mobile bottom nav
   let mobileHTML = '';
-  pages.forEach(page => {
+  navPages.forEach(page => {
     mobileHTML += `
       <button onclick="navigate('${page.id}')" class="flex flex-col items-center text-white/70 hover:text-white transition">
         <span class="text-3xl">${page.icon}</span>
