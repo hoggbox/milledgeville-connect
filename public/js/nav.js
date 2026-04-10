@@ -1,7 +1,7 @@
 const pages = [
   { id: 'home', icon: '🏠', label: 'Home' },
   { id: 'directory', icon: '📍', label: 'Directory' },
-  { id: 'shoutouts', icon: '💬', label: 'Shoutouts' },
+  { id: 'community', icon: '💬', label: 'Community' },
   { id: 'events', icon: '📅', label: 'Events' },
   { id: 'deals', icon: '🔥', label: 'Deals' }
 ];
