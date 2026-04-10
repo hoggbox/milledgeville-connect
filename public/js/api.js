@@ -22,7 +22,6 @@ async function apiRequest(endpoint, data = null, method = 'GET') {
   try {
     return JSON.parse(text);
   } catch (e) {
-    console.error('API Error:', text);
     return { message: text || 'Server error' };
   }
 }
