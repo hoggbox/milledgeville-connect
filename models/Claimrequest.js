@@ -14,3 +14,5 @@ const claimRequestSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('ClaimRequest', claimRequestSchema);
+
+//test

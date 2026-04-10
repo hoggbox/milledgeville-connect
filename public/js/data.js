@@ -90,7 +90,7 @@ function loadHomePage(content) {
     </div>`;
 }
 
-// ─── DIRECTORY ────────────────────────────────────────────────────────────────
+// ─── DIRECTORY (FULLY MOBILE-OPTIMIZED) ───────────────────────────────────────
 async function loadDirectoryPage(content) {
   const data = await apiGet('/directory');
   allBusinesses = data.businesses;
@@ -131,20 +131,19 @@ function renderDirectory(businesses) {
     const avg = b.avgRating || 0;
     const count = b.ratings ? b.ratings.length : 0;
     const isOwned = b.owner !== null && b.owner !== undefined;
-    const isMyBusiness = currentUser && b.owner && (b.owner._id || b.owner) === (currentUser.id || currentUser._id);
     const categoryIcon = b.category?.icon || '🏢';
     const categoryName = b.category?.name || 'Business';
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300">
+           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300 w-full">
         <!-- Color band header -->
         <div class="h-2 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-50'}"></div>
         <div class="p-5">
           <!-- Top row: icon + name + badges -->
-          <div class="flex items-start justify-between mb-3">
+          <div class="flex items-start justify-between gap-3">
             <div class="flex items-center gap-3 flex-1 min-w-0">
-              <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
+              <div class="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
                 ${categoryIcon}
               </div>
               <div class="flex-1 min-w-0">
@@ -159,12 +158,12 @@ function renderDirectory(businesses) {
           </div>
 
           <!-- Address -->
-          <p class="text-emerald-300 text-sm mb-2 flex items-center gap-1">
+          <p class="text-emerald-300 text-sm mt-3 mb-2 flex items-center gap-1">
             <span>📍</span> ${b.address || 'Milledgeville, GA'}
           </p>
 
           <!-- Description -->
-          ${b.description ? `<p class="text-sm text-white/70 mb-3 line-clamp-2">${b.description}</p>` : ''}
+          ${b.description ? `<p class="text-sm text-white/70 mb-4 line-clamp-2">${b.description}</p>` : ''}
 
           <!-- Stars + quick actions -->
           <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
