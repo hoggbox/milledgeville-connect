@@ -3,6 +3,17 @@
   *, *::before, *::after { box-sizing: border-box; }
 }
 
+/* Prevent ANY child from blowing out the viewport on mobile */
+#content, #mobileContentWrapper {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+#directoryResults, #directoryResults * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .card-hover {
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }

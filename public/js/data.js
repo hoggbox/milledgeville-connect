@@ -94,26 +94,25 @@ async function loadDirectoryPage(content) {
   allBusinesses = data.businesses;
 
   let html = `
-    <div class="w-full max-w-full overflow-hidden">
-    <h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">Local Directory</h2>
-    <div class="px-4 mb-4">
+    <h2 class="text-3xl md:text-4xl font-bold mb-5">Local Directory</h2>
+    <div class="mb-4">
       <input id="directorySearch" type="text" placeholder="Search businesses or keywords..."
-             class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400 text-base box-border"
+             style="box-sizing:border-box;width:100%;"
+             class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400 text-base"
              onkeyup="filterDirectory()">
     </div>
-    <div class="flex gap-2 mb-6 px-4 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling: touch;">
+    <div class="flex gap-2 mb-5 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;width:100%;">
       <button onclick="renderDirectory(allBusinesses)" 
-              class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2.5 rounded-3xl text-sm whitespace-nowrap transition font-semibold">
+              class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition font-semibold">
         All
       </button>
       ${data.categories.map(cat => `
         <button onclick="filterByCategory('${cat._id}')"
-                class="flex-shrink-0 bg-white/10 hover:bg-white/20 px-4 py-2.5 rounded-3xl text-sm whitespace-nowrap transition flex items-center gap-1.5">
+                class="flex-shrink-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition flex items-center gap-1">
           <span>${cat.icon}</span><span>${cat.name}</span>
         </button>`).join('')}
     </div>
-    <div id="directoryResults" class="px-4 w-full max-w-full"></div>
-    </div>`;
+    <div id="directoryResults" style="width:100%;min-width:0;"></div>`;
 
   content.innerHTML = html;
   renderDirectory(allBusinesses);
@@ -126,7 +125,7 @@ function renderDirectory(businesses) {
     return;
   }
 
-  let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">';
+  let html = '<div style="display:grid;grid-template-columns:1fr;gap:12px;width:100%;min-width:0;">';
   businesses.forEach(b => {
     const avg = b.avgRating || 0;
     const count = b.ratings ? b.ratings.length : 0;
@@ -136,43 +135,36 @@ function renderDirectory(businesses) {
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300 w-full box-border">
-        <!-- Color band header -->
+           style="width:100%;min-width:0;box-sizing:border-box;"
+           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300">
         <div class="h-2 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-50'}"></div>
-        <div class="p-4">
-          <!-- Top row: icon + name + badges -->
-          <div class="flex items-start gap-3">
-            <div class="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-              ${categoryIcon}
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-start justify-between gap-2">
-                <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors break-words">${b.name}</h3>
-                <div class="flex flex-col items-end gap-1 flex-shrink-0 ml-1">
-                  ${isOwned ? `<span class="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">✓ Verified</span>` : ''}
-                  ${b.isPremium ? `<span class="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">⭐ Premium</span>` : ''}
+        <div class="p-4" style="box-sizing:border-box;">
+          <!-- Top row -->
+          <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;">
+            <div class="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center text-2xl" style="flex-shrink:0;">${categoryIcon}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;min-width:0;">
+                <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors" style="min-width:0;word-break:break-word;flex:1;">${b.name}</h3>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
+                  ${isOwned ? `<span class="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">✓ Verified</span>` : ''}
+                  ${b.isPremium ? `<span class="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">⭐ Premium</span>` : ''}
                 </div>
               </div>
               <span class="text-xs text-white/50">${categoryName}</span>
             </div>
           </div>
-
           <!-- Address -->
-          <p class="text-emerald-300 text-sm mt-3 mb-2 flex items-start gap-1">
-            <span class="flex-shrink-0">📍</span> <span class="break-words">${b.address || 'Milledgeville, GA'}</span>
+          <p class="text-emerald-300 text-sm mt-3 mb-2" style="display:flex;align-items:flex-start;gap:4px;min-width:0;">
+            <span style="flex-shrink:0;">📍</span><span style="word-break:break-word;min-width:0;">${b.address || 'Milledgeville, GA'}</span>
           </p>
-
           <!-- Description -->
-          ${b.description ? `<p class="text-sm text-white/70 mb-3 line-clamp-2 break-words">${b.description}</p>` : ''}
-
-          <!-- Stars + quick actions -->
-          <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10 gap-2">
-            <div id="card-stars-${b._id}" class="flex items-center gap-1 flex-shrink-0">
-              ${renderStars(avg, count)}
-            </div>
-            <div class="flex gap-2 flex-shrink-0">
-              ${b.phone ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition whitespace-nowrap">📞 Call</a>` : ''}
-              ${!isOwned && currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" onclick="event.stopPropagation();showClaimModal('${b._id}')">Claim</span>` : ''}
+          ${b.description ? `<p class="text-sm text-white/70 mb-3 line-clamp-2" style="word-break:break-word;">${b.description}</p>` : ''}
+          <!-- Stars + actions -->
+          <div class="mt-3 pt-3 border-t border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;">
+            <div id="card-stars-${b._id}" style="flex-shrink:0;">${renderStars(avg, count)}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              ${b.phone ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition" style="white-space:nowrap;">📞 Call</a>` : ''}
+              ${!isOwned && currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showClaimModal('${b._id}')">Claim</span>` : ''}
             </div>
           </div>
         </div>
