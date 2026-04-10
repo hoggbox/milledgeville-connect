@@ -143,16 +143,16 @@ function renderDirectory(businesses) {
         <div class="p-5">
           <!-- Top row: icon + name + badges -->
           <div class="flex items-start justify-between mb-3">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
               <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
                 ${categoryIcon}
               </div>
-              <div>
-                <h3 class="font-bold text-lg leading-tight group-hover:text-emerald-300 transition-colors">${b.name}</h3>
+              <div class="flex-1 min-w-0">
+                <h3 class="font-bold text-lg leading-tight group-hover:text-emerald-300 transition-colors truncate">${b.name}</h3>
                 <span class="text-xs text-white/50">${categoryName}</span>
               </div>
             </div>
-            <div class="flex flex-col items-end gap-1">
+            <div class="flex flex-col items-end gap-1 flex-shrink-0">
               ${isOwned ? `<span class="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">✓ Verified</span>` : ''}
               ${b.isPremium ? `<span class="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">⭐ Premium</span>` : ''}
             </div>
@@ -371,78 +371,59 @@ async function loadShoutoutsPage(content) {
   }
   shoutouts.forEach(s => {
     html += `
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4 mx-4">
-        <p class="text-lg">${s.text}</p>
-        <p class="text-xs text-white/50 mt-4">${s.author} · ${new Date(s.createdAt).toLocaleDateString()}</p>
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mx-4 mb-4">
+        <p class="text-white/80">${s.text}</p>
+        <p class="text-xs text-white/40 mt-3">${s.author} • ${new Date(s.createdAt).toLocaleDateString()}</p>
       </div>`;
   });
   content.innerHTML = html;
 }
 
-// ─── EVENTS & DEALS ───────────────────────────────────────────────────────────
 async function loadItemsPage(content, type) {
   const items = await apiGet(`/${type}`);
-  const isEvents = type === 'events';
-  let html = `<h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">${isEvents ? '📅 Upcoming Events' : '🔥 Hot Deals'}</h2>`;
+  let html = `<h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">${type === 'events' ? 'Events' : 'Deals'}</h2>`;
   if (!items.length) {
-    html += `<p class="text-center text-white/50 py-12">No ${type} yet — check back soon!</p>`;
+    html += `<p class="text-center text-white/50 py-12">No ${type} yet</p>`;
+  } else {
+    html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">`;
+    items.forEach(item => {
+      html += `
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+          <div class="font-bold text-xl">${item.title}</div>
+          ${type === 'events' ? `<div class="text-emerald-300 text-sm mt-1">${new Date(item.date).toLocaleDateString()}</div>` : ''}
+          ${type === 'deals' && item.expires ? `<div class="text-amber-300 text-sm mt-1">Expires ${new Date(item.expires).toLocaleDateString()}</div>` : ''}
+          ${item.description ? `<p class="text-white/70 mt-3">${item.description}</p>` : ''}
+          ${item.location ? `<p class="text-xs text-white/50 mt-2">📍 ${item.location}</p>` : ''}
+        </div>`;
+    });
+    html += `</div>`;
   }
-  items.forEach(item => {
-    html += `
-      <div class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4 mx-4">
-        <div class="font-bold text-xl mb-1">${item.title}</div>
-        ${isEvents ? `<div class="text-emerald-300 text-sm mb-2">📅 ${new Date(item.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>` : ''}
-        ${isEvents && item.location ? `<div class="text-white/60 text-sm mb-2">📍 ${item.location}</div>` : ''}
-        ${!isEvents && item.business?.name ? `<div class="text-emerald-300 text-sm mb-2">🏪 ${item.business.name}</div>` : ''}
-        ${!isEvents && item.expires ? `<div class="text-amber-300 text-xs mb-2">⏰ Expires ${new Date(item.expires).toLocaleDateString()}</div>` : ''}
-        ${item.description ? `<div class="text-sm text-white/80">${item.description}</div>` : ''}
-      </div>`;
-  });
   content.innerHTML = html;
 }
 
 // ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
 async function loadOwnerDashboard(content) {
-  if (!currentUser || !currentUser.verifiedBusiness) {
-    content.innerHTML = `<div class="text-center py-12 text-white/60">You need a verified business to access this.</div>`;
-    return;
-  }
-
-  const biz = currentUser.verifiedBusiness;
-  const bizId = biz._id || biz;
-
   content.innerHTML = `
     <div class="px-4">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl">🏪</div>
-        <div>
-          <h2 class="text-2xl font-bold">Business Dashboard</h2>
-          <p class="text-emerald-300 text-sm">${biz.name || 'Your Business'}</p>
-        </div>
+      <h2 class="text-3xl font-bold mb-6">🏪 My Business Dashboard</h2>
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-8">
+        <h3 class="font-semibold mb-4 text-lg">Update Business Listing</h3>
+        <input id="ownerName" type="text" placeholder="Business Name" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
+        <input id="ownerAddress" type="text" placeholder="Address" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
+        <input id="ownerPhone" type="text" placeholder="Phone" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
+        <input id="ownerWebsite" type="text" placeholder="Website (optional)" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
+        <textarea id="ownerDescription" rows="3" placeholder="Description" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white"></textarea>
+        <button onclick="saveOwnerListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold">Save Changes</button>
       </div>
 
       <!-- Tabs -->
-      <div class="flex border-b border-white/20 mb-6 overflow-x-auto">
-        <button onclick="switchOwnerTab(0)" id="otab0" class="flex-shrink-0 flex-1 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white">Edit Listing</button>
-        <button onclick="switchOwnerTab(1)" id="otab1" class="flex-shrink-0 flex-1 py-4 text-center font-semibold text-white/70">Deals</button>
-        <button onclick="switchOwnerTab(2)" id="otab2" class="flex-shrink-0 flex-1 py-4 text-center font-semibold text-white/70">Events</button>
-      </div>
-
-      <!-- Edit Listing Tab -->
-      <div id="otabContent0">
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-          <h3 class="font-semibold mb-4 text-lg">Update Your Listing</h3>
-          <input id="ownerName" type="text" placeholder="Business Name" value="${biz.name || ''}" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="ownerAddress" type="text" placeholder="Address" value="${biz.address || ''}" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="ownerPhone" type="text" placeholder="Phone" value="${biz.phone || ''}" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="ownerWebsite" type="text" placeholder="Website (optional)" value="${biz.website || ''}" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <textarea id="ownerDescription" rows="3" placeholder="Short description" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">${biz.description || ''}</textarea>
-          <button onclick="saveOwnerListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold text-lg">Save Changes</button>
-        </div>
+      <div class="flex border-b border-white/20 mb-6">
+        <button onclick="switchOwnerTab(0)" id="otab0" class="flex-1 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white">Deals</button>
+        <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">Events</button>
       </div>
 
       <!-- Deals Tab -->
-      <div id="otabContent1" class="hidden">
+      <div id="otabContent0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Deal</h3>
           <input id="dealTitle" type="text" placeholder="Deal Title" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
@@ -454,7 +435,7 @@ async function loadOwnerDashboard(content) {
       </div>
 
       <!-- Events Tab -->
-      <div id="otabContent2" class="hidden">
+      <div id="otabContent1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Event</h3>
           <input id="eventTitle" type="text" placeholder="Event Title" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
@@ -472,7 +453,7 @@ async function loadOwnerDashboard(content) {
 }
 
 window.switchOwnerTab = function (tab) {
-  [0, 1, 2].forEach(i => {
+  [0, 1].forEach(i => {
     const tabBtn = document.getElementById(`otab${i}`);
     const tabContent = document.getElementById(`otabContent${i}`);
     if (!tabBtn || !tabContent) return;
@@ -495,7 +476,6 @@ window.saveOwnerListing = async function () {
 
   const res = await apiPost('/owner/business', { name, address, phone, website, description }, 'PUT');
   if (res._id) {
-    // Update currentUser's verifiedBusiness in memory
     currentUser.verifiedBusiness = res;
     showToast('✅ Listing updated!');
   } else {
