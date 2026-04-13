@@ -28,6 +28,21 @@ function authenticate(req, res, next) {
   }
 }
 
+// optionalAuth — sets req.userId if a valid token is present, but never blocks the request
+function optionalAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
+    const token = header.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.userId = decoded.userId;
+    } catch (_) {
+      // token invalid / expired — continue as guest
+    }
+  }
+  next();
+}
+
 function requireAdmin(req, res, next) {
   User.findById(req.userId).then(user => {
     if (!user || user.email !== 'imhoggbox@gmail.com') {
@@ -102,7 +117,7 @@ router.patch('/auth/profile', authenticate, async (req, res) => {
 });
 
 // ─── Directory ────────────────────────────────────────────────────────────────
-router.get('/directory', authenticate, async (req, res) => {
+router.get('/directory', optionalAuth, async (req, res) => {
   try {
     const businesses = await Business.find().populate('category').populate('owner', 'name email');
     const categories = await Category.find();
@@ -139,7 +154,7 @@ router.get('/resources', async (req, res) => {
   }
 });
 
-router.get('/popular', authenticate, async (req, res) => {
+router.get('/popular', optionalAuth, async (req, res) => {
   try {
     const businesses = await Business.find().populate('category');
     const sorted = businesses
@@ -182,7 +197,7 @@ router.post('/business/:id/rate', authenticate, async (req, res) => {
 });
 
 // ─── Shoutouts ────────────────────────────────────────────────────────────────
-router.get('/shoutouts', authenticate, async (req, res) => {
+router.get('/shoutouts', optionalAuth, async (req, res) => {
   try {
     const shoutouts = await Shoutout.find().sort({ createdAt: -1 });
     res.json(shoutouts);
@@ -328,7 +343,7 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
 });
 
 // ─── Events ───────────────────────────────────────────────────────────────────
-router.get('/events', authenticate, async (req, res) => {
+router.get('/events', optionalAuth, async (req, res) => {
   try {
     const events = await Event.find().sort({ date: 1 }).populate('owner', 'name email');
     res.json(events);
@@ -338,7 +353,7 @@ router.get('/events', authenticate, async (req, res) => {
 });
 
 // ─── Deals ────────────────────────────────────────────────────────────────────
-router.get('/deals', authenticate, async (req, res) => {
+router.get('/deals', optionalAuth, async (req, res) => {
   try {
     const deals = await Deal.find().populate('business', 'name').populate('owner', 'name email');
     res.json(deals);
@@ -348,7 +363,7 @@ router.get('/deals', authenticate, async (req, res) => {
 });
 
 // ─── News (public read, restricted write) ────────────────────────────────────
-router.get('/news', authenticate, async (req, res) => {
+router.get('/news', optionalAuth, async (req, res) => {
   try {
     const news = await News.find().sort({ createdAt: -1 });
     res.json(news);
@@ -357,7 +372,7 @@ router.get('/news', authenticate, async (req, res) => {
   }
 });
 
-router.get('/news/:id', authenticate, async (req, res) => {
+router.get('/news/:id', optionalAuth, async (req, res) => {
   try {
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
@@ -713,7 +728,7 @@ router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) =>
 });
 
 // ─── GLOBAL SEARCH ENDPOINT ───────────────────────────────────────────────────
-router.get('/search', authenticate, async (req, res) => {
+router.get('/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
