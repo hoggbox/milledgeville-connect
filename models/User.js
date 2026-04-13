@@ -20,10 +20,13 @@ const userSchema = new mongoose.Schema({
   instagram: { type: String, default: '' },
   facebook:  { type: String, default: '' },
 
-  // Notification preferences
+  // Notification preferences (in-app)
   notifyDeals:    { type: Boolean, default: true },
   notifyEvents:   { type: Boolean, default: true },
   notifyShoutouts:{ type: Boolean, default: false },
+
+  // Push notification opt-in (Web Push)
+  pushEnabled: { type: Boolean, default: false },
 
   // ─── News Posting Permission ───────────────────────────────────────────────
   canPostNews: { type: Boolean, default: false },

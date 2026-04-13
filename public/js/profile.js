@@ -1,34 +1,96 @@
 // ─── profile.js ───────────────────────────────────────────────────────────────
-// Enhanced user profile: sheet display, edit modal, avatar upload
+// Enhanced user profile: sheet display, edit modal, avatar upload, push notifications
 
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES    = ['image/jpeg', 'image/png', 'image/webp'];
 
-// ─── Avatar helpers ───────────────────────────────────────────────────────────
-function getAvatarHTML(user, size = 'lg') {
-  const dims   = size === 'lg' ? 'w-28 h-28 text-7xl rounded-3xl' : 'w-10 h-10 text-2xl rounded-2xl';
-  const letter = (user.name || '?')[0].toUpperCase();
-  if (user.avatar) {
-    return `<img src="${user.avatar}" alt="avatar"
-                 class="${dims === 'w-28 h-28 text-7xl rounded-3xl' ? 'w-28 h-28 rounded-3xl' : 'w-10 h-10 rounded-2xl'} object-cover shadow-inner"
-                 style="object-fit:cover;">`;
-  }
-  return `<div class="${dims} bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center font-bold text-white shadow-inner">${letter}</div>`;
+// ─── Push Notification Helpers ────────────────────────────────────────────────
+let _vapidPublicKey = null;
+
+async function getVapidKey() {
+  if (_vapidPublicKey) return _vapidPublicKey;
+  try {
+    const res = await apiGet('/push/vapid-public-key');
+    _vapidPublicKey = res.key || null;
+  } catch (e) { _vapidPublicKey = null; }
+  return _vapidPublicKey;
 }
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const output  = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
+  return output;
+}
+
+async function requestPushPermission() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast('Push notifications are not supported on this device/browser.', 'error');
+    return false;
+  }
+  const vapidKey = await getVapidKey();
+  if (!vapidKey) {
+    showToast('Push notifications are not configured on this server yet.', 'error');
+    return false;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    showToast('Notification permission denied. You can enable it in browser settings.', 'error');
+    return false;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey)
+    });
+
+    const res = await apiPost('/push/subscribe', { subscription: subscription.toJSON() });
+    if (res.message === 'Subscribed') {
+      currentUser.pushEnabled = true;
+      return true;
+    }
+  } catch (err) {
+    console.error('Push subscribe error:', err);
+    showToast('Could not enable push notifications. Please try again.', 'error');
+  }
+  return false;
+}
+
+async function disablePushNotifications() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+    }
+    await apiPost('/push/unsubscribe', {});
+    currentUser.pushEnabled = false;
+  } catch (err) {
+    console.error('Push unsubscribe error:', err);
+  }
+}
+
+// Register service worker on load
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(err => {
+    console.warn('SW registration failed:', err);
+  });
+}
+
+// ─── Avatar helpers ───────────────────────────────────────────────────────────
 function updateSidebarAvatars() {
   if (!currentUser) return;
-  // These elements are now rendered by renderNav() — just re-render nav to refresh them
   renderNav();
 }
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
 function showProfileSheet() {
-  // If not logged in, show auth modal instead of silently failing
-  if (!currentUser) {
-    showAuthModal();
-    return;
-  }
+  if (!currentUser) { showAuthModal(); return; }
 
   const sheet   = document.getElementById('profileSheet');
   const content = document.getElementById('sheet-content');
@@ -46,59 +108,37 @@ function showProfileSheet() {
     ? new Date(currentUser.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : 'Recently';
 
-  // Social link rows
   const socials = [
-    currentUser.instagram ? `<a href="https://instagram.com/${currentUser.instagram.replace('@','')}" target="_blank"
-        class="flex items-center gap-2 text-pink-400 hover:text-pink-300 text-sm font-medium transition">
-        <span class="text-lg">📸</span> @${currentUser.instagram.replace('@','')}
-      </a>` : '',
-    currentUser.facebook ? `<a href="${currentUser.facebook.startsWith('http') ? currentUser.facebook : 'https://facebook.com/'+currentUser.facebook}" target="_blank"
-        class="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition">
-        <span class="text-lg">👤</span> Facebook
-      </a>` : '',
-    currentUser.website ? `<a href="${currentUser.website.startsWith('http') ? currentUser.website : 'https://'+currentUser.website}" target="_blank"
-        class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition">
-        <span class="text-lg">🔗</span> ${currentUser.website.replace(/^https?:\/\//,'')}
-      </a>` : ''
+    currentUser.instagram ? `<a href="https://instagram.com/${currentUser.instagram.replace('@','')}" target="_blank" class="flex items-center gap-2 text-pink-400 hover:text-pink-300 text-sm font-medium transition"><span class="text-lg">📸</span> @${currentUser.instagram.replace('@','')}</a>` : '',
+    currentUser.facebook  ? `<a href="${currentUser.facebook.startsWith('http') ? currentUser.facebook : 'https://facebook.com/'+currentUser.facebook}" target="_blank" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition"><span class="text-lg">👤</span> Facebook</a>` : '',
+    currentUser.website   ? `<a href="${currentUser.website.startsWith('http') ? currentUser.website : 'https://'+currentUser.website}" target="_blank" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"><span class="text-lg">🔗</span> ${currentUser.website.replace(/^https?:\/\//,'')}</a>` : ''
   ].filter(Boolean).join('');
 
   content.innerHTML = `
-    <!-- Header gradient banner -->
     <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
          style="background: linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%);">
-      <div class="absolute inset-0 opacity-10"
-           style="background-image:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,.15) 20px,rgba(255,255,255,.15) 21px);"></div>
-      <!-- edit button -->
+      <div class="absolute inset-0 opacity-10" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,.15) 20px,rgba(255,255,255,.15) 21px);"></div>
       <button onclick="showEditProfileModal()"
               class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">
         ✏️ Edit Profile
       </button>
     </div>
 
-    <!-- Avatar overlapping banner -->
     <div class="flex justify-center -mt-20 mb-4 relative z-10">
       <div class="relative inline-block">
         <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white shadow-2xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white">
-          ${currentUser.avatar
-            ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar">`
-            : (currentUser.name||'?')[0].toUpperCase()}
+          ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()}
         </div>
         ${isVerified ? `<div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1 border border-white">✓ Verified</div>` : ''}
       </div>
     </div>
 
-    <!-- Name / email -->
     <h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
     <p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
     ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
-
-    <!-- Bio -->
     ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${currentUser.bio}"</p>` : ''}
-
-    <!-- Verified business badge -->
     ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
 
-    <!-- Stats strip -->
     <div class="mt-6 grid grid-cols-3 gap-3">
       <div class="bg-slate-50 border border-slate-100 rounded-2xl py-3 flex flex-col items-center">
         <span class="text-xl font-bold text-slate-800">🗓️</span>
@@ -117,7 +157,6 @@ function showProfileSheet() {
       </div>
     </div>
 
-    <!-- Contact / social -->
     ${(currentUser.phone || socials) ? `
     <div class="mt-5 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left space-y-2">
       ${currentUser.phone ? `<div class="flex items-center gap-2 text-slate-600 text-sm"><span>📞</span><span>${currentUser.phone}</span></div>` : ''}
@@ -126,7 +165,6 @@ function showProfileSheet() {
 
     <p class="text-slate-400 text-xs mt-4">${lastLoginText}</p>
 
-    <!-- Action buttons -->
     <div class="mt-8 space-y-3">
       ${isAdmin    ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
       ${isVerified ? `<button onclick="navigate('owner-dashboard');hideProfileSheet();" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
@@ -136,11 +174,7 @@ function showProfileSheet() {
     </div>
   `;
 
-  // Show the sheet — remove hidden first, then animate slide-up on next frame
   sheet.classList.remove('hidden');
-
-  // Use requestAnimationFrame (double-rAF) to ensure the browser has painted
-  // before triggering the CSS transition. More reliable than setTimeout(fn, 10).
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const panel = document.getElementById('profileSheetPanel');
@@ -163,7 +197,6 @@ function hideProfileSheet() {
 
 // ─── Edit Profile Modal ───────────────────────────────────────────────────────
 function showEditProfileModal() {
-  // Reset pending avatar state each time modal opens
   pendingAvatarData = undefined;
 
   let modal = document.getElementById('editProfileModal');
@@ -175,12 +208,14 @@ function showEditProfileModal() {
     document.body.appendChild(modal);
   }
 
-  const u = currentUser;
+  const u           = currentUser;
+  const pushSupported = ('serviceWorker' in navigator) && ('PushManager' in window);
+  const pushEnabled = !!u.pushEnabled;
+
   modal.innerHTML = `
     <div onclick="event.stopPropagation()"
          class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
 
-      <!-- Sticky header -->
       <div class="sticky top-0 bg-white z-10 pt-4 pb-3 px-6 border-b border-slate-100 flex items-center justify-between">
         <h2 class="text-xl font-bold">Edit Profile</h2>
         <button onclick="hideEditProfileModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">✕</button>
@@ -209,7 +244,7 @@ function showEditProfileModal() {
           </div>
           <input id="avatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
                  onchange="handleAvatarSelect(this)">
-          <p class="text-xs text-slate-400">JPG, PNG or WebP · Max 2 MB · Displayed at 112×112 px</p>
+          <p class="text-xs text-slate-400">JPG, PNG or WebP · Max 2 MB</p>
           <div id="avatarError" class="hidden text-xs text-red-500 font-medium text-center"></div>
         </div>
 
@@ -253,7 +288,7 @@ function showEditProfileModal() {
                  class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm">
         </div>
 
-        <!-- Social section -->
+        <!-- Social links -->
         <div class="bg-slate-50 rounded-2xl p-4 space-y-3">
           <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Social Links</p>
           <div class="flex items-center gap-3">
@@ -271,12 +306,14 @@ function showEditProfileModal() {
         </div>
 
         <!-- Notification preferences -->
-        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
+        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-4">
           <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notification Preferences</p>
+
+          <!-- In-app toggles -->
           ${[
-            { id: 'ep-notifyDeals',    label: '🔥 New Deals',      checked: u.notifyDeals !== false },
-            { id: 'ep-notifyEvents',   label: '📅 Upcoming Events', checked: u.notifyEvents !== false },
-            { id: 'ep-notifyShoutouts',label: '💬 Shoutouts',       checked: !!u.notifyShoutouts },
+            { id: 'ep-notifyDeals',     label: '🔥 New Deals',       checked: u.notifyDeals !== false },
+            { id: 'ep-notifyEvents',    label: '📅 Upcoming Events',  checked: u.notifyEvents !== false },
+            { id: 'ep-notifyShoutouts', label: '💬 Shoutout Activity',checked: !!u.notifyShoutouts },
           ].map(n => `
             <label class="flex items-center justify-between cursor-pointer select-none">
               <span class="text-sm font-medium text-slate-700">${n.label}</span>
@@ -286,9 +323,27 @@ function showEditProfileModal() {
                 <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
               </div>
             </label>`).join('')}
+
+          <!-- Push notification toggle -->
+          <div class="border-t border-emerald-200 pt-4 mt-2">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-slate-700">🔔 Push Notifications</p>
+                <p class="text-xs text-slate-500 mt-0.5">Receive alerts on your phone even when the app is closed. Requires browser permission.</p>
+              </div>
+              <div class="relative flex-shrink-0">
+                <input type="checkbox" id="ep-pushEnabled" ${pushEnabled ? 'checked' : ''} ${!pushSupported ? 'disabled' : ''}
+                       class="sr-only peer" onchange="handlePushToggle(this.checked)">
+                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors peer-disabled:opacity-40"></div>
+                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+              </div>
+            </div>
+            ${!pushSupported ? `<p class="text-xs text-amber-600 mt-2">⚠️ Push notifications require a modern browser with service worker support.</p>` : ''}
+            <div id="pushStatusMsg" class="text-xs text-emerald-600 mt-2 hidden"></div>
+          </div>
         </div>
 
-        <!-- Save button -->
+        <!-- Save -->
         <button onclick="saveProfile()"
                 class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2"
                 id="saveProfileBtn">
@@ -303,15 +358,32 @@ function showEditProfileModal() {
 
   modal.classList.remove('hidden');
 
-  // Live bio counter
   const bioTextarea = document.getElementById('ep-bio');
   const bioCount    = document.getElementById('bioCount');
   if (bioTextarea && bioCount) {
-    bioTextarea.addEventListener('input', () => {
-      bioCount.textContent = bioTextarea.value.length;
-    });
+    bioTextarea.addEventListener('input', () => { bioCount.textContent = bioTextarea.value.length; });
   }
 }
+
+// Handle the push toggle interaction
+window.handlePushToggle = async function (checked) {
+  const statusEl = document.getElementById('pushStatusMsg');
+  if (statusEl) { statusEl.textContent = checked ? 'Enabling…' : 'Disabling…'; statusEl.classList.remove('hidden'); }
+
+  if (checked) {
+    const success = await requestPushPermission();
+    if (!success) {
+      const cb = document.getElementById('ep-pushEnabled');
+      if (cb) cb.checked = false;
+      if (statusEl) statusEl.classList.add('hidden');
+    } else {
+      if (statusEl) { statusEl.textContent = '✅ Push notifications enabled!'; }
+    }
+  } else {
+    await disablePushNotifications();
+    if (statusEl) { statusEl.textContent = 'Push notifications disabled.'; }
+  }
+};
 
 function hideEditProfileModal() {
   const modal = document.getElementById('editProfileModal');
@@ -319,12 +391,11 @@ function hideEditProfileModal() {
 }
 
 // ─── Avatar selection & validation ───────────────────────────────────────────
-let pendingAvatarData = undefined; // undefined = unchanged, null = remove, string = new base64
+let pendingAvatarData = undefined;
 
 function handleAvatarSelect(input) {
-  const file = input.files[0];
+  const file  = input.files[0];
   if (!file) return;
-
   const errEl = document.getElementById('avatarError');
   if (errEl) errEl.classList.add('hidden');
 
@@ -344,7 +415,7 @@ function handleAvatarSelect(input) {
 
   const reader = new FileReader();
   reader.onload = e => {
-    pendingAvatarData = e.target.result; // base64 data URI
+    pendingAvatarData = e.target.result;
     const preview = document.getElementById('avatarPreview');
     if (preview) {
       preview.innerHTML = `
@@ -381,21 +452,18 @@ async function saveProfile() {
 
   const payload = {
     name,
-    bio:           document.getElementById('ep-bio')?.value.trim()        || '',
+    bio:           document.getElementById('ep-bio')?.value.trim()          || '',
     neighborhood:  document.getElementById('ep-neighborhood')?.value.trim() || '',
-    phone:         document.getElementById('ep-phone')?.value.trim()       || '',
-    website:       document.getElementById('ep-website')?.value.trim()     || '',
-    instagram:     document.getElementById('ep-instagram')?.value.trim()   || '',
-    facebook:      document.getElementById('ep-facebook')?.value.trim()    || '',
-    notifyDeals:   document.getElementById('ep-notifyDeals')?.checked      ?? true,
-    notifyEvents:  document.getElementById('ep-notifyEvents')?.checked     ?? true,
+    phone:         document.getElementById('ep-phone')?.value.trim()        || '',
+    website:       document.getElementById('ep-website')?.value.trim()      || '',
+    instagram:     document.getElementById('ep-instagram')?.value.trim()    || '',
+    facebook:      document.getElementById('ep-facebook')?.value.trim()     || '',
+    notifyDeals:   document.getElementById('ep-notifyDeals')?.checked       ?? true,
+    notifyEvents:  document.getElementById('ep-notifyEvents')?.checked      ?? true,
     notifyShoutouts: document.getElementById('ep-notifyShoutouts')?.checked ?? false,
   };
 
-  // Avatar: only include if it changed
-  if (pendingAvatarData !== undefined) {
-    payload.avatar = pendingAvatarData; // null = remove, string = new image
-  }
+  if (pendingAvatarData !== undefined) payload.avatar = pendingAvatarData;
 
   const res = await apiPatch('/auth/profile', payload);
 
@@ -404,7 +472,6 @@ async function saveProfile() {
     pendingAvatarData = undefined;
     updateUserUI();
     hideEditProfileModal();
-    // Small delay so the edit modal finishes closing before the profile sheet re-renders
     setTimeout(() => showProfileSheet(), 150);
     showToast('✅ Profile updated!');
   } else {
@@ -417,16 +484,11 @@ async function saveProfile() {
 // ─── Escape helper ────────────────────────────────────────────────────────────
 function escHtml(str) {
   return String(str)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── Override updateUserUI to also update sidebar avatars ─────────────────────
-window.updateUserUI = function () {
-  renderNav(); // renderNav handles both logged-in avatars and guest sign-in buttons
-};
+// ─── Override updateUserUI ────────────────────────────────────────────────────
+window.updateUserUI = function () { renderNav(); };
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 window.showProfileSheet      = showProfileSheet;
@@ -435,3 +497,5 @@ window.showEditProfileModal  = showEditProfileModal;
 window.hideEditProfileModal  = hideEditProfileModal;
 window.handleAvatarSelect    = handleAvatarSelect;
 window.saveProfile           = saveProfile;
+window.requestPushPermission = requestPushPermission;
+window.disablePushNotifications = disablePushNotifications;

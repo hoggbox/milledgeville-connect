@@ -748,18 +748,22 @@ async function filterByCategory(catId) {
 }
 
 // ─── BUSINESS DETAIL MODAL ────────────────────────────────────────────────────
-function showBusinessDetail(id) {
+async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
   if (!business) return;
 
-  const avg = business.avgRating || 0;
-  const count = business.ratings ? business.ratings.length : 0;
+  const avg     = business.avgRating || 0;
+  const count   = business.ratings ? business.ratings.length : 0;
   const isOwned = !!business.owner;
 
+  // Fetch reviews (first 3 shown, rest behind "See all")
+  const reviews = await apiGet(`/business/${id}/reviews`);
+  const preview = (reviews || []).slice(0, 3);
+
   const modalHTML = `
-    <div onclick="if(event.target.id==='businessModal')hideBusinessModal()" id="businessModal" 
+    <div onclick="if(event.target.id==='businessModal')hideBusinessModal()" id="businessModal"
          class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center">
-      <div onclick="event.stopImmediatePropagation()" 
+      <div onclick="event.stopImmediatePropagation()"
            class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
         <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
           <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
@@ -772,7 +776,9 @@ function showBusinessDetail(id) {
           </div>
           <p class="text-emerald-600 text-sm mb-1">${business.category?.name || ''}</p>
           <p class="text-gray-500 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
-          <div class="bg-gray-50 rounded-2xl p-4 mb-6">
+
+          <!-- Star rating -->
+          <div class="bg-gray-50 rounded-2xl p-4 mb-4">
             <p class="text-sm font-semibold text-gray-700 mb-2">Rate this business:</p>
             ${currentUser
               ? renderStars(avg, count, true, business._id)
@@ -782,7 +788,16 @@ function showBusinessDetail(id) {
                    Sign in to leave a rating →
                  </button>`}
           </div>
-          <div class="space-y-3 mb-6">
+
+          <!-- Menu button (food businesses only) -->
+          ${business.menu ? `
+            <button onclick="showMenuViewer('${id}')"
+                    class="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-semibold py-3 rounded-2xl mb-4 transition">
+              🍽️ View Menu
+            </button>` : ''}
+
+          <!-- Contact -->
+          <div class="space-y-3 mb-5">
             ${business.phone ? `
               <a href="tel:${business.phone}" class="flex items-center gap-3 bg-emerald-50 hover:bg-emerald-100 transition p-4 rounded-2xl text-emerald-700 font-semibold">
                 <span class="text-2xl">📞</span> ${business.phone}
@@ -792,10 +807,78 @@ function showBusinessDetail(id) {
                 <span class="text-2xl">🌐</span> Visit Website
               </a>` : ''}
           </div>
-          ${business.description ? `<p class="text-gray-600 leading-relaxed mb-6">${business.description}</p>` : ''}
+
+          ${business.description ? `<p class="text-gray-600 leading-relaxed mb-5">${business.description}</p>` : ''}
+
+          <!-- ─── Reviews Section ─────────────────────────────────────────── -->
+          <div class="border-t border-gray-100 pt-5 mb-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-lg text-slate-900">⭐ Reviews
+                <span class="text-sm font-normal text-gray-400 ml-1">(${reviews.length})</span>
+              </h3>
+              ${reviews.length > 3 ? `
+                <button onclick="showAllReviews('${id}')"
+                        class="text-xs text-emerald-600 hover:text-emerald-500 font-semibold transition">
+                  See all ${reviews.length} →
+                </button>` : ''}
+            </div>
+
+            <!-- Review summary bar -->
+            ${reviews.length > 0 ? renderReviewSummary(reviews) : ''}
+
+            <!-- Write a review -->
+            ${currentUser ? `
+              <div id="writeReviewBox" class="mb-4">
+                <button onclick="toggleWriteReview('${id}')"
+                        class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-2xl transition text-sm">
+                  ✏️ Write a Review
+                </button>
+                <div id="reviewForm-${id}" class="hidden mt-3 bg-gray-50 rounded-2xl p-4 space-y-3">
+                  <div>
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Your Rating *</p>
+                    <div class="flex gap-1" id="reviewStarPicker-${id}">
+                      ${[1,2,3,4,5].map(s => `
+                        <button onclick="setReviewStar('${id}',${s})" data-star="${s}"
+                                class="text-3xl transition hover:scale-110 review-star-btn" style="color:#d1d5db;">★</button>`).join('')}
+                    </div>
+                  </div>
+                  <input id="reviewTitle-${id}" type="text" placeholder="Headline (optional)" maxlength="100"
+                         class="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:border-emerald-500 outline-none text-sm">
+                  <textarea id="reviewBody-${id}" rows="3" placeholder="Share your experience…" maxlength="1000"
+                            class="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:border-emerald-500 outline-none text-sm resize-none"></textarea>
+                  <div class="flex gap-2">
+                    <button onclick="submitReview('${id}')"
+                            class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-semibold text-sm transition">
+                      Submit Review
+                    </button>
+                    <button onclick="toggleWriteReview('${id}')"
+                            class="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-2xl text-sm transition">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>` : `
+              <div class="mb-4">
+                <button onclick="hideBusinessModal();showAuthModal({message:'Sign in to leave a review.'})"
+                        class="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-slate-700 font-semibold py-3 rounded-2xl transition text-sm">
+                  ✏️ Sign in to Review
+                </button>
+              </div>`}
+
+            <!-- Review cards (preview) -->
+            <div id="reviewCards-${id}" class="space-y-3">
+              ${preview.length ? preview.map(r => renderReviewCard(r, id)).join('') : `
+                <div class="text-center py-6 text-gray-400 text-sm">
+                  <p class="text-3xl mb-2">💬</p>
+                  No reviews yet — be the first!
+                </div>`}
+            </div>
+          </div>
+
+          <!-- Actions -->
           <div class="space-y-3">
             ${!isOwned && currentUser ? `
-              <button onclick="hideBusinessModal();showClaimModal('${business._id}')" 
+              <button onclick="hideBusinessModal();showClaimModal('${business._id}')"
                       class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition">
                 🏷️ Claim This Business
               </button>` : ''}
@@ -809,8 +892,219 @@ function showBusinessDetail(id) {
         </div>
       </div>
     </div>`;
+
   document.body.insertAdjacentHTML('beforeend', modalHTML);
+  window._currentBizReviews = reviews;
+  window._currentBizId      = id;
 }
+
+// ─── Review helpers ───────────────────────────────────────────────────────────
+function renderReviewSummary(reviews) {
+  const avg   = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const avgR  = Math.round(avg * 10) / 10;
+  const dist  = [5,4,3,2,1].map(s => ({ star: s, count: reviews.filter(r => r.rating === s).length }));
+
+  return `
+    <div class="bg-gray-50 rounded-2xl p-4 mb-4">
+      <div class="flex items-center gap-5">
+        <div class="text-center flex-shrink-0">
+          <div class="text-5xl font-black text-slate-900">${avgR}</div>
+          <div class="flex gap-0.5 justify-center mt-1">
+            ${[1,2,3,4,5].map(s => `<span style="color:${s<=Math.round(avgR)?'#f59e0b':'#d1d5db'};font-size:16px;">★</span>`).join('')}
+          </div>
+          <div class="text-xs text-gray-400 mt-1">${reviews.length} review${reviews.length!==1?'s':''}</div>
+        </div>
+        <div class="flex-1 space-y-1.5">
+          ${dist.map(d => {
+            const pct = reviews.length ? Math.round((d.count / reviews.length) * 100) : 0;
+            return `
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-gray-500 w-3 text-right flex-shrink-0">${d.star}</span>
+                <span class="text-amber-400 flex-shrink-0">★</span>
+                <div class="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                  <div class="bg-amber-400 h-full rounded-full" style="width:${pct}%"></div>
+                </div>
+                <span class="text-gray-400 w-5 flex-shrink-0">${d.count}</span>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderReviewCard(r, bizId) {
+  const stars = [1,2,3,4,5].map(s => `<span style="color:${s<=r.rating?'#f59e0b':'#d1d5db'};font-size:13px;">★</span>`).join('');
+  const isAdmin  = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAuthor = currentUser && (r.user === currentUser._id || r.user === currentUser.id);
+  return `
+    <div class="bg-gray-50 border border-gray-100 rounded-2xl p-4" id="review-card-${r._id}">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+            ${(r.authorName||'?')[0].toUpperCase()}
+          </div>
+          <div>
+            <p class="font-semibold text-sm text-slate-800">${r.authorName || 'Anonymous'}</p>
+            <div class="flex items-center gap-1">${stars}<span class="text-xs text-gray-400 ml-1">${timeAgo(r.createdAt)}</span></div>
+          </div>
+        </div>
+        ${isAuthor || isAdmin ? `
+          <button onclick="deleteReview('${bizId}','${r._id}')"
+                  class="text-xs text-red-400 hover:text-red-600 transition font-semibold flex-shrink-0">Delete</button>` : ''}
+      </div>
+      ${r.title ? `<p class="font-semibold text-slate-800 text-sm mb-1">${r.title}</p>` : ''}
+      ${r.body  ? `<p class="text-sm text-gray-600 leading-relaxed">${r.body}</p>` : ''}
+    </div>`;
+}
+
+let _reviewStarRating = 0;
+window.setReviewStar = function (bizId, star) {
+  _reviewStarRating = star;
+  document.querySelectorAll(`#reviewStarPicker-${bizId} .review-star-btn`).forEach(btn => {
+    btn.style.color = parseInt(btn.dataset.star) <= star ? '#f59e0b' : '#d1d5db';
+  });
+};
+
+window.toggleWriteReview = function (bizId) {
+  const form = document.getElementById(`reviewForm-${bizId}`);
+  if (form) form.classList.toggle('hidden');
+};
+
+window.submitReview = async function (bizId) {
+  if (!_reviewStarRating) { showToast('Please select a star rating.', 'error'); return; }
+  const title = document.getElementById(`reviewTitle-${bizId}`)?.value.trim();
+  const body  = document.getElementById(`reviewBody-${bizId}`)?.value.trim();
+  const res   = await apiPost(`/business/${bizId}/reviews`, { rating: _reviewStarRating, title, body });
+  if (res._id) {
+    showToast('✅ Review posted!');
+    // Refresh the reviews section
+    const updatedReviews = await apiGet(`/business/${bizId}/reviews`);
+    window._currentBizReviews = updatedReviews;
+    const preview = updatedReviews.slice(0, 3);
+    const container = document.getElementById(`reviewCards-${bizId}`);
+    if (container) container.innerHTML = preview.map(r => renderReviewCard(r, bizId)).join('');
+    // Hide form
+    const form = document.getElementById(`reviewForm-${bizId}`);
+    if (form) form.classList.add('hidden');
+    _reviewStarRating = 0;
+  } else {
+    showToast(res.message || 'Error posting review', 'error');
+  }
+};
+
+window.deleteReview = async function (bizId, reviewId) {
+  if (!confirm('Delete this review?')) return;
+  const res = await apiPost(`/business/${bizId}/reviews/${reviewId}`, {}, 'DELETE');
+  if (res.message === 'Deleted') {
+    showToast('Review deleted');
+    const card = document.getElementById(`review-card-${reviewId}`);
+    if (card) card.remove();
+    // Update global list
+    if (window._currentBizReviews) {
+      window._currentBizReviews = window._currentBizReviews.filter(r => r._id !== reviewId);
+    }
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+// All reviews modal
+window.showAllReviews = async function (bizId) {
+  const business = allBusinesses.find(b => b._id === bizId);
+  const reviews  = window._currentBizReviews || await apiGet(`/business/${bizId}/reviews`);
+  const filterOpts = ['All', '5 Stars', '4 Stars', '3 Stars', '2 Stars', '1 Star'];
+
+  const html = `
+    <div onclick="if(event.target.id==='allReviewsModal')closeAllReviews()" id="allReviewsModal"
+         class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[13000] flex items-end md:items-center md:justify-center">
+      <div onclick="event.stopImmediatePropagation()"
+           class="bg-white text-slate-900 w-full md:max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
+        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100 z-10">
+          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+        </div>
+        <div class="h-1 bg-gradient-to-r from-amber-400 to-orange-400"></div>
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold">All Reviews</h2>
+            <span class="text-sm text-gray-400">${business?.name || ''}</span>
+          </div>
+          ${reviews.length > 0 ? renderReviewSummary(reviews) : ''}
+
+          <!-- Filter chips -->
+          <div class="flex gap-2 overflow-x-auto pb-2 mb-4 hide-scrollbar">
+            ${filterOpts.map((f, i) => `
+              <button onclick="filterReviews(${i}, '${bizId}')" id="rchip-${i}"
+                      class="flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition ${i===0 ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">
+                ${f}
+              </button>`).join('')}
+          </div>
+
+          <div id="allReviewsList" class="space-y-3">
+            ${reviews.map(r => renderReviewCard(r, bizId)).join('')}
+          </div>
+          <button onclick="closeAllReviews()" class="w-full mt-6 bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._allReviewsData  = reviews;
+  window._allReviewsBizId = bizId;
+};
+
+window.filterReviews = function (chipIdx, bizId) {
+  const starFilter = [0, 5, 4, 3, 2, 1][chipIdx];
+  const filtered   = starFilter === 0
+    ? window._allReviewsData
+    : window._allReviewsData.filter(r => r.rating === starFilter);
+
+  document.querySelectorAll('[id^="rchip-"]').forEach((btn, i) => {
+    btn.className = i === chipIdx
+      ? 'flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition bg-amber-500 text-white'
+      : 'flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition bg-gray-100 text-gray-600 hover:bg-gray-200';
+  });
+
+  const list = document.getElementById('allReviewsList');
+  if (list) list.innerHTML = filtered.length
+    ? filtered.map(r => renderReviewCard(r, bizId)).join('')
+    : `<p class="text-center text-gray-400 py-8">No ${starFilter}-star reviews yet.</p>`;
+};
+
+window.closeAllReviews = function () {
+  const el = document.getElementById('allReviewsModal');
+  if (el) el.remove();
+};
+
+// ─── Menu viewer ──────────────────────────────────────────────────────────────
+window.showMenuViewer = function (bizId) {
+  const business = allBusinesses.find(b => b._id === bizId);
+  if (!business || !business.menu) return;
+
+  const isImg  = business.menu.startsWith('data:image');
+  const isPdf  = business.menu.startsWith('data:application/pdf');
+
+  const html = `
+    <div onclick="if(event.target.id==='menuViewerModal')closeMenuViewer()" id="menuViewerModal"
+         class="fixed inset-0 bg-black/85 z-[14000] flex items-center justify-center p-4">
+      <div onclick="event.stopImmediatePropagation()"
+           class="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl">
+        <div class="sticky top-0 bg-white px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-xl font-bold">🍽️ Menu — ${business.name}</h2>
+          <button onclick="closeMenuViewer()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">✕</button>
+        </div>
+        <div class="p-4">
+          ${isImg ? `<img src="${business.menu}" alt="Menu" class="w-full rounded-2xl" style="max-height:75vh;object-fit:contain;">` :
+            isPdf ? `<iframe src="${business.menu}" class="w-full rounded-2xl border border-gray-100" style="height:75vh;"></iframe>` :
+            `<p class="text-center text-gray-400 py-12">Menu format not supported for preview.</p>`}
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.closeMenuViewer = function () {
+  const el = document.getElementById('menuViewerModal');
+  if (el) el.remove();
+};
 
 function hideBusinessModal() {
   const modal = document.getElementById('businessModal');
@@ -842,14 +1136,28 @@ window.showClaimModal = function (businessId) {
             <p class="text-gray-500 text-sm mt-2">Provide your info so we can verify you're the owner. Our admin will review and approve your request.</p>
           </div>
           <div class="space-y-3">
-            <input id="claimOwnerName" type="text" placeholder="Your full name (owner)" 
+            <input id="claimOwnerName" type="text" placeholder="Your full name (owner)"
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
-            <input id="claimPhone" type="tel" placeholder="Business phone number" 
+            <input id="claimPhone" type="tel" placeholder="Business phone number"
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
-            <input id="claimAddress" type="text" placeholder="Business address" 
+            <input id="claimAddress" type="text" placeholder="Business address"
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
-            <textarea id="claimMessage" rows="3" placeholder="Anything else to verify? (optional)" 
+            <textarea id="claimMessage" rows="3" placeholder="Anything else to verify? (optional)"
                       class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50 resize-none"></textarea>
+
+            <!-- Food / Restaurant checkbox -->
+            <label class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 cursor-pointer select-none">
+              <div class="relative flex-shrink-0 mt-0.5">
+                <input type="checkbox" id="claimIsRestaurant" class="sr-only peer">
+                <div class="w-5 h-5 rounded-md border-2 border-amber-300 peer-checked:bg-amber-500 peer-checked:border-amber-500 transition-colors flex items-center justify-center">
+                  <svg class="w-3 h-3 text-white hidden peer-checked:block" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+              </div>
+              <div>
+                <p class="font-semibold text-amber-800 text-sm">🍽️ Food or Restaurant Business</p>
+                <p class="text-amber-600 text-xs mt-0.5">Check this if your business serves food. If approved, you'll be able to upload a menu to your listing.</p>
+              </div>
+            </label>
           </div>
           <div id="claimStatus" class="hidden mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-sm text-center">
             ⏳ Your claim has been submitted! You'll be notified once approved.
@@ -874,13 +1182,14 @@ window.submitClaim = async function (businessId) {
   const phone = document.getElementById('claimPhone').value.trim();
   const address = document.getElementById('claimAddress').value.trim();
   const message = document.getElementById('claimMessage').value.trim();
+  const isRestaurant = document.getElementById('claimIsRestaurant')?.checked || false;
 
   if (!ownerName || !phone || !address) {
     showToast('Please fill in your name, phone, and address.', 'error');
     return;
   }
 
-  const res = await apiPost(`/claim/${businessId}`, { ownerName, phone, address, message });
+  const res = await apiPost(`/claim/${businessId}`, { ownerName, phone, address, message, isRestaurant });
 
   if (res.message && res.message.includes('submitted')) {
     document.getElementById('claimStatus').classList.remove('hidden');
@@ -1837,6 +2146,45 @@ async function loadOwnerDashboard(content) {
         <textarea id="ownerDescription" rows="3"  placeholder="Description"        class="${inputClass} resize-none"></textarea>
         <button onclick="saveOwnerListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold">Save Changes</button>
       </div>
+
+      ${biz && biz.isRestaurant ? `
+      <div class="bg-white/10 backdrop-blur-xl border border-amber-500/30 rounded-3xl p-6 mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="text-2xl">🍽️</span>
+          <div>
+            <h3 class="font-semibold text-lg">Restaurant Menu</h3>
+            <p class="text-white/50 text-xs">Upload an image or PDF of your menu (max 5 MB)</p>
+          </div>
+        </div>
+        ${biz.menu ? `
+          <div class="mb-4 bg-white/5 rounded-2xl overflow-hidden">
+            ${biz.menu.startsWith('data:image')
+              ? `<img src="${biz.menu}" alt="Current Menu" class="w-full max-h-64 object-contain">`
+              : `<div class="p-4 flex items-center gap-3"><span class="text-3xl">📄</span><p class="text-sm font-semibold">Menu PDF uploaded</p></div>`}
+          </div>
+          <p class="text-xs text-emerald-400 mb-3">✅ Menu is live on your listing</p>` : ''}
+        <div id="menuPreviewBox" class="hidden mb-4 bg-white/5 rounded-2xl overflow-hidden">
+          <img id="menuPreviewImg" src="" alt="Menu preview" class="w-full max-h-64 object-contain hidden">
+          <div id="menuPdfLabel" class="hidden p-4 flex items-center gap-3"><span class="text-3xl">📄</span><p class="text-sm font-semibold">PDF ready to upload</p></div>
+        </div>
+        <button onclick="document.getElementById('menuFileInput').click()"
+                class="w-full border-2 border-dashed border-amber-500/40 hover:border-amber-400 rounded-2xl py-4 text-white/60 hover:text-white transition text-sm font-medium mb-3">
+          📁 Choose Menu File (Image or PDF)
+        </button>
+        <input id="menuFileInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="hidden"
+               onchange="handleMenuFileSelect(this)">
+        <div class="flex gap-3">
+          <button onclick="uploadMenu()" id="menuUploadBtn"
+                  class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition hidden">
+            📤 Upload Menu
+          </button>
+          ${biz.menu ? `
+          <button onclick="removeMenu()"
+                  class="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 py-4 rounded-3xl font-semibold transition text-sm">
+            🗑️ Remove Menu
+          </button>` : ''}
+        </div>
+      </div>` : ''}
       <div class="flex border-b border-white/20 mb-6">
         <button onclick="switchOwnerTab(0)" id="otab0" class="flex-1 py-4 text-center font-semibold border-b-2 border-amber-500 text-white">🔥 Deals</button>
         <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">📅 Events</button>
@@ -2717,6 +3065,73 @@ async function postShoutout() {
   input.value = '';
   loadPage('shoutouts');
 }
+
+// ─── MENU UPLOAD (owner dashboard) ───────────────────────────────────────────
+window._pendingMenuFile = null;
+
+window.handleMenuFileSelect = function (input) {
+  const file = input.files[0];
+  if (!file) return;
+  const MAX = 5 * 1024 * 1024;
+  if (file.size > MAX) { showToast('File too large. Max 5 MB.', 'error'); input.value = ''; return; }
+
+  window._pendingMenuFile = file;
+  const isImg = file.type.startsWith('image/');
+  const isPdf = file.type === 'application/pdf';
+
+  const box     = document.getElementById('menuPreviewBox');
+  const img     = document.getElementById('menuPreviewImg');
+  const pdfLbl  = document.getElementById('menuPdfLabel');
+  const uploadBtn = document.getElementById('menuUploadBtn');
+
+  if (box) box.classList.remove('hidden');
+  if (uploadBtn) uploadBtn.classList.remove('hidden');
+
+  if (isImg && img) {
+    const reader = new FileReader();
+    reader.onload = e => { img.src = e.target.result; img.classList.remove('hidden'); if (pdfLbl) pdfLbl.classList.add('hidden'); };
+    reader.readAsDataURL(file);
+  } else if (isPdf && pdfLbl) {
+    pdfLbl.classList.remove('hidden');
+    if (img) img.classList.add('hidden');
+  }
+};
+
+window.uploadMenu = async function () {
+  if (!window._pendingMenuFile) return;
+  const btn = document.getElementById('menuUploadBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Uploading…'; }
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const res = await apiPost('/owner/business/menu', { menu: e.target.result }, 'PUT');
+    if (res.message === 'Menu updated') {
+      showToast('✅ Menu uploaded!');
+      window._pendingMenuFile = null;
+      // Refresh dashboard
+      const meRes = await apiGet('/auth/me');
+      if (meRes.user) { currentUser = meRes.user; }
+      loadPage('owner-dashboard');
+    } else {
+      showToast(res.message || 'Error uploading menu', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Upload Menu'; }
+    }
+  };
+  reader.readAsDataURL(window._pendingMenuFile);
+};
+
+window.removeMenu = async function () {
+  if (!confirm('Remove your menu from the listing?')) return;
+  const res = await apiPost('/owner/business/menu', { menu: null }, 'PUT');
+  if (res.message === 'Menu updated') {
+    showToast('Menu removed');
+    const meRes = await apiGet('/auth/me');
+    if (meRes.user) { currentUser = meRes.user; }
+    loadPage('owner-dashboard');
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
 
 // ─── Global exports ───────────────────────────────────────────────────────────
 window.loadResourcesPage     = loadResourcesPage;

@@ -16,7 +16,14 @@ const businessSchema = new mongoose.Schema({
   keywords: [String],
   isPremium: { type: Boolean, default: false },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  ratings: [ratingSchema]
+  ratings: [ratingSchema],
+
+  // ─── Restaurant / Food flag ────────────────────────────────────────────────
+  // Set during claim — admin must approve claim for this to grant menu access
+  isRestaurant: { type: Boolean, default: false },
+
+  // ─── Menu upload (base64 data URI, max ~5 MB) ──────────────────────────────
+  menu: { type: String, default: null },
 });
 
 // Virtual for average rating

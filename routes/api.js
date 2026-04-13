@@ -1,23 +1,34 @@
 const express = require('express');
-const router = express.Router();
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
+const router  = express.Router();
+const jwt     = require('jsonwebtoken');
+const bcrypt  = require('bcryptjs');
+const webpush = require('web-push');
 
-const User         = require('../models/User');
-const Business     = require('../models/Business');
-const Category     = require('../models/Category');
-const Deal         = require('../models/Deal');
-const Event        = require('../models/Event');
-const Shoutout     = require('../models/Shoutout');
-const ClaimRequest = require('../models/ClaimRequest');
-const News         = require('../models/News');
+const User            = require('../models/User');
+const Business        = require('../models/Business');
+const Category        = require('../models/Category');
+const Deal            = require('../models/Deal');
+const Event           = require('../models/Event');
+const Shoutout        = require('../models/Shoutout');
+const ClaimRequest    = require('../models/ClaimRequest');
+const News            = require('../models/News');
+const Review          = require('../models/Review');
+const PushSubscription = require('../models/PushSubscription');
+
+// ─── Web Push setup ───────────────────────────────────────────────────────────
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:' + (process.env.ADMIN_EMAIL || 'admin@milledgevilleconnect.com'),
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 // ─── Auth Middleware ──────────────────────────────────────────────────────────
 function authenticate(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  if (!header || !header.startsWith('Bearer '))
     return res.status(401).json({ message: 'No token provided' });
-  }
   const token = header.split(' ')[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -28,7 +39,6 @@ function authenticate(req, res, next) {
   }
 }
 
-// optionalAuth — sets req.userId if a valid token is present, but never blocks the request
 function optionalAuth(req, res, next) {
   const header = req.headers.authorization;
   if (header && header.startsWith('Bearer ')) {
@@ -36,21 +46,59 @@ function optionalAuth(req, res, next) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.userId = decoded.userId;
-    } catch (_) {
-      // token invalid / expired — continue as guest
-    }
+    } catch (_) {}
   }
   next();
 }
 
 function requireAdmin(req, res, next) {
   User.findById(req.userId).then(user => {
-    if (!user || user.email !== 'imhoggbox@gmail.com') {
+    if (!user || user.email !== 'imhoggbox@gmail.com')
       return res.status(403).json({ message: 'Admin only' });
-    }
     req.user = user;
     next();
   }).catch(() => res.status(500).json({ message: 'Server error' }));
+}
+
+// ─── Helper: send push to a single user ──────────────────────────────────────
+async function sendPushToUser(userId, payload) {
+  try {
+    const sub = await PushSubscription.findOne({ user: userId });
+    if (!sub) return;
+    const user = await User.findById(userId);
+    if (!user || !user.pushEnabled) return;
+    await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
+  } catch (err) {
+    // Subscription may be expired — clean it up
+    if (err.statusCode === 410) {
+      await PushSubscription.deleteOne({ user: userId });
+      await User.findByIdAndUpdate(userId, { pushEnabled: false });
+    }
+  }
+}
+
+// ─── Helper: broadcast push to all subscribed users ──────────────────────────
+async function broadcastPush(payload, filter = {}) {
+  try {
+    const subs = await PushSubscription.find({});
+    for (const sub of subs) {
+      const user = await User.findById(sub.user);
+      if (!user || !user.pushEnabled) continue;
+      // Apply filter (e.g. notifyDeals, notifyEvents)
+      if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
+      if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
+      try {
+        await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
+      } catch (err) {
+        if (err.statusCode === 410) {
+          await PushSubscription.deleteOne({ user: sub.user });
+          await User.findByIdAndUpdate(sub.user, { pushEnabled: false });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('broadcastPush error:', err.message);
+  }
 }
 
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
@@ -63,7 +111,7 @@ router.post('/auth/register', async (req, res) => {
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) return res.status(400).json({ message: 'Email already in use' });
 
-    const user = await User.create({ name, email, password });
+    const user  = await User.create({ name, email, password });
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: sanitizeUser(user) });
   } catch (err) {
@@ -104,13 +152,47 @@ router.patch('/auth/profile', authenticate, async (req, res) => {
   try {
     const allowed = ['name', 'bio', 'phone', 'neighborhood', 'website',
                      'instagram', 'facebook', 'notifyDeals', 'notifyEvents',
-                     'notifyShoutouts', 'avatar'];
+                     'notifyShoutouts', 'avatar', 'pushEnabled'];
     const updates = {};
     allowed.forEach(k => { if (k in req.body) updates[k] = req.body[k]; });
 
     const user = await User.findByIdAndUpdate(req.userId, updates, { new: true })
                            .populate('verifiedBusiness');
     res.json({ user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Web Push VAPID public key ────────────────────────────────────────────────
+router.get('/push/vapid-public-key', (req, res) => {
+  res.json({ key: process.env.VAPID_PUBLIC_KEY || '' });
+});
+
+// ─── Save/update push subscription ───────────────────────────────────────────
+router.post('/push/subscribe', authenticate, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription) return res.status(400).json({ message: 'Subscription required' });
+
+    await PushSubscription.findOneAndUpdate(
+      { user: req.userId },
+      { user: req.userId, subscription },
+      { upsert: true, new: true }
+    );
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    res.json({ message: 'Subscribed' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Remove push subscription ─────────────────────────────────────────────────
+router.post('/push/unsubscribe', authenticate, async (req, res) => {
+  try {
+    await PushSubscription.deleteOne({ user: req.userId });
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: false });
+    res.json({ message: 'Unsubscribed' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -127,27 +209,14 @@ router.get('/directory', optionalAuth, async (req, res) => {
   }
 });
 
-// ─── Resources (PUBLIC — no auth required) ────────────────────────────────────
-// Returns businesses in the resource categories only, with their categories
+// ─── Resources (PUBLIC) ───────────────────────────────────────────────────────
 router.get('/resources', async (req, res) => {
   try {
-    const RESOURCE_CATEGORY_NAMES = [
-      'Churches',
-      'Recycling Centers',
-      'Fishing Spots',
-      'Parks & Recreation',
-      'Libraries'
-    ];
-
-    // Find the category documents for these names
+    const RESOURCE_CATEGORY_NAMES = ['Churches','Recycling Centers','Fishing Spots','Parks & Recreation','Libraries'];
     const resourceCats = await Category.find({ name: { $in: RESOURCE_CATEGORY_NAMES } });
     const catIds = resourceCats.map(c => c._id);
-
-    // Find businesses in those categories
     const businesses = await Business.find({ category: { $in: catIds } })
-      .populate('category')
-      .populate('owner', 'name');
-
+      .populate('category').populate('owner', 'name');
     res.json({ businesses, categories: resourceCats });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -163,8 +232,7 @@ router.get('/popular', optionalAuth, async (req, res) => {
         const avgA = a.ratings.reduce((s, r) => s + r.score, 0) / a.ratings.length;
         const avgB = b.ratings.reduce((s, r) => s + r.score, 0) / b.ratings.length;
         return avgB - avgA;
-      })
-      .slice(0, 5);
+      }).slice(0, 5);
     res.json(sorted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -182,15 +250,82 @@ router.post('/business/:id/rate', authenticate, async (req, res) => {
     if (!business) return res.status(404).json({ message: 'Business not found' });
 
     const existing = business.ratings.find(r => r.user.toString() === req.userId);
-    if (existing) {
-      existing.score = score;
-    } else {
-      business.ratings.push({ user: req.userId, score });
-    }
+    if (existing) { existing.score = score; } else { business.ratings.push({ user: req.userId, score }); }
     await business.save();
 
     const avg = Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / business.ratings.length) * 10) / 10;
     res.json({ avg, count: business.ratings.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Reviews ──────────────────────────────────────────────────────────────────
+router.get('/business/:id/reviews', optionalAuth, async (req, res) => {
+  try {
+    const reviews = await Review.find({ business: req.params.id }).sort({ createdAt: -1 });
+    res.json(reviews);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/business/:id/reviews', authenticate, async (req, res) => {
+  try {
+    const { rating, title, body } = req.body;
+    if (!rating || rating < 1 || rating > 5)
+      return res.status(400).json({ message: 'Rating 1-5 required' });
+
+    const user = await User.findById(req.userId);
+
+    // Upsert — one review per user per business
+    const review = await Review.findOneAndUpdate(
+      { business: req.params.id, user: req.userId },
+      { business: req.params.id, user: req.userId, authorName: user.name, rating, title: title || '', body: body || '', createdAt: new Date() },
+      { upsert: true, new: true }
+    );
+    res.json(review);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/business/:id/reviews/:reviewId', authenticate, async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.reviewId);
+    if (!review) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAuthor = review.user.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+    await review.deleteOne();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Menu upload (owner only, isRestaurant must be true) ─────────────────────
+router.put('/owner/business/menu', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user.verifiedBusiness)
+      return res.status(403).json({ message: 'No verified business' });
+
+    const business = await Business.findById(user.verifiedBusiness);
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+    if (!business.isRestaurant)
+      return res.status(403).json({ message: 'Menu upload is only available for food/restaurant businesses' });
+
+    const { menu } = req.body; // base64 data URI
+
+    // ~5 MB limit (base64 string length)
+    if (menu && menu.length > 7 * 1024 * 1024)
+      return res.status(400).json({ message: 'Menu file is too large. Maximum 5 MB.' });
+
+    business.menu = menu || null;
+    await business.save();
+    res.json({ message: 'Menu updated', menu: business.menu });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -209,11 +344,7 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
 router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    const shoutout = await Shoutout.create({
-      text: req.body.text,
-      author: user.name,
-      authorId: user._id
-    });
+    const shoutout = await Shoutout.create({ text: req.body.text, author: user.name, authorId: user._id });
     res.json(shoutout);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -224,14 +355,10 @@ router.delete('/shoutouts/:id', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-    const user = await User.findById(req.userId);
+    const user    = await User.findById(req.userId);
     const isAdmin = user.email === 'imhoggbox@gmail.com';
-    const isAuthor = shoutout.authorId && shoutout.authorId.toString() === req.userId;
-
-    if (!isAdmin && !isAuthor)
-      return res.status(403).json({ message: 'Not authorized' });
-
+    const isAuthor= shoutout.authorId && shoutout.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
     await shoutout.deleteOne();
     res.json({ message: 'Deleted' });
   } catch (err) {
@@ -243,16 +370,10 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
     const idx = shoutout.likes.indexOf(req.userId);
     let liked;
-    if (idx === -1) {
-      shoutout.likes.push(req.userId);
-      liked = true;
-    } else {
-      shoutout.likes.splice(idx, 1);
-      liked = false;
-    }
+    if (idx === -1) { shoutout.likes.push(req.userId); liked = true; }
+    else            { shoutout.likes.splice(idx, 1);   liked = false; }
     await shoutout.save();
     res.json({ likes: shoutout.likes.length, liked });
   } catch (err) {
@@ -263,13 +384,23 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
 // Comments
 router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
-    const shoutout = await Shoutout.findById(req.params.id);
+    const user    = await User.findById(req.userId);
+    const shoutout= await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
     const comment = { text: req.body.text, author: user.name, authorId: user._id };
     shoutout.comments.push(comment);
     await shoutout.save();
+
+    // Push notification to original poster
+    if (shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
+      sendPushToUser(shoutout.authorId, {
+        title: '💬 New Comment',
+        body:  `${user.name} commented on your shoutout`,
+        url:   '/shoutouts'
+      });
+    }
+
     res.json(shoutout.comments[shoutout.comments.length - 1]);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -280,16 +411,12 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
   try {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-    const user = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
-    const comment = shoutout.comments.id(req.params.commentId);
+    const user     = await User.findById(req.userId);
+    const isAdmin  = user.email === 'imhoggbox@gmail.com';
+    const comment  = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
-
     const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
-    if (!isAdmin && !isAuthor)
-      return res.status(403).json({ message: 'Not authorized' });
-
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
     comment.deleteOne();
     await shoutout.save();
     res.json({ message: 'Deleted' });
@@ -301,16 +428,25 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
 // Replies
 router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user     = await User.findById(req.userId);
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-    const comment = shoutout.comments.id(req.params.commentId);
+    const comment  = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
 
     const reply = { text: req.body.text, author: user.name, authorId: user._id };
     comment.replies.push(reply);
     await shoutout.save();
+
+    // Push notification to comment author
+    if (comment.authorId && comment.authorId.toString() !== req.userId) {
+      sendPushToUser(comment.authorId, {
+        title: '↩️ New Reply',
+        body:  `${user.name} replied to your comment`,
+        url:   '/shoutouts'
+      });
+    }
+
     res.json(comment.replies[comment.replies.length - 1]);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -321,19 +457,14 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
   try {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-    const user = await User.findById(req.userId);
+    const user    = await User.findById(req.userId);
     const isAdmin = user.email === 'imhoggbox@gmail.com';
     const comment = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
-
-    const reply = comment.replies.id(req.params.replyId);
+    const reply   = comment.replies.id(req.params.replyId);
     if (!reply) return res.status(404).json({ message: 'Reply not found' });
-
-    const isAuthor = reply.authorId && reply.authorId.toString() === req.userId;
-    if (!isAdmin && !isAuthor)
-      return res.status(403).json({ message: 'Not authorized' });
-
+    const isAuthor= reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
     reply.deleteOne();
     await shoutout.save();
     res.json({ message: 'Deleted' });
@@ -362,7 +493,7 @@ router.get('/deals', optionalAuth, async (req, res) => {
   }
 });
 
-// ─── News (public read, restricted write) ────────────────────────────────────
+// ─── News ────────────────────────────────────────────────────────────────────
 router.get('/news', optionalAuth, async (req, res) => {
   try {
     const news = await News.find().sort({ createdAt: -1 });
@@ -384,7 +515,7 @@ router.get('/news/:id', optionalAuth, async (req, res) => {
 
 router.post('/news', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user    = await User.findById(req.userId);
     const isAdmin = user.email === 'imhoggbox@gmail.com';
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
@@ -393,14 +524,7 @@ router.post('/news', authenticate, async (req, res) => {
     if (!title || !summary || !content)
       return res.status(400).json({ message: 'Title, summary, and content are required' });
 
-    const article = await News.create({
-      title,
-      summary,
-      content,
-      images: images || [],
-      author: user._id,
-      authorName: user.name
-    });
+    const article = await News.create({ title, summary, content, images: images || [], author: user._id, authorName: user.name });
     res.json(article);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -409,15 +533,12 @@ router.post('/news', authenticate, async (req, res) => {
 
 router.put('/news/:id', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user    = await User.findById(req.userId);
     const isAdmin = user.email === 'imhoggbox@gmail.com';
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
-
     const isAuthor = article.author.toString() === req.userId;
-    if (!isAdmin && !isAuthor)
-      return res.status(403).json({ message: 'Not authorized' });
-
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
     const { title, summary, content, images } = req.body;
     article.title   = title   || article.title;
     article.summary = summary || article.summary;
@@ -432,15 +553,12 @@ router.put('/news/:id', authenticate, async (req, res) => {
 
 router.delete('/news/:id', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user    = await User.findById(req.userId);
     const isAdmin = user.email === 'imhoggbox@gmail.com';
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
-
     const isAuthor = article.author.toString() === req.userId;
-    if (!isAdmin && !isAuthor)
-      return res.status(403).json({ message: 'Not authorized' });
-
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
     await article.deleteOne();
     res.json({ message: 'Deleted' });
   } catch (err) {
@@ -453,23 +571,18 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
   try {
     const business = await Business.findById(req.params.businessId);
     if (!business) return res.status(404).json({ message: 'Business not found' });
-
-    if (business.owner) {
+    if (business.owner)
       return res.status(400).json({ message: 'This business has already been claimed and is no longer available.' });
-    }
 
-    const { ownerName, phone, address, message } = req.body;
-    const existing = await ClaimRequest.findOne({
-      business: req.params.businessId,
-      user: req.userId,
-      status: 'pending'
-    });
-    if (existing) return res.status(400).json({ message: 'You already have a pending claim for this business' });
+    const { ownerName, phone, address, message, isRestaurant } = req.body;
+    const existing = await ClaimRequest.findOne({ business: req.params.businessId, user: req.userId, status: 'pending' });
+    if (existing)
+      return res.status(400).json({ message: 'You already have a pending claim for this business' });
 
     await ClaimRequest.create({
       user: req.userId,
       business: req.params.businessId,
-      verificationInfo: { ownerName, phone, address, message }
+      verificationInfo: { ownerName, phone, address, message, isRestaurant: !!isRestaurant }
     });
     res.json({ message: 'Claim submitted successfully' });
   } catch (err) {
@@ -479,10 +592,7 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
 
 router.get('/claim/status/:businessId', authenticate, async (req, res) => {
   try {
-    const claim = await ClaimRequest.findOne({
-      business: req.params.businessId,
-      user: req.userId
-    }).sort({ createdAt: -1 });
+    const claim = await ClaimRequest.findOne({ business: req.params.businessId, user: req.userId }).sort({ createdAt: -1 });
     if (!claim) return res.json({ status: 'none' });
     res.json({ status: claim.status });
   } catch (err) {
@@ -530,13 +640,18 @@ router.post('/owner/deals', authenticate, async (req, res) => {
     }
 
     const deal = await Deal.create({
-      title,
-      description,
-      expires: expires || null,
-      business: user.verifiedBusiness,
-      owner: req.userId,
+      title, description, expires: expires || null,
+      business: user.verifiedBusiness, owner: req.userId,
       category: resolvedCategory || ''
     });
+
+    // Broadcast push to deal subscribers
+    broadcastPush({
+      title: '🔥 New Deal Available!',
+      body:  title,
+      url:   '/deals'
+    }, { notifyDeals: true });
+
     res.json(deal);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -573,13 +688,17 @@ router.post('/owner/events', authenticate, async (req, res) => {
     }
 
     const event = await Event.create({
-      title,
-      date,
-      location,
-      description,
-      owner: req.userId,
-      category: resolvedCategory || ''
+      title, date, location, description,
+      owner: req.userId, category: resolvedCategory || ''
     });
+
+    // Broadcast push to event subscribers
+    broadcastPush({
+      title: '📅 New Event Posted!',
+      body:  title + (location ? ` · ${location}` : ''),
+      url:   '/events'
+    }, { notifyEvents: true });
+
     res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -610,9 +729,7 @@ router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) =
   try {
     const { name, address, phone, website, description, categoryId } = req.body;
     const business = await Business.findByIdAndUpdate(
-      req.params.id,
-      { name, address, phone, website, description, category: categoryId },
-      { new: true }
+      req.params.id, { name, address, phone, website, description, category: categoryId }, { new: true }
     );
     res.json({ message: 'Business updated successfully', business });
   } catch (err) {
@@ -651,7 +768,9 @@ router.post('/admin/claims/:id/decision', authenticate, requireAdmin, async (req
     await claim.save();
 
     if (decision === 'approved') {
-      await Business.findByIdAndUpdate(claim.business._id, { owner: claim.user._id });
+      // Apply isRestaurant flag if it was requested in the claim
+      const isRestaurant = claim.verificationInfo?.isRestaurant === true;
+      await Business.findByIdAndUpdate(claim.business._id, { owner: claim.user._id, isRestaurant });
       await User.findByIdAndUpdate(claim.user._id, { verifiedBusiness: claim.business._id });
     }
 
@@ -679,7 +798,6 @@ router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) =
   }
 });
 
-// ─── Admin: User Management ───────────────────────────────────────────────────
 router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
   try {
     const users = await User.find().populate('verifiedBusiness', 'name').sort({ joinedAt: -1 });
@@ -692,11 +810,8 @@ router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
 router.patch('/admin/users/:id/news-access', authenticate, requireAdmin, async (req, res) => {
   try {
     const { canPostNews } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { canPostNews: !!canPostNews },
-      { new: true }
-    ).populate('verifiedBusiness', 'name');
+    const user = await User.findByIdAndUpdate(req.params.id, { canPostNews: !!canPostNews }, { new: true })
+      .populate('verifiedBusiness', 'name');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'Updated', user: sanitizeUser(user) });
   } catch (err) {
@@ -717,7 +832,6 @@ router.delete('/admin/users/:id', authenticate, requireAdmin, async (req, res) =
   }
 });
 
-// ─── Admin: News management ───────────────────────────────────────────────────
 router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await News.findByIdAndDelete(req.params.id);
@@ -727,12 +841,11 @@ router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) =>
   }
 });
 
-// ─── GLOBAL SEARCH ENDPOINT ───────────────────────────────────────────────────
+// ─── Global Search ────────────────────────────────────────────────────────────
 router.get('/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
-
     const regex = new RegExp(q, 'i');
 
     const [businesses, events, deals, news, shoutouts] = await Promise.all([
@@ -745,12 +858,11 @@ router.get('/search', optionalAuth, async (req, res) => {
 
     const results = [
       ...businesses.map(b => ({ type: 'business', id: b._id, title: b.name, subtitle: b.description || '', icon: '📍' })),
-      ...events.map(e => ({ type: 'event', id: e._id, title: e.title, subtitle: e.description || '', icon: '📅' })),
-      ...deals.map(d => ({ type: 'deal', id: d._id, title: d.title, subtitle: d.description || '', icon: '🔥' })),
-      ...news.map(n => ({ type: 'news', id: n._id, title: n.title, subtitle: n.summary || '', icon: '📰' })),
-      ...shoutouts.map(s => ({ type: 'shoutout', id: s._id, title: s.text, subtitle: `by ${s.author}`, icon: '💬' }))
+      ...events.map(e    => ({ type: 'event',    id: e._id, title: e.title,  subtitle: e.description || '', icon: '📅' })),
+      ...deals.map(d     => ({ type: 'deal',     id: d._id, title: d.title,  subtitle: d.description || '', icon: '🔥' })),
+      ...news.map(n      => ({ type: 'news',     id: n._id, title: n.title,  subtitle: n.summary || '', icon: '📰' })),
+      ...shoutouts.map(s => ({ type: 'shoutout', id: s._id, title: s.text,   subtitle: `by ${s.author}`, icon: '💬' }))
     ];
-
     res.json({ results });
   } catch (err) {
     res.status(500).json({ message: err.message });
