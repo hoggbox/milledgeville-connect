@@ -409,6 +409,13 @@ router.delete('/news/:id', authenticate, async (req, res) => {
 // ─── Claim ────────────────────────────────────────────────────────────────────
 router.post('/claim/:businessId', authenticate, async (req, res) => {
   try {
+    const business = await Business.findById(req.params.businessId);
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+
+    if (business.owner) {
+      return res.status(400).json({ message: 'This business has already been claimed and is no longer available.' });
+    }
+
     const { ownerName, phone, address, message } = req.body;
     const existing = await ClaimRequest.findOne({
       business: req.params.businessId,
@@ -474,7 +481,6 @@ router.post('/owner/deals', authenticate, async (req, res) => {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
     const { title, description, expires, category } = req.body;
 
-    // If the owner didn't choose a category, use their business's directory category name directly
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
       const bizCat = user.verifiedBusiness.category;
@@ -518,7 +524,6 @@ router.post('/owner/events', authenticate, async (req, res) => {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
     const { title, date, location, description, category } = req.body;
 
-    // If the owner didn't choose a category, use their business's directory category name directly
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
       const bizCat = user.verifiedBusiness.category;
@@ -675,6 +680,36 @@ router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) =>
   try {
     await News.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── GLOBAL SEARCH ENDPOINT ───────────────────────────────────────────────────
+router.get('/search', authenticate, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json({ results: [] });
+
+    const regex = new RegExp(q, 'i');
+
+    const [businesses, events, deals, news, shoutouts] = await Promise.all([
+      Business.find({ $or: [{ name: regex }, { description: regex }] }).populate('category').limit(8),
+      Event.find({ $or: [{ title: regex }, { description: regex }] }).limit(6),
+      Deal.find({ $or: [{ title: regex }, { description: regex }] }).populate('business').limit(6),
+      News.find({ $or: [{ title: regex }, { summary: regex }, { content: regex }] }).limit(6),
+      Shoutout.find({ text: regex }).limit(6)
+    ]);
+
+    const results = [
+      ...businesses.map(b => ({ type: 'business', id: b._id, title: b.name, subtitle: b.description || '', icon: '📍' })),
+      ...events.map(e => ({ type: 'event', id: e._id, title: e.title, subtitle: e.description || '', icon: '📅' })),
+      ...deals.map(d => ({ type: 'deal', id: d._id, title: d.title, subtitle: d.description || '', icon: '🔥' })),
+      ...news.map(n => ({ type: 'news', id: n._id, title: n.title, subtitle: n.summary || '', icon: '📰' })),
+      ...shoutouts.map(s => ({ type: 'shoutout', id: s._id, title: s.text, subtitle: `by ${s.author}`, icon: '💬' }))
+    ];
+
+    res.json({ results });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

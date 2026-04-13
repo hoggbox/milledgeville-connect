@@ -109,6 +109,76 @@ async function loadPage(page) {
   if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
 }
 
+// ─── GLOBAL SEARCH (add this after the loadPage function) ─────────────────────
+let searchTimeout = null;
+
+window.initGlobalSearch = function () {
+  const input = document.getElementById('globalSearchInput'); // make sure your search bar has this ID
+  const resultsContainer = document.getElementById('globalSearchResults');
+
+  if (!input || !resultsContainer) return;
+
+  input.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+
+    const q = input.value.trim();
+    if (q.length < 2) {
+      resultsContainer.innerHTML = '';
+      resultsContainer.classList.add('hidden');
+      return;
+    }
+
+    searchTimeout = setTimeout(async () => {
+      const res = await apiGet(`/search?q=${encodeURIComponent(q)}`);
+      if (!res.results || res.results.length === 0) {
+        resultsContainer.innerHTML = `<div class="p-4 text-white/60 text-sm">No results found for "${q}"</div>`;
+        resultsContainer.classList.remove('hidden');
+        return;
+      }
+
+      let html = '';
+      res.results.forEach(item => {
+        html += `
+          <div onclick="handleSearchResultClick('${item.type}', '${item.id}')" 
+               class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-none">
+            <span class="text-2xl">${item.icon}</span>
+            <div class="flex-1 min-w-0">
+              <p class="font-medium text-white text-sm leading-tight">${item.title}</p>
+              <p class="text-white/60 text-xs line-clamp-1">${item.subtitle}</p>
+            </div>
+          </div>`;
+      });
+
+      resultsContainer.innerHTML = html;
+      resultsContainer.classList.remove('hidden');
+    }, 300);
+  });
+
+  // Close results when clicking outside
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+      resultsContainer.classList.add('hidden');
+    }
+  });
+};
+
+window.handleSearchResultClick = function (type, id) {
+  const resultsContainer = document.getElementById('globalSearchResults');
+  resultsContainer.classList.add('hidden');
+  document.getElementById('globalSearchInput').value = '';
+
+  if (type === 'business') loadDirectoryAndOpen(id);
+  else if (type === 'event') navigate('events');
+  else if (type === 'deal') navigate('deals');
+  else if (type === 'news') openNewsArticle(id);
+  else if (type === 'shoutout') navigate('shoutouts');
+};
+
+// Call this once the page loads
+document.addEventListener('DOMContentLoaded', () => {
+  initGlobalSearch();
+});
+
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 async function loadHomePage(content) {
   content.innerHTML = `

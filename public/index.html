@@ -31,8 +31,9 @@
           <h1 class="text-lg font-bold truncate">Milledgeville Connect</h1>
         </div>
         <div class="flex-1 min-w-0 mx-3 md:mx-0">
-          <input id="searchInput" type="text" placeholder="Search businesses, events..."
+          <input id="globalSearchInput" type="text" placeholder="What are you looking for in Milledgeville?"
                  class="w-full bg-white/10 border border-white/20 rounded-3xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-400 placeholder:text-white/50">
+                 <div id="globalSearchResults" class="hidden absolute top-full mt-2 w-full bg-slate-900 border border-white/20 rounded-3xl shadow-2xl max-h-96 overflow-auto z-50"></div>
         </div>
         <!-- Top-right: avatar for logged-in users, Sign In button for guests -->
         <div id="topbar-user-area" class="md:hidden flex-shrink-0"></div>
