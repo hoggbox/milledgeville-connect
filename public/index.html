@@ -11,7 +11,7 @@
   <div class="flex min-h-screen relative">
 
     <!-- LOCKED OVERLAY -->
-    <div id="lockedOverlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xl z-[9999] flex items-center justify-center">
+    <div id="lockedOverlay" class="fixed inset-0 bg-black/70 backdrop-blur-xl z-[9999] flex items-center justify-center">
       <div class="text-center max-w-md mx-auto px-6">
         <div class="w-20 h-20 bg-emerald-500 rounded-3xl flex items-center justify-center text-6xl mx-auto mb-8">🏠</div>
         <h1 class="text-5xl font-bold mb-3">Milledgeville Connect</h1>
@@ -30,7 +30,7 @@
       <nav id="desktop-nav" class="flex-1 px-3"></nav>
       <div class="mx-4 mb-6">
         <div onclick="showProfileSheet()" id="sidebar-avatar"
-             class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer hover:scale-110 transition-transform"></div>
+             class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer hover:scale-110 transition-transform overflow-hidden"></div>
       </div>
     </div>
 
@@ -47,7 +47,7 @@
                  class="w-full bg-white/10 border border-white/20 rounded-3xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-400 placeholder:text-white/50">
         </div>
         <div onclick="showProfileSheet()" id="mobile-avatar"
-             class="md:hidden w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer flex-shrink-0"></div>
+             class="md:hidden w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer flex-shrink-0 overflow-hidden"></div>
       </div>
 
       <!-- CONTENT WRAPPER -->
@@ -61,14 +61,16 @@
   </div>
 
   <!-- PROFILE SLIDE-UP SHEET -->
+  <!-- NOTE: id="profileSheetPanel" is used by profile.js for reliable animation targeting -->
   <div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet"
        class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
-    <div onclick="event.stopImmediatePropagation()"
-         class="bg-white text-slate-900 w-full rounded-t-3xl max-h-[85vh] overflow-auto transition-transform duration-300 translate-y-full">
-      <div class="sticky top-0 bg-white pt-4 pb-2 flex justify-center">
+    <div id="profileSheetPanel"
+         onclick="event.stopImmediatePropagation()"
+         class="bg-white text-slate-900 w-full rounded-t-3xl max-h-[90vh] overflow-auto transition-transform duration-300 translate-y-full">
+      <div class="sticky top-0 bg-white pt-4 pb-2 flex justify-center z-10">
         <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
       </div>
-      <div class="px-6 pb-8">
+      <div class="px-6 pb-10">
         <div id="sheet-content" class="text-center"></div>
       </div>
     </div>
@@ -105,11 +107,12 @@
     </div>
   </div>
 
-  <!-- Scripts — order matters -->
+  <!-- Scripts — ORDER MATTERS -->
   <script src="/js/api.js"></script>
   <script src="/js/data.js"></script>
   <script src="/js/nav.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/profile.js"></script>
   <script src="/js/main.js"></script>
 </body>
 </html>

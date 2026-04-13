@@ -1,49 +1,55 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const Business = require('../models/Business');
-const Category = require('../models/Category');
-const Shoutout = require('../models/Shoutout');
-const Event = require('../models/Event');
-const Deal = require('../models/Deal');
+const bcrypt = require('bcryptjs');
+
+const User         = require('../models/User');
+const Business     = require('../models/Business');
+const Category     = require('../models/Category');
+const Deal         = require('../models/Deal');
+const Event        = require('../models/Event');
+const Shoutout     = require('../models/Shoutout');
 const ClaimRequest = require('../models/ClaimRequest');
 
-const ADMIN_EMAIL = 'imhoggbox@gmail.com';
-
-// ─── Middleware helpers ────────────────────────────────────────────────────────
-async function requireAuth(req, res) {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) { res.status(401).json({ message: 'Login required' }); return null; }
+// ─── Auth Middleware ──────────────────────────────────────────────────────────
+function authenticate(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+  const token = header.split(' ')[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) { res.status(404).json({ message: 'User not found' }); return null; }
-    return user;
-  } catch {
-    res.status(401).json({ message: 'Invalid token' }); return null;
+    req.userId = decoded.userId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
   }
 }
 
-async function requireAdmin(req, res) {
-  const user = await requireAuth(req, res);
-  if (!user) return null;
-  if (user.email !== ADMIN_EMAIL) { res.status(403).json({ message: 'Admin only' }); return null; }
-  return user;
+function requireAdmin(req, res, next) {
+  User.findById(req.userId).then(user => {
+    if (!user || user.email !== 'imhoggbox@gmail.com') {
+      return res.status(403).json({ message: 'Admin only' });
+    }
+    req.user = user;
+    next();
+  }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ===================== AUTH =====================
+// ─── Auth Routes ──────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ message: 'Email already used' });
+    if (!name || !email || !password)
+      return res.status(400).json({ message: 'All fields required' });
 
-    const user = new User({ name, email, password });
-    await user.save();
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) return res.status(400).json({ message: 'Email already in use' });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email, verifiedBusiness: user.verifiedBusiness } });
+    const user = await User.create({ name, email, password });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: sanitizeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -52,378 +58,479 @@ router.post('/auth/register', async (req, res) => {
 router.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email }).populate('verifiedBusiness');
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    const user = await User.findOne({ email: email.toLowerCase() }).populate('verifiedBusiness');
+    if (!user) return res.status(400).json({ message: 'Invalid email or password' });
+
+    const match = await user.comparePassword(password);
+    if (!match) return res.status(400).json({ message: 'Invalid email or password' });
 
     user.lastLogin = new Date();
     await user.save();
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email, lastLogin: user.lastLogin, verifiedBusiness: user.verifiedBusiness } });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: sanitizeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-router.get('/auth/me', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token' });
+router.get('/auth/me', authenticate, async (req, res) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).populate('verifiedBusiness');
+    const user = await User.findById(req.userId).populate('verifiedBusiness');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({ user: { id: user._id, name: user.name, email: user.email, lastLogin: user.lastLogin, verifiedBusiness: user.verifiedBusiness } });
-  } catch {
-    res.status(401).json({ message: 'Invalid token' });
+    res.json({ user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
-// ===================== PUBLIC =====================
-router.get('/directory', async (req, res) => {
-  const categories = await Category.find();
-  const businesses = await Business.find().populate('category').populate('owner', 'name email');
-  res.json({ categories, businesses });
-});
+router.patch('/auth/profile', authenticate, async (req, res) => {
+  try {
+    const allowed = ['name', 'bio', 'phone', 'neighborhood', 'website',
+                     'instagram', 'facebook', 'notifyDeals', 'notifyEvents',
+                     'notifyShoutouts', 'avatar'];
+    const updates = {};
+    allowed.forEach(k => { if (k in req.body) updates[k] = req.body[k]; });
 
-router.get('/shoutouts', async (req, res) => {
-  const shoutouts = await Shoutout.find().sort({ createdAt: -1 }).limit(50);
-  res.json(shoutouts);
-});
-
-router.get('/events', async (req, res) => {
-  const events = await Event.find().sort({ date: 1 });
-  res.json(events);
-});
-
-router.get('/deals', async (req, res) => {
-  const deals = await Deal.find().sort({ expires: 1 }).populate('business', 'name');
-  res.json(deals);
-});
-
-// ===================== POPULAR BUSINESSES (for home page) =====================
-router.get('/popular', async (req, res) => {
-  const businesses = await Business.find().populate('category').populate('owner', 'name email');
-  // Sort by avg rating then count
-  const sorted = businesses
-    .filter(b => b.ratings && b.ratings.length > 0)
-    .sort((a, b) => {
-      const aAvg = a.avgRating || 0;
-      const bAvg = b.avgRating || 0;
-      if (bAvg !== aAvg) return bAvg - aAvg;
-      return b.ratings.length - a.ratings.length;
-    })
-    .slice(0, 5);
-  res.json(sorted);
-});
-
-// ===================== RATINGS =====================
-router.post('/business/:id/rate', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-
-  const { score } = req.body;
-  if (!score || score < 1 || score > 5) return res.status(400).json({ message: 'Score must be 1–5' });
-
-  const business = await Business.findById(req.params.id);
-  if (!business) return res.status(404).json({ message: 'Business not found' });
-
-  const existing = business.ratings.find(r => r.user.toString() === user._id.toString());
-  if (existing) {
-    existing.score = score;
-  } else {
-    business.ratings.push({ user: user._id, score });
+    const user = await User.findByIdAndUpdate(req.userId, updates, { new: true })
+                           .populate('verifiedBusiness');
+    res.json({ user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-  await business.save();
-
-  const avg = business.avgRating;
-  const count = business.ratings.length;
-  res.json({ avg, count, userScore: score });
 });
 
-router.get('/business/:id/myrating', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const business = await Business.findById(req.params.id);
-  if (!business) return res.status(404).json({ score: 0 });
-  const existing = business.ratings.find(r => r.user.toString() === user._id.toString());
-  res.json({ score: existing ? existing.score : 0 });
-});
-
-// ===================== CLAIM BUSINESS =====================
-router.post('/claim/:businessId', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-
-  const business = await Business.findById(req.params.businessId);
-  if (!business) return res.status(404).json({ message: 'Business not found' });
-  if (business.owner) return res.status(400).json({ message: 'This business has already been claimed' });
-
-  const existing = await ClaimRequest.findOne({ user: user._id, business: business._id, status: 'pending' });
-  if (existing) return res.status(400).json({ message: 'You already have a pending claim for this business' });
-
-  const { ownerName, phone, address, message } = req.body;
-  const claim = new ClaimRequest({
-    user: user._id,
-    business: business._id,
-    verificationInfo: { ownerName, phone, address, message }
-  });
-  await claim.save();
-  res.json({ message: 'Claim submitted! You will be notified once approved.' });
-});
-
-router.get('/claim/status/:businessId', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-
-  const claim = await ClaimRequest.findOne({ user: user._id, business: req.params.businessId }).sort({ createdAt: -1 });
-  if (!claim) return res.json({ status: 'none' });
-  res.json({ status: claim.status });
-});
-
-// ===================== PROTECTED — SHOUTOUTS =====================
-router.post('/shoutouts', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const { text } = req.body;
-  const newShoutout = new Shoutout({ text, author: user.name || 'Verified User', authorId: user._id });
-  await newShoutout.save();
-  res.json(newShoutout);
-});
-
-// Like / unlike a shoutout
-router.post('/shoutouts/:id/like', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const shoutout = await Shoutout.findById(req.params.id);
-  if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-  const idx = shoutout.likes.indexOf(user._id);
-  if (idx === -1) {
-    shoutout.likes.push(user._id);
-  } else {
-    shoutout.likes.splice(idx, 1);
+// ─── Directory ────────────────────────────────────────────────────────────────
+router.get('/directory', authenticate, async (req, res) => {
+  try {
+    const businesses = await Business.find().populate('category').populate('owner', 'name email');
+    const categories = await Category.find();
+    res.json({ businesses, categories });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-  await shoutout.save();
-  res.json({ likes: shoutout.likes.length, liked: idx === -1 });
 });
 
-// Add a comment to a shoutout
-router.post('/shoutouts/:id/comments', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const { text } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ message: 'Comment text required' });
-
-  const shoutout = await Shoutout.findById(req.params.id);
-  if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-  shoutout.comments.push({ text: text.trim(), author: user.name, authorId: user._id });
-  await shoutout.save();
-  const comment = shoutout.comments[shoutout.comments.length - 1];
-  res.json(comment);
-});
-
-// Reply to a comment
-router.post('/shoutouts/:id/comments/:commentId/replies', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const { text } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ message: 'Reply text required' });
-
-  const shoutout = await Shoutout.findById(req.params.id);
-  if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-  const comment = shoutout.comments.id(req.params.commentId);
-  if (!comment) return res.status(404).json({ message: 'Comment not found' });
-
-  comment.replies.push({ text: text.trim(), author: user.name, authorId: user._id });
-  await shoutout.save();
-  const reply = comment.replies[comment.replies.length - 1];
-  res.json(reply);
-});
-
-// Delete a comment (owner or admin)
-router.delete('/shoutouts/:id/comments/:commentId', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-
-  const shoutout = await Shoutout.findById(req.params.id);
-  if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-  const comment = shoutout.comments.id(req.params.commentId);
-  if (!comment) return res.status(404).json({ message: 'Comment not found' });
-
-  const isOwner = comment.authorId?.toString() === user._id.toString();
-  const isAdmin = user.email === ADMIN_EMAIL;
-  if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Not authorized' });
-
-  comment.deleteOne();
-  await shoutout.save();
-  res.json({ message: 'Deleted' });
-});
-
-// ===================== BUSINESS OWNER — DEALS =====================
-router.post('/owner/deals', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  if (!user.verifiedBusiness) return res.status(403).json({ message: 'Verified business owners only' });
-
-  const { title, description, expires } = req.body;
-  const deal = new Deal({ title, description, expires, business: user.verifiedBusiness, owner: user._id });
-  await deal.save();
-  res.json(deal);
-});
-
-router.put('/owner/deals/:id', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const deal = await Deal.findById(req.params.id);
-  if (!deal) return res.status(404).json({ message: 'Deal not found' });
-  if (deal.owner?.toString() !== user._id.toString()) return res.status(403).json({ message: 'Not your deal' });
-
-  const { title, description, expires } = req.body;
-  Object.assign(deal, { title, description, expires });
-  await deal.save();
-  res.json(deal);
-});
-
-router.delete('/owner/deals/:id', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const deal = await Deal.findById(req.params.id);
-  if (!deal) return res.status(404).json({ message: 'Deal not found' });
-  if (deal.owner?.toString() !== user._id.toString()) return res.status(403).json({ message: 'Not your deal' });
-  await deal.deleteOne();
-  res.json({ message: 'Deleted' });
-});
-
-router.get('/owner/deals', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const deals = await Deal.find({ owner: user._id });
-  res.json(deals);
-});
-
-// ===================== BUSINESS OWNER — EVENTS =====================
-router.post('/owner/events', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  if (!user.verifiedBusiness) return res.status(403).json({ message: 'Verified business owners only' });
-
-  const { title, date, location, description } = req.body;
-  const event = new Event({ title, date, location, description, owner: user._id });
-  await event.save();
-  res.json(event);
-});
-
-router.put('/owner/events/:id', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const event = await Event.findById(req.params.id);
-  if (!event) return res.status(404).json({ message: 'Event not found' });
-  if (event.owner?.toString() !== user._id.toString()) return res.status(403).json({ message: 'Not your event' });
-
-  const { title, date, location, description } = req.body;
-  Object.assign(event, { title, date, location, description });
-  await event.save();
-  res.json(event);
-});
-
-router.delete('/owner/events/:id', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const event = await Event.findById(req.params.id);
-  if (!event) return res.status(404).json({ message: 'Event not found' });
-  if (event.owner?.toString() !== user._id.toString()) return res.status(403).json({ message: 'Not your event' });
-  await event.deleteOne();
-  res.json({ message: 'Deleted' });
-});
-
-router.get('/owner/events', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  const events = await Event.find({ owner: user._id });
-  res.json(events);
-});
-
-// ===================== BUSINESS OWNER — EDIT OWN LISTING =====================
-router.put('/owner/business', async (req, res) => {
-  const user = await requireAuth(req, res);
-  if (!user) return;
-  if (!user.verifiedBusiness) return res.status(403).json({ message: 'Verified business owners only' });
-
-  const { name, address, phone, website, description } = req.body;
-  const updated = await Business.findByIdAndUpdate(
-    user.verifiedBusiness,
-    { name, address, phone, website, description },
-    { new: true }
-  ).populate('category');
-  res.json(updated);
-});
-
-// ===================== ADMIN ONLY =====================
-router.get('/admin/claims', async (req, res) => {
-  const admin = await requireAdmin(req, res);
-  if (!admin) return;
-  const claims = await ClaimRequest.find({ status: 'pending' })
-    .populate('user', 'name email')
-    .populate('business', 'name address')
-    .sort({ createdAt: -1 });
-  res.json(claims);
-});
-
-router.post('/admin/claims/:id/decision', async (req, res) => {
-  const admin = await requireAdmin(req, res);
-  if (!admin) return;
-
-  const { decision } = req.body;
-  const claim = await ClaimRequest.findById(req.params.id);
-  if (!claim) return res.status(404).json({ message: 'Claim not found' });
-
-  claim.status = decision;
-  await claim.save();
-
-  if (decision === 'approved') {
-    await Business.findByIdAndUpdate(claim.business, { owner: claim.user });
-    await User.findByIdAndUpdate(claim.user, { verifiedBusiness: claim.business });
+router.get('/popular', authenticate, async (req, res) => {
+  try {
+    const businesses = await Business.find().populate('category');
+    const sorted = businesses
+      .filter(b => b.ratings && b.ratings.length > 0)
+      .sort((a, b) => {
+        const avgA = a.ratings.reduce((s, r) => s + r.score, 0) / a.ratings.length;
+        const avgB = b.ratings.reduce((s, r) => s + r.score, 0) / b.ratings.length;
+        return avgB - avgA;
+      })
+      .slice(0, 5);
+    res.json(sorted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-
-  res.json({ message: `Claim ${decision}` });
 });
 
-router.post('/admin/business', async (req, res) => {
-  const admin = await requireAdmin(req, res);
-  if (!admin) return;
+// ─── Business Rating ──────────────────────────────────────────────────────────
+router.post('/business/:id/rate', authenticate, async (req, res) => {
+  try {
+    const { score } = req.body;
+    if (!score || score < 1 || score > 5)
+      return res.status(400).json({ message: 'Score must be 1-5' });
 
-  const { name, address, phone, website, description, categoryId, keywords } = req.body;
-  const newBusiness = new Business({
-    name, address, phone, website, description,
-    category: categoryId,
-    keywords: keywords || [],
-    isPremium: true
-  });
-  await newBusiness.save();
-  res.json({ message: 'Business added successfully!' });
+    const business = await Business.findById(req.params.id);
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+
+    const existing = business.ratings.find(r => r.user.toString() === req.userId);
+    if (existing) {
+      existing.score = score;
+    } else {
+      business.ratings.push({ user: req.userId, score });
+    }
+    await business.save();
+
+    const avg = Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / business.ratings.length) * 10) / 10;
+    res.json({ avg, count: business.ratings.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-router.put('/admin/business/:id', async (req, res) => {
-  const admin = await requireAdmin(req, res);
-  if (!admin) return;
-
-  const { name, address, phone, website, description, categoryId } = req.body;
-  await Business.findByIdAndUpdate(req.params.id,
-    { name, address, phone, website, description, category: categoryId },
-    { new: true });
-  res.json({ message: 'Business updated successfully!' });
+// ─── Shoutouts ────────────────────────────────────────────────────────────────
+router.get('/shoutouts', authenticate, async (req, res) => {
+  try {
+    const shoutouts = await Shoutout.find().sort({ createdAt: -1 });
+    res.json(shoutouts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-router.delete('/admin/business/:id', async (req, res) => {
-  const admin = await requireAdmin(req, res);
-  if (!admin) return;
-  await Business.findByIdAndDelete(req.params.id);
-  res.json({ message: 'Business deleted successfully!' });
+router.post('/shoutouts', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const shoutout = await Shoutout.create({
+      text: req.body.text,
+      author: user.name,
+      authorId: user._id
+    });
+    res.json(shoutout);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
+
+router.delete('/shoutouts/:id', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAuthor = shoutout.authorId && shoutout.authorId.toString() === req.userId;
+
+    if (!isAdmin && !isAuthor)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    await shoutout.deleteOne();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    const idx = shoutout.likes.indexOf(req.userId);
+    let liked;
+    if (idx === -1) {
+      shoutout.likes.push(req.userId);
+      liked = true;
+    } else {
+      shoutout.likes.splice(idx, 1);
+      liked = false;
+    }
+    await shoutout.save();
+    res.json({ likes: shoutout.likes.length, liked });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Comments
+router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    const comment = { text: req.body.text, author: user.name, authorId: user._id };
+    shoutout.comments.push(comment);
+    await shoutout.save();
+    res.json(shoutout.comments[shoutout.comments.length - 1]);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const comment = shoutout.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    comment.deleteOne();
+    await shoutout.save();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Replies
+router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    const comment = shoutout.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    const reply = { text: req.body.text, author: user.name, authorId: user._id };
+    comment.replies.push(reply);
+    await shoutout.save();
+    res.json(comment.replies[comment.replies.length - 1]);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const comment = shoutout.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+
+    const isAuthor = reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    reply.deleteOne();
+    await shoutout.save();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+router.get('/events', authenticate, async (req, res) => {
+  try {
+    const events = await Event.find().sort({ date: 1 }).populate('owner', 'name email');
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Deals ────────────────────────────────────────────────────────────────────
+router.get('/deals', authenticate, async (req, res) => {
+  try {
+    const deals = await Deal.find().populate('business', 'name').populate('owner', 'name email');
+    res.json(deals);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Claim ────────────────────────────────────────────────────────────────────
+router.post('/claim/:businessId', authenticate, async (req, res) => {
+  try {
+    const { ownerName, phone, address, message } = req.body;
+    const existing = await ClaimRequest.findOne({
+      business: req.params.businessId,
+      user: req.userId,
+      status: 'pending'
+    });
+    if (existing) return res.status(400).json({ message: 'You already have a pending claim for this business' });
+
+    await ClaimRequest.create({
+      user: req.userId,
+      business: req.params.businessId,
+      verificationInfo: { ownerName, phone, address, message }
+    });
+    res.json({ message: 'Claim submitted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/claim/status/:businessId', authenticate, async (req, res) => {
+  try {
+    const claim = await ClaimRequest.findOne({
+      business: req.params.businessId,
+      user: req.userId
+    }).sort({ createdAt: -1 });
+    if (!claim) return res.json({ status: 'none' });
+    res.json({ status: claim.status });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Owner Routes ─────────────────────────────────────────────────────────────
+router.put('/owner/business', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user.verifiedBusiness)
+      return res.status(403).json({ message: 'No verified business' });
+
+    const { name, address, phone, website, description } = req.body;
+    const business = await Business.findByIdAndUpdate(
+      user.verifiedBusiness,
+      { name, address, phone, website, description },
+      { new: true }
+    ).populate('category');
+    res.json(business);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/owner/deals', authenticate, async (req, res) => {
+  try {
+    const deals = await Deal.find({ owner: req.userId }).sort({ createdAt: -1 });
+    res.json(deals);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/owner/deals', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const { title, description, expires } = req.body;
+    const deal = await Deal.create({
+      title,
+      description,
+      expires: expires || null,
+      business: user.verifiedBusiness,
+      owner: req.userId
+    });
+    res.json(deal);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/owner/deals/:id', authenticate, async (req, res) => {
+  try {
+    await Deal.findOneAndDelete({ _id: req.params.id, owner: req.userId });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/owner/events', authenticate, async (req, res) => {
+  try {
+    const events = await Event.find({ owner: req.userId }).sort({ date: 1 });
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/owner/events', authenticate, async (req, res) => {
+  try {
+    const { title, date, location, description } = req.body;
+    const event = await Event.create({
+      title,
+      date,
+      location,
+      description,
+      owner: req.userId
+    });
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/owner/events/:id', authenticate, async (req, res) => {
+  try {
+    await Event.findOneAndDelete({ _id: req.params.id, owner: req.userId });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Admin Routes ─────────────────────────────────────────────────────────────
+router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, address, phone, website, description, categoryId } = req.body;
+    const business = await Business.create({ name, address, phone, website, description, category: categoryId });
+    res.json({ message: 'Business added successfully', business });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, address, phone, website, description, categoryId } = req.body;
+    const business = await Business.findByIdAndUpdate(
+      req.params.id,
+      { name, address, phone, website, description, category: categoryId },
+      { new: true }
+    );
+    res.json({ message: 'Business updated successfully', business });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await Business.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/admin/claims', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const claims = await ClaimRequest.find({ status: 'pending' })
+      .populate('user', 'name email')
+      .populate('business', 'name address')
+      .sort({ createdAt: -1 });
+    res.json(claims);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/claims/:id/decision', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { decision } = req.body;
+    const claim = await ClaimRequest.findById(req.params.id).populate('user').populate('business');
+    if (!claim) return res.status(404).json({ message: 'Claim not found' });
+
+    claim.status = decision;
+    await claim.save();
+
+    if (decision === 'approved') {
+      await Business.findByIdAndUpdate(claim.business._id, { owner: claim.user._id });
+      await User.findByIdAndUpdate(claim.user._id, { verifiedBusiness: claim.business._id });
+    }
+
+    res.json({ message: `Claim ${decision}` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/admin/events/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await Event.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await Deal.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+function sanitizeUser(user) {
+  const u = user.toObject ? user.toObject() : user;
+  delete u.password;
+  return u;
+}
 
 module.exports = router;

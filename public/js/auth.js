@@ -23,8 +23,8 @@ function switchToRegister() {
 }
 
 async function handleRegister() {
-  const name = document.getElementById('regName').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
+  const name     = document.getElementById('regName').value.trim();
+  const email    = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPassword').value;
 
   if (!name || !email || !password) return alert('All fields are required');
@@ -50,7 +50,7 @@ async function handleRegister() {
 }
 
 async function handleLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
+  const email    = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
 
   const result = await apiPost('/auth/login', { email, password });
@@ -67,70 +67,24 @@ async function handleLogin() {
   }
 }
 
-function showProfileSheet() {
-  if (!currentUser) return;
-  const sheet = document.getElementById('profileSheet');
-  const content = document.getElementById('sheet-content');
-
-  const avatarLetter = currentUser.name[0].toUpperCase();
-  const lastLoginText = currentUser.lastLogin
-    ? `Last logged in: ${new Date(currentUser.lastLogin).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-    : 'Just now';
-
-  const isAdmin = currentUser.email === 'imhoggbox@gmail.com';
-  const isVerified = !!currentUser.verifiedBusiness;
-  const bizName = isVerified ? (currentUser.verifiedBusiness?.name || 'Your Business') : '';
-
-  content.innerHTML = `
-    <div class="flex justify-center mb-6">
-      <div class="relative inline-block">
-        <div class="w-28 h-28 bg-emerald-500 rounded-3xl flex items-center justify-center text-7xl font-bold text-white shadow-inner">
-          ${avatarLetter}
-        </div>
-        ${isVerified ? `<div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1">✓ Verified</div>` : ''}
-      </div>
-    </div>
-    <h2 class="text-3xl font-bold text-slate-900">${currentUser.name}</h2>
-    <p class="text-emerald-600 text-lg">${currentUser.email}</p>
-    ${isVerified ? `<div class="mt-3 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
-    <p class="text-gray-500 text-sm mt-6">${lastLoginText}</p>
-
-    <div class="mt-10 space-y-3">
-      ${isAdmin ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-5 rounded-3xl font-semibold text-xl transition">🔧 Admin Panel</button>` : ''}
-      ${isVerified ? `<button onclick="navigate('owner-dashboard');hideProfileSheet();" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-3xl font-semibold text-xl transition">🏪 My Business Dashboard</button>` : ''}
-      <button onclick="logout()" class="w-full bg-red-500 hover:bg-red-600 text-white py-5 rounded-3xl font-semibold text-xl transition">Logout</button>
-      <button onclick="hideProfileSheet()" class="w-full bg-gray-200 hover:bg-gray-300 text-slate-900 py-5 rounded-3xl font-semibold text-xl transition">Close</button>
-    </div>
-  `;
-
-  sheet.classList.remove('hidden');
-  setTimeout(() => { sheet.querySelector('div').classList.remove('translate-y-full'); }, 10);
-}
-
-function hideProfileSheet() {
-  const sheet = document.getElementById('profileSheet');
-  const inner = sheet.querySelector('div');
-  inner.classList.add('translate-y-full');
-  setTimeout(() => { sheet.classList.add('hidden'); }, 300);
-}
-
+// updateUserUI is defined (and overridden) in profile.js
+// Fallback in case profile.js isn't loaded yet
 function updateUserUI() {
   if (!currentUser) return;
-  const avatarLetter = currentUser.name[0].toUpperCase();
+  const letter     = (currentUser.name || '?')[0].toUpperCase();
   const isVerified = !!currentUser.verifiedBusiness;
 
-  const sidebarEl = document.getElementById('sidebar-avatar');
-  const mobileEl = document.getElementById('mobile-avatar');
+  ['sidebar-avatar','mobile-avatar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (currentUser.avatar) {
+      el.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-2xl" alt="avatar">`;
+    } else {
+      el.innerHTML = letter;
+    }
+    if (id === 'sidebar-avatar') el.title = isVerified ? 'Verified Business Owner' : currentUser.name;
+  });
 
-  if (sidebarEl) {
-    sidebarEl.innerHTML = avatarLetter;
-    sidebarEl.title = isVerified ? 'Verified Business Owner' : currentUser.name;
-  }
-  if (mobileEl) {
-    mobileEl.innerHTML = avatarLetter;
-  }
-
-  // Show/hide owner dashboard nav item
   renderNav();
 }
 
@@ -144,24 +98,37 @@ function logout() {
 }
 
 function showLockedState() {
-  document.getElementById('lockedOverlay').classList.remove('hidden');
-  document.getElementById('content').classList.add('blur-sm', 'pointer-events-none');
+  const overlay = document.getElementById('lockedOverlay');
+  if (overlay) overlay.classList.remove('hidden');
+  const content = document.getElementById('content');
+  if (content) content.classList.add('blur-sm', 'pointer-events-none');
 }
 
 function hideLockedState() {
-  document.getElementById('lockedOverlay').classList.add('hidden');
-  document.getElementById('content').classList.remove('blur-sm', 'pointer-events-none');
+  const overlay = document.getElementById('lockedOverlay');
+  if (overlay) overlay.classList.add('hidden');
+  const content = document.getElementById('content');
+  if (content) content.classList.remove('blur-sm', 'pointer-events-none');
 }
 
 async function checkAuth() {
-  const token = localStorage.getItem('token');
-  if (!token) { showLockedState(); return; }
-  const result = await apiGet('/auth/me');
-  if (result.user) {
-    currentUser = result.user;
-    updateUserUI();
-    hideLockedState();
-  } else {
+  const storedToken = localStorage.getItem('token');
+  if (!storedToken) {
+    showLockedState();
+    return;
+  }
+  try {
+    const result = await apiGet('/auth/me');
+    if (result.user) {
+      currentUser = result.user;
+      updateUserUI();
+      hideLockedState();
+    } else {
+      // Token is invalid or expired — clear it
+      localStorage.removeItem('token');
+      showLockedState();
+    }
+  } catch (e) {
     showLockedState();
   }
 }
@@ -173,13 +140,11 @@ function startVerificationPoll(businessId) {
     const res = await apiGet(`/claim/status/${businessId}`);
     if (res.status === 'approved') {
       stopVerificationPoll();
-      // Refresh user data
       const meRes = await apiGet('/auth/me');
       if (meRes.user) {
         currentUser = meRes.user;
         updateUserUI();
         showVerifiedNotification(currentUser.verifiedBusiness?.name || 'Your business');
-        // Reload current directory page to show updated state
         if (typeof loadPage !== 'undefined') loadPage('directory');
       }
     } else if (res.status === 'rejected') {
@@ -206,22 +171,21 @@ function showVerifiedNotification(bizName) {
 
 function showToast(message, type = 'info') {
   const color = type === 'error' ? 'bg-red-500' : 'bg-slate-800';
-  const el = document.createElement('div');
+  const el    = document.createElement('div');
   el.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[99999] ${color} text-white px-8 py-4 rounded-3xl shadow-2xl text-center font-semibold text-base`;
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
 
-window.showAuthModal = showAuthModal;
-window.hideAuthModal = hideAuthModal;
-window.switchToLogin = switchToLogin;
-window.switchToRegister = switchToRegister;
-window.handleLogin = handleLogin;
-window.handleRegister = handleRegister;
-window.showProfileSheet = showProfileSheet;
-window.hideProfileSheet = hideProfileSheet;
-window.logout = logout;
+window.showAuthModal       = showAuthModal;
+window.hideAuthModal       = hideAuthModal;
+window.switchToLogin       = switchToLogin;
+window.switchToRegister    = switchToRegister;
+window.handleLogin         = handleLogin;
+window.handleRegister      = handleRegister;
+window.logout              = logout;
+window.checkAuth           = checkAuth;
 window.startVerificationPoll = startVerificationPoll;
-window.stopVerificationPoll = stopVerificationPoll;
-window.showToast = showToast;
+window.stopVerificationPoll  = stopVerificationPoll;
+window.showToast           = showToast;

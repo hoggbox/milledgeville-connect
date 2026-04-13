@@ -12,7 +12,7 @@ async function apiRequest(endpoint, data = null, method = 'GET') {
 
   const options = { method, headers };
 
-  if (data && (method === 'POST' || method === 'PUT')) {
+  if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
     options.body = JSON.stringify(data);
   }
 
@@ -34,6 +34,11 @@ async function apiPost(endpoint, data, method = 'POST') {
   return apiRequest(endpoint, data, method);
 }
 
-window.apiGet = apiGet;
-window.apiPost = apiPost;
+async function apiPatch(endpoint, data) {
+  return apiRequest(endpoint, data, 'PATCH');
+}
+
+window.apiGet   = apiGet;
+window.apiPost  = apiPost;
+window.apiPatch = apiPatch;
 window.setToken = setToken;
