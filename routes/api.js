@@ -441,44 +441,6 @@ router.get('/claim/status/:businessId', authenticate, async (req, res) => {
   }
 });
 
-// ─── Category auto-mapping helpers ───────────────────────────────────────────
-const BIZ_TO_DEAL_MAP = {
-  restaurant:'Food & Drink', food:'Food & Drink', cafe:'Food & Drink',
-  bar:'Food & Drink', coffee:'Food & Drink', bakery:'Food & Drink', pizza:'Food & Drink',
-  retail:'Shopping', shop:'Shopping', boutique:'Shopping', clothing:'Shopping', grocery:'Shopping',
-  pharmacy:'Health & Beauty', salon:'Health & Beauty', spa:'Health & Beauty',
-  beauty:'Health & Beauty', fitness:'Health & Beauty', gym:'Health & Beauty',
-  health:'Health & Beauty', medical:'Health & Beauty', dental:'Health & Beauty',
-  plumbing:'Home & Services', hvac:'Home & Services', contractor:'Home & Services',
-  home:'Home & Services', landscaping:'Home & Services', cleaning:'Home & Services',
-  services:'Home & Services',
-  entertainment:'Entertainment', bowling:'Entertainment', movie:'Entertainment',
-  theater:'Entertainment', arcade:'Entertainment',
-  auto:'Automotive', car:'Automotive', mechanic:'Automotive', tire:'Automotive', dealership:'Automotive',
-};
-const BIZ_TO_EVENT_MAP = {
-  restaurant:'Food & Drink', food:'Food & Drink', cafe:'Food & Drink',
-  bar:'Food & Drink', coffee:'Food & Drink', bakery:'Food & Drink',
-  music:'Music & Arts', art:'Music & Arts', gallery:'Music & Arts', theater:'Music & Arts',
-  gym:'Sports & Fitness', fitness:'Sports & Fitness', sports:'Sports & Fitness',
-  kids:'Family & Kids', family:'Family & Kids', childcare:'Family & Kids',
-  school:'Education', education:'Education', tutoring:'Education',
-  networking:'Business & Networking', professional:'Business & Networking', business:'Business & Networking',
-};
-
-function inferDealCat(bizCatName) {
-  if (!bizCatName) return 'Other';
-  const lower = bizCatName.toLowerCase();
-  for (const [key, val] of Object.entries(BIZ_TO_DEAL_MAP)) { if (lower.includes(key)) return val; }
-  return 'Other';
-}
-function inferEventCat(bizCatName) {
-  if (!bizCatName) return 'Community';
-  const lower = bizCatName.toLowerCase();
-  for (const [key, val] of Object.entries(BIZ_TO_EVENT_MAP)) { if (lower.includes(key)) return val; }
-  return 'Community';
-}
-
 // ─── Owner Routes ─────────────────────────────────────────────────────────────
 router.put('/owner/business', authenticate, async (req, res) => {
   try {
@@ -509,15 +471,14 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).populate('verifiedBusiness');
+    const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
     const { title, description, expires, category } = req.body;
 
-    // Auto-derive category from the business's directory category if not explicitly set
+    // If the owner didn't choose a category, use their business's directory category name directly
     let resolvedCategory = category;
-    if (!resolvedCategory) {
-      const bizCat = user.verifiedBusiness?.category;
-      const bizCatName = typeof bizCat === 'object' ? (bizCat?.name || '') : (bizCat || '');
-      resolvedCategory = inferDealCat(bizCatName);
+    if (!resolvedCategory && user.verifiedBusiness) {
+      const bizCat = user.verifiedBusiness.category;
+      resolvedCategory = (bizCat && typeof bizCat === 'object') ? bizCat.name : (bizCat || '');
     }
 
     const deal = await Deal.create({
@@ -526,7 +487,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       expires: expires || null,
       business: user.verifiedBusiness,
       owner: req.userId,
-      category: resolvedCategory
+      category: resolvedCategory || ''
     });
     res.json(deal);
   } catch (err) {
@@ -554,15 +515,14 @@ router.get('/owner/events', authenticate, async (req, res) => {
 
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).populate('verifiedBusiness');
+    const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
     const { title, date, location, description, category } = req.body;
 
-    // Auto-derive category from the business's directory category if not explicitly set
+    // If the owner didn't choose a category, use their business's directory category name directly
     let resolvedCategory = category;
-    if (!resolvedCategory) {
-      const bizCat = user.verifiedBusiness?.category;
-      const bizCatName = typeof bizCat === 'object' ? (bizCat?.name || '') : (bizCat || '');
-      resolvedCategory = inferEventCat(bizCatName);
+    if (!resolvedCategory && user.verifiedBusiness) {
+      const bizCat = user.verifiedBusiness.category;
+      resolvedCategory = (bizCat && typeof bizCat === 'object') ? bizCat.name : (bizCat || '');
     }
 
     const event = await Event.create({
@@ -571,7 +531,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
       location,
       description,
       owner: req.userId,
-      category: resolvedCategory
+      category: resolvedCategory || ''
     });
     res.json(event);
   } catch (err) {

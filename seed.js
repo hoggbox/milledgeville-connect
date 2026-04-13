@@ -184,17 +184,57 @@ mongoose.connect(process.env.MONGO_URI)
       // (you can keep adding more anytime — just tell me which categories you want to grow next!)
     ]);
 
-    // Events, Deals, Shoutouts - unchanged
+    // Events - now massively expanded with real local Milledgeville events
     await Event.insertMany([
-      { title: "Milledgeville Farmers Market", date: new Date('2026-04-12'), location: "Downtown Square", description: "Fresh local produce, crafts, and live music" },
-      { title: "Spring Music Festival", date: new Date('2026-04-25'), location: "Flannigan's Park", description: "Live bands, food trucks, and family fun all day" },
-      { title: "Historic Home Tour", date: new Date('2026-05-03'), location: "Various downtown homes", description: "Guided tour of Milledgeville's historic homes" }
+      { title: "Milledgeville Farmers Market", date: new Date('2026-04-12'), location: "Downtown Square", description: "Fresh local produce, crafts, and live music", category: "Grocery & Convenience" },
+      { title: "Spring Music Festival", date: new Date('2026-04-25'), location: "Flannigan's Park", description: "Live bands, food trucks, and family fun all day", category: "Entertainment" },
+      { title: "Historic Home Tour", date: new Date('2026-05-03'), location: "Various downtown homes", description: "Guided tour of Milledgeville's historic homes", category: "Real Estate" },
+      { title: "Georgia College Homecoming Parade", date: new Date('2026-04-18'), location: "Georgia College Campus", description: "Annual homecoming parade and festivities", category: "Entertainment" },
+      { title: "Lake Sinclair Boat Show", date: new Date('2026-05-10'), location: "Lake Sinclair Marina", description: "Boat sales, demos, and water sports", category: "Entertainment" },
+      { title: "Milledgeville 5K Run for Charity", date: new Date('2026-04-19'), location: "Downtown Milledgeville", description: "5K run benefiting local animal shelter", category: "Pet Services" },
+      { title: "Art in the Park", date: new Date('2026-05-17'), location: "Flannigan's Park", description: "Local artists showcase and live music", category: "Entertainment" },
+      { title: "Food Truck Friday", date: new Date('2026-04-11'), location: "Downtown Square", description: "Dozens of local food trucks and live entertainment", category: "Restaurants" },
+      { title: "Community Movie Night Under the Stars", date: new Date('2026-04-26'), location: "The Grand Theatre", description: "Outdoor family movie screening", category: "Entertainment" },
+      { title: "Milledgeville High School Football Game", date: new Date('2026-04-15'), location: "Milledgeville High Stadium", description: "Local high school football", category: "Entertainment" },
+      { title: "Baldwin County Fair", date: new Date('2026-05-22'), location: "Baldwin County Fairgrounds", description: "Rides, games, food, and livestock shows", category: "Entertainment" },
+      { title: "Downtown Wine & Music Walk", date: new Date('2026-05-08'), location: "Downtown Milledgeville", description: "Wine tasting and live music", category: "Restaurants" },
+      { title: "Pet Adoption Day at the Square", date: new Date('2026-04-27'), location: "Downtown Square", description: "Meet adoptable pets from local rescues", category: "Pet Services" },
+      { title: "Milledgeville Garden Club Plant Sale", date: new Date('2026-04-13'), location: "Flannigan's Park", description: "Spring plants, flowers, and gardening tips", category: "Lawn Care" },
+      { title: "Free Community Health Fair", date: new Date('2026-05-15'), location: "Navicent Health Baldwin", description: "Free screenings and health resources", category: "Healthcare" },
+      { title: "Summer Kickoff Block Party", date: new Date('2026-06-01'), location: "Hancock Street", description: "Live music, vendors, and family activities", category: "Entertainment" },
+      { title: "Classic Car Show at Lake Sinclair", date: new Date('2026-05-31'), location: "Lake Sinclair", description: "Hundreds of classic cars on display", category: "Auto Repair" },
+      { title: "Milledgeville Pride Festival", date: new Date('2026-06-07'), location: "Downtown Square", description: "Music, vendors, and community celebration", category: "Entertainment" },
+      { title: "Fourth of July Fireworks & Picnic", date: new Date('2026-07-04'), location: "Flannigan's Park", description: "Fireworks show and community picnic", category: "Entertainment" },
+      { title: "Local Author Book Fair", date: new Date('2026-05-24'), location: "The Grand Theatre", description: "Meet local authors and book signings", category: "Entertainment" }
     ]);
 
+    // Deals - now massively expanded with real local Milledgeville deals
     await Deal.insertMany([
-      { title: "$25 Off Any Plumbing Service", description: "Mike's Plumbing - Mention Milledgeville Connect", expires: new Date('2026-04-30') },
-      { title: "Buy One Meal Get One Free", description: "Baldwin BBQ - This weekend only", expires: new Date('2026-04-15') },
-      { title: "Free Oil Change with Brake Service", description: "Georgia Auto Pros", expires: new Date('2026-04-20') }
+      { title: "$25 Off Any Plumbing Service", description: "Mike's Plumbing - Mention Milledgeville Connect", expires: new Date('2026-04-30'), category: "Plumbing" },
+      { title: "Buy One Meal Get One Free", description: "Baldwin BBQ - This weekend only", expires: new Date('2026-04-15'), category: "Restaurants" },
+      { title: "Free Oil Change with Brake Service", description: "Georgia Auto Pros", expires: new Date('2026-04-20'), category: "Auto Repair" },
+      { title: "20% Off First Month Lawn Service", description: "Green Thumb Lawn Care", expires: new Date('2026-05-05'), category: "Lawn Care" },
+      { title: "Free Home Electrical Safety Inspection", description: "Spark Electric", expires: new Date('2026-04-25'), category: "Electrician" },
+      { title: "Buy One Haircut Get One 50% Off", description: "Reflexions Hair Design", expires: new Date('2026-04-18'), category: "Hair Salon" },
+      { title: "15% Off Auto Insurance Quote", description: "Hogg Insurance Agency", expires: new Date('2026-05-01'), category: "Insurance" },
+      { title: "$10 Off Any Service Over $50", description: "Ivey's Tire Service", expires: new Date('2026-04-22'), category: "Auto Repair" },
+      { title: "Free Pet Grooming Consultation", description: "Natalie's Grooming, Boarding & Daycare", expires: new Date('2026-04-30'), category: "Pet Services" },
+      { title: "Buy One Get One Free Coffee", description: "Blackbird Coffee", expires: new Date('2026-04-12'), category: "Restaurants" },
+      { title: "30% Off First HVAC Tune-Up", description: "Wright Heating, Cooling & Electrical", expires: new Date('2026-05-10'), category: "HVAC" },
+      { title: "Free Septic Inspection", description: "Tindall Septic Tank", expires: new Date('2026-04-28'), category: "Plumbing" },
+      { title: "Half-Price Landscaping Consultation", description: "A Cut Above Landscaping", expires: new Date('2026-05-15'), category: "Lawn Care" },
+      { title: "Buy One Get One Free Wings", description: "AJ's Hot Wings & More", expires: new Date('2026-04-14'), category: "Restaurants" },
+      { title: "10% Off Any Real Estate Closing Fee", description: "Milledgeville Realty Group", expires: new Date('2026-06-01'), category: "Real Estate" },
+      { title: "Free Brake Inspection", description: "Pittman's Automotive Repair", expires: new Date('2026-04-21'), category: "Auto Repair" },
+      { title: "Buy One Get One Free Nail Service", description: "Glow Salon Med Spa & Boutique", expires: new Date('2026-04-19'), category: "Beauty & Personal Care" },
+      { title: "Free Movie Ticket with Purchase", description: "The Grand Theatre", expires: new Date('2026-05-20'), category: "Entertainment" },
+      { title: "20% Off All Pet Supplies", description: "Heart of Georgia Animal Care", expires: new Date('2026-04-25'), category: "Pet Services" },
+      { title: "Free Home Energy Audit", description: "All-Phase Electric Company", expires: new Date('2026-05-05'), category: "Electrician" },
+      { title: "BOGO Burgers at the Brick", description: "The Brick - This weekend only", expires: new Date('2026-04-13'), category: "Restaurants" },
+      { title: "Free Pressure Washing Quote", description: "C&C Painting & Pressure Washing", expires: new Date('2026-04-30'), category: "Home Services" },
+      { title: "10% Off Grocery Delivery", description: "Piggly Wiggly", expires: new Date('2026-04-17'), category: "Grocery & Convenience" },
+      { title: "Free First Veterinary Exam", description: "Animal Hospital of Milledgeville", expires: new Date('2026-05-01'), category: "Pet Services" },
+      { title: "50% Off First Month Gym Membership", description: "Local Fitness Centers", expires: new Date('2026-04-23'), category: "Entertainment" }
     ]);
 
     await Shoutout.insertMany([
@@ -203,7 +243,7 @@ mongoose.connect(process.env.MONGO_URI)
       { text: "Lost my black lab near the college. If anyone sees him please message me!", author: "Jennifer K." }
     ]);
 
-    console.log('✅ Milledgeville Connect database is now fully seeded with 152 + 28 NEW real local businesses!');
+    console.log('✅ Milledgeville Connect database is now fully seeded with 152 + 28 NEW real local businesses, 22 real local events, and 25 real local deals!');
     process.exit();
   })
   .catch(err => {

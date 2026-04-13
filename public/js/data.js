@@ -1094,47 +1094,67 @@ window.deleteShoutout = async function (shoutoutId) {
 };
 
 // ─── EVENTS & DEALS ──────────────────────────────────────────────────────────
-// ─── DEALS category config ────────────────────────────────────────────────────
-const DEAL_CATEGORIES = [
-  { id: 'Food & Drink',      icon: '🍔' },
-  { id: 'Shopping',          icon: '🛍️' },
-  { id: 'Health & Beauty',   icon: '💅' },
-  { id: 'Home & Services',   icon: '🔧' },
-  { id: 'Entertainment',     icon: '🎉' },
-  { id: 'Automotive',        icon: '🚗' },
-  { id: 'Other',             icon: '📦' },
+
+// ─── Shared directory categories cache ───────────────────────────────────────
+// Populated once on first deals/events page load. Same Category docs as Directory.
+// Shape: [{ name: 'Insurance', icon: '🛡️' }, ...]
+window._dirCategories = window._dirCategories || [];
+
+async function ensureDirCategories() {
+  if (window._dirCategories.length) return;
+  try {
+    const data = await apiGet('/directory');
+    window._dirCategories = (data.categories || []).map(c => ({ name: c.name, icon: c.icon || '📁' }));
+  } catch (e) { /* fail silently */ }
+}
+
+// ─── Event categories — community-focused, fixed list ─────────────────────────
+const EVENT_CATEGORIES = [
+  { name: 'Community',             icon: '🏘️'  },
+  { name: 'Food & Drink',          icon: '🍽️'  },
+  { name: 'Music & Entertainment', icon: '🎶'  },
+  { name: 'Sports & Fitness',      icon: '⚽'  },
+  { name: 'Family & Kids',         icon: '👨‍👩‍👧'  },
+  { name: 'Arts & Culture',        icon: '🎨'  },
+  { name: 'Business & Networking', icon: '💼'  },
+  { name: 'Education & Classes',   icon: '📚'  },
+  { name: 'Health & Wellness',     icon: '🧘'  },
+  { name: 'Charity & Fundraiser',  icon: '❤️'  },
+  { name: 'Holiday & Seasonal',    icon: '🎉'  },
+  { name: 'Other',                 icon: '📌'  },
 ];
 
-// ─── EVENTS category config ───────────────────────────────────────────────────
-const EVENT_CATEGORIES = [
-  { id: 'Community',              icon: '🏘️' },
-  { id: 'Food & Drink',           icon: '🍽️' },
-  { id: 'Music & Arts',           icon: '🎶' },
-  { id: 'Sports & Fitness',       icon: '⚽' },
-  { id: 'Family & Kids',          icon: '👨‍👩‍👧' },
-  { id: 'Business & Networking',  icon: '💼' },
-  { id: 'Education',              icon: '📚' },
-  { id: 'Other',                  icon: '📌' },
-];
+// Return the icon for a category name —
+// checks event categories first, then directory categories, then falls back
+function catIcon(name) {
+  if (!name) return '📁';
+  const evtMatch = EVENT_CATEGORIES.find(c => c.name === name);
+  if (evtMatch) return evtMatch.icon;
+  const dirMatch = (window._dirCategories || []).find(c => c.name === name);
+  return dirMatch ? dirMatch.icon : '📁';
+}
 
 // ─── DEALS PAGE ───────────────────────────────────────────────────────────────
 async function loadDealsPage(content) {
-  const allDeals = await apiGet('/deals');
-  window._allDeals = allDeals;
+  const [allDeals] = await Promise.all([apiGet('/deals'), ensureDirCategories()]);
+  window._allDeals   = allDeals;
   window._dealFilter = 'All';
   window._dealSearch = '';
   window._dealSort   = 'newest';
+
+  const now         = new Date();
+  const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
+  const activeCats  = [...new Set(activeDeals.map(d => d.category).filter(Boolean))].sort();
 
   content.innerHTML = `
     <div class="max-w-3xl mx-auto px-2 pb-10">
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-3xl md:text-4xl font-bold">🔥 Deals</h2>
-        <span class="text-sm text-white/40">${allDeals.filter(d => !d.expires || new Date(d.expires) >= new Date()).length} active</span>
+        <span class="text-sm text-white/40">${activeDeals.length} active</span>
       </div>
 
       ${!currentUser ? guestBanner('post deals and get notified about new offers') : ''}
 
-      <!-- Search + sort row -->
       <div class="flex gap-2 mb-4">
         <input id="dealSearchInput" type="text" placeholder="Search deals…"
                class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400"
@@ -1148,21 +1168,7 @@ async function loadDealsPage(content) {
         </select>
       </div>
 
-      <!-- Category filter chips -->
-      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
-        <button onclick="window._dealFilter='All'; renderDealsFiltered()"
-                id="deal-chip-All"
-                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-amber-500 text-white">
-          All
-        </button>
-        ${DEAL_CATEGORIES.map(c => `
-          <button onclick="window._dealFilter='${c.id}'; renderDealsFiltered()"
-                  id="deal-chip-${c.id.replace(/[^a-z0-9]/gi,'_')}"
-                  class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-white/10 hover:bg-white/20 text-white/80">
-            <span>${c.icon}</span><span>${c.id}</span>
-          </button>`).join('')}
-      </div>
-
+      <div id="dealChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
       <div id="dealResults"></div>
     </div>`;
 
@@ -1170,33 +1176,48 @@ async function loadDealsPage(content) {
 }
 
 window.renderDealsFiltered = function () {
-  const search   = (window._dealSearch || '').toLowerCase();
-  const filter   = window._dealFilter || 'All';
-  const sort     = window._dealSort   || 'newest';
-  const now      = new Date();
+  const search    = (window._dealSearch || '').toLowerCase();
+  const filter    = window._dealFilter  || 'All';
+  const sort      = window._dealSort    || 'newest';
+  const now       = new Date();
+  const allDeals  = window._allDeals    || [];
 
-  // Update chip styles
-  ['All', ...DEAL_CATEGORIES.map(c => c.id)].forEach(id => {
-    const chip = document.getElementById(`deal-chip-${id.replace(/[^a-z0-9]/gi,'_')}`);
-    if (!chip) return;
-    const active = filter === id;
-    chip.className = `flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${
-      active ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'
-    }`;
-  });
+  // Active = non-expired deals; chips only show categories with active deals
+  const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
+  const activeCats  = [...new Set(activeDeals.map(d => d.category).filter(Boolean))].sort();
 
-  let deals = (window._allDeals || []).filter(d => {
-    if (filter !== 'All' && d.category !== filter) return false;
+  // Auto-reset filter if its category has no active deals
+  if (filter !== 'All' && !activeCats.includes(filter)) window._dealFilter = 'All';
+  const currentFilter = window._dealFilter || 'All';
+
+  // Rebuild chips
+  const chips = document.getElementById('dealChips');
+  if (chips) {
+    chips.innerHTML = `
+      <button onclick="window._dealFilter='All'; renderDealsFiltered()"
+              class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+        All
+      </button>
+      ${activeCats.map(name => {
+        const safe = name.replace(/'/g, "\\'");
+        return `
+        <button onclick="window._dealFilter='${safe}'; renderDealsFiltered()"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === name ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+          <span>${catIcon(name)}</span><span>${name}</span>
+        </button>`;
+      }).join('')}`;
+  }
+
+  let deals = allDeals.filter(d => {
+    if (currentFilter !== 'All' && d.category !== currentFilter) return false;
     if (search && !d.title.toLowerCase().includes(search) && !(d.description||'').toLowerCase().includes(search)) return false;
     return true;
   });
 
-  // Sort
   if (sort === 'expiring') {
-    deals = deals
-      .filter(d => d.expires)
-      .sort((a, b) => new Date(a.expires) - new Date(b.expires))
-      .concat(deals.filter(d => !d.expires));
+    const withExpiry    = deals.filter(d => d.expires).sort((a,b) => new Date(a.expires) - new Date(b.expires));
+    const withoutExpiry = deals.filter(d => !d.expires);
+    deals = [...withExpiry, ...withoutExpiry];
   } else if (sort === 'az') {
     deals.sort((a, b) => a.title.localeCompare(b.title));
   } else {
@@ -1211,49 +1232,36 @@ window.renderDealsFiltered = function () {
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">🏷️</p>
         <p class="text-white/50 text-sm">No deals found</p>
-        ${filter !== 'All' ? `<button onclick="window._dealFilter='All';renderDealsFiltered()" class="mt-3 text-amber-400 text-sm font-semibold hover:text-amber-300 transition">Clear filter</button>` : ''}
+        ${currentFilter !== 'All' ? `<button onclick="window._dealFilter='All';renderDealsFiltered()" class="mt-3 text-amber-400 text-sm font-semibold hover:text-amber-300 transition">Clear filter</button>` : ''}
       </div>`;
     return;
   }
 
-  const catMap = Object.fromEntries(DEAL_CATEGORIES.map(c => [c.id, c.icon]));
-
   container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">` +
     deals.map(d => {
-      const expired = d.expires && new Date(d.expires) < now;
-      const expiresIn = d.expires ? Math.ceil((new Date(d.expires) - now) / (1000 * 60 * 60 * 24)) : null;
-      const urgency = expiresIn !== null && expiresIn <= 3 && !expired;
-      const catIcon = catMap[d.category] || '📦';
-      const catLabel = d.category || 'Other';
-
+      const expired   = d.expires && new Date(d.expires) < now;
+      const expiresIn = d.expires ? Math.ceil((new Date(d.expires) - now) / (1000*60*60*24)) : null;
+      const urgency   = expiresIn !== null && expiresIn <= 3 && !expired;
+      const icon      = catIcon(d.category);
+      const label     = d.category || 'General';
       return `
         <div class="bg-white/10 backdrop-blur-xl border ${urgency ? 'border-amber-500/50' : expired ? 'border-white/5 opacity-60' : 'border-white/10'} rounded-3xl overflow-hidden transition hover:bg-white/15">
           <div class="h-1.5 ${expired ? 'bg-white/10' : urgency ? 'bg-gradient-to-r from-amber-500 to-orange-400' : 'bg-gradient-to-r from-amber-500/60 to-yellow-500/60'}"></div>
           <div class="p-5">
             <div class="flex items-start justify-between gap-3 mb-3">
               <div class="flex items-center gap-2">
-                <div class="w-9 h-9 rounded-2xl flex items-center justify-center text-xl ${expired ? 'bg-white/5' : 'bg-amber-500/20'} flex-shrink-0">${catIcon}</div>
-                <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${expired ? 'bg-white/10 text-white/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">${catLabel}</span>
+                <div class="w-9 h-9 rounded-2xl flex items-center justify-center text-xl ${expired ? 'bg-white/5' : 'bg-amber-500/20'} flex-shrink-0">${icon}</div>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${expired ? 'bg-white/10 text-white/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">${label}</span>
               </div>
-              ${expired
-                ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/20 flex-shrink-0">Expired</span>`
-                : urgency
-                ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0 animate-pulse">⚡ ${expiresIn}d left</span>`
+              ${expired ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/20 flex-shrink-0">Expired</span>`
+                : urgency ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0 animate-pulse">⚡ ${expiresIn}d left</span>`
                 : ''}
             </div>
             <h3 class="font-bold text-base leading-snug mb-2 ${expired ? 'text-white/40 line-through' : 'text-white'}">${d.title}</h3>
             ${d.description ? `<p class="text-sm text-white/60 leading-relaxed mb-3 line-clamp-2">${d.description}</p>` : ''}
             <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
-              <div class="text-xs text-white/40">
-                ${d.business?.name ? `🏪 ${d.business.name}` : d.owner?.name ? `👤 ${d.owner.name}` : ''}
-              </div>
-              <div class="text-xs text-white/40">
-                ${d.expires
-                  ? expired
-                    ? `Expired ${new Date(d.expires).toLocaleDateString()}`
-                    : `Expires ${new Date(d.expires).toLocaleDateString()}`
-                  : 'No expiry'}
-              </div>
+              <div class="text-xs text-white/40">${d.business?.name ? `🏪 ${d.business.name}` : d.owner?.name ? `👤 ${d.owner.name}` : ''}</div>
+              <div class="text-xs text-white/40">${d.expires ? (expired ? `Expired ${new Date(d.expires).toLocaleDateString()}` : `Expires ${new Date(d.expires).toLocaleDateString()}`) : 'No expiry'}</div>
             </div>
           </div>
         </div>`;
@@ -1262,22 +1270,25 @@ window.renderDealsFiltered = function () {
 
 // ─── EVENTS PAGE ──────────────────────────────────────────────────────────────
 async function loadEventsPage(content) {
-  const allEvents = await apiGet('/events');
-  window._allEvents  = allEvents;
+  const [allEvents] = await Promise.all([apiGet('/events'), ensureDirCategories()]);
+  window._allEvents   = allEvents;
   window._eventFilter = 'All';
   window._eventSearch = '';
   window._eventTime   = 'upcoming';
+
+  const now            = new Date();
+  const upcomingEvents = allEvents.filter(e => new Date(e.date) >= now);
+  const activeCats     = [...new Set(upcomingEvents.map(e => e.category).filter(Boolean))].sort();
 
   content.innerHTML = `
     <div class="max-w-3xl mx-auto px-2 pb-10">
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-3xl md:text-4xl font-bold">📅 Events</h2>
-        <span class="text-sm text-white/40">${allEvents.filter(e => new Date(e.date) >= new Date()).length} upcoming</span>
+        <span class="text-sm text-white/40">${upcomingEvents.length} upcoming</span>
       </div>
 
       ${!currentUser ? guestBanner('post events and connect with the community') : ''}
 
-      <!-- Search + time filter row -->
       <div class="flex gap-2 mb-4">
         <input id="eventSearchInput" type="text" placeholder="Search events…"
                class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
@@ -1291,21 +1302,7 @@ async function loadEventsPage(content) {
         </select>
       </div>
 
-      <!-- Category filter chips -->
-      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
-        <button onclick="window._eventFilter='All'; renderEventsFiltered()"
-                id="event-chip-All"
-                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-emerald-500 text-white">
-          All
-        </button>
-        ${EVENT_CATEGORIES.map(c => `
-          <button onclick="window._eventFilter='${c.id}'; renderEventsFiltered()"
-                  id="event-chip-${c.id.replace(/[^a-z0-9]/gi,'_')}"
-                  class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-white/10 hover:bg-white/20 text-white/80">
-            <span>${c.icon}</span><span>${c.id}</span>
-          </button>`).join('')}
-      </div>
-
+      <div id="eventChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
       <div id="eventResults"></div>
     </div>`;
 
@@ -1313,38 +1310,51 @@ async function loadEventsPage(content) {
 }
 
 window.renderEventsFiltered = function () {
-  const search = (window._eventSearch || '').toLowerCase();
-  const filter = window._eventFilter || 'All';
-  const time   = window._eventTime   || 'upcoming';
-  const now    = new Date();
+  const search    = (window._eventSearch || '').toLowerCase();
+  const filter    = window._eventFilter  || 'All';
+  const time      = window._eventTime    || 'upcoming';
+  const now       = new Date();
+  const allEvents = window._allEvents    || [];
 
-  // Update chip styles
-  ['All', ...EVENT_CATEGORIES.map(c => c.id)].forEach(id => {
-    const chip = document.getElementById(`event-chip-${id.replace(/[^a-z0-9]/gi,'_')}`);
-    if (!chip) return;
-    const active = filter === id;
-    chip.className = `flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${
-      active ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'
-    }`;
-  });
+  // Chips: show only event categories that have ≥1 event in the current time pool,
+  // ordered by the EVENT_CATEGORIES master list (not alphabetically)
+  const pool       = time === 'past' ? allEvents.filter(e => new Date(e.date) < now) : allEvents.filter(e => new Date(e.date) >= now);
+  const poolCatSet = new Set(pool.map(e => e.category).filter(Boolean));
+  const activeCats = EVENT_CATEGORIES.filter(c => poolCatSet.has(c.name));
 
-  let events = (window._allEvents || []).filter(e => {
+  if (filter !== 'All' && !activeCats.find(c => c.name === filter)) window._eventFilter = 'All';
+  const currentFilter = window._eventFilter || 'All';
+
+  const chips = document.getElementById('eventChips');
+  if (chips) {
+    chips.innerHTML = `
+      <button onclick="window._eventFilter='All'; renderEventsFiltered()"
+              class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+        All
+      </button>
+      ${activeCats.map(cat => {
+        const safe = cat.name.replace(/'/g, "\\'");
+        return `
+        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered()"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === cat.name ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+          <span>${cat.icon}</span><span>${cat.name}</span>
+        </button>`;
+      }).join('')}`;
+  }
+
+  let events = allEvents.filter(e => {
     const eDate = new Date(e.date);
-    if (time === 'upcoming' && eDate < now) return false;
+    if (time === 'upcoming' && eDate < now)  return false;
     if (time === 'past'     && eDate >= now) return false;
-    if (filter !== 'All' && e.category !== filter) return false;
+    if (currentFilter !== 'All' && e.category !== currentFilter) return false;
     if (search && !e.title.toLowerCase().includes(search) &&
         !(e.description||'').toLowerCase().includes(search) &&
         !(e.location||'').toLowerCase().includes(search)) return false;
     return true;
   });
 
-  // Sort: upcoming = soonest first, past = most recent first
-  if (time === 'past') {
-    events.sort((a, b) => new Date(b.date) - new Date(a.date));
-  } else {
-    events.sort((a, b) => new Date(a.date) - new Date(b.date));
-  }
+  time === 'past' ? events.sort((a,b) => new Date(b.date) - new Date(a.date))
+                  : events.sort((a,b) => new Date(a.date) - new Date(b.date));
 
   const container = document.getElementById('eventResults');
   if (!container) return;
@@ -1355,76 +1365,68 @@ window.renderEventsFiltered = function () {
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">📅</p>
         <p class="text-white/50 text-sm">${msg}</p>
-        ${filter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
       </div>`;
     return;
   }
 
-  const catMap = Object.fromEntries(EVENT_CATEGORIES.map(c => [c.id, c.icon]));
-
-  // Group upcoming events by month for better readability
   if (time !== 'past') {
     const grouped = {};
     events.forEach(e => {
-      const key = new Date(e.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(e);
     });
-
-    container.innerHTML = Object.entries(grouped).map(([month, monthEvents]) => `
+    container.innerHTML = Object.entries(grouped).map(([month, mes]) => `
       <div class="mb-6">
         <div class="flex items-center gap-3 mb-3">
           <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">${month}</span>
           <div class="flex-1 h-px bg-white/10"></div>
         </div>
-        <div class="space-y-3">
-          ${monthEvents.map(e => renderEventCard(e, catMap, now)).join('')}
-        </div>
+        <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
       </div>`).join('');
   } else {
-    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, catMap, now)).join('')}</div>`;
+    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
   }
 };
 
-function renderEventCard(e, catMap, now) {
+function renderEventCard(e, now) {
   const eDate   = new Date(e.date);
   const isPast  = eDate < now;
-  const catIcon = catMap[e.category] || '📌';
-  const catLabel = e.category || 'Community';
+  const icon    = catIcon(e.category);
+  const label   = e.category || 'General';
 
-  const isToday = eDate.toDateString() === now.toDateString();
+  const isToday    = eDate.toDateString() === now.toDateString();
   const isTomorrow = eDate.toDateString() === new Date(now.getTime() + 86400000).toDateString();
-  const daysUntil = Math.ceil((eDate - now) / (1000 * 60 * 60 * 24));
+  const daysUntil  = Math.ceil((eDate - now) / (1000*60*60*24));
 
   let dateBadge = '';
-  if (isToday)        dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 animate-pulse">Today</span>`;
+  if (isToday)         dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 animate-pulse">Today</span>`;
   else if (isTomorrow) dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-blue-500/30 text-blue-300 border border-blue-500/30">Tomorrow</span>`;
   else if (!isPast && daysUntil <= 7) dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-white/10 text-white/60">in ${daysUntil}d</span>`;
 
-  const weekday = eDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const month   = eDate.toLocaleDateString('en-US', { month: 'short' });
+  const weekday = eDate.toLocaleDateString('en-US', { weekday:'short' });
+  const month   = eDate.toLocaleDateString('en-US', { month:'short' });
   const day     = eDate.getDate();
-  const time    = eDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const timeStr = eDate.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
 
   return `
     <div class="bg-white/10 backdrop-blur-xl border ${isPast ? 'border-white/5 opacity-70' : 'border-white/10 hover:bg-white/15'} rounded-3xl overflow-hidden transition">
       <div class="h-1 ${isPast ? 'bg-white/10' : 'bg-gradient-to-r from-emerald-500 to-teal-400'}"></div>
       <div class="p-5 flex items-start gap-4">
-        <!-- Date block -->
         <div class="flex-shrink-0 w-14 text-center bg-white/10 rounded-2xl py-2 px-1">
           <div class="text-[10px] font-bold uppercase text-white/50">${weekday}</div>
           <div class="text-2xl font-black leading-tight ${isPast ? 'text-white/40' : 'text-white'}">${day}</div>
           <div class="text-[10px] font-bold uppercase text-emerald-400">${month}</div>
         </div>
-        <!-- Content -->
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between gap-2 mb-1">
             <h3 class="font-bold text-base leading-snug ${isPast ? 'text-white/50' : 'text-white'}">${e.title}</h3>
             <div class="flex-shrink-0 flex items-center gap-1.5">${dateBadge}</div>
           </div>
           <div class="flex items-center gap-2 flex-wrap mb-2">
-            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catIcon} ${catLabel}</span>
-            <span class="text-xs text-white/40">🕐 ${time}</span>
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
+            <span class="text-xs text-white/40">🕐 ${timeStr}</span>
           </div>
           ${e.description ? `<p class="text-sm text-white/60 leading-relaxed line-clamp-2 mb-2">${e.description}</p>` : ''}
           ${e.location ? `<p class="text-xs text-white/40 flex items-center gap-1">📍 ${e.location}</p>` : ''}
@@ -1435,108 +1437,32 @@ function renderEventCard(e, catMap, now) {
 }
 
 // ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
-
-// Maps business directory category names → deal/event category enum values.
-// Business categories are free-form strings set by the admin; we match case-insensitively.
-const BIZ_TO_DEAL_CAT = {
-  'restaurant':      'Food & Drink',
-  'food':            'Food & Drink',
-  'cafe':            'Food & Drink',
-  'bar':             'Food & Drink',
-  'coffee':          'Food & Drink',
-  'bakery':          'Food & Drink',
-  'pizza':           'Food & Drink',
-  'retail':          'Shopping',
-  'shop':            'Shopping',
-  'boutique':        'Shopping',
-  'clothing':        'Shopping',
-  'grocery':         'Shopping',
-  'pharmacy':        'Health & Beauty',
-  'salon':           'Health & Beauty',
-  'spa':             'Health & Beauty',
-  'beauty':          'Health & Beauty',
-  'fitness':         'Health & Beauty',
-  'gym':             'Health & Beauty',
-  'health':          'Health & Beauty',
-  'medical':         'Health & Beauty',
-  'dental':          'Health & Beauty',
-  'plumbing':        'Home & Services',
-  'hvac':            'Home & Services',
-  'contractor':      'Home & Services',
-  'home':            'Home & Services',
-  'landscaping':     'Home & Services',
-  'cleaning':        'Home & Services',
-  'services':        'Home & Services',
-  'entertainment':   'Entertainment',
-  'bowling':         'Entertainment',
-  'movie':           'Entertainment',
-  'theater':         'Entertainment',
-  'arcade':          'Entertainment',
-  'auto':            'Automotive',
-  'car':             'Automotive',
-  'mechanic':        'Automotive',
-  'tire':            'Automotive',
-  'dealership':      'Automotive',
-};
-
-const BIZ_TO_EVENT_CAT = {
-  'restaurant':      'Food & Drink',
-  'food':            'Food & Drink',
-  'cafe':            'Food & Drink',
-  'bar':             'Food & Drink',
-  'coffee':          'Food & Drink',
-  'bakery':          'Food & Drink',
-  'music':           'Music & Arts',
-  'art':             'Music & Arts',
-  'gallery':         'Music & Arts',
-  'theater':         'Music & Arts',
-  'gym':             'Sports & Fitness',
-  'fitness':         'Sports & Fitness',
-  'sports':          'Sports & Fitness',
-  'kids':            'Family & Kids',
-  'family':          'Family & Kids',
-  'childcare':       'Family & Kids',
-  'school':          'Education',
-  'education':       'Education',
-  'tutoring':        'Education',
-  'networking':      'Business & Networking',
-  'professional':    'Business & Networking',
-  'business':        'Business & Networking',
-};
-
-function bizCategoryToDeals(bizCatName) {
-  if (!bizCatName) return '';
-  const lower = bizCatName.toLowerCase();
-  for (const [key, val] of Object.entries(BIZ_TO_DEAL_CAT)) {
-    if (lower.includes(key)) return val;
-  }
-  return 'Other';
-}
-
-function bizCategoryToEvents(bizCatName) {
-  if (!bizCatName) return '';
-  const lower = bizCatName.toLowerCase();
-  for (const [key, val] of Object.entries(BIZ_TO_EVENT_CAT)) {
-    if (lower.includes(key)) return val;
-  }
-  return 'Community';
-}
-
 async function loadOwnerDashboard(content) {
-  // Get the business category name for auto-selection
-  const biz = currentUser && currentUser.verifiedBusiness;
-  const bizCatName = biz?.category?.name || biz?.category || '';
-  const autoDealCat  = bizCategoryToDeals(bizCatName);
-  const autoEventCat = bizCategoryToEvents(bizCatName);
+  await ensureDirCategories();
 
-  const dealCatOptions = DEAL_CATEGORIES.map(c =>
-    `<option value="${c.id}" ${c.id === autoDealCat ? 'selected' : ''}>${c.icon} ${c.id}</option>`).join('');
-  const eventCatOptions = EVENT_CATEGORIES.map(c =>
-    `<option value="${c.id}" ${c.id === autoEventCat ? 'selected' : ''}>${c.icon} ${c.id}</option>`).join('');
+  // Deals use business directory categories (Insurance, Restaurant, etc.)
+  // Events use the community EVENT_CATEGORIES list (Community, Food & Drink, etc.)
+  const biz        = currentUser && currentUser.verifiedBusiness;
+  const bizCatName = biz?.category?.name || (typeof biz?.category === 'string' ? biz.category : '') || '';
 
   const selectStyle = 'background:#1e293b;color-scheme:dark;';
   const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
   const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
+
+  // Deal category options: directory categories, pre-select owner's business category
+  const dealCatOptions = window._dirCategories.map(c =>
+    `<option value="${c.name}" ${c.name === bizCatName ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+  ).join('');
+
+  // Event category options: fixed community event list, no pre-selection
+  const eventCatOptions = EVENT_CATEGORIES.map(c =>
+    `<option value="${c.name}">${c.icon} ${c.name}</option>`
+  ).join('');
+
+  // Hint shown on deal form when category was auto-selected from business type
+  const dealAutoHint = bizCatName
+    ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected: ${bizCatName}</p>`
+    : '';
 
   content.innerHTML = `
     <div class="px-4 max-w-2xl mx-auto">
@@ -1565,7 +1491,7 @@ async function loadOwnerDashboard(content) {
             <option value="">Select Category *</option>
             ${dealCatOptions}
           </select>
-          ${autoDealCat ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected based on your business type</p>` : ''}
+          ${dealAutoHint}
           <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
           <input id="dealExpires" type="date" class="${inputClass}">
           <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
@@ -1583,10 +1509,9 @@ async function loadOwnerDashboard(content) {
           <input id="eventDate"     type="datetime-local"                           class="${inputClass}">
           <input id="eventLocation" type="text"  placeholder="Location (optional)" class="${inputClass}">
           <select id="eventCategory" class="${selectClass}" style="${selectStyle}">
-            <option value="">Select Category *</option>
+            <option value="">Select Event Type *</option>
             ${eventCatOptions}
           </select>
-          ${autoEventCat ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected based on your business type</p>` : ''}
           <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
           <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
         </div>
@@ -1646,13 +1571,13 @@ async function loadOwnerDeals() {
     container.innerHTML = `<p class="text-white/50 text-center py-6 text-sm">No deals posted yet.</p>`;
     return;
   }
-  const catMap = Object.fromEntries(DEAL_CATEGORIES.map(c => [c.id, c.icon]));
+  const catMap = Object.fromEntries((window._dirCategories || []).map(c => [c.name, c.icon]));
   container.innerHTML = deals.map(d => `
     <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-3">
       <div class="flex justify-between items-start gap-3">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1 flex-wrap">
-            ${d.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/20">${catMap[d.category]||'📦'} ${d.category}</span>` : ''}
+            ${d.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/20">${catMap[d.category]||'📁'} ${d.category}</span>` : ''}
             ${d.expires ? `<span class="text-[11px] text-white/40">Exp. ${new Date(d.expires).toLocaleDateString()}</span>` : ''}
           </div>
           <div class="font-bold leading-snug">${d.title}</div>
@@ -1671,13 +1596,13 @@ async function loadOwnerEvents() {
     container.innerHTML = `<p class="text-white/50 text-center py-6 text-sm">No events posted yet.</p>`;
     return;
   }
-  const catMap = Object.fromEntries(EVENT_CATEGORIES.map(c => [c.id, c.icon]));
+  const catMap = Object.fromEntries(EVENT_CATEGORIES.map(c => [c.name, c.icon]));
   container.innerHTML = events.map(e => `
     <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-3">
       <div class="flex justify-between items-start gap-3">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1 flex-wrap">
-            ${e.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catMap[e.category]||'📌'} ${e.category}</span>` : ''}
+            ${e.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catMap[e.category]||'📅'} ${e.category}</span>` : ''}
             <span class="text-[11px] text-white/40">${new Date(e.date).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}</span>
           </div>
           <div class="font-bold leading-snug">${e.title}</div>
