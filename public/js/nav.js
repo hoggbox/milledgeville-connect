@@ -3,7 +3,8 @@ const pages = [
   { id: 'directory', icon: '📍', label: 'Directory' },
   { id: 'shoutouts', icon: '💬', label: 'Shoutouts' },
   { id: 'events',    icon: '📅', label: 'Events' },
-  { id: 'deals',     icon: '🔥', label: 'Deals' }
+  { id: 'deals',     icon: '🔥', label: 'Deals' },
+  { id: 'resources', icon: '🌍', label: 'Resources' }   // ← NEW
 ];
 
 function renderNav() {
@@ -13,7 +14,7 @@ function renderNav() {
 
   const navPages = [...pages];
   if (isOwner) navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
-  if (canNews)  navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
+  if (canNews) navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
 
   // ── Desktop sidebar nav ──
   let desktopHTML = '';

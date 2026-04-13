@@ -44,7 +44,6 @@ window.submitRating = async function (businessId, score) {
 };
 
 // ─── Guest auth nudge banner ──────────────────────────────────────────────────
-// Returns an HTML string for a "sign in to participate" banner
 function guestBanner(action) {
   return `
     <div class="bg-emerald-900/40 border border-emerald-500/30 rounded-3xl p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -107,13 +106,14 @@ async function loadPage(page) {
   if (page === 'events')          { await loadEventsPage(content);           return; }
   if (page === 'deals')           { await loadDealsPage(content);            return; }
   if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
+  if (page === 'resources')       { await loadResourcesPage(content);     return; }
 }
 
-// ─── GLOBAL SEARCH (add this after the loadPage function) ─────────────────────
+// ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
 let searchTimeout = null;
 
 window.initGlobalSearch = function () {
-  const input = document.getElementById('globalSearchInput'); // make sure your search bar has this ID
+  const input = document.getElementById('globalSearchInput');
   const resultsContainer = document.getElementById('globalSearchResults');
 
   if (!input || !resultsContainer) return;
@@ -154,7 +154,6 @@ window.initGlobalSearch = function () {
     }, 300);
   });
 
-  // Close results when clicking outside
   document.addEventListener('click', e => {
     if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
       resultsContainer.classList.add('hidden');
@@ -174,7 +173,6 @@ window.handleSearchResultClick = function (type, id) {
   else if (type === 'shoutout') navigate('shoutouts');
 };
 
-// Call this once the page loads
 document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
 });
@@ -307,11 +305,9 @@ async function loadHomePage(content) {
       </div>`;
   }
 
-  // ── News section: real news articles first, then events/deals/shoutouts ──
   const newsSection = document.getElementById('newsSection');
   let newsCardsHTML = '';
 
-  // Real news articles
   const recentNews = (newsArticles || []).slice(0, 3);
   recentNews.forEach(article => {
     newsCardsHTML += `
@@ -333,8 +329,7 @@ async function loadHomePage(content) {
       </div>`;
   });
 
-  // Community items
-  const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 1);
+  const upcomingEvents = (events || []).filter(e => new Date(e.date) >= new Date()).slice(0, 1);
   upcomingEvents.forEach(e => {
     const dateStr = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     newsCardsHTML += `
@@ -354,7 +349,7 @@ async function loadHomePage(content) {
       </div>`;
   });
 
-  const activeDeals = deals.filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 1);
+  const activeDeals = (deals || []).filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 1);
   activeDeals.forEach(d => {
     newsCardsHTML += `
       <div onclick="navigate('deals')"
@@ -403,11 +398,11 @@ async function loadHomePage(content) {
       <div class="text-xs text-white/60 mt-1">Businesses</div>
     </div>
     <div class="bg-gradient-to-br from-blue-600/30 to-indigo-600/20 border border-blue-500/20 rounded-3xl p-4 text-center">
-      <div class="text-2xl font-bold">${events.length}</div>
+      <div class="text-2xl font-bold">${(events || []).length}</div>
       <div class="text-xs text-white/60 mt-1">Events</div>
     </div>
     <div class="bg-gradient-to-br from-amber-600/30 to-orange-600/20 border border-amber-500/20 rounded-3xl p-4 text-center">
-      <div class="text-2xl font-bold">${deals.length}</div>
+      <div class="text-2xl font-bold">${(deals || []).length}</div>
       <div class="text-xs text-white/60 mt-1">Active Deals</div>
     </div>`;
   content.querySelector('.max-w-2xl').appendChild(pulse);
@@ -467,8 +462,6 @@ window.openNewsArticle = async function (articleId) {
       </div>
     </div>`;
   document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-  // Store images on window for lightbox access
   window._newsArticleImages = article.images || [];
 };
 
@@ -547,7 +540,6 @@ async function loadPostNewsPage(content) {
         <textarea id="newsContent" rows="8" placeholder="Full article content *"
                   class="w-full mb-4 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
 
-        <!-- Photo upload -->
         <div class="mb-5">
           <p class="text-sm font-semibold text-white/70 mb-2">Photos (optional — click to add, drag to reorder)</p>
           <div id="newsImagePreviews" class="grid grid-cols-3 gap-2 mb-3"></div>
@@ -565,7 +557,6 @@ async function loadPostNewsPage(content) {
         </button>
       </div>
 
-      <!-- Existing articles by this user / admin sees all -->
       <div>
         <h3 class="font-semibold text-lg mb-4">Published Articles</h3>
         <div id="myNewsList">
@@ -574,7 +565,6 @@ async function loadPostNewsPage(content) {
       </div>
     </div>`;
 
-  // Render existing articles
   if (existingNews.length) {
     const listEl = document.getElementById('myNewsList');
     listEl.innerHTML = existingNews.map(a => `
@@ -594,7 +584,6 @@ async function loadPostNewsPage(content) {
       </div>`).join('');
   }
 
-  // Initialize pending images array
   window._pendingNewsImages = [];
 }
 
@@ -1164,10 +1153,6 @@ window.deleteShoutout = async function (shoutoutId) {
 };
 
 // ─── EVENTS & DEALS ──────────────────────────────────────────────────────────
-
-// ─── Shared directory categories cache ───────────────────────────────────────
-// Populated once on first deals/events page load. Same Category docs as Directory.
-// Shape: [{ name: 'Insurance', icon: '🛡️' }, ...]
 window._dirCategories = window._dirCategories || [];
 
 async function ensureDirCategories() {
@@ -1178,7 +1163,6 @@ async function ensureDirCategories() {
   } catch (e) { /* fail silently */ }
 }
 
-// ─── Event categories — community-focused, fixed list ─────────────────────────
 const EVENT_CATEGORIES = [
   { name: 'Community',             icon: '🏘️'  },
   { name: 'Food & Drink',          icon: '🍽️'  },
@@ -1194,8 +1178,6 @@ const EVENT_CATEGORIES = [
   { name: 'Other',                 icon: '📌'  },
 ];
 
-// Return the icon for a category name —
-// checks event categories first, then directory categories, then falls back
 function catIcon(name) {
   if (!name) return '📁';
   const evtMatch = EVENT_CATEGORIES.find(c => c.name === name);
@@ -1214,7 +1196,6 @@ async function loadDealsPage(content) {
 
   const now         = new Date();
   const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
-  const activeCats  = [...new Set(activeDeals.map(d => d.category).filter(Boolean))].sort();
 
   content.innerHTML = `
     <div class="max-w-3xl mx-auto px-2 pb-10">
@@ -1252,15 +1233,12 @@ window.renderDealsFiltered = function () {
   const now       = new Date();
   const allDeals  = window._allDeals    || [];
 
-  // Active = non-expired deals; chips only show categories with active deals
   const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
   const activeCats  = [...new Set(activeDeals.map(d => d.category).filter(Boolean))].sort();
 
-  // Auto-reset filter if its category has no active deals
   if (filter !== 'All' && !activeCats.includes(filter)) window._dealFilter = 'All';
   const currentFilter = window._dealFilter || 'All';
 
-  // Rebuild chips
   const chips = document.getElementById('dealChips');
   if (chips) {
     chips.innerHTML = `
@@ -1348,7 +1326,6 @@ async function loadEventsPage(content) {
 
   const now            = new Date();
   const upcomingEvents = allEvents.filter(e => new Date(e.date) >= now);
-  const activeCats     = [...new Set(upcomingEvents.map(e => e.category).filter(Boolean))].sort();
 
   content.innerHTML = `
     <div class="max-w-3xl mx-auto px-2 pb-10">
@@ -1386,8 +1363,6 @@ window.renderEventsFiltered = function () {
   const now       = new Date();
   const allEvents = window._allEvents    || [];
 
-  // Chips: show only event categories that have ≥1 event in the current time pool,
-  // ordered by the EVENT_CATEGORIES master list (not alphabetically)
   const pool       = time === 'past' ? allEvents.filter(e => new Date(e.date) < now) : allEvents.filter(e => new Date(e.date) >= now);
   const poolCatSet = new Set(pool.map(e => e.category).filter(Boolean));
   const activeCats = EVENT_CATEGORIES.filter(c => poolCatSet.has(c.name));
@@ -1506,12 +1481,331 @@ function renderEventCard(e, now) {
     </div>`;
 }
 
+// ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
+// Uses the dedicated public /resources endpoint — no auth required.
+// Stores fetched data so the category filter buttons work without re-fetching.
+
+let _allResources = [];
+let _resourceCategories = [];
+
+async function loadResourcesPage(content) {
+  // Show loading skeleton while we fetch
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto px-2 pb-10">
+      <h2 class="text-3xl md:text-4xl font-bold mb-6">🌍 Community Resources</h2>
+      <div class="space-y-3">
+        ${[1,2,3,4].map(() => `
+          <div class="bg-white/10 rounded-3xl p-5 animate-pulse">
+            <div class="flex gap-3">
+              <div class="w-12 h-12 bg-white/10 rounded-2xl flex-shrink-0"></div>
+              <div class="flex-1">
+                <div class="h-4 bg-white/10 rounded-full mb-2 w-2/3"></div>
+                <div class="h-3 bg-white/10 rounded-full w-1/3 mb-2"></div>
+                <div class="h-3 bg-white/10 rounded-full w-full"></div>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  try {
+    const data = await apiGet('/resources');
+
+    if (!data || data.message) {
+      content.innerHTML = `
+        <div class="max-w-2xl mx-auto px-2 py-16 text-center">
+          <p class="text-4xl mb-4">⚠️</p>
+          <p class="text-white/60 text-sm">Could not load resources. Please try again.</p>
+          <button onclick="loadResourcesPage(document.getElementById('content'))" 
+                  class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-sm font-semibold transition">
+            Retry
+          </button>
+        </div>`;
+      return;
+    }
+
+    _allResources = data.businesses || [];
+    _resourceCategories = data.categories || [];
+
+    // Defined order + icons matching the seed file
+    const RESOURCE_CATS = [
+      { name: 'Churches',           icon: '⛪' },
+      { name: 'Recycling Centers',  icon: '♻️' },
+      { name: 'Fishing Spots',      icon: '🎣' },
+      { name: 'Parks & Recreation', icon: '🌳' },
+      { name: 'Libraries',          icon: '📚' },
+    ];
+
+    // Only show filter chips for categories that actually have entries
+    const presentCatNames = new Set(_allResources.map(b => b.category?.name).filter(Boolean));
+    const visibleCats = RESOURCE_CATS.filter(c => presentCatNames.has(c.name));
+
+    content.innerHTML = `
+      <div class="max-w-2xl mx-auto px-2 pb-10">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-3xl md:text-4xl font-bold">🌍 Community Resources</h2>
+          <span class="text-sm text-white/40">${_allResources.length} listed</span>
+        </div>
+        <p class="text-white/50 text-sm mb-5 leading-relaxed">
+          Free and public resources available to everyone in the Milledgeville community.
+        </p>
+
+        <!-- Category filter chips -->
+        <div class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;" id="resourceChips">
+          <button onclick="filterResources('All')"
+                  id="resChip-All"
+                  class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 border border-emerald-500/30 px-4 py-2 rounded-full text-sm font-semibold transition text-white">
+            All
+          </button>
+          ${visibleCats.map(c => `
+            <button onclick="filterResources('${c.name}')"
+                    id="resChip-${c.name.replace(/\s+/g, '-').replace(/[&]/g, '')}"
+                    class="flex-shrink-0 bg-white/10 hover:bg-white/20 border border-white/10 px-4 py-2 rounded-full text-sm font-semibold transition flex items-center gap-1.5 text-white/80">
+              <span>${c.icon}</span><span>${c.name}</span>
+            </button>`).join('')}
+        </div>
+
+        <!-- Search -->
+        <div class="mb-5">
+          <input id="resourceSearch" type="text" placeholder="Search resources…"
+                 class="w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
+                 oninput="filterResources(window._activeResourceFilter || 'All')">
+        </div>
+
+        <div id="resourcesResults"></div>
+      </div>`;
+
+    window._activeResourceFilter = 'All';
+    renderResourcesList(_allResources);
+
+  } catch (err) {
+    content.innerHTML = `
+      <div class="max-w-2xl mx-auto px-2 py-16 text-center">
+        <p class="text-4xl mb-4">⚠️</p>
+        <p class="text-white/60 text-sm">Could not load resources. Please try again.</p>
+        <button onclick="loadResourcesPage(document.getElementById('content'))" 
+                class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-sm font-semibold transition">
+          Retry
+        </button>
+      </div>`;
+  }
+}
+
+// Filter resources by category name and/or search query
+window.filterResources = function (categoryName) {
+  window._activeResourceFilter = categoryName;
+
+  // Update chip active styles
+  document.querySelectorAll('[id^="resChip-"]').forEach(btn => {
+    btn.className = btn.className
+      .replace('bg-emerald-500/30 border-emerald-500/30 text-white', 'bg-white/10 border-white/10 text-white/80')
+      .replace('hover:bg-emerald-500/50', 'hover:bg-white/20');
+  });
+  const activeChipId = 'resChip-' + (categoryName === 'All' ? 'All' : categoryName.replace(/\s+/g, '-').replace(/[&]/g, ''));
+  const activeChip = document.getElementById(activeChipId);
+  if (activeChip) {
+    activeChip.className = activeChip.className
+      .replace('bg-white/10 border-white/10 text-white/80', 'bg-emerald-500/30 border-emerald-500/30 text-white')
+      .replace('hover:bg-white/20', 'hover:bg-emerald-500/50');
+  }
+
+  const search = (document.getElementById('resourceSearch')?.value || '').toLowerCase();
+
+  const filtered = _allResources.filter(b => {
+    const catMatch = categoryName === 'All' || b.category?.name === categoryName;
+    const searchMatch = !search ||
+      b.name.toLowerCase().includes(search) ||
+      (b.description || '').toLowerCase().includes(search) ||
+      (b.address || '').toLowerCase().includes(search);
+    return catMatch && searchMatch;
+  });
+
+  renderResourcesList(filtered);
+};
+
+function renderResourcesList(items) {
+  const container = document.getElementById('resourcesResults');
+  if (!container) return;
+
+  if (!items.length) {
+    container.innerHTML = `
+      <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+        <p class="text-4xl mb-3">🔍</p>
+        <p class="text-white/50 text-sm">No resources match your search.</p>
+        <button onclick="filterResources('All')" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">
+          Clear filter
+        </button>
+      </div>`;
+    return;
+  }
+
+  // Group by category for nicer display
+  const grouped = {};
+  items.forEach(item => {
+    const catName = item.category?.name || 'Other';
+    const catIcon = item.category?.icon || '📍';
+    if (!grouped[catName]) grouped[catName] = { icon: catIcon, items: [] };
+    grouped[catName].items.push(item);
+  });
+
+  container.innerHTML = Object.entries(grouped).map(([catName, group]) => `
+    <div class="mb-7">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-lg">${group.icon}</span>
+        <h3 class="font-bold text-base text-white">${catName}</h3>
+        <div class="flex-1 h-px bg-white/10"></div>
+        <span class="text-xs text-white/30">${group.items.length}</span>
+      </div>
+      <div class="space-y-3">
+        ${group.items.map(item => renderResourceCard(item)).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function renderResourceCard(item) {
+  const icon = item.category?.icon || '📍';
+  const catName = item.category?.name || 'Resource';
+
+  // Parse hours out of description if it contains the "🕒 Hours:" pattern
+  let description = item.description || '';
+  let hoursLine = '';
+  const hoursMatch = description.match(/\n\n🕒 Hours: (.+)$/s);
+  if (hoursMatch) {
+    hoursLine = hoursMatch[1].trim();
+    description = description.replace(/\n\n🕒 Hours: .+$/s, '').trim();
+  }
+
+  return `
+    <div onclick="showResourceDetail('${item._id}')"
+         class="bg-white/10 hover:bg-white/15 border border-white/10 hover:border-emerald-500/30 rounded-3xl p-5 cursor-pointer transition-all duration-200 group">
+      <div class="flex gap-4">
+        <div class="w-12 h-12 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 group-hover:scale-110 transition-transform">
+          ${icon}
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors mb-1">${item.name}</h3>
+          ${item.address ? `
+            <p class="text-emerald-300 text-xs flex items-center gap-1 mb-1">
+              <span>📍</span><span class="truncate">${item.address}</span>
+            </p>` : ''}
+          ${item.phone ? `
+            <p class="text-white/50 text-xs flex items-center gap-1 mb-1">
+              <span>📞</span><span>${item.phone}</span>
+            </p>` : ''}
+          ${hoursLine ? `
+            <p class="text-amber-300/70 text-xs flex items-start gap-1 mb-1">
+              <span class="flex-shrink-0">🕒</span><span>${hoursLine}</span>
+            </p>` : ''}
+          ${description ? `
+            <p class="text-white/55 text-xs mt-2 line-clamp-2 leading-relaxed">${description}</p>` : ''}
+        </div>
+        <span class="text-white/20 group-hover:text-white/50 transition flex-shrink-0 self-center text-lg">›</span>
+      </div>
+    </div>`;
+}
+
+// Full detail modal for a resource
+window.showResourceDetail = function (id) {
+  const item = _allResources.find(b => b._id === id);
+  if (!item) return;
+
+  const icon = item.category?.icon || '📍';
+  const catName = item.category?.name || 'Resource';
+
+  let description = item.description || '';
+  let hoursLine = '';
+  const hoursMatch = description.match(/\n\n🕒 Hours: (.+)$/s);
+  if (hoursMatch) {
+    hoursLine = hoursMatch[1].trim();
+    description = description.replace(/\n\n🕒 Hours: .+$/s, '').trim();
+  }
+
+  const modalHTML = `
+    <div onclick="if(event.target.id==='resourceModal')closeResourceDetail()" id="resourceModal"
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center">
+      <div onclick="event.stopImmediatePropagation()"
+           class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
+        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
+          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+        </div>
+        <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
+        <div class="p-6">
+          <!-- Header -->
+          <div class="flex items-start gap-4 mb-5">
+            <div class="w-14 h-14 bg-gradient-to-br from-emerald-100 to-teal-50 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
+              ${icon}
+            </div>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-2xl font-bold leading-tight text-slate-900">${item.name}</h1>
+              <span class="inline-block mt-1 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                ${icon} ${catName}
+              </span>
+            </div>
+          </div>
+
+          <!-- Details -->
+          <div class="space-y-3 mb-6">
+            ${item.address ? `
+              <div class="flex items-start gap-3 bg-slate-50 rounded-2xl p-4">
+                <span class="text-xl flex-shrink-0">📍</span>
+                <div>
+                  <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Address</p>
+                  <p class="text-slate-700 font-medium text-sm">${item.address}</p>
+                </div>
+              </div>` : ''}
+            ${item.phone ? `
+              <a href="tel:${item.phone}" class="flex items-start gap-3 bg-emerald-50 hover:bg-emerald-100 rounded-2xl p-4 transition">
+                <span class="text-xl flex-shrink-0">📞</span>
+                <div>
+                  <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-0.5">Phone</p>
+                  <p class="text-emerald-700 font-semibold text-sm">${item.phone}</p>
+                </div>
+              </a>` : ''}
+            ${hoursLine ? `
+              <div class="flex items-start gap-3 bg-amber-50 rounded-2xl p-4">
+                <span class="text-xl flex-shrink-0">🕒</span>
+                <div>
+                  <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Hours</p>
+                  <p class="text-amber-800 text-sm leading-relaxed">${hoursLine}</p>
+                </div>
+              </div>` : ''}
+            ${item.website ? `
+              <a href="${item.website.startsWith('http') ? item.website : 'https://'+item.website}" target="_blank"
+                 class="flex items-start gap-3 bg-blue-50 hover:bg-blue-100 rounded-2xl p-4 transition">
+                <span class="text-xl flex-shrink-0">🌐</span>
+                <div>
+                  <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Website</p>
+                  <p class="text-blue-700 font-semibold text-sm">${item.website.replace(/^https?:\/\//, '')}</p>
+                </div>
+              </a>` : ''}
+          </div>
+
+          ${description ? `
+            <div class="mb-6">
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">About</p>
+              <p class="text-slate-600 leading-relaxed text-sm">${description}</p>
+            </div>` : ''}
+
+          <button onclick="closeResourceDetail()"
+                  class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+};
+
+window.closeResourceDetail = function () {
+  const el = document.getElementById('resourceModal');
+  if (el) el.remove();
+};
+
 // ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
 async function loadOwnerDashboard(content) {
   await ensureDirCategories();
 
-  // Deals use business directory categories (Insurance, Restaurant, etc.)
-  // Events use the community EVENT_CATEGORIES list (Community, Food & Drink, etc.)
   const biz        = currentUser && currentUser.verifiedBusiness;
   const bizCatName = biz?.category?.name || (typeof biz?.category === 'string' ? biz.category : '') || '';
 
@@ -1519,17 +1813,14 @@ async function loadOwnerDashboard(content) {
   const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
   const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
 
-  // Deal category options: directory categories, pre-select owner's business category
   const dealCatOptions = window._dirCategories.map(c =>
     `<option value="${c.name}" ${c.name === bizCatName ? 'selected' : ''}>${c.icon} ${c.name}</option>`
   ).join('');
 
-  // Event category options: fixed community event list, no pre-selection
   const eventCatOptions = EVENT_CATEGORIES.map(c =>
     `<option value="${c.name}">${c.icon} ${c.name}</option>`
   ).join('');
 
-  // Hint shown on deal form when category was auto-selected from business type
   const dealAutoHint = bizCatName
     ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected: ${bizCatName}</p>`
     : '';
@@ -1551,7 +1842,6 @@ async function loadOwnerDashboard(content) {
         <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">📅 Events</button>
       </div>
 
-      <!-- Deals tab -->
       <div id="otabContent0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Deal</h3>
@@ -1570,7 +1860,6 @@ async function loadOwnerDashboard(content) {
         <div id="ownerDealsList"></div>
       </div>
 
-      <!-- Events tab -->
       <div id="otabContent1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Event</h3>
@@ -1757,7 +2046,6 @@ async function loadAdminPage(content) {
         <button onclick="switchAdminTab(5)" id="tab5" class="flex-shrink-0 px-4 py-4 text-center font-semibold text-white/70 whitespace-nowrap text-sm">👥 Users</button>
       </div>
 
-      <!-- Tab 0: Add/Edit Business -->
       <div id="adminTab0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
           <h3 id="adminFormTitle" class="font-semibold mb-4 text-lg">Add New Business</h3>
@@ -1776,29 +2064,24 @@ async function loadAdminPage(content) {
         </div>
       </div>
 
-      <!-- Tab 1: Manage Businesses -->
       <div id="adminTab1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
           <div id="manageList"></div>
         </div>
       </div>
 
-      <!-- Tab 2: Claims -->
       <div id="adminTab2" class="hidden">
         <div id="claimsList"></div>
       </div>
 
-      <!-- Tab 3: Moderation -->
       <div id="adminTab3" class="hidden">
         <div id="moderationPanel"></div>
       </div>
 
-      <!-- Tab 4: News Management -->
       <div id="adminTab4" class="hidden">
         <div id="adminNewsPanel"></div>
       </div>
 
-      <!-- Tab 5: User Management -->
       <div id="adminTab5" class="hidden">
         <div id="adminUsersPanel"></div>
       </div>
@@ -1947,9 +2230,7 @@ function renderAdminUsersList(users) {
           </div>
         </div>
 
-        <!-- Actions row -->
         <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
-          <!-- News access toggle -->
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <span class="text-xs font-semibold text-white/70">📰 News Posting Access</span>
             <div class="relative">
@@ -1960,7 +2241,6 @@ function renderAdminUsersList(users) {
             </div>
           </label>
 
-          <!-- Delete user -->
           ${!isAdminUser ? `
             <button onclick="adminDeleteUser('${u._id}', '${u.name.replace(/'/g, "\\'")}')"
                     class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-white px-3 py-1.5 rounded-2xl border border-red-500/20 transition font-semibold">
@@ -1984,17 +2264,14 @@ window.toggleNewsAccess = async function (userId, allow) {
   const res = await apiPost(`/admin/users/${userId}/news-access`, { canPostNews: allow }, 'PATCH');
   if (res.user) {
     showToast(allow ? '✅ News access granted!' : '🚫 News access removed');
-    // Update local data
     const idx = (window._adminUsersData || []).findIndex(u => u._id === userId);
     if (idx !== -1) window._adminUsersData[idx].canPostNews = allow;
-    // Update nav if this is the current user
     if (currentUser && currentUser._id === userId) {
       currentUser.canPostNews = allow;
       renderNav();
     }
   } else {
     showToast(res.message || 'Error updating access', 'error');
-    // Revert checkbox
     const cb = document.getElementById(`newstoggle-${userId}`);
     if (cb) cb.checked = !allow;
   }
@@ -2441,16 +2718,18 @@ async function postShoutout() {
   loadPage('shoutouts');
 }
 
-window.loadPage = loadPage;
-window.postShoutout = postShoutout;
-window.navigate = loadPage;
-window.filterDirectory = filterDirectory;
-window.filterByCategory = filterByCategory;
-window.showBusinessDetail = showBusinessDetail;
-window.hideBusinessModal = hideBusinessModal;
-window.saveBusiness = saveBusiness;
-window.switchAdminTab = switchAdminTab;
-window.renderDirectory = renderDirectory;
-window.loadModerationPanel = loadModerationPanel;
-window.renderDealsFiltered  = renderDealsFiltered;
-window.renderEventsFiltered = renderEventsFiltered;
+// ─── Global exports ───────────────────────────────────────────────────────────
+window.loadResourcesPage     = loadResourcesPage;
+window.loadPage              = loadPage;
+window.postShoutout          = postShoutout;
+window.navigate              = loadPage;
+window.filterDirectory       = filterDirectory;
+window.filterByCategory      = filterByCategory;
+window.showBusinessDetail    = showBusinessDetail;
+window.hideBusinessModal     = hideBusinessModal;
+window.saveBusiness          = saveBusiness;
+window.switchAdminTab        = switchAdminTab;
+window.renderDirectory       = renderDirectory;
+window.loadModerationPanel   = loadModerationPanel;
+window.renderDealsFiltered   = renderDealsFiltered;
+window.renderEventsFiltered  = renderEventsFiltered;

@@ -112,6 +112,33 @@ router.get('/directory', authenticate, async (req, res) => {
   }
 });
 
+// ─── Resources (PUBLIC — no auth required) ────────────────────────────────────
+// Returns businesses in the resource categories only, with their categories
+router.get('/resources', async (req, res) => {
+  try {
+    const RESOURCE_CATEGORY_NAMES = [
+      'Churches',
+      'Recycling Centers',
+      'Fishing Spots',
+      'Parks & Recreation',
+      'Libraries'
+    ];
+
+    // Find the category documents for these names
+    const resourceCats = await Category.find({ name: { $in: RESOURCE_CATEGORY_NAMES } });
+    const catIds = resourceCats.map(c => c._id);
+
+    // Find businesses in those categories
+    const businesses = await Business.find({ category: { $in: catIds } })
+      .populate('category')
+      .populate('owner', 'name');
+
+    res.json({ businesses, categories: resourceCats });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/popular', authenticate, async (req, res) => {
   try {
     const businesses = await Business.find().populate('category');
