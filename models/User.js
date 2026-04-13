@@ -24,6 +24,9 @@ const userSchema = new mongoose.Schema({
   notifyDeals:    { type: Boolean, default: true },
   notifyEvents:   { type: Boolean, default: true },
   notifyShoutouts:{ type: Boolean, default: false },
+
+  // ─── News Posting Permission ───────────────────────────────────────────────
+  canPostNews: { type: Boolean, default: false },
 });
 
 userSchema.pre('save', async function (next) {

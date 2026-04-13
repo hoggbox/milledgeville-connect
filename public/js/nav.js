@@ -7,11 +7,16 @@ const pages = [
 ];
 
 function renderNav() {
-  const isOwner = currentUser && currentUser.verifiedBusiness;
+  const isOwner    = currentUser && currentUser.verifiedBusiness;
+  const isAdmin    = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const canNews    = currentUser && (currentUser.canPostNews || isAdmin);
 
   const navPages = [...pages];
   if (isOwner) {
     navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
+  }
+  if (canNews) {
+    navPages.push({ id: 'post-news', icon: '📰', label: 'Post News' });
   }
 
   // Desktop sidebar

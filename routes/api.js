@@ -10,6 +10,7 @@ const Deal         = require('../models/Deal');
 const Event        = require('../models/Event');
 const Shoutout     = require('../models/Shoutout');
 const ClaimRequest = require('../models/ClaimRequest');
+const News         = require('../models/News');
 
 // ─── Auth Middleware ──────────────────────────────────────────────────────────
 function authenticate(req, res, next) {
@@ -319,6 +320,92 @@ router.get('/deals', authenticate, async (req, res) => {
   }
 });
 
+// ─── News (public read, restricted write) ────────────────────────────────────
+router.get('/news', authenticate, async (req, res) => {
+  try {
+    const news = await News.find().sort({ createdAt: -1 });
+    res.json(news);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/news/:id', authenticate, async (req, res) => {
+  try {
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    res.json(article);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/news', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    if (!isAdmin && !user.canPostNews)
+      return res.status(403).json({ message: 'Not authorized to post news' });
+
+    const { title, summary, content, images } = req.body;
+    if (!title || !summary || !content)
+      return res.status(400).json({ message: 'Title, summary, and content are required' });
+
+    const article = await News.create({
+      title,
+      summary,
+      content,
+      images: images || [],
+      author: user._id,
+      authorName: user.name
+    });
+    res.json(article);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put('/news/:id', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+
+    const isAuthor = article.author.toString() === req.userId;
+    if (!isAdmin && !isAuthor)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    const { title, summary, content, images } = req.body;
+    article.title   = title   || article.title;
+    article.summary = summary || article.summary;
+    article.content = content || article.content;
+    if (images !== undefined) article.images = images;
+    await article.save();
+    res.json(article);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/news/:id', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+
+    const isAuthor = article.author.toString() === req.userId;
+    if (!isAdmin && !isAuthor)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    await article.deleteOne();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ─── Claim ────────────────────────────────────────────────────────────────────
 router.post('/claim/:businessId', authenticate, async (req, res) => {
   try {
@@ -520,6 +607,54 @@ router.delete('/admin/events/:id', authenticate, requireAdmin, async (req, res) 
 router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await Deal.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Admin: User Management ───────────────────────────────────────────────────
+router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find().populate('verifiedBusiness', 'name').sort({ joinedAt: -1 });
+    res.json(users.map(sanitizeUser));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.patch('/admin/users/:id/news-access', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { canPostNews } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { canPostNews: !!canPostNews },
+      { new: true }
+    ).populate('verifiedBusiness', 'name');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: 'Updated', user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.email === 'imhoggbox@gmail.com')
+      return res.status(403).json({ message: 'Cannot delete admin account' });
+    await user.deleteOne();
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Admin: News management ───────────────────────────────────────────────────
+router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await News.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

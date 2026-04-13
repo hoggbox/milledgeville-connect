@@ -55,18 +55,32 @@ function timeAgo(date) {
   return new Date(date).toLocaleDateString();
 }
 
+function formatDate(date) {
+  return new Date(date).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+function formatDateTime(date) {
+  return new Date(date).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit'
+  });
+}
+
 // ─── Page Router ──────────────────────────────────────────────────────────────
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
 
-  if (page === 'admin') { await loadAdminPage(content); return; }
-  if (page === 'owner-dashboard') { await loadOwnerDashboard(content); return; }
-  if (page === 'home') { await loadHomePage(content); return; }
-  if (page === 'directory') { await loadDirectoryPage(content); return; }
-  if (page === 'shoutouts') { await loadShoutoutsPage(content); return; }
-  if (page === 'events') { await loadItemsPage(content, 'events'); return; }
-  if (page === 'deals') { await loadItemsPage(content, 'deals'); return; }
+  if (page === 'admin')           { await loadAdminPage(content);        return; }
+  if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
+  if (page === 'home')            { await loadHomePage(content);          return; }
+  if (page === 'directory')       { await loadDirectoryPage(content);     return; }
+  if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
+  if (page === 'events')          { await loadItemsPage(content, 'events'); return; }
+  if (page === 'deals')           { await loadItemsPage(content, 'deals');  return; }
+  if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
@@ -146,11 +160,12 @@ async function loadHomePage(content) {
       </div>
     </div>`;
 
-  const [popularBiz, events, deals, shoutouts] = await Promise.all([
+  const [popularBiz, events, deals, shoutouts, newsArticles] = await Promise.all([
     apiGet('/popular'),
     apiGet('/events'),
     apiGet('/deals'),
-    apiGet('/shoutouts')
+    apiGet('/shoutouts'),
+    apiGet('/news')
   ]);
 
   const popSection = document.getElementById('popularSection');
@@ -196,50 +211,73 @@ async function loadHomePage(content) {
       </div>`;
   }
 
+  // ── News section: real news articles first, then events/deals/shoutouts ──
   const newsSection = document.getElementById('newsSection');
-  const newsItems = [];
+  let newsCardsHTML = '';
 
-  const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 2);
+  // Real news articles
+  const recentNews = (newsArticles || []).slice(0, 3);
+  recentNews.forEach(article => {
+    newsCardsHTML += `
+      <div onclick="openNewsArticle('${article._id}')"
+           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-emerald-500/30 rounded-3xl p-5 cursor-pointer transition-all duration-200">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">📰</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">News</span>
+              <span class="text-[10px] text-white/40">${timeAgo(article.createdAt)}</span>
+            </div>
+            <p class="font-semibold text-sm leading-snug mb-1 text-white">${article.title}</p>
+            <p class="text-xs text-white/60 line-clamp-2">${article.summary}</p>
+            <p class="text-xs text-emerald-400 mt-1">By ${article.authorName || 'Staff'}</p>
+          </div>
+          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
+        </div>
+      </div>`;
+  });
+
+  // Community items
+  const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 1);
   upcomingEvents.forEach(e => {
     const dateStr = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    newsItems.push({
-      icon: '📅',
-      badge: 'Event',
-      badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-      title: e.title,
-      body: `${dateStr}${e.location ? ' · ' + e.location : ''}`,
-      sub: e.description || '',
-      action: () => navigate('events')
-    });
+    newsCardsHTML += `
+      <div onclick="navigate('events')"
+           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition-all duration-200">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">📅</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-500/20 text-blue-300 border-blue-500/30">Event</span>
+            </div>
+            <p class="font-semibold text-sm leading-snug mb-1 text-white">${e.title}</p>
+            <p class="text-xs text-emerald-300">${dateStr}${e.location ? ' · ' + e.location : ''}</p>
+          </div>
+          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
+        </div>
+      </div>`;
   });
 
-  const activeDeals = deals.filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 2);
+  const activeDeals = deals.filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 1);
   activeDeals.forEach(d => {
-    newsItems.push({
-      icon: '🔥',
-      badge: 'Deal',
-      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-      title: d.title,
-      body: d.business?.name ? `From ${d.business.name}` : 'Local business deal',
-      sub: d.description || '',
-      action: () => navigate('deals')
-    });
+    newsCardsHTML += `
+      <div onclick="navigate('deals')"
+           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition-all duration-200">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">🔥</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30">Deal</span>
+            </div>
+            <p class="font-semibold text-sm leading-snug mb-1 text-white">${d.title}</p>
+            <p class="text-xs text-emerald-300">${d.business?.name ? 'From ' + d.business.name : 'Local business deal'}</p>
+          </div>
+          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
+        </div>
+      </div>`;
   });
 
-  if (shoutouts.length > 0) {
-    const recent = shoutouts[0];
-    newsItems.push({
-      icon: '💬',
-      badge: 'Community',
-      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-      title: `"${recent.text.length > 80 ? recent.text.slice(0,80) + '…' : recent.text}"`,
-      body: `${recent.author} · ${timeAgo(recent.createdAt)}`,
-      sub: `${shoutouts.length} shoutout${shoutouts.length !== 1 ? 's' : ''} in the community`,
-      action: () => navigate('shoutouts')
-    });
-  }
-
-  if (newsItems.length === 0) {
+  if (!newsCardsHTML) {
     newsSection.innerHTML = `
       <div class="flex items-center gap-2 mb-3">
         <span class="text-xl">📰</span>
@@ -247,26 +285,9 @@ async function loadHomePage(content) {
       </div>
       <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
         <p class="text-4xl mb-3">🌱</p>
-        <p class="text-white/60 text-sm">Nothing posted yet — be the first to add an event, deal, or shoutout!</p>
+        <p class="text-white/60 text-sm">Nothing posted yet — check back soon!</p>
       </div>`;
   } else {
-    const cards = newsItems.map(item => `
-      <div onclick="(${item.action.toString()})()" 
-           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition-all duration-200">
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">${item.icon}</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${item.badgeColor}">${item.badge}</span>
-            </div>
-            <p class="font-semibold text-sm leading-snug mb-1 text-white">${item.title}</p>
-            <p class="text-xs text-emerald-300">${item.body}</p>
-            ${item.sub ? `<p class="text-xs text-white/40 mt-1 line-clamp-1">${item.sub}</p>` : ''}
-          </div>
-          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
-        </div>
-      </div>`).join('');
-
     newsSection.innerHTML = `
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
@@ -275,7 +296,7 @@ async function loadHomePage(content) {
         </div>
         <span class="text-xs text-white/40">${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
       </div>
-      <div class="space-y-3">${cards}</div>`;
+      <div class="space-y-3">${newsCardsHTML}</div>`;
   }
 
   const pulse = document.createElement('div');
@@ -295,6 +316,247 @@ async function loadHomePage(content) {
     </div>`;
   content.querySelector('.max-w-2xl').appendChild(pulse);
 }
+
+// ─── NEWS ARTICLE VIEWER ──────────────────────────────────────────────────────
+window.openNewsArticle = async function (articleId) {
+  const article = await apiGet(`/news/${articleId}`);
+  if (!article || article.message) { showToast('Could not load article', 'error'); return; }
+
+  const isAdmin    = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAuthor   = currentUser && article.author && (article.author === currentUser._id || article.author === currentUser.id);
+  const canDelete  = isAdmin || isAuthor;
+
+  const imagesHTML = (article.images || []).length > 0
+    ? `<div class="mt-6 grid grid-cols-2 gap-3">
+        ${article.images.map((src, i) => `
+          <div onclick="openImageViewer('${articleId}', ${i})"
+               class="rounded-2xl overflow-hidden cursor-pointer hover:opacity-90 transition aspect-video bg-white/5">
+            <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover" loading="lazy">
+          </div>`).join('')}
+       </div>`
+    : '';
+
+  const modalHTML = `
+    <div onclick="if(event.target.id==='newsArticleModal')closeNewsArticle()" id="newsArticleModal"
+         class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center overflow-y-auto">
+      <div onclick="event.stopImmediatePropagation()"
+           class="bg-white text-slate-900 w-full md:max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
+        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100 z-10">
+          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+        </div>
+        <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
+        <div class="p-6 pb-10">
+          <div class="flex items-start gap-2 mb-4 flex-wrap">
+            <span class="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">📰 News</span>
+            <span class="text-xs text-gray-400 mt-0.5">${formatDateTime(article.createdAt)}</span>
+          </div>
+          <h1 class="text-2xl md:text-3xl font-bold leading-tight text-slate-900 mb-3">${article.title}</h1>
+          <p class="text-emerald-600 font-medium text-sm mb-6 leading-relaxed">${article.summary}</p>
+          <div class="flex items-center gap-3 mb-6 pb-6 border-b border-gray-100">
+            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+              ${(article.authorName || 'S')[0].toUpperCase()}
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-slate-800">${article.authorName || 'Staff'}</p>
+              <p class="text-xs text-gray-400">${formatDate(article.createdAt)}</p>
+            </div>
+          </div>
+          <div class="prose prose-slate max-w-none text-slate-700 leading-relaxed text-[15px]" style="white-space:pre-wrap;">${article.content}</div>
+          ${imagesHTML}
+          <div class="mt-8 space-y-3">
+            ${canDelete ? `<button onclick="deleteNewsArticle('${article._id}')" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-3 rounded-3xl font-semibold transition">🗑️ Delete Article</button>` : ''}
+            <button onclick="closeNewsArticle()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  // Store images on window for lightbox access
+  window._newsArticleImages = article.images || [];
+};
+
+window.closeNewsArticle = function () {
+  const el = document.getElementById('newsArticleModal');
+  if (el) el.remove();
+};
+
+window.deleteNewsArticle = async function (id) {
+  if (!confirm('Delete this article permanently?')) return;
+  const res = await apiPost(`/news/${id}`, {}, 'DELETE');
+  if (res.message) {
+    showToast('Article deleted');
+    closeNewsArticle();
+    loadPage(currentPage);
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+// ─── IMAGE LIGHTBOX ───────────────────────────────────────────────────────────
+window.openImageViewer = function (articleId, startIndex) {
+  const images = window._newsArticleImages || [];
+  if (!images.length) return;
+  let current = startIndex;
+
+  function render() {
+    const existing = document.getElementById('imgLightbox');
+    if (existing) existing.remove();
+
+    const html = `
+      <div id="imgLightbox" class="fixed inset-0 bg-black/95 z-[14000] flex items-center justify-center">
+        <button onclick="document.getElementById('imgLightbox').remove()"
+                class="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl font-bold transition z-10">✕</button>
+        ${images.length > 1 ? `
+          <button onclick="imgLightboxPrev()" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">‹</button>
+          <button onclick="imgLightboxNext()" class="absolute right-16 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">›</button>` : ''}
+        <div class="max-w-full max-h-full flex flex-col items-center px-16">
+          <img src="${images[current]}" alt="Photo ${current+1}" class="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl">
+          ${images.length > 1 ? `<p class="text-white/50 text-sm mt-3">${current+1} / ${images.length}</p>` : ''}
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  window.imgLightboxPrev = function () { current = (current - 1 + images.length) % images.length; render(); };
+  window.imgLightboxNext = function () { current = (current + 1) % images.length; render(); };
+
+  render();
+};
+
+// ─── POST NEWS PAGE ───────────────────────────────────────────────────────────
+async function loadPostNewsPage(content) {
+  const isAdmin   = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const canPost   = currentUser && (currentUser.canPostNews || isAdmin);
+  if (!canPost) {
+    content.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-12 text-center">
+      <p class="text-4xl mb-4">🚫</p>
+      <p class="text-white/60">You don't have permission to post news.</p>
+    </div>`;
+    return;
+  }
+
+  const existingNews = await apiGet('/news');
+
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto px-2 pb-10">
+      <h2 class="text-3xl font-bold mb-6">📰 Post News</h2>
+
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-8">
+        <h3 class="font-semibold text-lg mb-5">Write a News Article</h3>
+        <input id="newsTitle" type="text" placeholder="Headline / Title *"
+               class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
+        <input id="newsSummary" type="text" placeholder="Short summary (shown on home page) *"
+               class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
+        <textarea id="newsContent" rows="8" placeholder="Full article content *"
+                  class="w-full mb-4 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
+
+        <!-- Photo upload -->
+        <div class="mb-5">
+          <p class="text-sm font-semibold text-white/70 mb-2">Photos (optional — click to add, drag to reorder)</p>
+          <div id="newsImagePreviews" class="grid grid-cols-3 gap-2 mb-3"></div>
+          <button onclick="document.getElementById('newsImageInput').click()"
+                  class="w-full border-2 border-dashed border-white/20 hover:border-emerald-400 rounded-2xl py-4 text-white/50 hover:text-white transition text-sm font-medium">
+            📷 Add Photos
+          </button>
+          <input id="newsImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                 onchange="handleNewsImages(this)">
+        </div>
+
+        <button onclick="submitNewsArticle()"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-3xl font-semibold text-lg transition">
+          📤 Publish Article
+        </button>
+      </div>
+
+      <!-- Existing articles by this user / admin sees all -->
+      <div>
+        <h3 class="font-semibold text-lg mb-4">Published Articles</h3>
+        <div id="myNewsList">
+          ${!existingNews.length ? '<p class="text-white/50 text-center py-6">No articles yet.</p>' : ''}
+        </div>
+      </div>
+    </div>`;
+
+  // Render existing articles
+  if (existingNews.length) {
+    const listEl = document.getElementById('myNewsList');
+    listEl.innerHTML = existingNews.map(a => `
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <p class="font-bold leading-tight">${a.title}</p>
+            <p class="text-xs text-white/50 mt-1">${formatDateTime(a.createdAt)} · By ${a.authorName || 'Staff'}</p>
+            <p class="text-sm text-white/60 mt-2 line-clamp-2">${a.summary}</p>
+            ${a.images && a.images.length > 0 ? `<p class="text-xs text-emerald-400 mt-1">📷 ${a.images.length} photo${a.images.length !== 1 ? 's' : ''}</p>` : ''}
+          </div>
+          <div class="flex flex-col gap-2 flex-shrink-0">
+            <button onclick="openNewsArticle('${a._id}')" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition">View</button>
+            <button onclick="deleteNewsArticle('${a._id}')" class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-400 px-3 py-1.5 rounded-full transition">Delete</button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Initialize pending images array
+  window._pendingNewsImages = [];
+}
+
+window.handleNewsImages = function (input) {
+  const files = Array.from(input.files);
+  if (!window._pendingNewsImages) window._pendingNewsImages = [];
+
+  files.forEach(file => {
+    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} is too large (max 5MB)`, 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      window._pendingNewsImages.push(e.target.result);
+      renderNewsImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+};
+
+function renderNewsImagePreviews() {
+  const container = document.getElementById('newsImagePreviews');
+  if (!container) return;
+  container.innerHTML = (window._pendingNewsImages || []).map((src, i) => `
+    <div class="relative aspect-video bg-white/10 rounded-2xl overflow-hidden group">
+      <img src="${src}" class="w-full h-full object-cover" alt="Preview ${i+1}">
+      <button onclick="removeNewsImage(${i})"
+              class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>
+    </div>`).join('');
+}
+
+window.removeNewsImage = function (index) {
+  if (window._pendingNewsImages) {
+    window._pendingNewsImages.splice(index, 1);
+    renderNewsImagePreviews();
+  }
+};
+
+window.submitNewsArticle = async function () {
+  const title   = document.getElementById('newsTitle')?.value.trim();
+  const summary = document.getElementById('newsSummary')?.value.trim();
+  const content = document.getElementById('newsContent')?.value.trim();
+  if (!title || !summary || !content) { showToast('Title, summary, and content are required', 'error'); return; }
+
+  const res = await apiPost('/news', {
+    title,
+    summary,
+    content,
+    images: window._pendingNewsImages || []
+  });
+
+  if (res._id) {
+    window._pendingNewsImages = [];
+    showToast('✅ Article published!');
+    loadPage('post-news');
+  } else {
+    showToast(res.message || 'Error publishing article', 'error');
+  }
+};
 
 window.loadDirectoryAndOpen = async function (businessId) {
   await loadDirectoryPage(document.getElementById('content'));
@@ -537,7 +799,7 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// ─── SHOUTOUTS — Facebook-style collapsible comments ─────────────────────────
+// ─── SHOUTOUTS ────────────────────────────────────────────────────────────────
 async function loadShoutoutsPage(content) {
   const shoutouts = await apiGet('/shoutouts');
 
@@ -578,13 +840,10 @@ function renderShoutoutCard(s) {
   const likeCount = s.likes ? s.likes.length : 0;
   const comments = s.comments || [];
   const commentCount = comments.length;
-  const totalReplies = comments.reduce((acc, c) => acc + (c.replies ? c.replies.length : 0), 0);
-  const totalActivity = commentCount + totalReplies;
 
   const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
 
-  // All comments — hidden by default, toggled as one unit
   let allCommentsHtml = '';
   comments.forEach(c => { allCommentsHtml += renderCommentRow(c, s._id); });
 
@@ -594,7 +853,6 @@ function renderShoutoutCard(s) {
 
   return `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5" id="shoutout-${s._id}">
-      <!-- Author row -->
       <div class="flex items-start justify-between gap-3 mb-3">
         <div class="flex items-start gap-3 flex-1 min-w-0">
           <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
@@ -607,14 +865,8 @@ function renderShoutoutCard(s) {
           <button onclick="deleteShoutout('${s._id}')" 
                   class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
       </div>
-
-      <!-- Shoutout text -->
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
-
-      <!-- Like count summary (tiny, above action bar) -->
       ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
-
-      <!-- Action buttons -->
       <div class="flex items-center gap-1 border-t border-white/10 pt-2">
         <button onclick="toggleLike('${s._id}')" id="like-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
@@ -626,8 +878,6 @@ function renderShoutoutCard(s) {
           ${commentLabel}
         </button>
       </div>
-
-      <!-- Collapsible comment section (hidden by default) -->
       <div id="comment-section-${s._id}" class="hidden mt-3 border-t border-white/10 pt-3 space-y-2">
         ${allCommentsHtml}
         ${currentUser ? `
@@ -857,7 +1107,6 @@ async function loadOwnerDashboard(content) {
   loadOwnerDeals();
   loadOwnerEvents();
 
-  // Pre-fill current business info
   if (currentUser && currentUser.verifiedBusiness) {
     const biz = currentUser.verifiedBusiness;
     document.getElementById('ownerName').value = biz.name || '';
@@ -996,14 +1245,14 @@ async function loadAdminPage(content) {
     <div class="px-2 md:px-4 max-w-4xl mx-auto">
       <h2 class="text-3xl font-bold mb-6">🔧 Admin Panel</h2>
       <div class="flex border-b border-white/20 mb-6 overflow-x-auto hide-scrollbar">
-        <button onclick="switchAdminTab(0)" id="tab0" class="flex-shrink-0 px-5 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white whitespace-nowrap">Add / Edit</button>
-        <button onclick="switchAdminTab(1)" id="tab1" class="flex-shrink-0 px-5 py-4 text-center font-semibold text-white/70 whitespace-nowrap">Manage</button>
-        <button onclick="switchAdminTab(2)" id="tab2" class="flex-shrink-0 px-5 py-4 text-center font-semibold text-white/70 whitespace-nowrap">
+        <button onclick="switchAdminTab(0)" id="tab0" class="flex-shrink-0 px-4 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white whitespace-nowrap text-sm">Add / Edit</button>
+        <button onclick="switchAdminTab(1)" id="tab1" class="flex-shrink-0 px-4 py-4 text-center font-semibold text-white/70 whitespace-nowrap text-sm">Manage</button>
+        <button onclick="switchAdminTab(2)" id="tab2" class="flex-shrink-0 px-4 py-4 text-center font-semibold text-white/70 whitespace-nowrap text-sm">
           Claims <span id="claimBadge" class="hidden ml-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full"></span>
         </button>
-        <button onclick="switchAdminTab(3)" id="tab3" class="flex-shrink-0 px-5 py-4 text-center font-semibold text-white/70 whitespace-nowrap">
-          🛡️ Moderate
-        </button>
+        <button onclick="switchAdminTab(3)" id="tab3" class="flex-shrink-0 px-4 py-4 text-center font-semibold text-white/70 whitespace-nowrap text-sm">🛡️ Moderate</button>
+        <button onclick="switchAdminTab(4)" id="tab4" class="flex-shrink-0 px-4 py-4 text-center font-semibold text-white/70 whitespace-nowrap text-sm">📰 News</button>
+        <button onclick="switchAdminTab(5)" id="tab5" class="flex-shrink-0 px-4 py-4 text-center font-semibold text-white/70 whitespace-nowrap text-sm">👥 Users</button>
       </div>
 
       <!-- Tab 0: Add/Edit Business -->
@@ -1041,6 +1290,16 @@ async function loadAdminPage(content) {
       <div id="adminTab3" class="hidden">
         <div id="moderationPanel"></div>
       </div>
+
+      <!-- Tab 4: News Management -->
+      <div id="adminTab4" class="hidden">
+        <div id="adminNewsPanel"></div>
+      </div>
+
+      <!-- Tab 5: User Management -->
+      <div id="adminTab5" class="hidden">
+        <div id="adminUsersPanel"></div>
+      </div>
     </div>`;
 
   const data = await apiGet('/directory');
@@ -1055,10 +1314,12 @@ async function loadAdminPage(content) {
   loadManageList();
   loadAdminClaims();
   loadModerationPanel();
+  loadAdminNewsPanel();
+  loadAdminUsersPanel();
 }
 
 window.switchAdminTab = function (tab) {
-  [0, 1, 2, 3].forEach(i => {
+  [0, 1, 2, 3, 4, 5].forEach(i => {
     const t = document.getElementById(`adminTab${i}`);
     const btn = document.getElementById(`tab${i}`);
     if (!t || !btn) return;
@@ -1070,6 +1331,187 @@ window.switchAdminTab = function (tab) {
   });
 };
 
+// ─── ADMIN: NEWS PANEL ────────────────────────────────────────────────────────
+async function loadAdminNewsPanel() {
+  const container = document.getElementById('adminNewsPanel');
+  if (!container) return;
+
+  container.innerHTML = `<div class="text-center py-8 text-white/40 animate-pulse">Loading news…</div>`;
+
+  const articles = await apiGet('/news');
+
+  if (!articles.length) {
+    container.innerHTML = `
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-8 text-center">
+        <p class="text-4xl mb-3">📰</p>
+        <p class="text-white/60">No news articles published yet.</p>
+        <button onclick="navigate('post-news')" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-3xl font-semibold text-sm transition">Write First Article</button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg">All Published Articles (${articles.length})</h3>
+      <button onclick="navigate('post-news')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl text-sm font-semibold transition">+ Write New</button>
+    </div>
+    <div class="space-y-3">
+      ${articles.map(a => `
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-5">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <p class="font-bold leading-tight">${a.title}</p>
+              <p class="text-xs text-white/50 mt-1">${formatDateTime(a.createdAt)} · By ${a.authorName || 'Staff'}</p>
+              <p class="text-sm text-white/60 mt-2 line-clamp-2">${a.summary}</p>
+              ${a.images && a.images.length > 0 ? `<p class="text-xs text-emerald-400 mt-1">📷 ${a.images.length} photo${a.images.length !== 1 ? 's' : ''}</p>` : ''}
+            </div>
+            <div class="flex flex-col gap-2 flex-shrink-0">
+              <button onclick="openNewsArticle('${a._id}')" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition">View</button>
+              <button onclick="adminDeleteNews('${a._id}')" class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-400 px-3 py-1.5 rounded-full transition">Delete</button>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+window.adminDeleteNews = async function (id) {
+  if (!confirm('Delete this article permanently?')) return;
+  const res = await apiPost(`/admin/news/${id}`, {}, 'DELETE');
+  if (res.message) {
+    showToast('Article deleted');
+    loadAdminNewsPanel();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+// ─── ADMIN: USER MANAGEMENT PANEL ─────────────────────────────────────────────
+async function loadAdminUsersPanel() {
+  const container = document.getElementById('adminUsersPanel');
+  if (!container) return;
+
+  container.innerHTML = `<div class="text-center py-8 text-white/40 animate-pulse">Loading users…</div>`;
+
+  const users = await apiGet('/admin/users');
+
+  if (!users || users.message) {
+    container.innerHTML = `<div class="text-center py-8 text-red-400">Failed to load users.</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg">All Users (${users.length})</h3>
+    </div>
+    <div class="mb-4">
+      <input id="userSearchInput" type="text" placeholder="Search by name or email…"
+             class="w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 text-sm"
+             oninput="filterAdminUsers()">
+    </div>
+    <div id="adminUsersList">
+      ${renderAdminUsersList(users)}
+    </div>`;
+
+  window._adminUsersData = users;
+}
+
+function renderAdminUsersList(users) {
+  if (!users.length) return `<p class="text-white/50 text-center py-8">No users found.</p>`;
+
+  return users.map(u => {
+    const isAdminUser  = u.email === 'imhoggbox@gmail.com';
+    const isVerified   = !!u.verifiedBusiness;
+    const joinDate     = u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
+    const lastLogin    = u.lastLogin ? timeAgo(u.lastLogin) : 'Never';
+
+    return `
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-3" id="userrow-${u._id}">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3 flex-1 min-w-0">
+            <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+              ${(u.name || '?')[0].toUpperCase()}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="font-bold text-sm">${u.name}</p>
+                ${isAdminUser ? `<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">Admin</span>` : ''}
+                ${isVerified ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">Verified Owner</span>` : ''}
+                ${u.canPostNews ? `<span class="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold">📰 News Access</span>` : ''}
+              </div>
+              <p class="text-xs text-white/50 mt-0.5">${u.email}</p>
+              ${isVerified && u.verifiedBusiness ? `<p class="text-xs text-emerald-400 mt-0.5">🏪 ${u.verifiedBusiness.name}</p>` : ''}
+              <p class="text-xs text-white/30 mt-1">Joined ${joinDate} · Last seen ${lastLogin}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions row -->
+        <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+          <!-- News access toggle -->
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <span class="text-xs font-semibold text-white/70">📰 News Posting Access</span>
+            <div class="relative">
+              <input type="checkbox" id="newstoggle-${u._id}" ${u.canPostNews ? 'checked' : ''} ${isAdminUser ? 'disabled' : ''}
+                     class="sr-only peer" onchange="toggleNewsAccess('${u._id}', this.checked)">
+              <div class="w-10 h-5 bg-white/20 rounded-full peer peer-checked:bg-emerald-500 transition-colors peer-disabled:opacity-40"></div>
+              <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </label>
+
+          <!-- Delete user -->
+          ${!isAdminUser ? `
+            <button onclick="adminDeleteUser('${u._id}', '${u.name.replace(/'/g, "\\'")}')"
+                    class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-white px-3 py-1.5 rounded-2xl border border-red-500/20 transition font-semibold">
+              🗑️ Delete User
+            </button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+window.filterAdminUsers = function () {
+  const search = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+  const filtered = (window._adminUsersData || []).filter(u =>
+    u.name.toLowerCase().includes(search) || u.email.toLowerCase().includes(search)
+  );
+  const list = document.getElementById('adminUsersList');
+  if (list) list.innerHTML = renderAdminUsersList(filtered);
+};
+
+window.toggleNewsAccess = async function (userId, allow) {
+  const res = await apiPost(`/admin/users/${userId}/news-access`, { canPostNews: allow }, 'PATCH');
+  if (res.user) {
+    showToast(allow ? '✅ News access granted!' : '🚫 News access removed');
+    // Update local data
+    const idx = (window._adminUsersData || []).findIndex(u => u._id === userId);
+    if (idx !== -1) window._adminUsersData[idx].canPostNews = allow;
+    // Update nav if this is the current user
+    if (currentUser && currentUser._id === userId) {
+      currentUser.canPostNews = allow;
+      renderNav();
+    }
+  } else {
+    showToast(res.message || 'Error updating access', 'error');
+    // Revert checkbox
+    const cb = document.getElementById(`newstoggle-${userId}`);
+    if (cb) cb.checked = !allow;
+  }
+};
+
+window.adminDeleteUser = async function (userId, userName) {
+  if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
+  const res = await apiPost(`/admin/users/${userId}`, {}, 'DELETE');
+  if (res.message === 'User deleted') {
+    showToast('User deleted');
+    window._adminUsersData = (window._adminUsersData || []).filter(u => u._id !== userId);
+    const row = document.getElementById(`userrow-${userId}`);
+    if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+// ─── ADMIN CLAIMS ─────────────────────────────────────────────────────────────
 async function loadAdminClaims() {
   const container = document.getElementById('claimsList');
   if (!container) return;
@@ -1224,9 +1666,8 @@ window.deleteBusiness = async function (id) {
 };
 
 // ─── MODERATION PANEL ─────────────────────────────────────────────────────────
-// State for moderation filters
 let modState = {
-  type: 'all',       // 'all' | 'shoutouts' | 'events' | 'deals' | 'comments'
+  type: 'all',
   search: '',
   userFilter: '',
   rawData: { shoutouts: [], events: [], deals: [] }
@@ -1238,11 +1679,8 @@ async function loadModerationPanel() {
 
   container.innerHTML = `
     <div class="space-y-4">
-      <!-- Header -->
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
         <h3 class="font-bold text-lg mb-4">🛡️ Content Moderation</h3>
-
-        <!-- Search & filter bar -->
         <div class="flex flex-col gap-3">
           <input id="modSearch" type="text" placeholder="Search content or author name…"
                  class="w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 text-sm"
@@ -1259,14 +1697,11 @@ async function loadModerationPanel() {
           </div>
         </div>
       </div>
-
-      <!-- Results -->
       <div id="modResults" class="space-y-3">
         <div class="text-center py-12 text-white/40 animate-pulse">Loading content…</div>
       </div>
     </div>`;
 
-  // Fetch all content in parallel
   const [shoutouts, events, deals] = await Promise.all([
     apiGet('/shoutouts'),
     apiGet('/events'),
@@ -1314,66 +1749,44 @@ function renderModResults() {
 
   let items = [];
 
-  // ── Shoutouts ──
   if (type === 'all' || type === 'shoutouts') {
     shoutouts.forEach(s => {
       if (!matchesSearch(s.text) && !matchesSearch(s.author)) return;
       if (!matchesUser(s.author)) return;
       items.push({
-        kind: 'shoutout',
-        id: s._id,
-        title: s.text,
-        author: s.author || 'Unknown',
-        authorId: s.authorId,
-        date: s.createdAt,
+        kind: 'shoutout', id: s._id, title: s.text, author: s.author || 'Unknown',
+        authorId: s.authorId, date: s.createdAt,
         meta: `❤️ ${s.likes?.length || 0} likes · 💬 ${s.comments?.length || 0} comments`,
-        deleteLabel: 'Delete Shoutout',
-        deleteFn: `adminDeleteShoutout('${s._id}')`
+        deleteLabel: 'Delete Shoutout', deleteFn: `adminDeleteShoutout('${s._id}')`
       });
     });
   }
 
-  // ── Comments (extracted from shoutouts) ──
   if (type === 'all' || type === 'comments') {
     shoutouts.forEach(s => {
       (s.comments || []).forEach(c => {
         if (!matchesSearch(c.text) && !matchesSearch(c.author)) return;
         if (!matchesUser(c.author)) return;
         items.push({
-          kind: 'comment',
-          id: c._id,
-          parentId: s._id,
-          title: c.text,
-          author: c.author || 'Unknown',
-          authorId: c.authorId,
-          date: c.createdAt,
+          kind: 'comment', id: c._id, parentId: s._id, title: c.text,
+          author: c.author || 'Unknown', authorId: c.authorId, date: c.createdAt,
           meta: `On shoutout by ${s.author} · ${c.replies?.length || 0} repl${c.replies?.length !== 1 ? 'ies' : 'y'}`,
-          deleteLabel: 'Delete Comment',
-          deleteFn: `adminDeleteComment('${s._id}','${c._id}')`
+          deleteLabel: 'Delete Comment', deleteFn: `adminDeleteComment('${s._id}','${c._id}')`
         });
-        // Also index replies
         (c.replies || []).forEach(r => {
           if (!matchesSearch(r.text) && !matchesSearch(r.author)) return;
           if (!matchesUser(r.author)) return;
           items.push({
-            kind: 'reply',
-            id: r._id,
-            parentId: s._id,
-            commentId: c._id,
-            title: r.text,
-            author: r.author || 'Unknown',
-            authorId: r.authorId,
-            date: r.createdAt,
+            kind: 'reply', id: r._id, parentId: s._id, commentId: c._id, title: r.text,
+            author: r.author || 'Unknown', authorId: r.authorId, date: r.createdAt,
             meta: `Reply to ${c.author}'s comment on ${s.author}'s shoutout`,
-            deleteLabel: 'Delete Reply',
-            deleteFn: `adminDeleteReply('${s._id}','${c._id}','${r._id}')`
+            deleteLabel: 'Delete Reply', deleteFn: `adminDeleteReply('${s._id}','${c._id}','${r._id}')`
           });
         });
       });
     });
   }
 
-  // ── Events ──
   if (type === 'all' || type === 'events') {
     events.forEach(e => {
       if (!matchesSearch(e.title) && !matchesSearch(e.description) && !matchesSearch(e.location)) return;
@@ -1381,21 +1794,14 @@ function renderModResults() {
       const ownerEmail = e.owner?.email || '';
       if (!matchesUser(ownerName, ownerEmail)) return;
       items.push({
-        kind: 'event',
-        id: e._id,
-        title: e.title,
-        author: ownerName,
-        authorEmail: ownerEmail,
+        kind: 'event', id: e._id, title: e.title, author: ownerName, authorEmail: ownerEmail,
         date: e.createdAt || e.date,
         meta: `📅 ${new Date(e.date).toLocaleDateString()}${e.location ? ' · 📍 ' + e.location : ''}`,
-        description: e.description,
-        deleteLabel: 'Delete Event',
-        deleteFn: `adminDeleteEvent('${e._id}')`
+        description: e.description, deleteLabel: 'Delete Event', deleteFn: `adminDeleteEvent('${e._id}')`
       });
     });
   }
 
-  // ── Deals ──
   if (type === 'all' || type === 'deals') {
     deals.forEach(d => {
       if (!matchesSearch(d.title) && !matchesSearch(d.description)) return;
@@ -1403,21 +1809,14 @@ function renderModResults() {
       const ownerEmail = d.owner?.email || '';
       if (!matchesUser(ownerName, ownerEmail)) return;
       items.push({
-        kind: 'deal',
-        id: d._id,
-        title: d.title,
-        author: ownerName,
-        authorEmail: ownerEmail,
+        kind: 'deal', id: d._id, title: d.title, author: ownerName, authorEmail: ownerEmail,
         date: d.createdAt,
         meta: `${d.expires ? 'Expires ' + new Date(d.expires).toLocaleDateString() : 'No expiry'}${d.business?.name ? ' · ' + d.business.name : ''}`,
-        description: d.description,
-        deleteLabel: 'Delete Deal',
-        deleteFn: `adminDeleteDeal('${d._id}')`
+        description: d.description, deleteLabel: 'Delete Deal', deleteFn: `adminDeleteDeal('${d._id}')`
       });
     });
   }
 
-  // Sort by date desc
   items.sort((a, b) => new Date(b.date) - new Date(a.date));
 
   if (!items.length) {
@@ -1473,8 +1872,6 @@ window.adminDeleteShoutout = async function (id) {
     const idx = modState.rawData.shoutouts.findIndex(s => s._id === id);
     if (idx !== -1) modState.rawData.shoutouts.splice(idx, 1);
     renderModResults();
-    // Update badge hint
-    document.getElementById(`mod-item-shoutout-${id}`)?.remove();
   } else {
     showToast(res.message || 'Error', 'error');
   }
