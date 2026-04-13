@@ -1,25 +1,21 @@
 const pages = [
-  { id: 'home', icon: '🏠', label: 'Home' },
+  { id: 'home',      icon: '🏠', label: 'Home' },
   { id: 'directory', icon: '📍', label: 'Directory' },
   { id: 'shoutouts', icon: '💬', label: 'Shoutouts' },
-  { id: 'events', icon: '📅', label: 'Events' },
-  { id: 'deals', icon: '🔥', label: 'Deals' }
+  { id: 'events',    icon: '📅', label: 'Events' },
+  { id: 'deals',     icon: '🔥', label: 'Deals' }
 ];
 
 function renderNav() {
-  const isOwner    = currentUser && currentUser.verifiedBusiness;
-  const isAdmin    = currentUser && currentUser.email === 'imhoggbox@gmail.com';
-  const canNews    = currentUser && (currentUser.canPostNews || isAdmin);
+  const isOwner = currentUser && currentUser.verifiedBusiness;
+  const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const canNews = currentUser && (currentUser.canPostNews || isAdmin);
 
   const navPages = [...pages];
-  if (isOwner) {
-    navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
-  }
-  if (canNews) {
-    navPages.push({ id: 'post-news', icon: '📰', label: 'Post News' });
-  }
+  if (isOwner) navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
+  if (canNews)  navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
 
-  // Desktop sidebar
+  // ── Desktop sidebar nav ──
   let desktopHTML = '';
   navPages.forEach(page => {
     desktopHTML += `
@@ -29,9 +25,31 @@ function renderNav() {
         <span class="font-medium">${page.label}</span>
       </button>`;
   });
-  document.getElementById('desktop-nav').innerHTML = desktopHTML;
+  const desktopNavEl = document.getElementById('desktop-nav');
+  if (desktopNavEl) desktopNavEl.innerHTML = desktopHTML;
 
-  // Mobile bottom nav
+  // ── Desktop sidebar bottom user area ──
+  const sidebarUserArea = document.getElementById('sidebar-user-area');
+  if (sidebarUserArea) {
+    if (currentUser) {
+      sidebarUserArea.innerHTML = `
+        <div onclick="showProfileSheet()" id="sidebar-avatar"
+             title="${currentUser.verifiedBusiness ? 'Verified Business Owner' : currentUser.name}"
+             class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer hover:scale-110 transition-transform overflow-hidden">
+          ${currentUser.avatar
+            ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-2xl" alt="avatar">`
+            : (currentUser.name || '?')[0].toUpperCase()}
+        </div>`;
+    } else {
+      sidebarUserArea.innerHTML = `
+        <button onclick="showAuthModal()"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-3xl font-semibold text-sm transition flex items-center justify-center gap-2">
+          <span>👤</span> Sign In / Register
+        </button>`;
+    }
+  }
+
+  // ── Mobile bottom nav ──
   let mobileHTML = '';
   navPages.forEach(page => {
     mobileHTML += `
@@ -40,7 +58,28 @@ function renderNav() {
         <span class="text-[10px]">${page.label}</span>
       </button>`;
   });
-  document.getElementById('mobile-nav').innerHTML = mobileHTML;
+  const mobileNavEl = document.getElementById('mobile-nav');
+  if (mobileNavEl) mobileNavEl.innerHTML = mobileHTML;
+
+  // ── Mobile topbar user area ──
+  const topbarUserArea = document.getElementById('topbar-user-area');
+  if (topbarUserArea) {
+    if (currentUser) {
+      topbarUserArea.innerHTML = `
+        <div onclick="showProfileSheet()" id="mobile-avatar"
+             class="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white cursor-pointer flex-shrink-0 overflow-hidden">
+          ${currentUser.avatar
+            ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-2xl" alt="avatar">`
+            : (currentUser.name || '?')[0].toUpperCase()}
+        </div>`;
+    } else {
+      topbarUserArea.innerHTML = `
+        <button onclick="showAuthModal()"
+                class="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl text-sm font-semibold transition whitespace-nowrap">
+          Sign In
+        </button>`;
+    }
+  }
 }
 
 window.navigate = loadPage; // defined in data.js

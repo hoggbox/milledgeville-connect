@@ -1,9 +1,32 @@
 let currentUser = null;
 let verificationPollInterval = null;
 
-function showAuthModal() {
-  document.getElementById('authModal').classList.remove('hidden');
-  switchToLogin();
+// ─── Auth Modal ───────────────────────────────────────────────────────────────
+function showAuthModal(opts = {}) {
+  const modal = document.getElementById('authModal');
+  modal.classList.remove('hidden');
+
+  // If a specific prompt message was requested, show it above the form
+  if (opts.message) {
+    let msgEl = document.getElementById('authPromptMsg');
+    if (!msgEl) {
+      msgEl = document.createElement('div');
+      msgEl.id = 'authPromptMsg';
+      msgEl.className = 'text-center text-sm bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-3 mb-4';
+      document.querySelector('#authModal .p-8').prepend(msgEl);
+    }
+    msgEl.textContent = opts.message;
+    msgEl.classList.remove('hidden');
+  } else {
+    const msgEl = document.getElementById('authPromptMsg');
+    if (msgEl) msgEl.classList.add('hidden');
+  }
+
+  if (opts.register) {
+    switchToRegister();
+  } else {
+    switchToLogin();
+  }
 }
 
 function hideAuthModal() {
@@ -20,6 +43,15 @@ function switchToRegister() {
   document.getElementById('loginForm').classList.add('hidden');
   document.getElementById('registerForm').classList.remove('hidden');
   document.getElementById('modalTitle').textContent = 'Create account';
+}
+
+// ─── Prompt guests to sign in for gated actions ───────────────────────────────
+// Call this anywhere a write action requires auth.
+// msg = short description of what they need to sign in to do.
+function requireAuth(msg) {
+  if (currentUser) return true; // already logged in — proceed
+  showAuthModal({ message: msg || 'Sign in to access this feature.' });
+  return false;
 }
 
 async function handleRegister() {
@@ -41,7 +73,6 @@ async function handleRegister() {
       currentUser = result.user;
       updateUserUI();
       hideAuthModal();
-      hideLockedState();
       loadPage('home');
     }, 1600);
   } else {
@@ -60,31 +91,16 @@ async function handleLogin() {
     currentUser = result.user;
     updateUserUI();
     hideAuthModal();
-    hideLockedState();
-    loadPage('home');
+    // Reload current page so gated content appears
+    loadPage(currentPage || 'home');
   } else {
     alert(result.message || 'Login failed');
   }
 }
 
-// updateUserUI is defined (and overridden) in profile.js
-// Fallback in case profile.js isn't loaded yet
+// ─── updateUserUI ─────────────────────────────────────────────────────────────
+// Fallback — overridden by profile.js once it loads
 function updateUserUI() {
-  if (!currentUser) return;
-  const letter     = (currentUser.name || '?')[0].toUpperCase();
-  const isVerified = !!currentUser.verifiedBusiness;
-
-  ['sidebar-avatar','mobile-avatar'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (currentUser.avatar) {
-      el.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-2xl" alt="avatar">`;
-    } else {
-      el.innerHTML = letter;
-    }
-    if (id === 'sidebar-avatar') el.title = isVerified ? 'Verified Business Owner' : currentUser.name;
-  });
-
   renderNav();
 }
 
@@ -94,27 +110,15 @@ function logout() {
   currentUser = null;
   stopVerificationPoll();
   updateUserUI();
-  showLockedState();
+  loadPage('home');
 }
 
-function showLockedState() {
-  const overlay = document.getElementById('lockedOverlay');
-  if (overlay) overlay.classList.remove('hidden');
-  const content = document.getElementById('content');
-  if (content) content.classList.add('blur-sm', 'pointer-events-none');
-}
-
-function hideLockedState() {
-  const overlay = document.getElementById('lockedOverlay');
-  if (overlay) overlay.classList.add('hidden');
-  const content = document.getElementById('content');
-  if (content) content.classList.remove('blur-sm', 'pointer-events-none');
-}
-
+// ─── Auth check on page load ──────────────────────────────────────────────────
 async function checkAuth() {
   const storedToken = localStorage.getItem('token');
   if (!storedToken) {
-    showLockedState();
+    // Guest — show app but without user-specific UI
+    updateUserUI();
     return;
   }
   try {
@@ -122,14 +126,13 @@ async function checkAuth() {
     if (result.user) {
       currentUser = result.user;
       updateUserUI();
-      hideLockedState();
     } else {
-      // Token is invalid or expired — clear it
+      // Token invalid / expired
       localStorage.removeItem('token');
-      showLockedState();
+      updateUserUI();
     }
   } catch (e) {
-    showLockedState();
+    updateUserUI();
   }
 }
 
@@ -178,14 +181,15 @@ function showToast(message, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
-window.showAuthModal       = showAuthModal;
-window.hideAuthModal       = hideAuthModal;
-window.switchToLogin       = switchToLogin;
-window.switchToRegister    = switchToRegister;
-window.handleLogin         = handleLogin;
-window.handleRegister      = handleRegister;
-window.logout              = logout;
-window.checkAuth           = checkAuth;
-window.startVerificationPoll = startVerificationPoll;
-window.stopVerificationPoll  = stopVerificationPoll;
-window.showToast           = showToast;
+window.showAuthModal           = showAuthModal;
+window.hideAuthModal           = hideAuthModal;
+window.switchToLogin           = switchToLogin;
+window.switchToRegister        = switchToRegister;
+window.handleLogin             = handleLogin;
+window.handleRegister          = handleRegister;
+window.logout                  = logout;
+window.checkAuth               = checkAuth;
+window.requireAuth             = requireAuth;
+window.startVerificationPoll   = startVerificationPoll;
+window.stopVerificationPoll    = stopVerificationPoll;
+window.showToast               = showToast;

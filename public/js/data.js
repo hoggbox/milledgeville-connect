@@ -25,6 +25,7 @@ function renderStars(avg, count, interactive = false, businessId = '') {
 }
 
 window.submitRating = async function (businessId, score) {
+  if (!requireAuth('sign in to rate businesses.')) return;
   const res = await apiPost(`/business/${businessId}/rate`, { score });
   if (res.avg !== undefined) {
     const starsEl = document.getElementById(`stars-${businessId}`);
@@ -41,6 +42,31 @@ window.submitRating = async function (businessId, score) {
     }
   }
 };
+
+// ─── Guest auth nudge banner ──────────────────────────────────────────────────
+// Returns an HTML string for a "sign in to participate" banner
+function guestBanner(action) {
+  return `
+    <div class="bg-emerald-900/40 border border-emerald-500/30 rounded-3xl p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="text-3xl">👋</span>
+        <div>
+          <p class="font-semibold text-white text-sm">Join Milledgeville Connect</p>
+          <p class="text-emerald-300 text-xs mt-0.5">Create a free account to ${action}</p>
+        </div>
+      </div>
+      <div class="flex gap-2 flex-shrink-0">
+        <button onclick="showAuthModal({register:true})"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition">
+          Register Free
+        </button>
+        <button onclick="showAuthModal()"
+                class="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition">
+          Sign In
+        </button>
+      </div>
+    </div>`;
+}
 
 // ─── Time helper ──────────────────────────────────────────────────────────────
 function timeAgo(date) {
@@ -78,8 +104,8 @@ async function loadPage(page) {
   if (page === 'home')            { await loadHomePage(content);          return; }
   if (page === 'directory')       { await loadDirectoryPage(content);     return; }
   if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
-  if (page === 'events')          { await loadItemsPage(content, 'events'); return; }
-  if (page === 'deals')           { await loadItemsPage(content, 'deals');  return; }
+  if (page === 'events')          { await loadEventsPage(content);           return; }
+  if (page === 'deals')           { await loadDealsPage(content);            return; }
   if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
 }
 
@@ -570,6 +596,7 @@ async function loadDirectoryPage(content) {
 
   let html = `
     <h2 class="text-3xl md:text-4xl font-bold mb-5">Local Directory</h2>
+    ${!currentUser ? guestBanner('rate businesses, claim your listing, and more') : ''}
     <div class="mb-4">
       <input id="directorySearch" type="text" placeholder="Search businesses or keywords..."
              style="box-sizing:border-box;width:100%;"
@@ -636,6 +663,7 @@ function renderDirectory(businesses) {
             <div style="display:flex;gap:6px;flex-shrink:0;">
               ${b.phone ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition" style="white-space:nowrap;">📞 Call</a>` : ''}
               ${!isOwned && currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showClaimModal('${b._id}')">Claim</span>` : ''}
+              ${!isOwned && !currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showAuthModal({message:'Sign in to claim your business.'})">Claim</span>` : ''}
             </div>
           </div>
         </div>
@@ -687,7 +715,13 @@ function showBusinessDetail(id) {
           <p class="text-gray-500 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
           <div class="bg-gray-50 rounded-2xl p-4 mb-6">
             <p class="text-sm font-semibold text-gray-700 mb-2">Rate this business:</p>
-            ${renderStars(avg, count, true, business._id)}
+            ${currentUser
+              ? renderStars(avg, count, true, business._id)
+              : `<p class="text-sm text-gray-500 mb-1">${renderStars(avg, count)} ${count > 0 ? `(${count} rating${count !== 1 ? 's' : ''})` : 'No ratings yet'}</p>
+                 <button onclick="hideBusinessModal();showAuthModal({message:'Sign in to rate businesses.'})"
+                         class="mt-2 text-xs text-emerald-600 hover:text-emerald-500 font-semibold transition">
+                   Sign in to leave a rating →
+                 </button>`}
           </div>
           <div class="space-y-3 mb-6">
             ${business.phone ? `
@@ -705,6 +739,11 @@ function showBusinessDetail(id) {
               <button onclick="hideBusinessModal();showClaimModal('${business._id}')" 
                       class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition">
                 🏷️ Claim This Business
+              </button>` : ''}
+            ${!isOwned && !currentUser ? `
+              <button onclick="hideBusinessModal();showAuthModal({message:'Sign in to claim your business listing.'})"
+                      class="w-full bg-amber-500/80 hover:bg-amber-500 text-white py-4 rounded-3xl font-semibold transition">
+                🏷️ Own This Business? Sign In to Claim
               </button>` : ''}
             <button onclick="hideBusinessModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>
           </div>
@@ -821,6 +860,8 @@ async function loadShoutoutsPage(content) {
           </div>
         </div>
       </div>`;
+  } else {
+    html += guestBanner('post shoutouts, comment, and like');
   }
 
   if (!shoutouts.length) {
@@ -868,12 +909,12 @@ function renderShoutoutCard(s) {
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
       ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
       <div class="flex items-center gap-1 border-t border-white/10 pt-2">
-        <button onclick="toggleLike('${s._id}')" id="like-btn-${s._id}"
+        <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like shoutouts.'})`}" id="like-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
           <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
           <span id="like-label-${s._id}">Like</span>
         </button>
-        <button onclick="toggleCommentSection('${s._id}')" id="comment-btn-${s._id}"
+        <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment on shoutouts.'})`}" id="comment-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
           ${commentLabel}
         </button>
@@ -890,7 +931,13 @@ function renderShoutoutCard(s) {
                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitComment('${s._id}');}">
               <button onclick="submitComment('${s._id}')" class="text-emerald-400 hover:text-emerald-300 transition flex-shrink-0 text-sm font-semibold">Post</button>
             </div>
-          </div>` : ''}
+          </div>` : `
+          <div class="mt-3 text-center">
+            <button onclick="showAuthModal({message:'Sign in to comment.'})"
+                    class="text-xs text-emerald-400 hover:text-emerald-300 transition font-semibold">
+              Sign in to comment →
+            </button>
+          </div>`}
       </div>
     </div>`;
 }
@@ -952,7 +999,11 @@ function renderCommentRow(c, shoutoutId) {
                 <button onclick="submitReply('${shoutoutId}','${c._id}')" 
                         class="text-emerald-400 hover:text-emerald-300 transition text-xs font-semibold">Post</button>
               </div>
-            </div>` : ''}
+            </div>` : `
+            <div class="flex items-center gap-3 mt-1 ml-2">
+              <button onclick="showAuthModal({message:'Sign in to reply.'})"
+                      class="text-[11px] text-white/40 hover:text-emerald-400 transition font-semibold">Reply</button>
+            </div>`}
         </div>
       </div>
       ${repliesHtml}
@@ -961,7 +1012,7 @@ function renderCommentRow(c, shoutoutId) {
 
 // ─── Shoutout interactions ────────────────────────────────────────────────────
 window.toggleLike = async function (shoutoutId) {
-  if (!currentUser) { showToast('Login to like shoutouts', 'error'); return; }
+  if (!requireAuth('Sign in to like shoutouts.')) return;
   const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
   if (res.likes !== undefined) {
     const icon = document.getElementById(`like-icon-${shoutoutId}`);
@@ -983,6 +1034,7 @@ window.toggleCommentSection = function (shoutoutId) {
 };
 
 window.submitComment = async function (shoutoutId) {
+  if (!requireAuth('Sign in to comment.')) return;
   const input = document.getElementById(`commentinput-${shoutoutId}`);
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
@@ -1007,6 +1059,7 @@ window.toggleReplyBox = function (shoutoutId, commentId) {
 };
 
 window.submitReply = async function (shoutoutId, commentId) {
+  if (!requireAuth('Sign in to reply.')) return;
   const input = document.getElementById(`replyinput-${commentId}`);
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
@@ -1041,65 +1094,503 @@ window.deleteShoutout = async function (shoutoutId) {
 };
 
 // ─── EVENTS & DEALS ──────────────────────────────────────────────────────────
-async function loadItemsPage(content, type) {
-  const items = await apiGet(`/${type}`);
-  let html = `<h2 class="text-3xl md:text-4xl font-bold mb-6 px-4">${type === 'events' ? 'Events' : 'Deals'}</h2>`;
-  if (!items.length) {
-    html += `<p class="text-center text-white/50 py-12">No ${type} yet</p>`;
+// ─── DEALS category config ────────────────────────────────────────────────────
+const DEAL_CATEGORIES = [
+  { id: 'Food & Drink',      icon: '🍔' },
+  { id: 'Shopping',          icon: '🛍️' },
+  { id: 'Health & Beauty',   icon: '💅' },
+  { id: 'Home & Services',   icon: '🔧' },
+  { id: 'Entertainment',     icon: '🎉' },
+  { id: 'Automotive',        icon: '🚗' },
+  { id: 'Other',             icon: '📦' },
+];
+
+// ─── EVENTS category config ───────────────────────────────────────────────────
+const EVENT_CATEGORIES = [
+  { id: 'Community',              icon: '🏘️' },
+  { id: 'Food & Drink',           icon: '🍽️' },
+  { id: 'Music & Arts',           icon: '🎶' },
+  { id: 'Sports & Fitness',       icon: '⚽' },
+  { id: 'Family & Kids',          icon: '👨‍👩‍👧' },
+  { id: 'Business & Networking',  icon: '💼' },
+  { id: 'Education',              icon: '📚' },
+  { id: 'Other',                  icon: '📌' },
+];
+
+// ─── DEALS PAGE ───────────────────────────────────────────────────────────────
+async function loadDealsPage(content) {
+  const allDeals = await apiGet('/deals');
+  window._allDeals = allDeals;
+  window._dealFilter = 'All';
+  window._dealSearch = '';
+  window._dealSort   = 'newest';
+
+  content.innerHTML = `
+    <div class="max-w-3xl mx-auto px-2 pb-10">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-3xl md:text-4xl font-bold">🔥 Deals</h2>
+        <span class="text-sm text-white/40">${allDeals.filter(d => !d.expires || new Date(d.expires) >= new Date()).length} active</span>
+      </div>
+
+      ${!currentUser ? guestBanner('post deals and get notified about new offers') : ''}
+
+      <!-- Search + sort row -->
+      <div class="flex gap-2 mb-4">
+        <input id="dealSearchInput" type="text" placeholder="Search deals…"
+               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400"
+               oninput="window._dealSearch=this.value; renderDealsFiltered()">
+        <select id="dealSortSelect" onchange="window._dealSort=this.value; renderDealsFiltered()"
+                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                style="background:#1e293b;color-scheme:dark;">
+          <option value="newest">Newest</option>
+          <option value="expiring">Expiring Soon</option>
+          <option value="az">A–Z</option>
+        </select>
+      </div>
+
+      <!-- Category filter chips -->
+      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
+        <button onclick="window._dealFilter='All'; renderDealsFiltered()"
+                id="deal-chip-All"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-amber-500 text-white">
+          All
+        </button>
+        ${DEAL_CATEGORIES.map(c => `
+          <button onclick="window._dealFilter='${c.id}'; renderDealsFiltered()"
+                  id="deal-chip-${c.id.replace(/[^a-z0-9]/gi,'_')}"
+                  class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-white/10 hover:bg-white/20 text-white/80">
+            <span>${c.icon}</span><span>${c.id}</span>
+          </button>`).join('')}
+      </div>
+
+      <div id="dealResults"></div>
+    </div>`;
+
+  renderDealsFiltered();
+}
+
+window.renderDealsFiltered = function () {
+  const search   = (window._dealSearch || '').toLowerCase();
+  const filter   = window._dealFilter || 'All';
+  const sort     = window._dealSort   || 'newest';
+  const now      = new Date();
+
+  // Update chip styles
+  ['All', ...DEAL_CATEGORIES.map(c => c.id)].forEach(id => {
+    const chip = document.getElementById(`deal-chip-${id.replace(/[^a-z0-9]/gi,'_')}`);
+    if (!chip) return;
+    const active = filter === id;
+    chip.className = `flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${
+      active ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'
+    }`;
+  });
+
+  let deals = (window._allDeals || []).filter(d => {
+    if (filter !== 'All' && d.category !== filter) return false;
+    if (search && !d.title.toLowerCase().includes(search) && !(d.description||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Sort
+  if (sort === 'expiring') {
+    deals = deals
+      .filter(d => d.expires)
+      .sort((a, b) => new Date(a.expires) - new Date(b.expires))
+      .concat(deals.filter(d => !d.expires));
+  } else if (sort === 'az') {
+    deals.sort((a, b) => a.title.localeCompare(b.title));
   } else {
-    html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">`;
-    items.forEach(item => {
-      html += `
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-          <div class="font-bold text-xl">${item.title}</div>
-          ${type === 'events' ? `<div class="text-emerald-300 text-sm mt-1">${new Date(item.date).toLocaleDateString()}</div>` : ''}
-          ${type === 'deals' && item.expires ? `<div class="text-amber-300 text-sm mt-1">Expires ${new Date(item.expires).toLocaleDateString()}</div>` : ''}
-          ${item.description ? `<p class="text-white/70 mt-3">${item.description}</p>` : ''}
-          ${item.location ? `<p class="text-xs text-white/50 mt-2">📍 ${item.location}</p>` : ''}
-        </div>`;
-    });
-    html += `</div>`;
+    deals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
-  content.innerHTML = html;
+
+  const container = document.getElementById('dealResults');
+  if (!container) return;
+
+  if (!deals.length) {
+    container.innerHTML = `
+      <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+        <p class="text-4xl mb-3">🏷️</p>
+        <p class="text-white/50 text-sm">No deals found</p>
+        ${filter !== 'All' ? `<button onclick="window._dealFilter='All';renderDealsFiltered()" class="mt-3 text-amber-400 text-sm font-semibold hover:text-amber-300 transition">Clear filter</button>` : ''}
+      </div>`;
+    return;
+  }
+
+  const catMap = Object.fromEntries(DEAL_CATEGORIES.map(c => [c.id, c.icon]));
+
+  container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">` +
+    deals.map(d => {
+      const expired = d.expires && new Date(d.expires) < now;
+      const expiresIn = d.expires ? Math.ceil((new Date(d.expires) - now) / (1000 * 60 * 60 * 24)) : null;
+      const urgency = expiresIn !== null && expiresIn <= 3 && !expired;
+      const catIcon = catMap[d.category] || '📦';
+      const catLabel = d.category || 'Other';
+
+      return `
+        <div class="bg-white/10 backdrop-blur-xl border ${urgency ? 'border-amber-500/50' : expired ? 'border-white/5 opacity-60' : 'border-white/10'} rounded-3xl overflow-hidden transition hover:bg-white/15">
+          <div class="h-1.5 ${expired ? 'bg-white/10' : urgency ? 'bg-gradient-to-r from-amber-500 to-orange-400' : 'bg-gradient-to-r from-amber-500/60 to-yellow-500/60'}"></div>
+          <div class="p-5">
+            <div class="flex items-start justify-between gap-3 mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-2xl flex items-center justify-center text-xl ${expired ? 'bg-white/5' : 'bg-amber-500/20'} flex-shrink-0">${catIcon}</div>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${expired ? 'bg-white/10 text-white/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">${catLabel}</span>
+              </div>
+              ${expired
+                ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/20 flex-shrink-0">Expired</span>`
+                : urgency
+                ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0 animate-pulse">⚡ ${expiresIn}d left</span>`
+                : ''}
+            </div>
+            <h3 class="font-bold text-base leading-snug mb-2 ${expired ? 'text-white/40 line-through' : 'text-white'}">${d.title}</h3>
+            ${d.description ? `<p class="text-sm text-white/60 leading-relaxed mb-3 line-clamp-2">${d.description}</p>` : ''}
+            <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
+              <div class="text-xs text-white/40">
+                ${d.business?.name ? `🏪 ${d.business.name}` : d.owner?.name ? `👤 ${d.owner.name}` : ''}
+              </div>
+              <div class="text-xs text-white/40">
+                ${d.expires
+                  ? expired
+                    ? `Expired ${new Date(d.expires).toLocaleDateString()}`
+                    : `Expires ${new Date(d.expires).toLocaleDateString()}`
+                  : 'No expiry'}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join('') + `</div>`;
+};
+
+// ─── EVENTS PAGE ──────────────────────────────────────────────────────────────
+async function loadEventsPage(content) {
+  const allEvents = await apiGet('/events');
+  window._allEvents  = allEvents;
+  window._eventFilter = 'All';
+  window._eventSearch = '';
+  window._eventTime   = 'upcoming';
+
+  content.innerHTML = `
+    <div class="max-w-3xl mx-auto px-2 pb-10">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-3xl md:text-4xl font-bold">📅 Events</h2>
+        <span class="text-sm text-white/40">${allEvents.filter(e => new Date(e.date) >= new Date()).length} upcoming</span>
+      </div>
+
+      ${!currentUser ? guestBanner('post events and connect with the community') : ''}
+
+      <!-- Search + time filter row -->
+      <div class="flex gap-2 mb-4">
+        <input id="eventSearchInput" type="text" placeholder="Search events…"
+               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
+               oninput="window._eventSearch=this.value; renderEventsFiltered()">
+        <select id="eventTimeSelect" onchange="window._eventTime=this.value; renderEventsFiltered()"
+                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
+                style="background:#1e293b;color-scheme:dark;">
+          <option value="upcoming">Upcoming</option>
+          <option value="all">All</option>
+          <option value="past">Past</option>
+        </select>
+      </div>
+
+      <!-- Category filter chips -->
+      <div class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
+        <button onclick="window._eventFilter='All'; renderEventsFiltered()"
+                id="event-chip-All"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-emerald-500 text-white">
+          All
+        </button>
+        ${EVENT_CATEGORIES.map(c => `
+          <button onclick="window._eventFilter='${c.id}'; renderEventsFiltered()"
+                  id="event-chip-${c.id.replace(/[^a-z0-9]/gi,'_')}"
+                  class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition bg-white/10 hover:bg-white/20 text-white/80">
+            <span>${c.icon}</span><span>${c.id}</span>
+          </button>`).join('')}
+      </div>
+
+      <div id="eventResults"></div>
+    </div>`;
+
+  renderEventsFiltered();
+}
+
+window.renderEventsFiltered = function () {
+  const search = (window._eventSearch || '').toLowerCase();
+  const filter = window._eventFilter || 'All';
+  const time   = window._eventTime   || 'upcoming';
+  const now    = new Date();
+
+  // Update chip styles
+  ['All', ...EVENT_CATEGORIES.map(c => c.id)].forEach(id => {
+    const chip = document.getElementById(`event-chip-${id.replace(/[^a-z0-9]/gi,'_')}`);
+    if (!chip) return;
+    const active = filter === id;
+    chip.className = `flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${
+      active ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'
+    }`;
+  });
+
+  let events = (window._allEvents || []).filter(e => {
+    const eDate = new Date(e.date);
+    if (time === 'upcoming' && eDate < now) return false;
+    if (time === 'past'     && eDate >= now) return false;
+    if (filter !== 'All' && e.category !== filter) return false;
+    if (search && !e.title.toLowerCase().includes(search) &&
+        !(e.description||'').toLowerCase().includes(search) &&
+        !(e.location||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Sort: upcoming = soonest first, past = most recent first
+  if (time === 'past') {
+    events.sort((a, b) => new Date(b.date) - new Date(a.date));
+  } else {
+    events.sort((a, b) => new Date(a.date) - new Date(b.date));
+  }
+
+  const container = document.getElementById('eventResults');
+  if (!container) return;
+
+  if (!events.length) {
+    const msg = time === 'upcoming' ? 'No upcoming events' : time === 'past' ? 'No past events' : 'No events found';
+    container.innerHTML = `
+      <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+        <p class="text-4xl mb-3">📅</p>
+        <p class="text-white/50 text-sm">${msg}</p>
+        ${filter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+      </div>`;
+    return;
+  }
+
+  const catMap = Object.fromEntries(EVENT_CATEGORIES.map(c => [c.id, c.icon]));
+
+  // Group upcoming events by month for better readability
+  if (time !== 'past') {
+    const grouped = {};
+    events.forEach(e => {
+      const key = new Date(e.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(e);
+    });
+
+    container.innerHTML = Object.entries(grouped).map(([month, monthEvents]) => `
+      <div class="mb-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">${month}</span>
+          <div class="flex-1 h-px bg-white/10"></div>
+        </div>
+        <div class="space-y-3">
+          ${monthEvents.map(e => renderEventCard(e, catMap, now)).join('')}
+        </div>
+      </div>`).join('');
+  } else {
+    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, catMap, now)).join('')}</div>`;
+  }
+};
+
+function renderEventCard(e, catMap, now) {
+  const eDate   = new Date(e.date);
+  const isPast  = eDate < now;
+  const catIcon = catMap[e.category] || '📌';
+  const catLabel = e.category || 'Community';
+
+  const isToday = eDate.toDateString() === now.toDateString();
+  const isTomorrow = eDate.toDateString() === new Date(now.getTime() + 86400000).toDateString();
+  const daysUntil = Math.ceil((eDate - now) / (1000 * 60 * 60 * 24));
+
+  let dateBadge = '';
+  if (isToday)        dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 animate-pulse">Today</span>`;
+  else if (isTomorrow) dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-blue-500/30 text-blue-300 border border-blue-500/30">Tomorrow</span>`;
+  else if (!isPast && daysUntil <= 7) dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-white/10 text-white/60">in ${daysUntil}d</span>`;
+
+  const weekday = eDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const month   = eDate.toLocaleDateString('en-US', { month: 'short' });
+  const day     = eDate.getDate();
+  const time    = eDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  return `
+    <div class="bg-white/10 backdrop-blur-xl border ${isPast ? 'border-white/5 opacity-70' : 'border-white/10 hover:bg-white/15'} rounded-3xl overflow-hidden transition">
+      <div class="h-1 ${isPast ? 'bg-white/10' : 'bg-gradient-to-r from-emerald-500 to-teal-400'}"></div>
+      <div class="p-5 flex items-start gap-4">
+        <!-- Date block -->
+        <div class="flex-shrink-0 w-14 text-center bg-white/10 rounded-2xl py-2 px-1">
+          <div class="text-[10px] font-bold uppercase text-white/50">${weekday}</div>
+          <div class="text-2xl font-black leading-tight ${isPast ? 'text-white/40' : 'text-white'}">${day}</div>
+          <div class="text-[10px] font-bold uppercase text-emerald-400">${month}</div>
+        </div>
+        <!-- Content -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <h3 class="font-bold text-base leading-snug ${isPast ? 'text-white/50' : 'text-white'}">${e.title}</h3>
+            <div class="flex-shrink-0 flex items-center gap-1.5">${dateBadge}</div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap mb-2">
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catIcon} ${catLabel}</span>
+            <span class="text-xs text-white/40">🕐 ${time}</span>
+          </div>
+          ${e.description ? `<p class="text-sm text-white/60 leading-relaxed line-clamp-2 mb-2">${e.description}</p>` : ''}
+          ${e.location ? `<p class="text-xs text-white/40 flex items-center gap-1">📍 ${e.location}</p>` : ''}
+          ${e.owner?.name ? `<p class="text-xs text-white/30 mt-1">Posted by ${e.owner.name}</p>` : ''}
+        </div>
+      </div>
+    </div>`;
 }
 
 // ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
+
+// Maps business directory category names → deal/event category enum values.
+// Business categories are free-form strings set by the admin; we match case-insensitively.
+const BIZ_TO_DEAL_CAT = {
+  'restaurant':      'Food & Drink',
+  'food':            'Food & Drink',
+  'cafe':            'Food & Drink',
+  'bar':             'Food & Drink',
+  'coffee':          'Food & Drink',
+  'bakery':          'Food & Drink',
+  'pizza':           'Food & Drink',
+  'retail':          'Shopping',
+  'shop':            'Shopping',
+  'boutique':        'Shopping',
+  'clothing':        'Shopping',
+  'grocery':         'Shopping',
+  'pharmacy':        'Health & Beauty',
+  'salon':           'Health & Beauty',
+  'spa':             'Health & Beauty',
+  'beauty':          'Health & Beauty',
+  'fitness':         'Health & Beauty',
+  'gym':             'Health & Beauty',
+  'health':          'Health & Beauty',
+  'medical':         'Health & Beauty',
+  'dental':          'Health & Beauty',
+  'plumbing':        'Home & Services',
+  'hvac':            'Home & Services',
+  'contractor':      'Home & Services',
+  'home':            'Home & Services',
+  'landscaping':     'Home & Services',
+  'cleaning':        'Home & Services',
+  'services':        'Home & Services',
+  'entertainment':   'Entertainment',
+  'bowling':         'Entertainment',
+  'movie':           'Entertainment',
+  'theater':         'Entertainment',
+  'arcade':          'Entertainment',
+  'auto':            'Automotive',
+  'car':             'Automotive',
+  'mechanic':        'Automotive',
+  'tire':            'Automotive',
+  'dealership':      'Automotive',
+};
+
+const BIZ_TO_EVENT_CAT = {
+  'restaurant':      'Food & Drink',
+  'food':            'Food & Drink',
+  'cafe':            'Food & Drink',
+  'bar':             'Food & Drink',
+  'coffee':          'Food & Drink',
+  'bakery':          'Food & Drink',
+  'music':           'Music & Arts',
+  'art':             'Music & Arts',
+  'gallery':         'Music & Arts',
+  'theater':         'Music & Arts',
+  'gym':             'Sports & Fitness',
+  'fitness':         'Sports & Fitness',
+  'sports':          'Sports & Fitness',
+  'kids':            'Family & Kids',
+  'family':          'Family & Kids',
+  'childcare':       'Family & Kids',
+  'school':          'Education',
+  'education':       'Education',
+  'tutoring':        'Education',
+  'networking':      'Business & Networking',
+  'professional':    'Business & Networking',
+  'business':        'Business & Networking',
+};
+
+function bizCategoryToDeals(bizCatName) {
+  if (!bizCatName) return '';
+  const lower = bizCatName.toLowerCase();
+  for (const [key, val] of Object.entries(BIZ_TO_DEAL_CAT)) {
+    if (lower.includes(key)) return val;
+  }
+  return 'Other';
+}
+
+function bizCategoryToEvents(bizCatName) {
+  if (!bizCatName) return '';
+  const lower = bizCatName.toLowerCase();
+  for (const [key, val] of Object.entries(BIZ_TO_EVENT_CAT)) {
+    if (lower.includes(key)) return val;
+  }
+  return 'Community';
+}
+
 async function loadOwnerDashboard(content) {
+  // Get the business category name for auto-selection
+  const biz = currentUser && currentUser.verifiedBusiness;
+  const bizCatName = biz?.category?.name || biz?.category || '';
+  const autoDealCat  = bizCategoryToDeals(bizCatName);
+  const autoEventCat = bizCategoryToEvents(bizCatName);
+
+  const dealCatOptions = DEAL_CATEGORIES.map(c =>
+    `<option value="${c.id}" ${c.id === autoDealCat ? 'selected' : ''}>${c.icon} ${c.id}</option>`).join('');
+  const eventCatOptions = EVENT_CATEGORIES.map(c =>
+    `<option value="${c.id}" ${c.id === autoEventCat ? 'selected' : ''}>${c.icon} ${c.id}</option>`).join('');
+
+  const selectStyle = 'background:#1e293b;color-scheme:dark;';
+  const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
+  const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
+
   content.innerHTML = `
-    <div class="px-4">
+    <div class="px-4 max-w-2xl mx-auto">
       <h2 class="text-3xl font-bold mb-6">🏪 My Business Dashboard</h2>
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-8">
         <h3 class="font-semibold mb-4 text-lg">Update Business Listing</h3>
-        <input id="ownerName" type="text" placeholder="Business Name" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-        <input id="ownerAddress" type="text" placeholder="Address" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-        <input id="ownerPhone" type="text" placeholder="Phone" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-        <input id="ownerWebsite" type="text" placeholder="Website (optional)" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-        <textarea id="ownerDescription" rows="3" placeholder="Description" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white"></textarea>
+        <input id="ownerName"        type="text"  placeholder="Business Name"      class="${inputClass}">
+        <input id="ownerAddress"     type="text"  placeholder="Address"            class="${inputClass}">
+        <input id="ownerPhone"       type="text"  placeholder="Phone"              class="${inputClass}">
+        <input id="ownerWebsite"     type="text"  placeholder="Website (optional)" class="${inputClass}">
+        <textarea id="ownerDescription" rows="3"  placeholder="Description"        class="${inputClass} resize-none"></textarea>
         <button onclick="saveOwnerListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold">Save Changes</button>
       </div>
       <div class="flex border-b border-white/20 mb-6">
-        <button onclick="switchOwnerTab(0)" id="otab0" class="flex-1 py-4 text-center font-semibold border-b-2 border-emerald-500 text-white">Deals</button>
-        <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">Events</button>
+        <button onclick="switchOwnerTab(0)" id="otab0" class="flex-1 py-4 text-center font-semibold border-b-2 border-amber-500 text-white">🔥 Deals</button>
+        <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">📅 Events</button>
       </div>
+
+      <!-- Deals tab -->
       <div id="otabContent0">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Deal</h3>
-          <input id="dealTitle" type="text" placeholder="Deal Title" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <textarea id="dealDesc" rows="2" placeholder="Deal description" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white"></textarea>
-          <input id="dealExpires" type="date" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold">🔥 Post Deal</button>
+          <input id="dealTitle" type="text" placeholder="Deal Title *" class="${inputClass}">
+          <textarea id="dealDesc" rows="2" placeholder="Deal description" class="${inputClass} resize-none"></textarea>
+          <select id="dealCategory" class="${selectClass}" style="${selectStyle}">
+            <option value="">Select Category *</option>
+            ${dealCatOptions}
+          </select>
+          ${autoDealCat ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected based on your business type</p>` : ''}
+          <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
+          <input id="dealExpires" type="date" class="${inputClass}">
+          <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
         </div>
+        <h4 class="font-semibold text-sm text-white/60 mb-3 uppercase tracking-wider">Your Active Deals</h4>
         <div id="ownerDealsList"></div>
       </div>
+
+      <!-- Events tab -->
       <div id="otabContent1" class="hidden">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
           <h3 class="font-semibold mb-4">Add New Event</h3>
-          <input id="eventTitle" type="text" placeholder="Event Title" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="eventDate" type="date" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <input id="eventLocation" type="text" placeholder="Location" class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white">
-          <textarea id="eventDesc" rows="2" placeholder="Event description" class="w-full mb-6 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white"></textarea>
-          <button onclick="addOwnerEvent()" class="w-full bg-blue-500 hover:bg-blue-600 py-4 rounded-3xl font-semibold">📅 Post Event</button>
+          <input id="eventTitle"    type="text"  placeholder="Event Title *"       class="${inputClass}">
+          <label class="block text-xs text-white/50 mb-1 px-1">Event Date *</label>
+          <input id="eventDate"     type="datetime-local"                           class="${inputClass}">
+          <input id="eventLocation" type="text"  placeholder="Location (optional)" class="${inputClass}">
+          <select id="eventCategory" class="${selectClass}" style="${selectStyle}">
+            <option value="">Select Category *</option>
+            ${eventCatOptions}
+          </select>
+          ${autoEventCat ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected based on your business type</p>` : ''}
+          <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
+          <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
         </div>
+        <h4 class="font-semibold text-sm text-white/60 mb-3 uppercase tracking-wider">Your Events</h4>
         <div id="ownerEventsList"></div>
       </div>
     </div>`;
@@ -1109,33 +1600,34 @@ async function loadOwnerDashboard(content) {
 
   if (currentUser && currentUser.verifiedBusiness) {
     const biz = currentUser.verifiedBusiness;
-    document.getElementById('ownerName').value = biz.name || '';
-    document.getElementById('ownerAddress').value = biz.address || '';
-    document.getElementById('ownerPhone').value = biz.phone || '';
-    document.getElementById('ownerWebsite').value = biz.website || '';
+    document.getElementById('ownerName').value        = biz.name        || '';
+    document.getElementById('ownerAddress').value     = biz.address     || '';
+    document.getElementById('ownerPhone').value       = biz.phone       || '';
+    document.getElementById('ownerWebsite').value     = biz.website     || '';
     document.getElementById('ownerDescription').value = biz.description || '';
   }
 }
 
 window.switchOwnerTab = function (tab) {
   [0, 1].forEach(i => {
-    const tabBtn = document.getElementById(`otab${i}`);
+    const tabBtn     = document.getElementById(`otab${i}`);
     const tabContent = document.getElementById(`otabContent${i}`);
     if (!tabBtn || !tabContent) return;
     const active = i === tab;
     tabContent.classList.toggle('hidden', !active);
     tabBtn.classList.toggle('border-b-2', active);
-    tabBtn.classList.toggle('border-emerald-500', active);
+    tabBtn.classList.toggle('border-amber-500', active && tab === 0);
+    tabBtn.classList.toggle('border-emerald-500', active && tab === 1);
     tabBtn.classList.toggle('text-white', active);
     tabBtn.classList.toggle('text-white/70', !active);
   });
 };
 
 window.saveOwnerListing = async function () {
-  const name = document.getElementById('ownerName').value.trim();
-  const address = document.getElementById('ownerAddress').value.trim();
-  const phone = document.getElementById('ownerPhone').value.trim();
-  const website = document.getElementById('ownerWebsite').value.trim();
+  const name        = document.getElementById('ownerName').value.trim();
+  const address     = document.getElementById('ownerAddress').value.trim();
+  const phone       = document.getElementById('ownerPhone').value.trim();
+  const website     = document.getElementById('ownerWebsite').value.trim();
   const description = document.getElementById('ownerDescription').value.trim();
   const res = await apiPost('/owner/business', { name, address, phone, website, description }, 'PUT');
   if (res._id) {
@@ -1151,18 +1643,22 @@ async function loadOwnerDeals() {
   if (!container) return;
   const deals = await apiGet('/owner/deals');
   if (!deals.length) {
-    container.innerHTML = `<p class="text-white/50 text-center py-6">No deals yet.</p>`;
+    container.innerHTML = `<p class="text-white/50 text-center py-6 text-sm">No deals posted yet.</p>`;
     return;
   }
+  const catMap = Object.fromEntries(DEAL_CATEGORIES.map(c => [c.id, c.icon]));
   container.innerHTML = deals.map(d => `
     <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-3">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="font-bold">${d.title}</div>
-          ${d.expires ? `<div class="text-xs text-amber-300 mt-1">Expires ${new Date(d.expires).toLocaleDateString()}</div>` : ''}
-          ${d.description ? `<div class="text-sm text-white/70 mt-2">${d.description}</div>` : ''}
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            ${d.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/20">${catMap[d.category]||'📦'} ${d.category}</span>` : ''}
+            ${d.expires ? `<span class="text-[11px] text-white/40">Exp. ${new Date(d.expires).toLocaleDateString()}</span>` : ''}
+          </div>
+          <div class="font-bold leading-snug">${d.title}</div>
+          ${d.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${d.description}</div>` : ''}
         </div>
-        <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-sm ml-3 flex-shrink-0">🗑️</button>
+        <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
       </div>
     </div>`).join('');
 }
@@ -1172,33 +1668,40 @@ async function loadOwnerEvents() {
   if (!container) return;
   const events = await apiGet('/owner/events');
   if (!events.length) {
-    container.innerHTML = `<p class="text-white/50 text-center py-6">No events yet.</p>`;
+    container.innerHTML = `<p class="text-white/50 text-center py-6 text-sm">No events posted yet.</p>`;
     return;
   }
+  const catMap = Object.fromEntries(EVENT_CATEGORIES.map(c => [c.id, c.icon]));
   container.innerHTML = events.map(e => `
     <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-3">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="font-bold">${e.title}</div>
-          <div class="text-xs text-emerald-300 mt-1">${new Date(e.date).toLocaleDateString()}</div>
-          ${e.location ? `<div class="text-sm text-white/70 mt-1">📍 ${e.location}</div>` : ''}
-          ${e.description ? `<div class="text-sm text-white/70 mt-2">${e.description}</div>` : ''}
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            ${e.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catMap[e.category]||'📌'} ${e.category}</span>` : ''}
+            <span class="text-[11px] text-white/40">${new Date(e.date).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}</span>
+          </div>
+          <div class="font-bold leading-snug">${e.title}</div>
+          ${e.location ? `<div class="text-xs text-emerald-300 mt-1">📍 ${e.location}</div>` : ''}
+          ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${e.description}</div>` : ''}
         </div>
-        <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-sm ml-3 flex-shrink-0">🗑️</button>
+        <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
       </div>
     </div>`).join('');
 }
 
 window.addOwnerDeal = async function () {
-  const title = document.getElementById('dealTitle').value.trim();
+  const title       = document.getElementById('dealTitle').value.trim();
   const description = document.getElementById('dealDesc').value.trim();
-  const expires = document.getElementById('dealExpires').value;
-  if (!title) { showToast('Title is required', 'error'); return; }
-  const res = await apiPost('/owner/deals', { title, description, expires });
+  const expires     = document.getElementById('dealExpires').value;
+  const category    = document.getElementById('dealCategory').value;
+  if (!title)    { showToast('Title is required', 'error'); return; }
+  if (!category) { showToast('Please select a category', 'error'); return; }
+  const res = await apiPost('/owner/deals', { title, description, expires, category });
   if (res._id) {
-    document.getElementById('dealTitle').value = '';
-    document.getElementById('dealDesc').value = '';
-    document.getElementById('dealExpires').value = '';
+    document.getElementById('dealTitle').value    = '';
+    document.getElementById('dealDesc').value     = '';
+    document.getElementById('dealExpires').value  = '';
+    document.getElementById('dealCategory').value = '';
     showToast('🔥 Deal posted!');
     loadOwnerDeals();
   } else {
@@ -1214,17 +1717,21 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function () {
-  const title = document.getElementById('eventTitle').value.trim();
-  const date = document.getElementById('eventDate').value;
-  const location = document.getElementById('eventLocation').value.trim();
+  const title       = document.getElementById('eventTitle').value.trim();
+  const date        = document.getElementById('eventDate').value;
+  const location    = document.getElementById('eventLocation').value.trim();
   const description = document.getElementById('eventDesc').value.trim();
-  if (!title || !date) { showToast('Title and date are required', 'error'); return; }
-  const res = await apiPost('/owner/events', { title, date, location, description });
+  const category    = document.getElementById('eventCategory').value;
+  if (!title)    { showToast('Title is required', 'error'); return; }
+  if (!date)     { showToast('Date is required', 'error'); return; }
+  if (!category) { showToast('Please select a category', 'error'); return; }
+  const res = await apiPost('/owner/events', { title, date, location, description, category });
   if (res._id) {
-    document.getElementById('eventTitle').value = '';
-    document.getElementById('eventDate').value = '';
+    document.getElementById('eventTitle').value    = '';
+    document.getElementById('eventDate').value     = '';
     document.getElementById('eventLocation').value = '';
-    document.getElementById('eventDesc').value = '';
+    document.getElementById('eventDesc').value     = '';
+    document.getElementById('eventCategory').value = '';
     showToast('📅 Event posted!');
     loadOwnerEvents();
   } else {
@@ -1931,6 +2438,7 @@ window.adminDeleteDeal = async function (id) {
 };
 
 async function postShoutout() {
+  if (!requireAuth('Sign in to post shoutouts.')) return;
   const input = document.getElementById('shoutoutInput');
   if (!input || !input.value.trim()) return;
   await apiPost('/shoutouts', { text: input.value });
@@ -1949,3 +2457,5 @@ window.saveBusiness = saveBusiness;
 window.switchAdminTab = switchAdminTab;
 window.renderDirectory = renderDirectory;
 window.loadModerationPanel = loadModerationPanel;
+window.renderDealsFiltered  = renderDealsFiltered;
+window.renderEventsFiltered = renderEventsFiltered;

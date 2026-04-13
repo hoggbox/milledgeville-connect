@@ -18,17 +18,8 @@ function getAvatarHTML(user, size = 'lg') {
 
 function updateSidebarAvatars() {
   if (!currentUser) return;
-  const letter = (currentUser.name || '?')[0].toUpperCase();
-  ['sidebar-avatar', 'mobile-avatar'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (currentUser.avatar) {
-      el.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-2xl" alt="avatar">`;
-    } else {
-      el.innerHTML = letter;
-      el.style.background = '';
-    }
-  });
+  // These elements are now rendered by renderNav() — just re-render nav to refresh them
+  renderNav();
 }
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
@@ -434,22 +425,7 @@ function escHtml(str) {
 
 // ─── Override updateUserUI to also update sidebar avatars ─────────────────────
 window.updateUserUI = function () {
-  if (!currentUser) return;
-  const letter     = (currentUser.name||'?')[0].toUpperCase();
-  const isVerified = !!currentUser.verifiedBusiness;
-
-  ['sidebar-avatar','mobile-avatar'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (currentUser.avatar) {
-      el.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-2xl" alt="avatar">`;
-    } else {
-      el.innerHTML = letter;
-    }
-    if (id === 'sidebar-avatar') el.title = isVerified ? 'Verified Business Owner' : currentUser.name;
-  });
-
-  renderNav();
+  renderNav(); // renderNav handles both logged-in avatars and guest sign-in buttons
 };
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
