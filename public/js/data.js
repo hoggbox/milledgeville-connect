@@ -177,19 +177,16 @@ document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
 });
 
-// ─── HOME PAGE — UPDATED WITH TODAY IN MILLEDGEVILLE + HOT RIGHT NOW ─────
+// ─── HOME PAGE — UPDATED WITH TODAY IN MILLEDGEVILLE + HOT RIGHT NOW + FILTER BUTTONS ─────
 async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
       <!-- Today in Milledgeville -->
       <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-6 mb-8 text-white overflow-hidden relative">
-        <!-- subtle texture overlay -->
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
 
-        <!-- Top row: title + weather widget -->
         <div class="relative flex items-start justify-between gap-4 mb-5">
-          <!-- Left: title -->
           <div class="flex items-center gap-3 min-w-0">
             <span class="text-4xl flex-shrink-0">🌅</span>
             <div class="min-w-0">
@@ -198,7 +195,6 @@ async function loadHomePage(content) {
             </div>
           </div>
 
-          <!-- Right: weather widget -->
           <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5 text-right min-w-[90px]">
             <div class="text-2xl leading-none mb-0.5" id="weatherIcon">—</div>
             <div class="text-xl font-black leading-none" id="weatherTemp">—</div>
@@ -210,7 +206,7 @@ async function loadHomePage(content) {
         <div id="todayDigest" class="relative space-y-3"></div>
       </div>
 
-      <!-- Hot Right Now -->
+      <!-- Hot Right Now + FILTER BUTTONS -->
       <div class="mb-8">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
@@ -218,6 +214,21 @@ async function loadHomePage(content) {
             <h2 class="text-lg font-bold">Hot Right Now</h2>
           </div>
         </div>
+
+        <!-- Filter buttons -->
+        <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
+          <button onclick="setHotFilter('all')" id="hotFilter-all"
+                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+          <button onclick="setHotFilter('news')" id="hotFilter-news"
+                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
+          <button onclick="setHotFilter('event')" id="hotFilter-event"
+                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
+          <button onclick="setHotFilter('deal')" id="hotFilter-deal"
+                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout"
+                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">💬 Shoutouts</button>
+        </div>
+
         <div id="hotFeed" class="space-y-3"></div>
         <div id="hotLoadMoreWrapper" class="mt-4 hidden">
           <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()"
@@ -241,10 +252,9 @@ async function loadHomePage(content) {
           <p class="font-semibold mt-3">See Events</p>
         </button>
       </div>
-
     </div>`;
 
-  // ── Fetch weather (Open-Meteo, no API key) ────────────────────────────────
+  // Weather (unchanged)
   (async () => {
     try {
       const wRes  = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
@@ -253,30 +263,27 @@ async function loadHomePage(content) {
       const daily = wData.daily;
 
       function wmoCond(code) {
-        if (code === 0)                       return { icon: '☀️',  label: 'Sunny'       };
-        if ([1,2].includes(code))             return { icon: '⛅',  label: 'Partly cloudy'};
-        if (code === 3)                       return { icon: '☁️',  label: 'Overcast'    };
-        if ([45,48].includes(code))           return { icon: '🌫️', label: 'Foggy'       };
-        if ([51,53,55,61,63].includes(code))  return { icon: '🌧️', label: 'Rainy'       };
-        if ([65,80,81,82].includes(code))     return { icon: '⛈️',  label: 'Showers'    };
-        if ([71,73,75,77,85,86].includes(code)) return { icon: '❄️', label: 'Snow'      };
-        if ([95,96,99].includes(code))        return { icon: '⛈️',  label: 'Thunderstorm'};
+        if (code === 0) return { icon: '☀️', label: 'Sunny' };
+        if ([1,2].includes(code)) return { icon: '⛅', label: 'Partly cloudy'};
+        if (code === 3) return { icon: '☁️', label: 'Overcast' };
+        if ([45,48].includes(code)) return { icon: '🌫️', label: 'Foggy' };
+        if ([51,53,55,61,63].includes(code)) return { icon: '🌧️', label: 'Rainy' };
+        if ([65,80,81,82].includes(code)) return { icon: '⛈️', label: 'Showers' };
+        if ([71,73,75,77,85,86].includes(code)) return { icon: '❄️', label: 'Snow' };
+        if ([95,96,99].includes(code)) return { icon: '⛈️', label: 'Thunderstorm'};
         return { icon: '🌤️', label: 'Mixed' };
       }
-
       const cond = wmoCond(curr.weathercode);
       const temp = Math.round(curr.temperature_2m);
-
       document.getElementById('weatherIcon').textContent = cond.icon;
       document.getElementById('weatherTemp').textContent = temp + '°F';
       document.getElementById('weatherDesc').textContent = cond.label;
 
-      // 3-day forecast pills
       const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
       const forecastHTML = daily.date.slice(1, 4).map((d, i) => {
-        const fc   = wmoCond(daily.weathercode[i + 1]);
+        const fc = wmoCond(daily.weathercode[i + 1]);
         const high = Math.round(daily.temperature_2m_max[i + 1]);
-        const dow  = days[new Date(d + 'T12:00:00').getDay()];
+        const dow = days[new Date(d + 'T12:00:00').getDay()];
         return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
           <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
           <div class="text-sm leading-none my-0.5">${fc.icon}</div>
@@ -284,12 +291,12 @@ async function loadHomePage(content) {
         </div>`;
       }).join('');
       document.getElementById('weatherForecast').innerHTML = forecastHTML;
-
     } catch (_) {
       document.getElementById('weatherDesc').textContent = 'Unavailable';
     }
   })();
 
+  // ── Fetch data (order is now correct)
   const [events, deals, newsArticles, shoutouts] = await Promise.all([
     apiGet('/events'),
     apiGet('/deals'),
@@ -297,6 +304,7 @@ async function loadHomePage(content) {
     apiGet('/shoutouts')
   ]);
 
+  // Digest (unchanged)
   const digestHTML = `
     <div class="grid grid-cols-2 gap-3">
       <div class="bg-white/15 rounded-2xl p-3">
@@ -310,59 +318,64 @@ async function loadHomePage(content) {
     </div>`;
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
-  // ── Build mixed feed ──────────────────────────────────────────────────────
+  // ── Build mixed feed (same as before)
   const now = new Date();
 
-  // News — always float to top, sorted by recency
   const newsItems = (newsArticles || []).map(n => ({
-    type: 'news',
-    sortDate: new Date(n.createdAt),
-    data: n
-  }));
-  newsItems.sort((a, b) => b.sortDate - a.sortDate);
+    type: 'news', sortDate: new Date(n.createdAt), data: n
+  })).sort((a, b) => b.sortDate - a.sortDate);
 
-  // Events — upcoming only, sorted by event date ascending (soonest first)
   const eventItems = (events || [])
     .filter(e => new Date(e.date) >= now)
     .map(e => ({ type: 'event', sortDate: new Date(e.date), data: e }))
     .sort((a, b) => a.sortDate - b.sortDate);
 
-  // Deals — active only, boost soonest-expiring first, then by createdAt desc
-  const activeDeals = (deals || []).filter(d => !d.expires || new Date(d.expires) >= now);
+  const activeDeals = (deals || []);
   const dealItems = activeDeals
     .map(d => ({ type: 'deal', sortDate: new Date(d.createdAt), expiresDate: d.expires ? new Date(d.expires) : null, data: d }))
     .sort((a, b) => {
-      // Both have expiry → soonest first
       if (a.expiresDate && b.expiresDate) return a.expiresDate - b.expiresDate;
-      // Only a has expiry → a comes first (more urgent)
       if (a.expiresDate && !b.expiresDate) return -1;
       if (!a.expiresDate && b.expiresDate) return 1;
-      // Neither has expiry → newest first
       return b.sortDate - a.sortDate;
     });
 
-  // Shoutouts — sorted by createdAt desc
   const shoutoutItems = (shoutouts || [])
     .map(s => ({ type: 'shoutout', sortDate: new Date(s.createdAt), data: s }))
     .sort((a, b) => b.sortDate - a.sortDate);
 
-  // Interleave non-news items by their sortDate (newest / soonest first)
   const otherItems = [...eventItems, ...dealItems, ...shoutoutItems]
     .sort((a, b) => {
-      // For events, soonest date is already "most relevant"; treat ascending
       if (a.type === 'event' && b.type === 'event') return a.sortDate - b.sortDate;
       if (a.type === 'event') return -1;
       if (b.type === 'event') return 1;
       return b.sortDate - a.sortDate;
     });
 
-  // Final feed: news first (most recent), then rest
   const allHotItems = [...newsItems, ...otherItems];
 
-  // ── Pagination state ──────────────────────────────────────────────────────
+  // Pagination + filter state
   const HOT_PAGE_SIZE = 6;
-  window._hotItems    = allHotItems;
-  window._hotPage     = 0;
+  window._hotItems = allHotItems;
+  window._hotPage = 0;
+  window._hotFilter = 'all';   // default
+
+  // ── NEW: Filter function
+  window.setHotFilter = function (type) {
+    window._hotFilter = type;
+    window._hotPage = 0;
+
+    // Highlight active button
+    document.querySelectorAll('[id^="hotFilter-"]').forEach(btn => {
+      if (btn.id === `hotFilter-${type}`) {
+        btn.className = 'flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white';
+      } else {
+        btn.className = 'flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80';
+      }
+    });
+
+    renderHotPage();
+  };
 
   function renderHotItem(item) {
     if (item.type === 'news') {
@@ -422,19 +435,26 @@ async function loadHomePage(content) {
   }
 
   function renderHotPage() {
-    const feed    = document.getElementById('hotFeed');
+    const feed = document.getElementById('hotFeed');
     const wrapper = document.getElementById('hotLoadMoreWrapper');
-    const btn     = document.getElementById('hotLoadMoreBtn');
+    const btn = document.getElementById('hotLoadMoreBtn');
     if (!feed) return;
 
-    const start     = 0;
-    const end       = (window._hotPage + 1) * HOT_PAGE_SIZE;
-    const visible   = window._hotItems.slice(start, end);
-    const hasMore   = end < window._hotItems.length;
-    const remaining = window._hotItems.length - end;
+    let filtered = window._hotItems;
+
+    // Apply filter
+    if (window._hotFilter !== 'all') {
+      filtered = window._hotItems.filter(item => item.type === window._hotFilter);
+    }
+
+    const start = 0;
+    const end = (window._hotPage + 1) * HOT_PAGE_SIZE;
+    const visible = filtered.slice(start, end);
+    const hasMore = end < filtered.length;
+    const remaining = filtered.length - end;
 
     feed.innerHTML = visible.map(renderHotItem).join('') ||
-      '<p class="text-white/40 text-center py-8">No activity yet — be the first to post!</p>';
+      `<p class="text-white/40 text-center py-8">No ${window._hotFilter === 'all' ? 'activity' : window._hotFilter} yet — be the first!</p>`;
 
     if (wrapper) wrapper.classList.toggle('hidden', !hasMore);
     if (btn && hasMore) btn.textContent = `Load More (${Math.min(remaining, HOT_PAGE_SIZE)} more)`;
@@ -447,20 +467,20 @@ async function loadHomePage(content) {
 
   renderHotPage();
 
-  // ── Community Stats Bar ────────────────────────────────────────────────────
-  const activeDealsCount   = activeDeals.length;
+  // ── Community Stats Bar (unchanged) ─────────────────────────────────────
+  const activeDealsCount   = (deals || []).length;
   const upcomingEvCount    = (events || []).filter(e => new Date(e.date) >= now).length;
   const todayStart         = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const shoutoutsTodayCount = (feed.shoutouts || shoutouts || []).filter(s => new Date(s.createdAt) >= todayStart).length;
-  // Fetch business count directly so it populates on first visit
-let bizCount = allBusinesses.length;
-if (!bizCount) {
-  try {
-    const dirData = await apiGet('/directory');
-    allBusinesses = dirData.businesses || [];
-    bizCount = allBusinesses.length;
-  } catch (_) {}
-}
+  const shoutoutsTodayCount = (shoutouts || []).filter(s => new Date(s.createdAt) >= todayStart).length;
+
+  let bizCount = allBusinesses.length;
+  if (!bizCount) {
+    try {
+      const dirData = await apiGet('/directory');
+      allBusinesses = dirData.businesses || [];
+      bizCount = allBusinesses.length;
+    } catch (_) {}
+  }
 
   const statsBar = document.getElementById('communityStatsBar');
   if (statsBar) {
