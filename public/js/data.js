@@ -177,237 +177,321 @@ document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
 });
 
-// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+// ─── HOME PAGE — UPDATED WITH TODAY IN MILLEDGEVILLE + HOT RIGHT NOW ─────
 async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
-      <div class="relative overflow-hidden rounded-3xl mb-6 mt-2" 
-           style="background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%);">
-        <div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.15) 20px, rgba(255,255,255,0.15) 21px);"></div>
-        <div class="relative p-7 md:p-10">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl">🏠</div>
-            <div>
-              <h1 class="text-2xl md:text-3xl font-bold leading-tight">Milledgeville Connect</h1>
-              <p class="text-emerald-200 text-sm">Your local community hub</p>
+
+      <!-- Today in Milledgeville -->
+      <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-6 mb-8 text-white overflow-hidden relative">
+        <!-- subtle texture overlay -->
+        <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
+
+        <!-- Top row: title + weather widget -->
+        <div class="relative flex items-start justify-between gap-4 mb-5">
+          <!-- Left: title -->
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="text-4xl flex-shrink-0">🌅</span>
+            <div class="min-w-0">
+              <h1 class="text-2xl font-bold leading-tight">Today in Milledgeville</h1>
+              <p class="text-emerald-100 text-xs mt-0.5">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
             </div>
           </div>
-          <p class="text-white/80 text-sm leading-relaxed mb-6 max-w-sm">Everything happening in Milledgeville — businesses, events, deals, and community shoutouts.</p>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="navigate('directory')" class="bg-white text-emerald-800 font-bold px-5 py-2.5 rounded-2xl text-sm transition hover:bg-emerald-50">📍 Directory</button>
-            <button onclick="navigate('events')" class="bg-white/20 backdrop-blur-sm text-white font-semibold px-5 py-2.5 rounded-2xl text-sm transition hover:bg-white/30">📅 Events</button>
-            <button onclick="navigate('deals')" class="bg-white/20 backdrop-blur-sm text-white font-semibold px-5 py-2.5 rounded-2xl text-sm transition hover:bg-white/30">🔥 Deals</button>
+
+          <!-- Right: weather widget -->
+          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5 text-right min-w-[90px]">
+            <div class="text-2xl leading-none mb-0.5" id="weatherIcon">—</div>
+            <div class="text-xl font-black leading-none" id="weatherTemp">—</div>
+            <div class="text-[10px] text-emerald-100 mt-0.5 leading-tight" id="weatherDesc">Loading…</div>
+            <div class="flex justify-end gap-1 mt-1.5" id="weatherForecast"></div>
           </div>
         </div>
+
+        <div id="todayDigest" class="relative space-y-3"></div>
       </div>
 
-      <div class="grid grid-cols-4 gap-3 mb-8">
-        <button onclick="navigate('directory')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
-          <span class="text-2xl mb-1">📍</span>
-          <span class="text-xs font-medium text-white/80">Businesses</span>
-        </button>
-        <button onclick="navigate('shoutouts')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
-          <span class="text-2xl mb-1">💬</span>
-          <span class="text-xs font-medium text-white/80">Shoutouts</span>
-        </button>
-        <button onclick="navigate('events')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
-          <span class="text-2xl mb-1">📅</span>
-          <span class="text-xs font-medium text-white/80">Events</span>
-        </button>
-        <button onclick="navigate('deals')" class="flex flex-col items-center bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-3 transition">
-          <span class="text-2xl mb-1">🔥</span>
-          <span class="text-xs font-medium text-white/80">Deals</span>
-        </button>
-      </div>
-
-      <div id="popularSection">
+      <!-- Hot Right Now -->
+      <div class="mb-8">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
-            <span class="text-xl">🏆</span>
-            <h2 class="text-lg font-bold">Popular This Week</h2>
+            <span class="text-xl">🔥</span>
+            <h2 class="text-lg font-bold">Hot Right Now</h2>
           </div>
-          <button onclick="navigate('directory')" class="text-emerald-400 text-xs font-semibold hover:text-emerald-300">See all →</button>
         </div>
-        <div class="flex gap-3 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
-          ${[1,2,3].map(() => `
-            <div class="flex-shrink-0 w-52 bg-white/10 rounded-3xl p-4 animate-pulse">
-              <div class="w-10 h-10 bg-white/10 rounded-2xl mb-3"></div>
-              <div class="h-4 bg-white/10 rounded-full mb-2 w-3/4"></div>
-              <div class="h-3 bg-white/10 rounded-full w-1/2"></div>
-            </div>`).join('')}
+        <div id="hotFeed" class="space-y-3"></div>
+        <div id="hotLoadMoreWrapper" class="mt-4 hidden">
+          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()"
+                  class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">
+            Load More
+          </button>
         </div>
       </div>
 
-      <div id="newsSection" class="mt-8">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="text-xl">📰</span>
-          <h2 class="text-lg font-bold">Local News & Updates</h2>
-        </div>
-        <div class="space-y-3">
-          ${[1,2].map(() => `
-            <div class="bg-white/10 rounded-3xl p-5 animate-pulse">
-              <div class="h-4 bg-white/10 rounded-full mb-3 w-2/3"></div>
-              <div class="h-3 bg-white/10 rounded-full w-full mb-2"></div>
-              <div class="h-3 bg-white/10 rounded-full w-3/4"></div>
-            </div>`).join('')}
-        </div>
+      <!-- Community Stats Bar -->
+      <div id="communityStatsBar" class="mb-8"></div>
+
+      <!-- Quick actions -->
+      <div class="grid grid-cols-2 gap-3 mb-8">
+        <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
+          <span class="text-3xl">💬</span>
+          <p class="font-semibold mt-3">Post a Shoutout</p>
+        </button>
+        <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
+          <span class="text-3xl">📅</span>
+          <p class="font-semibold mt-3">See Events</p>
+        </button>
       </div>
+
     </div>`;
 
-  const [popularBiz, events, deals, shoutouts, newsArticles] = await Promise.all([
-    apiGet('/popular'),
+  // ── Fetch weather (Open-Meteo, no API key) ────────────────────────────────
+  (async () => {
+    try {
+      const wRes  = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
+      const wData = await wRes.json();
+      const curr  = wData.current;
+      const daily = wData.daily;
+
+      function wmoCond(code) {
+        if (code === 0)                       return { icon: '☀️',  label: 'Sunny'       };
+        if ([1,2].includes(code))             return { icon: '⛅',  label: 'Partly cloudy'};
+        if (code === 3)                       return { icon: '☁️',  label: 'Overcast'    };
+        if ([45,48].includes(code))           return { icon: '🌫️', label: 'Foggy'       };
+        if ([51,53,55,61,63].includes(code))  return { icon: '🌧️', label: 'Rainy'       };
+        if ([65,80,81,82].includes(code))     return { icon: '⛈️',  label: 'Showers'    };
+        if ([71,73,75,77,85,86].includes(code)) return { icon: '❄️', label: 'Snow'      };
+        if ([95,96,99].includes(code))        return { icon: '⛈️',  label: 'Thunderstorm'};
+        return { icon: '🌤️', label: 'Mixed' };
+      }
+
+      const cond = wmoCond(curr.weathercode);
+      const temp = Math.round(curr.temperature_2m);
+
+      document.getElementById('weatherIcon').textContent = cond.icon;
+      document.getElementById('weatherTemp').textContent = temp + '°F';
+      document.getElementById('weatherDesc').textContent = cond.label;
+
+      // 3-day forecast pills
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const forecastHTML = daily.date.slice(1, 4).map((d, i) => {
+        const fc   = wmoCond(daily.weathercode[i + 1]);
+        const high = Math.round(daily.temperature_2m_max[i + 1]);
+        const dow  = days[new Date(d + 'T12:00:00').getDay()];
+        return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
+          <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
+          <div class="text-sm leading-none my-0.5">${fc.icon}</div>
+          <div class="text-[10px] font-bold">${high}°</div>
+        </div>`;
+      }).join('');
+      document.getElementById('weatherForecast').innerHTML = forecastHTML;
+
+    } catch (_) {
+      document.getElementById('weatherDesc').textContent = 'Unavailable';
+    }
+  })();
+
+  const [feed, events, deals, newsArticles, shoutouts] = await Promise.all([
     apiGet('/events'),
     apiGet('/deals'),
-    apiGet('/shoutouts'),
-    apiGet('/news')
+    apiGet('/news'),
+    apiGet('/shoutouts')
   ]);
 
-  const popSection = document.getElementById('popularSection');
-  if (popularBiz && popularBiz.length > 0) {
-    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
-    const cards = popularBiz.map((b, i) => {
-      const avg = b.avgRating || 0;
-      const count = b.ratings ? b.ratings.length : 0;
-      const icon = b.category?.icon || '🏢';
-      return `
-        <div onclick="loadDirectoryAndOpen('${b._id}')" 
-             class="flex-shrink-0 w-52 bg-white/10 hover:bg-white/20 border border-white/10 rounded-3xl p-4 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:border-emerald-500/40">
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-10 h-10 bg-gradient-to-br from-emerald-500/30 to-teal-500/20 rounded-2xl flex items-center justify-center text-xl">${icon}</div>
-            <span class="text-base">${medals[i]}</span>
-          </div>
-          <h3 class="font-bold text-sm leading-tight mb-1 line-clamp-2">${b.name}</h3>
-          <div class="flex items-center gap-1 mt-2">
-            ${[1,2,3,4,5].map(s => `<span style="color:${s<=Math.round(avg)?'#f59e0b':'#374151'};font-size:13px;">★</span>`).join('')}
-            <span class="text-xs text-white/50 ml-1">${avg}</span>
-          </div>
-          <p class="text-xs text-white/40 mt-1">${count} rating${count !== 1 ? 's' : ''}</p>
-        </div>`;
-    }).join('');
-    popSection.innerHTML = `
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">🏆</span>
-          <h2 class="text-lg font-bold">Popular This Week</h2>
-        </div>
-        <button onclick="navigate('directory')" class="text-emerald-400 text-xs font-semibold hover:text-emerald-300">See all →</button>
+  const digestHTML = `
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-white/15 rounded-2xl p-3">
+        <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
+        <p class="font-semibold text-sm leading-snug">${events[0] ? events[0].title : 'No upcoming events'}</p>
       </div>
-      <div class="flex gap-3 overflow-x-auto pb-3 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">${cards}</div>`;
-  } else {
-    popSection.innerHTML = `
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-xl">🏆</span>
-        <h2 class="text-lg font-bold">Popular This Week</h2>
+      <div class="bg-white/15 rounded-2xl p-3">
+        <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
+        <p class="font-semibold text-sm leading-snug">${deals[0] ? deals[0].title : 'No active deals'}</p>
       </div>
-      <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
-        <p class="text-white/50 text-sm">Rate some businesses to see what's trending!</p>
-        <button onclick="navigate('directory')" class="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-2xl text-sm font-semibold transition">Browse Directory</button>
-      </div>`;
-  }
-
-  const newsSection = document.getElementById('newsSection');
-  let newsCardsHTML = '';
-
-  const recentNews = (newsArticles || []).slice(0, 3);
-  recentNews.forEach(article => {
-    newsCardsHTML += `
-      <div onclick="openNewsArticle('${article._id}')"
-           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-emerald-500/30 rounded-3xl p-5 cursor-pointer transition-all duration-200">
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">📰</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">News</span>
-              <span class="text-[10px] text-white/40">${timeAgo(article.createdAt)}</span>
-            </div>
-            <p class="font-semibold text-sm leading-snug mb-1 text-white">${article.title}</p>
-            <p class="text-xs text-white/60 line-clamp-2">${article.summary}</p>
-            <p class="text-xs text-emerald-400 mt-1">By ${article.authorName || 'Staff'}</p>
-          </div>
-          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
-        </div>
-      </div>`;
-  });
-
-  const upcomingEvents = (events || []).filter(e => new Date(e.date) >= new Date()).slice(0, 1);
-  upcomingEvents.forEach(e => {
-    const dateStr = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    newsCardsHTML += `
-      <div onclick="navigate('events')"
-           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition-all duration-200">
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">📅</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-500/20 text-blue-300 border-blue-500/30">Event</span>
-            </div>
-            <p class="font-semibold text-sm leading-snug mb-1 text-white">${e.title}</p>
-            <p class="text-xs text-emerald-300">${dateStr}${e.location ? ' · ' + e.location : ''}</p>
-          </div>
-          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
-        </div>
-      </div>`;
-  });
-
-  const activeDeals = (deals || []).filter(d => !d.expires || new Date(d.expires) >= new Date()).slice(0, 1);
-  activeDeals.forEach(d => {
-    newsCardsHTML += `
-      <div onclick="navigate('deals')"
-           class="group bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition-all duration-200">
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform">🔥</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30">Deal</span>
-            </div>
-            <p class="font-semibold text-sm leading-snug mb-1 text-white">${d.title}</p>
-            <p class="text-xs text-emerald-300">${d.business?.name ? 'From ' + d.business.name : 'Local business deal'}</p>
-          </div>
-          <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 mt-1">›</span>
-        </div>
-      </div>`;
-  });
-
-  if (!newsCardsHTML) {
-    newsSection.innerHTML = `
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-xl">📰</span>
-        <h2 class="text-lg font-bold">Local News & Updates</h2>
-      </div>
-      <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
-        <p class="text-4xl mb-3">🌱</p>
-        <p class="text-white/60 text-sm">Nothing posted yet — check back soon!</p>
-      </div>`;
-  } else {
-    newsSection.innerHTML = `
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">📰</span>
-          <h2 class="text-lg font-bold">Local News & Updates</h2>
-        </div>
-        <span class="text-xs text-white/40">${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-      </div>
-      <div class="space-y-3">${newsCardsHTML}</div>`;
-  }
-
-  const pulse = document.createElement('div');
-  pulse.className = 'mt-8 grid grid-cols-3 gap-3';
-  pulse.innerHTML = `
-    <div class="bg-gradient-to-br from-emerald-600/30 to-teal-600/20 border border-emerald-500/20 rounded-3xl p-4 text-center">
-      <div class="text-2xl font-bold">${allBusinesses.length || '?'}</div>
-      <div class="text-xs text-white/60 mt-1">Businesses</div>
-    </div>
-    <div class="bg-gradient-to-br from-blue-600/30 to-indigo-600/20 border border-blue-500/20 rounded-3xl p-4 text-center">
-      <div class="text-2xl font-bold">${(events || []).length}</div>
-      <div class="text-xs text-white/60 mt-1">Events</div>
-    </div>
-    <div class="bg-gradient-to-br from-amber-600/30 to-orange-600/20 border border-amber-500/20 rounded-3xl p-4 text-center">
-      <div class="text-2xl font-bold">${(deals || []).length}</div>
-      <div class="text-xs text-white/60 mt-1">Active Deals</div>
     </div>`;
-  content.querySelector('.max-w-2xl').appendChild(pulse);
+  document.getElementById('todayDigest').innerHTML = digestHTML;
+
+  // ── Build mixed feed ──────────────────────────────────────────────────────
+  const now = new Date();
+
+  // News — always float to top, sorted by recency
+  const newsItems = (newsArticles || []).map(n => ({
+    type: 'news',
+    sortDate: new Date(n.createdAt),
+    data: n
+  }));
+  newsItems.sort((a, b) => b.sortDate - a.sortDate);
+
+  // Events — upcoming only, sorted by event date ascending (soonest first)
+  const eventItems = (events || [])
+    .filter(e => new Date(e.date) >= now)
+    .map(e => ({ type: 'event', sortDate: new Date(e.date), data: e }))
+    .sort((a, b) => a.sortDate - b.sortDate);
+
+  // Deals — active only, boost soonest-expiring first, then by createdAt desc
+  const activeDeals = (deals || []).filter(d => !d.expires || new Date(d.expires) >= now);
+  const dealItems = activeDeals
+    .map(d => ({ type: 'deal', sortDate: new Date(d.createdAt), expiresDate: d.expires ? new Date(d.expires) : null, data: d }))
+    .sort((a, b) => {
+      // Both have expiry → soonest first
+      if (a.expiresDate && b.expiresDate) return a.expiresDate - b.expiresDate;
+      // Only a has expiry → a comes first (more urgent)
+      if (a.expiresDate && !b.expiresDate) return -1;
+      if (!a.expiresDate && b.expiresDate) return 1;
+      // Neither has expiry → newest first
+      return b.sortDate - a.sortDate;
+    });
+
+  // Shoutouts — sorted by createdAt desc
+  const shoutoutItems = (feed.shoutouts || shoutouts || [])
+    .map(s => ({ type: 'shoutout', sortDate: new Date(s.createdAt), data: s }))
+    .sort((a, b) => b.sortDate - a.sortDate);
+
+  // Interleave non-news items by their sortDate (newest / soonest first)
+  const otherItems = [...eventItems, ...dealItems, ...shoutoutItems]
+    .sort((a, b) => {
+      // For events, soonest date is already "most relevant"; treat ascending
+      if (a.type === 'event' && b.type === 'event') return a.sortDate - b.sortDate;
+      if (a.type === 'event') return -1;
+      if (b.type === 'event') return 1;
+      return b.sortDate - a.sortDate;
+    });
+
+  // Final feed: news first (most recent), then rest
+  const allHotItems = [...newsItems, ...otherItems];
+
+  // ── Pagination state ──────────────────────────────────────────────────────
+  const HOT_PAGE_SIZE = 6;
+  window._hotItems    = allHotItems;
+  window._hotPage     = 0;
+
+  function renderHotItem(item) {
+    if (item.type === 'news') {
+      const n = item.data;
+      return `
+        <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
+          <div class="flex-shrink-0 w-9 h-9 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-lg">📰</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">📰 NEWS</span>
+            </div>
+            <p class="text-sm font-semibold text-white leading-snug line-clamp-2">${n.title}</p>
+            <p class="text-xs text-white/45 mt-0.5">${n.authorName || 'Staff'} • ${timeAgo(n.createdAt)}</p>
+          </div>
+        </div>`;
+    } else if (item.type === 'event') {
+      const e = item.data;
+      return `
+        <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
+          <div class="flex-shrink-0 w-9 h-9 bg-blue-500/20 rounded-2xl flex items-center justify-center text-lg">📅</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-blue-400">📅 EVENT</span>
+            </div>
+            <p class="text-sm font-semibold text-white leading-snug line-clamp-2">${e.title}</p>
+            <p class="text-xs text-white/45 mt-0.5">${new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${e.location ? ' • ' + e.location : ''}</p>
+          </div>
+        </div>`;
+    } else if (item.type === 'deal') {
+      const d = item.data;
+      return `
+        <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
+          <div class="flex-shrink-0 w-9 h-9 bg-amber-500/20 rounded-2xl flex items-center justify-center text-lg">🔥</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400">🔥 DEAL</span>
+            </div>
+            <p class="text-sm font-semibold text-white leading-snug line-clamp-2">${d.title}</p>
+            <p class="text-xs text-white/45 mt-0.5">${d.business?.name || d.owner?.name || 'Local Business'} • ${timeAgo(d.createdAt)}</p>
+          </div>
+        </div>`;
+    } else if (item.type === 'shoutout') {
+      const s = item.data;
+      return `
+        <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
+          <div class="flex-shrink-0 w-9 h-9 bg-purple-500/20 rounded-2xl flex items-center justify-center text-lg">💬</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-purple-400">💬 SHOUTOUT</span>
+            </div>
+            <p class="text-sm text-white/85 line-clamp-2">${s.text.substring(0, 100)}${s.text.length > 100 ? '…' : ''}</p>
+            <p class="text-xs text-white/45 mt-0.5">${s.author} • ${timeAgo(s.createdAt)}</p>
+          </div>
+        </div>`;
+    }
+    return '';
+  }
+
+  function renderHotPage() {
+    const feed    = document.getElementById('hotFeed');
+    const wrapper = document.getElementById('hotLoadMoreWrapper');
+    const btn     = document.getElementById('hotLoadMoreBtn');
+    if (!feed) return;
+
+    const start     = 0;
+    const end       = (window._hotPage + 1) * HOT_PAGE_SIZE;
+    const visible   = window._hotItems.slice(start, end);
+    const hasMore   = end < window._hotItems.length;
+    const remaining = window._hotItems.length - end;
+
+    feed.innerHTML = visible.map(renderHotItem).join('') ||
+      '<p class="text-white/40 text-center py-8">No activity yet — be the first to post!</p>';
+
+    if (wrapper) wrapper.classList.toggle('hidden', !hasMore);
+    if (btn && hasMore) btn.textContent = `Load More (${Math.min(remaining, HOT_PAGE_SIZE)} more)`;
+  }
+
+  window.loadMoreHotItems = function () {
+    window._hotPage = (window._hotPage || 0) + 1;
+    renderHotPage();
+  };
+
+  renderHotPage();
+
+  // ── Community Stats Bar ────────────────────────────────────────────────────
+  const activeDealsCount   = activeDeals.length;
+  const upcomingEvCount    = (events || []).filter(e => new Date(e.date) >= now).length;
+  const todayStart         = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const shoutoutsTodayCount = (feed.shoutouts || shoutouts || []).filter(s => new Date(s.createdAt) >= todayStart).length;
+  // Fetch business count directly so it populates on first visit
+let bizCount = allBusinesses.length;
+if (!bizCount) {
+  try {
+    const dirData = await apiGet('/directory');
+    allBusinesses = dirData.businesses || [];
+    bizCount = allBusinesses.length;
+  } catch (_) {}
 }
 
+  const statsBar = document.getElementById('communityStatsBar');
+  if (statsBar) {
+    statsBar.innerHTML = `
+      <div class="bg-gradient-to-r from-white/5 to-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-4 text-center">Community at a Glance</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div onclick="navigate('directory')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">📍</span>
+            <span class="text-xl font-black text-white group-hover:text-emerald-300 transition">${bizCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Businesses<br>in Directory</span>
+          </div>
+          <div onclick="navigate('deals')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">🔥</span>
+            <span class="text-xl font-black text-white group-hover:text-amber-300 transition">${activeDealsCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Active<br>Deals</span>
+          </div>
+          <div onclick="navigate('events')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">📅</span>
+            <span class="text-xl font-black text-white group-hover:text-blue-300 transition">${upcomingEvCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Upcoming<br>Events</span>
+          </div>
+          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">💬</span>
+            <span class="text-xl font-black text-white group-hover:text-purple-300 transition">${shoutoutsTodayCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Shoutouts<br>Today</span>
+          </div>
+        </div>
+      </div>`;
+  }
+}
 // ─── NEWS ARTICLE VIEWER ──────────────────────────────────────────────────────
 window.openNewsArticle = async function (articleId) {
   const article = await apiGet(`/news/${articleId}`);
@@ -679,6 +763,68 @@ async function loadDirectoryPage(content) {
   renderDirectory(allBusinesses);
 }
 
+// ─── "Open now" badge helper ──────────────────────────────────────────────────
+function getOpenStatus(hoursStr) {
+  if (!hoursStr) return null;
+  // Parse a simple hours string like "Mon-Fri 8am-5pm • Sat 9am-3pm"
+  // Returns { open: bool, label: string }
+  try {
+    const now     = new Date();
+    const dayIdx  = now.getDay(); // 0=Sun,1=Mon,...6=Sat
+    const dayNames = ['sun','mon','tue','wed','thu','fri','sat'];
+    const today   = dayNames[dayIdx];
+
+    // Split segments by • or ,
+    const segments = hoursStr.split(/[•,]/).map(s => s.trim());
+
+    for (const seg of segments) {
+      const lower = seg.toLowerCase();
+
+      // Check if today's day is mentioned
+      const dayMatch = lower.match(/^(sun|mon|tue|wed|thu|fri|sat)(?:-(sun|mon|tue|wed|thu|fri|sat))?/);
+      if (!dayMatch) continue;
+
+      const startDay = dayNames.indexOf(dayMatch[1]);
+      const endDay   = dayMatch[2] ? dayNames.indexOf(dayMatch[2]) : startDay;
+
+      // Check range (handles Mon-Fri etc.)
+      let inRange = false;
+      if (startDay <= endDay) {
+        inRange = dayIdx >= startDay && dayIdx <= endDay;
+      } else {
+        // wraps (e.g. Sat-Mon)
+        inRange = dayIdx >= startDay || dayIdx <= endDay;
+      }
+      if (!inRange) continue;
+
+      // Parse times from this segment
+      const timeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+      if (!timeMatch) continue;
+
+      function toMins(h, m, ampm) {
+        let hour = parseInt(h);
+        const min = parseInt(m || 0);
+        if (ampm === 'pm' && hour !== 12) hour += 12;
+        if (ampm === 'am' && hour === 12) hour = 0;
+        return hour * 60 + min;
+      }
+
+      const openMins  = toMins(timeMatch[1], timeMatch[2], timeMatch[3]);
+      const closeMins = toMins(timeMatch[4], timeMatch[5], timeMatch[6]);
+      const nowMins   = now.getHours() * 60 + now.getMinutes();
+
+      if (nowMins >= openMins && nowMins < closeMins) {
+        return { open: true,  label: 'Open Now' };
+      } else {
+        return { open: false, label: 'Closed' };
+      }
+    }
+    return null; // couldn't determine
+  } catch (_) {
+    return null;
+  }
+}
+
 function renderDirectory(businesses) {
   const container = document.getElementById('directoryResults');
   if (!businesses.length) {
@@ -686,45 +832,89 @@ function renderDirectory(businesses) {
     return;
   }
 
+  // Tag badge color palette (cycles)
+  const tagColors = [
+    'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    'bg-rose-500/20 text-rose-300 border-rose-500/30',
+  ];
+
   let html = '<div style="display:grid;grid-template-columns:1fr;gap:12px;width:100%;min-width:0;">';
   businesses.forEach(b => {
-    const avg = b.avgRating || 0;
-    const count = b.ratings ? b.ratings.length : 0;
-    const isOwned = b.owner !== null && b.owner !== undefined;
+    const avg          = b.avgRating || 0;
+    const count        = b.ratings ? b.ratings.length : 0;
+    const isOwned      = b.owner !== null && b.owner !== undefined;
     const categoryIcon = b.category?.icon || '🏢';
     const categoryName = b.category?.name || 'Business';
+    const openStatus   = getOpenStatus(b.hours);
+    const visibleTags  = (b.tags || []).slice(0, 3);
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
            style="width:100%;min-width:0;box-sizing:border-box;"
            class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300">
-        <div class="h-2 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-50'}"></div>
+        <div class="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-40'}"></div>
         <div class="p-4" style="box-sizing:border-box;">
+
+          <!-- Row 1: Logo + Name + Price + Badges -->
           <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;">
-            <div class="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center text-2xl" style="flex-shrink:0;">${categoryIcon}</div>
+            ${b.logo
+              ? `<img src="${b.logo}" alt="" style="width:48px;height:48px;border-radius:14px;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.15);">`
+              : `<div class="bg-white/10 rounded-2xl flex items-center justify-center text-2xl" style="width:48px;height:48px;flex-shrink:0;">${categoryIcon}</div>`
+            }
             <div style="flex:1;min-width:0;">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;min-width:0;">
-                <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors" style="min-width:0;word-break:break-word;flex:1;">${b.name}</h3>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+                    <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors" style="word-break:break-word;">${b.name}</h3>
+                    ${b.priceRange ? `<span class="text-xs text-white/50 font-semibold" style="flex-shrink:0;">${b.priceRange}</span>` : ''}
+                  </div>
+                  <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px;">
+                    <span class="text-xs text-white/50">${b.logo ? categoryIcon : ''} ${categoryName}</span>
+                    ${openStatus ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${openStatus.open ? 'bg-emerald-500/25 text-emerald-300' : 'bg-red-500/20 text-red-400'}">${openStatus.label}</span>` : ''}
+                  </div>
+                </div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
-                  ${isOwned ? `<span class="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">✓ Verified</span>` : ''}
+                  ${isOwned  ? `<span class="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">✓ Verified</span>` : ''}
                   ${b.isPremium ? `<span class="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">⭐ Premium</span>` : ''}
                 </div>
               </div>
-              <span class="text-xs text-white/50">${categoryName}</span>
             </div>
           </div>
-          <p class="text-emerald-300 text-sm mt-3 mb-2" style="display:flex;align-items:flex-start;gap:4px;min-width:0;">
+
+          <!-- Row 2: Address -->
+          <p class="text-emerald-300 text-sm mt-3 mb-1" style="display:flex;align-items:flex-start;gap:4px;min-width:0;">
             <span style="flex-shrink:0;">📍</span><span style="word-break:break-word;min-width:0;">${b.address || 'Milledgeville, GA'}</span>
           </p>
-          ${b.description ? `<p class="text-sm text-white/70 mb-3 line-clamp-2" style="word-break:break-word;">${b.description}</p>` : ''}
-          <div class="mt-3 pt-3 border-t border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;">
+
+          <!-- Row 3: Hours line -->
+          ${b.hours ? `<p class="text-xs text-white/45 mb-1" style="display:flex;align-items:center;gap:4px;"><span>🕐</span><span style="word-break:break-word;">${b.hours}</span></p>` : ''}
+
+          <!-- Row 4: Contact quick-links -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;margin-bottom:6px;">
+            ${b.phone   ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs text-emerald-300 hover:text-emerald-200 transition" style="white-space:nowrap;">📞 ${b.phone}</a>` : ''}
+            ${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" onclick="event.stopPropagation()" class="text-xs text-blue-300 hover:text-blue-200 transition" style="white-space:nowrap;">🌐 Website</a>` : ''}
+            ${b.email   ? `<a href="mailto:${b.email}" onclick="event.stopPropagation()" class="text-xs text-purple-300 hover:text-purple-200 transition" style="white-space:nowrap;">✉️ Email</a>` : ''}
+          </div>
+
+          <!-- Row 5: Tag badges (up to 3) -->
+          ${visibleTags.length ? `
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
+              ${visibleTags.map((tag, i) => `<span class="text-[10px] font-semibold border px-2 py-0.5 rounded-full ${tagColors[i % tagColors.length]}">${tag}</span>`).join('')}
+            </div>` : ''}
+
+          <!-- Row 6: Stars + action buttons -->
+          <div class="pt-3 border-t border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;">
             <div id="card-stars-${b._id}" style="flex-shrink:0;">${renderStars(avg, count)}</div>
             <div style="display:flex;gap:6px;flex-shrink:0;">
               ${b.phone ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition" style="white-space:nowrap;">📞 Call</a>` : ''}
-              ${!isOwned && currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showClaimModal('${b._id}')">Claim</span>` : ''}
+              ${!isOwned && currentUser  ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showClaimModal('${b._id}')">Claim</span>` : ''}
               ${!isOwned && !currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showAuthModal({message:'Sign in to claim your business.'})">Claim</span>` : ''}
             </div>
           </div>
+
         </div>
       </div>`;
   });
@@ -746,8 +936,7 @@ async function filterByCategory(catId) {
   const filtered = allBusinesses.filter(b => b.category && b.category._id === catId);
   renderDirectory(filtered);
 }
-
-// ─── BUSINESS DETAIL MODAL ────────────────────────────────────────────────────
+// ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
 async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
   if (!business) return;
@@ -759,6 +948,68 @@ async function showBusinessDetail(id) {
   // Fetch reviews (first 3 shown, rest behind "See all")
   const reviews = await apiGet(`/business/${id}/reviews`);
   const preview = (reviews || []).slice(0, 3);
+
+  const isFollowing = currentUser && business.followers && business.followers.includes(currentUser._id);
+
+  // ── New field helpers ──────────────────────────────────────────────────────
+  const openStatus   = getOpenStatus(business.hours);
+  const tagColors = [
+    'bg-emerald-100 text-emerald-700',
+    'bg-blue-100 text-blue-700',
+    'bg-purple-100 text-purple-700',
+    'bg-amber-100 text-amber-700',
+    'bg-rose-100 text-rose-700',
+  ];
+
+  const enrichedInfoSection = `
+    <!-- ─── Enriched Business Profile ──────────────────────────────────── -->
+    <div class="bg-gray-50 rounded-2xl p-4 mb-4 space-y-3">
+
+      ${business.logo ? `
+        <div class="flex items-center gap-3 pb-3 border-b border-gray-200">
+          <img src="${business.logo}" alt="${business.name} logo"
+               class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0">
+          <div>
+            <p class="font-bold text-slate-900 text-base leading-tight">${business.name}</p>
+            ${business.priceRange ? `<span class="text-xs font-semibold text-gray-500">${business.priceRange} · ${business.category?.name || ''}</span>` : `<span class="text-xs text-gray-500">${business.category?.name || ''}</span>`}
+          </div>
+        </div>` : (business.priceRange ? `
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-gray-700">Price Range:</span>
+          <span class="text-sm font-bold text-emerald-700">${business.priceRange}</span>
+        </div>` : '')}
+
+      ${business.hours ? `
+        <div class="flex items-start gap-2">
+          <span class="text-base flex-shrink-0 mt-0.5">🕐</span>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm text-gray-700">${business.hours}</span>
+              ${openStatus ? `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${openStatus.open ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}">${openStatus.label}</span>` : ''}
+            </div>
+          </div>
+        </div>` : ''}
+
+      ${(business.website || business.email) ? `
+        <div class="flex flex-wrap gap-2">
+          ${business.website ? `
+            <a href="${business.website}" target="_blank" onclick="event.stopPropagation()"
+               class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition">
+              🌐 Visit Website
+            </a>` : ''}
+          ${business.email ? `
+            <a href="mailto:${business.email}" onclick="event.stopPropagation()"
+               class="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition">
+              ✉️ Send Email
+            </a>` : ''}
+        </div>` : ''}
+
+      ${(business.tags && business.tags.length > 0) ? `
+        <div class="flex flex-wrap gap-1.5">
+          ${business.tags.map((tag, i) => `<span class="text-xs font-semibold px-2.5 py-1 rounded-full ${tagColors[i % tagColors.length]}">${tag}</span>`).join('')}
+        </div>` : ''}
+
+    </div>`;
 
   const modalHTML = `
     <div onclick="if(event.target.id==='businessModal')hideBusinessModal()" id="businessModal"
@@ -777,6 +1028,8 @@ async function showBusinessDetail(id) {
           <p class="text-emerald-600 text-sm mb-1">${business.category?.name || ''}</p>
           <p class="text-gray-500 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
 
+          ${enrichedInfoSection}
+
           <!-- Star rating -->
           <div class="bg-gray-50 rounded-2xl p-4 mb-4">
             <p class="text-sm font-semibold text-gray-700 mb-2">Rate this business:</p>
@@ -788,6 +1041,13 @@ async function showBusinessDetail(id) {
                    Sign in to leave a rating →
                  </button>`}
           </div>
+
+          <!-- FOLLOW BUTTON -->
+          ${currentUser ? `
+            <button onclick="toggleFollow('${id}')" id="follow-btn-${id}"
+                    class="w-full mb-4 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white py-3 rounded-3xl font-semibold transition">
+              ${isFollowing ? '❤️ Following this business' : '🔖 Follow this business'}
+            </button>` : ''}
 
           <!-- Menu button (food businesses only) -->
           ${business.menu ? `
@@ -810,6 +1070,38 @@ async function showBusinessDetail(id) {
 
           ${business.description ? `<p class="text-gray-600 leading-relaxed mb-5">${business.description}</p>` : ''}
 
+          <!-- ─── Photo Gallery ─────────────────────────────────────────── -->
+          ${(() => {
+            const isOwner = currentUser && currentUser.verifiedBusiness &&
+              (String(currentUser.verifiedBusiness._id || currentUser.verifiedBusiness) === String(id));
+            const hasPhotos = business.photos && business.photos.length > 0;
+            if (!hasPhotos && !isOwner) return '';
+            const canAddMore = isOwner && (business.photos || []).length < 5;
+            return `
+          <div class="border-t border-gray-100 pt-5 mb-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-bold text-lg text-slate-900">📷 Photos</h3>
+              ${canAddMore ? `
+                <button onclick="document.getElementById('bizPhotoInput-${id}').click()"
+                        class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-2xl font-semibold transition">
+                  + Add Photos (${5 - (business.photos || []).length} left)
+                </button>
+                <input id="bizPhotoInput-${id}" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                       onchange="handleBizPhotoUpload('${id}', this)">` : ''}
+            </div>
+            ${hasPhotos ? `
+              <div class="grid grid-cols-3 gap-2">
+                ${business.photos.map((src, i) => `
+                  <div class="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 group cursor-pointer"
+                       onclick="openBizPhotoLightbox('${id}', ${i})">
+                    <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover hover:opacity-90 transition" loading="lazy">
+                    ${isOwner ? `
+                      <button onclick="event.stopPropagation(); deleteBizPhoto('${id}', ${i})"
+                              class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>` : ''}
+                  </div>`).join('')}
+              </div>` : `<p class="text-gray-400 text-sm text-center py-4">No photos yet. Add up to 5 to showcase your business.</p>`}
+          </div>`;
+          })()}
           <!-- ─── Reviews Section ─────────────────────────────────────────── -->
           <div class="border-t border-gray-100 pt-5 mb-5">
             <div class="flex items-center justify-between mb-4">
@@ -898,6 +1190,16 @@ async function showBusinessDetail(id) {
   window._currentBizId      = id;
 }
 
+window.toggleFollow = async function (businessId) {
+  if (!requireAuth('Sign in to follow businesses.')) return;
+  const res = await apiPost(`/business/${businessId}/follow`, {});
+  if (res.following !== undefined) {
+    const btn = document.getElementById(`follow-btn-${businessId}`);
+    if (btn) btn.innerHTML = res.following ? '❤️ Following this business' : '🔖 Follow this business';
+    showToast(res.following ? '✅ You are now following this business!' : '👋 Unfollowed');
+  }
+};
+
 // ─── Review helpers ───────────────────────────────────────────────────────────
 function renderReviewSummary(reviews) {
   const avg   = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
@@ -977,13 +1279,11 @@ window.submitReview = async function (bizId) {
   const res   = await apiPost(`/business/${bizId}/reviews`, { rating: _reviewStarRating, title, body });
   if (res._id) {
     showToast('✅ Review posted!');
-    // Refresh the reviews section
     const updatedReviews = await apiGet(`/business/${bizId}/reviews`);
     window._currentBizReviews = updatedReviews;
     const preview = updatedReviews.slice(0, 3);
     const container = document.getElementById(`reviewCards-${bizId}`);
     if (container) container.innerHTML = preview.map(r => renderReviewCard(r, bizId)).join('');
-    // Hide form
     const form = document.getElementById(`reviewForm-${bizId}`);
     if (form) form.classList.add('hidden');
     _reviewStarRating = 0;
@@ -999,7 +1299,6 @@ window.deleteReview = async function (bizId, reviewId) {
     showToast('Review deleted');
     const card = document.getElementById(`review-card-${reviewId}`);
     if (card) card.remove();
-    // Update global list
     if (window._currentBizReviews) {
       window._currentBizReviews = window._currentBizReviews.filter(r => r._id !== reviewId);
     }
@@ -1110,7 +1409,6 @@ function hideBusinessModal() {
   const modal = document.getElementById('businessModal');
   if (modal) modal.remove();
 }
-
 // ─── CLAIM MODAL ──────────────────────────────────────────────────────────────
 window.showClaimModal = function (businessId) {
   const business = allBusinesses.find(b => b._id === businessId);
@@ -1206,7 +1504,7 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// ─── SHOUTOUTS ────────────────────────────────────────────────────────────────
+// ─── SHOUTOUTS — UPDATED WITH PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
   const shoutouts = await apiGet('/shoutouts');
 
@@ -1222,8 +1520,20 @@ async function loadShoutoutsPage(content) {
             <textarea id="shoutoutInput" rows="2" 
               class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
               placeholder="What's happening in Milledgeville?"></textarea>
-            <div class="flex justify-end mt-2">
-              <button onclick="postShoutout()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">Post Shoutout</button>
+
+            <!-- Photo picker -->
+            <div class="mt-3 flex items-center gap-3">
+              <button onclick="document.getElementById('shoutoutImageInput').click()" 
+                      class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-2xl text-sm font-semibold text-white/80 transition">
+                📷 Add photos
+              </button>
+              <input id="shoutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                     onchange="handleShoutoutImages(this)">
+              <div id="shoutoutImagePreviews" class="flex gap-2 flex-wrap"></div>
+            </div>
+
+            <div class="flex justify-end mt-4">
+              <button onclick="postShoutoutWithPhoto()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">Post Shoutout</button>
             </div>
           </div>
         </div>
@@ -1242,6 +1552,96 @@ async function loadShoutoutsPage(content) {
 
   html += `</div>`;
   content.innerHTML = html;
+}
+
+// ─── SHOUTOUT IMAGE LIGHTBOX ──────────────────────────────────────────────────
+window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
+  // Find the shoutout's images from the DOM's img src attributes within its card
+  const card = document.getElementById(`shoutout-${shoutoutId}`);
+  if (!card) return;
+  const imgs = Array.from(card.querySelectorAll('.hide-scrollbar img')).map(img => img.src);
+  if (!imgs.length) return;
+
+  let current = startIndex;
+
+  function render() {
+    const existing = document.getElementById('shoutoutImgLightbox');
+    if (existing) existing.remove();
+
+    const html = `
+      <div id="shoutoutImgLightbox" class="fixed inset-0 bg-black/95 z-[14000] flex items-center justify-center">
+        <button onclick="document.getElementById('shoutoutImgLightbox').remove()"
+                class="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl font-bold transition z-10">✕</button>
+        ${imgs.length > 1 ? `
+          <button onclick="shoutoutLightboxPrev()" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">‹</button>
+          <button onclick="shoutoutLightboxNext()" class="absolute right-16 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">›</button>` : ''}
+        <div class="max-w-full max-h-full flex flex-col items-center px-16">
+          <img src="${imgs[current]}" alt="Photo ${current+1}" class="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl">
+          ${imgs.length > 1 ? `<p class="text-white/50 text-sm mt-3">${current+1} / ${imgs.length}</p>` : ''}
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  window.shoutoutLightboxPrev = function () { current = (current - 1 + imgs.length) % imgs.length; render(); };
+  window.shoutoutLightboxNext = function () { current = (current + 1) % imgs.length; render(); };
+
+  render();
+};
+
+// ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
+let _pendingShoutoutImages = [];
+
+window.handleShoutoutImages = function (input) {
+  const files = Array.from(input.files);
+  if (!_pendingShoutoutImages) _pendingShoutoutImages = [];
+
+  files.forEach(file => {
+    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} is too large (max 5MB)`, 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      _pendingShoutoutImages.push(e.target.result);
+      renderShoutoutImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+};
+
+function renderShoutoutImagePreviews() {
+  const container = document.getElementById('shoutoutImagePreviews');
+  if (!container) return;
+  container.innerHTML = _pendingShoutoutImages.map((src, i) => `
+    <div class="relative w-16 h-16 bg-white/10 rounded-2xl overflow-hidden group">
+      <img src="${src}" class="w-full h-full object-cover" alt="Preview">
+      <button onclick="removeShoutoutImage(${i}); event.stopImmediatePropagation()" 
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-bl flex items-center justify-center">✕</button>
+    </div>`).join('');
+}
+
+window.removeShoutoutImage = function (index) {
+  _pendingShoutoutImages.splice(index, 1);
+  renderShoutoutImagePreviews();
+};
+
+window.postShoutoutWithPhoto = async function () {
+  if (!requireAuth('Sign in to post shoutouts.')) return;
+  const input = document.getElementById('shoutoutInput');
+  if (!input || !input.value.trim()) return;
+
+  const res = await apiPost('/shoutouts', { 
+    text: input.value.trim(),
+    images: _pendingShoutoutImages || []
+  });
+
+  if (res._id) {
+    _pendingShoutoutImages = [];
+    input.value = '';
+    showToast('✅ Shoutout posted!');
+    loadPage('shoutouts');
+  } else {
+    showToast(res.message || 'Error posting shoutout', 'error');
+  }
 }
 
 function renderShoutoutCard(s) {
@@ -1275,6 +1675,14 @@ function renderShoutoutCard(s) {
                   class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
       </div>
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
+      ${(s.images && s.images.length > 0) ? `
+        <div class="flex gap-2 overflow-x-auto pb-1 mb-3 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
+          ${s.images.map((src, i) => `
+            <div onclick="openShoutoutImageViewer('${s._id}', ${i}); event.stopPropagation();"
+                 class="flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden cursor-pointer bg-white/10 hover:opacity-90 transition">
+              <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover" loading="lazy">
+            </div>`).join('')}
+        </div>` : ''}
       ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
       <div class="flex items-center gap-1 border-t border-white/10 pt-2">
         <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like shoutouts.'})`}" id="like-btn-${s._id}"
@@ -1460,7 +1868,6 @@ window.deleteShoutout = async function (shoutoutId) {
     showToast(res.message || 'Error', 'error');
   }
 };
-
 // ─── EVENTS & DEALS ──────────────────────────────────────────────────────────
 window._dirCategories = window._dirCategories || [];
 
@@ -1625,7 +2032,7 @@ window.renderDealsFiltered = function () {
     }).join('') + `</div>`;
 };
 
-// ─── EVENTS PAGE ──────────────────────────────────────────────────────────────
+// ─── EVENTS PAGE — WITH RSVP BUTTONS ──────────────────────────────────────────
 async function loadEventsPage(content) {
   const [allEvents] = await Promise.all([apiGet('/events'), ensureDirCategories()]);
   window._allEvents   = allEvents;
@@ -1708,7 +2115,7 @@ window.renderEventsFiltered = function () {
   });
 
   time === 'past' ? events.sort((a,b) => new Date(b.date) - new Date(a.date))
-                  : events.sort((a,b) => new Date(a.date) - new Date(b.date));
+                  : events.sort((a,b) => new Date(a.date) - new Date(a.date));
 
   const container = document.getElementById('eventResults');
   if (!container) return;
@@ -1742,7 +2149,7 @@ window.renderEventsFiltered = function () {
   } else {
     container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
   }
-};
+}
 
 function renderEventCard(e, now) {
   const eDate   = new Date(e.date);
@@ -1750,55 +2157,54 @@ function renderEventCard(e, now) {
   const icon    = catIcon(e.category);
   const label   = e.category || 'General';
 
-  const isToday    = eDate.toDateString() === now.toDateString();
-  const isTomorrow = eDate.toDateString() === new Date(now.getTime() + 86400000).toDateString();
-  const daysUntil  = Math.ceil((eDate - now) / (1000*60*60*24));
+  const rsvpCount = e.rsvps ? e.rsvps.length : 0;
 
-  let dateBadge = '';
-  if (isToday)         dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 animate-pulse">Today</span>`;
-  else if (isTomorrow) dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-blue-500/30 text-blue-300 border border-blue-500/30">Tomorrow</span>`;
-  else if (!isPast && daysUntil <= 7) dateBadge = `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-white/10 text-white/60">in ${daysUntil}d</span>`;
-
-  const weekday = eDate.toLocaleDateString('en-US', { weekday:'short' });
-  const month   = eDate.toLocaleDateString('en-US', { month:'short' });
-  const day     = eDate.getDate();
-  const timeStr = eDate.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+  const rsvpHTML = currentUser ? `
+    <button onclick="toggleRSVP('${e._id}'); event.stopImmediatePropagation()" 
+            class="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2 rounded-2xl text-sm font-semibold transition">
+      👋 ${rsvpCount} going • I'm going!
+    </button>` : '';
 
   return `
     <div class="bg-white/10 backdrop-blur-xl border ${isPast ? 'border-white/5 opacity-70' : 'border-white/10 hover:bg-white/15'} rounded-3xl overflow-hidden transition">
       <div class="h-1 ${isPast ? 'bg-white/10' : 'bg-gradient-to-r from-emerald-500 to-teal-400'}"></div>
       <div class="p-5 flex items-start gap-4">
         <div class="flex-shrink-0 w-14 text-center bg-white/10 rounded-2xl py-2 px-1">
-          <div class="text-[10px] font-bold uppercase text-white/50">${weekday}</div>
-          <div class="text-2xl font-black leading-tight ${isPast ? 'text-white/40' : 'text-white'}">${day}</div>
-          <div class="text-[10px] font-bold uppercase text-emerald-400">${month}</div>
+          <div class="text-[10px] font-bold uppercase text-white/50">${eDate.toLocaleDateString('en-US', { weekday:'short' })}</div>
+          <div class="text-2xl font-black leading-tight ${isPast ? 'text-white/40' : 'text-white'}">${eDate.getDate()}</div>
+          <div class="text-[10px] font-bold uppercase text-emerald-400">${eDate.toLocaleDateString('en-US', { month:'short' })}</div>
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between gap-2 mb-1">
             <h3 class="font-bold text-base leading-snug ${isPast ? 'text-white/50' : 'text-white'}">${e.title}</h3>
-            <div class="flex-shrink-0 flex items-center gap-1.5">${dateBadge}</div>
           </div>
           <div class="flex items-center gap-2 flex-wrap mb-2">
             <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
-            <span class="text-xs text-white/40">🕐 ${timeStr}</span>
+            <span class="text-xs text-white/40">🕐 ${eDate.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' })}</span>
           </div>
           ${e.description ? `<p class="text-sm text-white/60 leading-relaxed line-clamp-2 mb-2">${e.description}</p>` : ''}
           ${e.location ? `<p class="text-xs text-white/40 flex items-center gap-1">📍 ${e.location}</p>` : ''}
           ${e.owner?.name ? `<p class="text-xs text-white/30 mt-1">Posted by ${e.owner.name}</p>` : ''}
+          ${rsvpHTML}
         </div>
       </div>
     </div>`;
 }
 
-// ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
-// Uses the dedicated public /resources endpoint — no auth required.
-// Stores fetched data so the category filter buttons work without re-fetching.
+window.toggleRSVP = async function (eventId) {
+  if (!requireAuth('Sign in to RSVP')) return;
+  const res = await apiPost(`/events/${eventId}/rsvp`, {});
+  if (res.rsvpCount !== undefined) {
+    showToast(res.going ? '✅ You are going!' : '👋 You are no longer going');
+    if (currentPage === 'events') loadEventsPage(document.getElementById('content'));
+  }
+};
 
+// ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
 let _allResources = [];
 let _resourceCategories = [];
 
 async function loadResourcesPage(content) {
-  // Show loading skeleton while we fetch
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-10">
       <h2 class="text-3xl md:text-4xl font-bold mb-6">🌍 Community Resources</h2>
@@ -1836,7 +2242,6 @@ async function loadResourcesPage(content) {
     _allResources = data.businesses || [];
     _resourceCategories = data.categories || [];
 
-    // Defined order + icons matching the seed file
     const RESOURCE_CATS = [
       { name: 'Churches',           icon: '⛪' },
       { name: 'Recycling Centers',  icon: '♻️' },
@@ -1845,7 +2250,6 @@ async function loadResourcesPage(content) {
       { name: 'Libraries',          icon: '📚' },
     ];
 
-    // Only show filter chips for categories that actually have entries
     const presentCatNames = new Set(_allResources.map(b => b.category?.name).filter(Boolean));
     const visibleCats = RESOURCE_CATS.filter(c => presentCatNames.has(c.name));
 
@@ -1900,11 +2304,9 @@ async function loadResourcesPage(content) {
   }
 }
 
-// Filter resources by category name and/or search query
 window.filterResources = function (categoryName) {
   window._activeResourceFilter = categoryName;
 
-  // Update chip active styles
   document.querySelectorAll('[id^="resChip-"]').forEach(btn => {
     btn.className = btn.className
       .replace('bg-emerald-500/30 border-emerald-500/30 text-white', 'bg-white/10 border-white/10 text-white/80')
@@ -1948,7 +2350,6 @@ function renderResourcesList(items) {
     return;
   }
 
-  // Group by category for nicer display
   const grouped = {};
   items.forEach(item => {
     const catName = item.category?.name || 'Other';
@@ -1975,7 +2376,6 @@ function renderResourceCard(item) {
   const icon = item.category?.icon || '📍';
   const catName = item.category?.name || 'Resource';
 
-  // Parse hours out of description if it contains the "🕒 Hours:" pattern
   let description = item.description || '';
   let hoursLine = '';
   const hoursMatch = description.match(/\n\n🕒 Hours: (.+)$/s);
@@ -2013,7 +2413,6 @@ function renderResourceCard(item) {
     </div>`;
 }
 
-// Full detail modal for a resource
 window.showResourceDetail = function (id) {
   const item = _allResources.find(b => b._id === id);
   if (!item) return;
@@ -2039,7 +2438,6 @@ window.showResourceDetail = function (id) {
         </div>
         <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
         <div class="p-6">
-          <!-- Header -->
           <div class="flex items-start gap-4 mb-5">
             <div class="w-14 h-14 bg-gradient-to-br from-emerald-100 to-teal-50 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
               ${icon}
@@ -2052,7 +2450,6 @@ window.showResourceDetail = function (id) {
             </div>
           </div>
 
-          <!-- Details -->
           <div class="space-y-3 mb-6">
             ${item.address ? `
               <div class="flex items-start gap-3 bg-slate-50 rounded-2xl p-4">
@@ -2134,102 +2531,164 @@ async function loadOwnerDashboard(content) {
     ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected: ${bizCatName}</p>`
     : '';
 
+  // Build tab list — Menu tab only for restaurants
+  const tabs = [
+    { id: 'listing', label: 'Listing',  icon: '📋' },
+    { id: 'photos',  label: 'Photos',   icon: '📷' },
+    ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
+    { id: 'deals',   label: 'Deals',    icon: '🔥' },
+    { id: 'events',  label: 'Events',   icon: '📅' },
+  ];
+
   content.innerHTML = `
-    <div class="px-4 max-w-2xl mx-auto">
-      <h2 class="text-3xl font-bold mb-6">🏪 My Business Dashboard</h2>
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-8">
-        <h3 class="font-semibold mb-4 text-lg">Update Business Listing</h3>
-        <input id="ownerName"        type="text"  placeholder="Business Name"      class="${inputClass}">
-        <input id="ownerAddress"     type="text"  placeholder="Address"            class="${inputClass}">
-        <input id="ownerPhone"       type="text"  placeholder="Phone"              class="${inputClass}">
-        <input id="ownerWebsite"     type="text"  placeholder="Website (optional)" class="${inputClass}">
-        <textarea id="ownerDescription" rows="3"  placeholder="Description"        class="${inputClass} resize-none"></textarea>
-        <button onclick="saveOwnerListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold">Save Changes</button>
+    <div class="max-w-2xl mx-auto pb-10">
+
+      <!-- ─── Header ───────────────────────────────────────────────────────── -->
+      <div class="px-4 pt-2 pb-4">
+        <h2 class="text-2xl font-bold">🏪 My Dashboard</h2>
+        ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      ${biz && biz.isRestaurant ? `
-      <div class="bg-white/10 backdrop-blur-xl border border-amber-500/30 rounded-3xl p-6 mb-8">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="text-2xl">🍽️</span>
-          <div>
-            <h3 class="font-semibold text-lg">Restaurant Menu</h3>
-            <p class="text-white/50 text-xs">Upload an image or PDF of your menu (max 5 MB)</p>
+      <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
+      <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
+        <div class="flex gap-1 overflow-x-auto hide-scrollbar">
+          ${tabs.map((t, i) => `
+            <button onclick="switchDashTab('${t.id}')" id="dtab-${t.id}"
+                    class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all
+                           ${i === 0 ? 'bg-emerald-600 text-white' : 'text-white/50 hover:text-white hover:bg-white/10'}">
+              <span>${t.icon}</span><span>${t.label}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="px-4 pt-6">
+
+        <!-- ═══ TAB: Listing ════════════════════════════════════════════════ -->
+        <div id="dtabContent-listing">
+
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>🏢</span> Basic Info</h3>
+            <input id="ownerName"           type="text" placeholder="Business Name *"                          class="${inputClass}">
+            <input id="ownerAddress"        type="text" placeholder="Address"                                  class="${inputClass}">
+            <input id="ownerPhone"          type="tel"  placeholder="Phone"                                    class="${inputClass}">
+            <input id="ownerWebsite"        type="url"  placeholder="Website (e.g. https://yourbusiness.com)"  class="${inputClass}">
+            <textarea id="ownerDescription" rows="3"    placeholder="Description — tell customers what makes your business special"
+                      class="${inputClass} resize-none"></textarea>
+            <button onclick="saveOwnerListing()"
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
+              💾 Save Info
+            </button>
+          </div>
+
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-1 flex items-center gap-2"><span>🕐</span> Business Hours</h3>
+            <p class="text-white/35 text-xs mb-3">Format: <span class="font-mono text-white/50">Mon-Fri 9am-5pm • Sat 10am-3pm • Sun Closed</span></p>
+            <input id="ownerHours" type="text"
+                   placeholder="e.g. Mon-Fri 9am-5pm • Sat 10am-3pm"
+                   class="${inputClass}">
+            <p class="text-white/30 text-xs mb-4 -mt-1 px-1">Drives the live Open/Closed badge on your business card.</p>
+            <button onclick="saveOwnerHours()"
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
+              💾 Save Hours
+            </button>
+          </div>
+
+        </div>
+
+        <!-- ═══ TAB: Photos ════════════════════════════════════════════════ -->
+        <div id="dtabContent-photos" class="hidden">
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-1 flex items-center gap-2"><span>📷</span> Photo Gallery</h3>
+            <p class="text-white/40 text-xs mb-4">Up to 5 photos shown on your listing. Customers can tap to browse them full screen.</p>
+            <div id="ownerPhotoGrid" class="grid grid-cols-3 gap-2 mb-4"></div>
+            <button onclick="document.getElementById('ownerPhotoInput').click()"
+                    class="w-full border-2 border-dashed border-white/20 hover:border-emerald-400 rounded-2xl py-5 text-white/50 hover:text-white transition text-sm font-medium">
+              📷 Add Photos (up to 5 total)
+            </button>
+            <input id="ownerPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                   onchange="handleOwnerPhotoUpload(this)">
           </div>
         </div>
-        ${biz.menu ? `
-          <div class="mb-4 bg-white/5 rounded-2xl overflow-hidden">
-            ${biz.menu.startsWith('data:image')
-              ? `<img src="${biz.menu}" alt="Current Menu" class="w-full max-h-64 object-contain">`
-              : `<div class="p-4 flex items-center gap-3"><span class="text-3xl">📄</span><p class="text-sm font-semibold">Menu PDF uploaded</p></div>`}
+
+        <!-- ═══ TAB: Menu (restaurants only) ══════════════════════════════ -->
+        ${biz && biz.isRestaurant ? `
+        <div id="dtabContent-menu" class="hidden">
+          <div class="bg-white/10 backdrop-blur-xl border border-amber-500/20 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-1 flex items-center gap-2"><span>🍽️</span> Restaurant Menu</h3>
+            <p class="text-white/40 text-xs mb-4">Upload an image or PDF (max 5 MB). Appears as a "View Menu" button on your listing.</p>
+            ${biz.menu ? `
+              <div class="mb-4 bg-white/5 rounded-2xl overflow-hidden">
+                ${biz.menu.startsWith('data:image')
+                  ? `<img src="${biz.menu}" alt="Current Menu" class="w-full max-h-64 object-contain">`
+                  : `<div class="p-4 flex items-center gap-3"><span class="text-3xl">📄</span><p class="text-sm font-semibold">Menu PDF uploaded</p></div>`}
+              </div>
+              <p class="text-xs text-emerald-400 mb-3">✅ Menu is live on your listing</p>` : ''}
+            <div id="menuPreviewBox" class="hidden mb-4 bg-white/5 rounded-2xl overflow-hidden">
+              <img id="menuPreviewImg" src="" alt="Menu preview" class="w-full max-h-64 object-contain hidden">
+              <div id="menuPdfLabel" class="hidden p-4 flex items-center gap-3"><span class="text-3xl">📄</span><p class="text-sm font-semibold">PDF ready to upload</p></div>
+            </div>
+            <button onclick="document.getElementById('menuFileInput').click()"
+                    class="w-full border-2 border-dashed border-amber-500/40 hover:border-amber-400 rounded-2xl py-4 text-white/60 hover:text-white transition text-sm font-medium mb-3">
+              📁 Choose Menu File (Image or PDF)
+            </button>
+            <input id="menuFileInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="hidden"
+                   onchange="handleMenuFileSelect(this)">
+            <div class="flex gap-3">
+              <button onclick="uploadMenu()" id="menuUploadBtn"
+                      class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition hidden">
+                📤 Upload Menu
+              </button>
+              ${biz.menu ? `
+              <button onclick="removeMenu()"
+                      class="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 py-4 rounded-3xl font-semibold transition text-sm">
+                🗑️ Remove Menu
+              </button>` : ''}
+            </div>
           </div>
-          <p class="text-xs text-emerald-400 mb-3">✅ Menu is live on your listing</p>` : ''}
-        <div id="menuPreviewBox" class="hidden mb-4 bg-white/5 rounded-2xl overflow-hidden">
-          <img id="menuPreviewImg" src="" alt="Menu preview" class="w-full max-h-64 object-contain hidden">
-          <div id="menuPdfLabel" class="hidden p-4 flex items-center gap-3"><span class="text-3xl">📄</span><p class="text-sm font-semibold">PDF ready to upload</p></div>
-        </div>
-        <button onclick="document.getElementById('menuFileInput').click()"
-                class="w-full border-2 border-dashed border-amber-500/40 hover:border-amber-400 rounded-2xl py-4 text-white/60 hover:text-white transition text-sm font-medium mb-3">
-          📁 Choose Menu File (Image or PDF)
-        </button>
-        <input id="menuFileInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="hidden"
-               onchange="handleMenuFileSelect(this)">
-        <div class="flex gap-3">
-          <button onclick="uploadMenu()" id="menuUploadBtn"
-                  class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition hidden">
-            📤 Upload Menu
-          </button>
-          ${biz.menu ? `
-          <button onclick="removeMenu()"
-                  class="flex-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 py-4 rounded-3xl font-semibold transition text-sm">
-            🗑️ Remove Menu
-          </button>` : ''}
-        </div>
-      </div>` : ''}
-      <div class="flex border-b border-white/20 mb-6">
-        <button onclick="switchOwnerTab(0)" id="otab0" class="flex-1 py-4 text-center font-semibold border-b-2 border-amber-500 text-white">🔥 Deals</button>
-        <button onclick="switchOwnerTab(1)" id="otab1" class="flex-1 py-4 text-center font-semibold text-white/70">📅 Events</button>
-      </div>
+        </div>` : ''}
 
-      <div id="otabContent0">
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-          <h3 class="font-semibold mb-4">Add New Deal</h3>
-          <input id="dealTitle" type="text" placeholder="Deal Title *" class="${inputClass}">
-          <textarea id="dealDesc" rows="2" placeholder="Deal description" class="${inputClass} resize-none"></textarea>
-          <select id="dealCategory" class="${selectClass}" style="${selectStyle}">
-            <option value="">Select Category *</option>
-            ${dealCatOptions}
-          </select>
-          ${dealAutoHint}
-          <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
-          <input id="dealExpires" type="date" class="${inputClass}">
-          <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
+        <!-- ═══ TAB: Deals ════════════════════════════════════════════════ -->
+        <div id="dtabContent-deals" class="hidden">
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>🔥</span> Post a Deal</h3>
+            <input id="dealTitle" type="text" placeholder="Deal Title *" class="${inputClass}">
+            <textarea id="dealDesc" rows="2" placeholder="Deal description" class="${inputClass} resize-none"></textarea>
+            <select id="dealCategory" class="${selectClass}" style="${selectStyle}">
+              <option value="">Select Category *</option>
+              ${dealCatOptions}
+            </select>
+            ${dealAutoHint}
+            <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
+            <input id="dealExpires" type="date" class="${inputClass}">
+            <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
+          </div>
+          <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Active Deals</p>
+          <div id="ownerDealsList"></div>
         </div>
-        <h4 class="font-semibold text-sm text-white/60 mb-3 uppercase tracking-wider">Your Active Deals</h4>
-        <div id="ownerDealsList"></div>
-      </div>
 
-      <div id="otabContent1" class="hidden">
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-          <h3 class="font-semibold mb-4">Add New Event</h3>
-          <input id="eventTitle"    type="text"  placeholder="Event Title *"       class="${inputClass}">
-          <label class="block text-xs text-white/50 mb-1 px-1">Event Date *</label>
-          <input id="eventDate"     type="datetime-local"                           class="${inputClass}">
-          <input id="eventLocation" type="text"  placeholder="Location (optional)" class="${inputClass}">
-          <select id="eventCategory" class="${selectClass}" style="${selectStyle}">
-            <option value="">Select Event Type *</option>
-            ${eventCatOptions}
-          </select>
-          <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
-          <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
+        <!-- ═══ TAB: Events ═══════════════════════════════════════════════ -->
+        <div id="dtabContent-events" class="hidden">
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>📅</span> Post an Event</h3>
+            <input id="eventTitle"    type="text"           placeholder="Event Title *"       class="${inputClass}">
+            <label class="block text-xs text-white/50 mb-1 px-1">Event Date & Time *</label>
+            <input id="eventDate"     type="datetime-local"                                   class="${inputClass}">
+            <input id="eventLocation" type="text"           placeholder="Location (optional)" class="${inputClass}">
+            <select id="eventCategory" class="${selectClass}" style="${selectStyle}">
+              <option value="">Select Event Type *</option>
+              ${eventCatOptions}
+            </select>
+            <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
+            <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
+          </div>
+          <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Events</p>
+          <div id="ownerEventsList"></div>
         </div>
-        <h4 class="font-semibold text-sm text-white/60 mb-3 uppercase tracking-wider">Your Events</h4>
-        <div id="ownerEventsList"></div>
+
       </div>
     </div>`;
 
-  loadOwnerDeals();
-  loadOwnerEvents();
-
+  // Pre-populate listing fields
   if (currentUser && currentUser.verifiedBusiness) {
     const biz = currentUser.verifiedBusiness;
     document.getElementById('ownerName').value        = biz.name        || '';
@@ -2237,22 +2696,31 @@ async function loadOwnerDashboard(content) {
     document.getElementById('ownerPhone').value       = biz.phone       || '';
     document.getElementById('ownerWebsite').value     = biz.website     || '';
     document.getElementById('ownerDescription').value = biz.description || '';
+    document.getElementById('ownerHours').value       = biz.hours       || '';
   }
 }
 
-window.switchOwnerTab = function (tab) {
-  [0, 1].forEach(i => {
-    const tabBtn     = document.getElementById(`otab${i}`);
-    const tabContent = document.getElementById(`otabContent${i}`);
-    if (!tabBtn || !tabContent) return;
-    const active = i === tab;
-    tabContent.classList.toggle('hidden', !active);
-    tabBtn.classList.toggle('border-b-2', active);
-    tabBtn.classList.toggle('border-amber-500', active && tab === 0);
-    tabBtn.classList.toggle('border-emerald-500', active && tab === 1);
-    tabBtn.classList.toggle('text-white', active);
-    tabBtn.classList.toggle('text-white/70', !active);
+window.switchDashTab = function (tabId) {
+  const allIds = ['listing', 'photos', 'menu', 'deals', 'events'];
+  allIds.forEach(id => {
+    const btn     = document.getElementById(`dtab-${id}`);
+    const content = document.getElementById(`dtabContent-${id}`);
+    if (!btn || !content) return;
+    const active = id === tabId;
+    content.classList.toggle('hidden', !active);
+    if (active) {
+      btn.className = btn.className
+        .replace('text-white/50 hover:text-white hover:bg-white/10', '')
+        .trim() + ' bg-emerald-600 text-white';
+    } else {
+      btn.className = btn.className
+        .replace('bg-emerald-600 text-white', '')
+        .trim() + ' text-white/50 hover:text-white hover:bg-white/10';
+    }
   });
+  if (tabId === 'deals')  loadOwnerDeals();
+  if (tabId === 'events') loadOwnerEvents();
+  if (tabId === 'photos') renderOwnerPhotoGrid();
 };
 
 window.saveOwnerListing = async function () {
@@ -2267,6 +2735,17 @@ window.saveOwnerListing = async function () {
     showToast('✅ Listing updated!');
   } else {
     showToast(res.message || 'Error saving', 'error');
+  }
+};
+
+window.saveOwnerHours = async function () {
+  const hours = document.getElementById('ownerHours').value.trim();
+  const res = await apiPost('/owner/business', { hours }, 'PUT');
+  if (res._id) {
+    currentUser.verifiedBusiness = res;
+    showToast('✅ Hours updated!');
+  } else {
+    showToast(res.message || 'Error saving hours', 'error');
   }
 };
 
@@ -3108,7 +3587,6 @@ window.uploadMenu = async function () {
     if (res.message === 'Menu updated') {
       showToast('✅ Menu uploaded!');
       window._pendingMenuFile = null;
-      // Refresh dashboard
       const meRes = await apiGet('/auth/me');
       if (meRes.user) { currentUser = meRes.user; }
       loadPage('owner-dashboard');
@@ -3133,10 +3611,175 @@ window.removeMenu = async function () {
   }
 };
 
+// ─── NEW HELPERS ─────────────────────────────────────────────────────────────
+window.toggleRSVP = async function (eventId) {
+  if (!requireAuth('Sign in to RSVP')) return;
+  const res = await apiPost(`/events/${eventId}/rsvp`, {});
+  if (res.rsvpCount !== undefined) {
+    showToast(res.going ? '✅ You are going!' : '👋 You are no longer going');
+    if (currentPage === 'events') loadEventsPage(document.getElementById('content'));
+  }
+};
+
+window.postShoutoutWithPhoto = async function () {
+  const input = document.getElementById('shoutoutInput');
+  if (!input || !input.value.trim()) return;
+  await apiPost('/shoutouts', { text: input.value });
+  input.value = '';
+  loadPage('shoutouts');
+};
+
+// ─── BIZ PHOTO GALLERY FUNCTIONS ─────────────────────────────────────────────
+window.handleBizPhotoUpload = async function (bizId, input) {
+  const files = Array.from(input.files);
+  const business = allBusinesses.find(b => b._id === bizId);
+  const currentCount = (business && business.photos) ? business.photos.length : 0;
+  const slots = 5 - currentCount;
+  if (slots <= 0) { showToast('Maximum 5 photos already uploaded', 'error'); input.value = ''; return; }
+
+  const toUpload = files.slice(0, slots);
+  if (files.length > slots) showToast(`Only ${slots} slot(s) left — uploading first ${slots}`, 'error');
+
+  const base64s = await Promise.all(toUpload.map(file => new Promise((resolve, reject) => {
+    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} too large (max 5MB)`, 'error'); resolve(null); return; }
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = () => resolve(null);
+    r.readAsDataURL(file);
+  })));
+
+  const validPhotos = base64s.filter(Boolean);
+  if (!validPhotos.length) { input.value = ''; return; }
+
+  const res = await apiPost('/owner/business/photos', { photos: validPhotos });
+  if (res.message === 'Photos updated') {
+    showToast('✅ Photos uploaded!');
+    const meRes = await apiGet('/auth/me');
+    if (meRes.user) currentUser = meRes.user;
+    // Refresh directory data and re-open modal
+    const dirData = await apiGet('/directory');
+    allBusinesses = dirData.businesses;
+    hideBusinessModal();
+    showBusinessDetail(bizId);
+  } else {
+    showToast(res.message || 'Error uploading photos', 'error');
+  }
+  input.value = '';
+};
+
+window.deleteBizPhoto = async function (bizId, index) {
+  if (!confirm('Remove this photo?')) return;
+  const res = await apiPost(`/owner/business/photos/${index}`, {}, 'DELETE');
+  if (res.message === 'Photo deleted') {
+    showToast('Photo removed');
+    const meRes = await apiGet('/auth/me');
+    if (meRes.user) currentUser = meRes.user;
+    const dirData = await apiGet('/directory');
+    allBusinesses = dirData.businesses;
+    hideBusinessModal();
+    showBusinessDetail(bizId);
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.openBizPhotoLightbox = function (bizId, startIndex) {
+  const business = allBusinesses.find(b => b._id === bizId);
+  if (!business || !business.photos || !business.photos.length) return;
+  const images = business.photos;
+  let current = startIndex;
+
+  function render() {
+    const existing = document.getElementById('bizPhotoLightbox');
+    if (existing) existing.remove();
+    const html = `
+      <div id="bizPhotoLightbox" class="fixed inset-0 bg-black/95 z-[14000] flex items-center justify-center">
+        <button onclick="document.getElementById('bizPhotoLightbox').remove()"
+                class="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl font-bold transition z-10">✕</button>
+        ${images.length > 1 ? `
+          <button onclick="bizLightboxPrev()" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">‹</button>
+          <button onclick="bizLightboxNext()" class="absolute right-16 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">›</button>` : ''}
+        <div class="max-w-full max-h-full flex flex-col items-center px-16">
+          <img src="${images[current]}" alt="Photo ${current+1}" class="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl">
+          ${images.length > 1 ? `<p class="text-white/50 text-sm mt-3">${current+1} / ${images.length}</p>` : ''}
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  window.bizLightboxPrev = function () { current = (current - 1 + images.length) % images.length; render(); };
+  window.bizLightboxNext = function () { current = (current + 1) % images.length; render(); };
+  render();
+};
+
+// ─── Owner dashboard photo tab functions ─────────────────────────────────────
+window.handleOwnerPhotoUpload = async function (input) {
+  const files = Array.from(input.files);
+  const biz = currentUser && currentUser.verifiedBusiness;
+  const currentCount = (biz && biz.photos) ? biz.photos.length : 0;
+  const slots = 5 - currentCount;
+  if (slots <= 0) { showToast('Maximum 5 photos already uploaded', 'error'); input.value = ''; return; }
+
+  const toUpload = files.slice(0, slots);
+  if (files.length > slots) showToast(`Only ${slots} slot(s) left`, 'error');
+
+  const base64s = await Promise.all(toUpload.map(file => new Promise((resolve) => {
+    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} too large (max 5MB)`, 'error'); resolve(null); return; }
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = () => resolve(null);
+    r.readAsDataURL(file);
+  })));
+
+  const validPhotos = base64s.filter(Boolean);
+  if (!validPhotos.length) { input.value = ''; return; }
+
+  const res = await apiPost('/owner/business/photos', { photos: validPhotos });
+  if (res.message === 'Photos updated') {
+    showToast('✅ Photos uploaded!');
+    const meRes = await apiGet('/auth/me');
+    if (meRes.user) currentUser = meRes.user;
+    renderOwnerPhotoGrid();
+  } else {
+    showToast(res.message || 'Error uploading photos', 'error');
+  }
+  input.value = '';
+};
+
+window.deleteOwnerPhoto = async function (index) {
+  if (!confirm('Remove this photo?')) return;
+  const res = await apiPost(`/owner/business/photos/${index}`, {}, 'DELETE');
+  if (res.message === 'Photo deleted') {
+    showToast('Photo removed');
+    const meRes = await apiGet('/auth/me');
+    if (meRes.user) currentUser = meRes.user;
+    renderOwnerPhotoGrid();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+function renderOwnerPhotoGrid() {
+  const container = document.getElementById('ownerPhotoGrid');
+  if (!container) return;
+  const biz = currentUser && currentUser.verifiedBusiness;
+  const photos = (biz && biz.photos) || [];
+  if (!photos.length) {
+    container.innerHTML = `<p class="col-span-3 text-white/40 text-sm text-center py-4">No photos uploaded yet. Add up to 5 photos.</p>`;
+    return;
+  }
+  container.innerHTML = photos.map((src, i) => `
+    <div class="relative aspect-square rounded-2xl overflow-hidden bg-white/10 group">
+      <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover" loading="lazy">
+      <button onclick="deleteOwnerPhoto(${i})"
+              class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>
+    </div>`).join('');
+}
+
 // ─── Global exports ───────────────────────────────────────────────────────────
 window.loadResourcesPage     = loadResourcesPage;
 window.loadPage              = loadPage;
-window.postShoutout          = postShoutout;
+window.postShoutout          = postShoutoutWithPhoto;
 window.navigate              = loadPage;
 window.filterDirectory       = filterDirectory;
 window.filterByCategory      = filterByCategory;

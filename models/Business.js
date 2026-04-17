@@ -11,7 +11,7 @@ const businessSchema = new mongoose.Schema({
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
   address: String,
   phone: String,
-  website: String,
+  website: { type: String, default: null },
   description: String,
   keywords: [String],
   isPremium: { type: Boolean, default: false },
@@ -24,6 +24,14 @@ const businessSchema = new mongoose.Schema({
 
   // ─── Menu upload (base64 data URI, max ~5 MB) ──────────────────────────────
   menu: { type: String, default: null },
+
+  // ─── Extended business profile fields ─────────────────────────────────────
+  email: { type: String, default: null },
+  hours: { type: String, default: null },          // e.g. "Mon-Fri 8am-5pm • Sat 9am-3pm"
+  priceRange: { type: String, enum: ['$', '$$', '$$$', '$$$$'], default: null },     // "$", "$$", "$$$", "$$$$"
+  tags: [{ type: String }],                        // e.g. ["Family Owned", "Delivery", "24/7", "Wheelchair Accessible"]
+  logo: { type: String, default: null },           // base64 data URI or image URL for small logo
+  photos: [{ type: String, default: null }],   // array of base64 image strings, max 5
 });
 
 // Virtual for average rating

@@ -8,28 +8,28 @@ const userSchema = new mongoose.Schema({
   lastLogin: { type: Date, default: Date.now },
   verifiedBusiness: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', default: null },
 
-  // ─── Enhanced Profile Fields ───────────────────────────────────────────────
   bio: { type: String, default: '', maxlength: 280 },
   phone: { type: String, default: '' },
   neighborhood: { type: String, default: '' },
   website: { type: String, default: '' },
-  avatar: { type: String, default: null },      // base64 data URI (≤ 2 MB)
+  avatar: { type: String, default: null },
   joinedAt: { type: Date, default: Date.now },
 
-  // Social / vanity links
   instagram: { type: String, default: '' },
   facebook:  { type: String, default: '' },
 
-  // Notification preferences (in-app)
   notifyDeals:    { type: Boolean, default: true },
   notifyEvents:   { type: Boolean, default: true },
   notifyShoutouts:{ type: Boolean, default: false },
-
-  // Push notification opt-in (Web Push)
   pushEnabled: { type: Boolean, default: false },
 
-  // ─── News Posting Permission ───────────────────────────────────────────────
   canPostNews: { type: Boolean, default: false },
+
+  // NEW: Following businesses
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Business'
+  }]
 });
 
 userSchema.pre('save', async function (next) {

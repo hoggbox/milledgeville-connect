@@ -6,9 +6,13 @@ const eventSchema = new mongoose.Schema({
   location:    String,
   description: String,
   owner:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  // Stores the directory Category name (e.g. "Insurance", "Restaurant") directly.
-  // No enum constraint — any category that exists in the directory is valid.
-  category:    { type: String, default: '' }
+  category:    { type: String, default: '' },
+  
+  // NEW: RSVPs
+  rsvps: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Event', eventSchema);

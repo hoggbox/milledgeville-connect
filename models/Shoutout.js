@@ -21,6 +21,10 @@ const shoutoutSchema = new mongoose.Schema({
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   comments: [commentSchema],
+  
+  // NEW: Photo support
+  images: [{ type: String }],   // base64 data URIs
+
   createdAt: { type: Date, default: Date.now }
 });
 
