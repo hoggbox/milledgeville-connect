@@ -290,7 +290,7 @@ async function loadHomePage(content) {
     }
   })();
 
-  const [feed, events, deals, newsArticles, shoutouts] = await Promise.all([
+  const [events, deals, newsArticles, shoutouts] = await Promise.all([
     apiGet('/events'),
     apiGet('/deals'),
     apiGet('/news'),
@@ -342,7 +342,7 @@ async function loadHomePage(content) {
     });
 
   // Shoutouts — sorted by createdAt desc
-  const shoutoutItems = (feed.shoutouts || shoutouts || [])
+  const shoutoutItems = (shoutouts || [])
     .map(s => ({ type: 'shoutout', sortDate: new Date(s.createdAt), data: s }))
     .sort((a, b) => b.sortDate - a.sortDate);
 
