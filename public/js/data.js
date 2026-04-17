@@ -1114,17 +1114,26 @@ async function showBusinessDetail(id) {
               🍽️ View Menu
             </button>` : ''}
 
-          <!-- Contact -->
-          <div class="space-y-3 mb-5">
-            ${business.phone ? `
-              <a href="tel:${business.phone}" class="flex items-center gap-3 bg-emerald-50 hover:bg-emerald-100 transition p-4 rounded-2xl text-emerald-700 font-semibold">
-                <span class="text-2xl">📞</span> ${business.phone}
-              </a>` : ''}
-            ${business.website ? `
-              <a href="${business.website}" target="_blank" class="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 transition p-4 rounded-2xl text-blue-700 font-semibold">
-                <span class="text-2xl">🌐</span> Visit Website
-              </a>` : ''}
-          </div>
+         <!-- Contact -->
+<div class="space-y-3 mb-5">
+  ${business.phone ? `
+    <a href="tel:${business.phone}" class="flex items-center gap-3 bg-emerald-50 hover:bg-emerald-100 transition p-4 rounded-2xl text-emerald-700 font-semibold">
+      <span class="text-2xl">📞</span> ${business.phone}
+    </a>` : ''}
+
+  ${business.website ? `
+    <a href="${business.website}" target="_blank" class="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 transition p-4 rounded-2xl text-blue-700 font-semibold">
+      <span class="text-2xl">🌐</span> Visit Website
+    </a>` : ''}
+
+  <!-- NEW: Get Directions button -->
+  ${business.address ? `
+    <button onclick="getDirections('${business.address}')" 
+            class="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 transition p-4 rounded-2xl text-blue-700 font-semibold w-full">
+      <span class="text-2xl">🗺️</span> 
+      Get Directions
+    </button>` : ''}
+</div>
 
           ${business.description ? `<p class="text-gray-600 leading-relaxed mb-5">${business.description}</p>` : ''}
 
@@ -3849,3 +3858,11 @@ window.renderDirectory       = renderDirectory;
 window.loadModerationPanel   = loadModerationPanel;
 window.renderDealsFiltered   = renderDealsFiltered;
 window.renderEventsFiltered  = renderEventsFiltered;
+window.getDirections = function(address) {
+  if (!address) {
+    showToast('No address available for this business', 'error');
+    return;
+  }
+  const encoded = encodeURIComponent(address);
+  window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+};
