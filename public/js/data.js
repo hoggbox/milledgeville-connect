@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
 });
 
-// ─── HOME PAGE — UPDATED WITH TODAY IN MILLEDGEVILLE + HOT RIGHT NOW + FILTER BUTTONS ─────
+// ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
 async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
@@ -185,7 +185,6 @@ async function loadHomePage(content) {
       <!-- Today in Milledgeville -->
       <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-6 mb-8 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
-
         <div class="relative flex items-start justify-between gap-4 mb-5">
           <div class="flex items-center gap-3 min-w-0">
             <span class="text-4xl flex-shrink-0">🌅</span>
@@ -194,7 +193,6 @@ async function loadHomePage(content) {
               <p class="text-emerald-100 text-xs mt-0.5">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
             </div>
           </div>
-
           <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5 text-right min-w-[90px]">
             <div class="text-2xl leading-none mb-0.5" id="weatherIcon">—</div>
             <div class="text-xl font-black leading-none" id="weatherTemp">—</div>
@@ -202,11 +200,24 @@ async function loadHomePage(content) {
             <div class="flex justify-end gap-1 mt-1.5" id="weatherForecast"></div>
           </div>
         </div>
-
         <div id="todayDigest" class="relative space-y-3"></div>
       </div>
 
-      <!-- Hot Right Now + FILTER BUTTONS -->
+      <!-- ── NEW: BUSINESS SPOTLIGHT (horizontal scroll) ───────────────────── -->
+      <div class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⭐</span>
+            <h2 class="text-lg font-bold">Business Spotlight</h2>
+          </div>
+          <button onclick="navigate('directory')" class="text-xs text-emerald-400 font-semibold flex items-center gap-1">See all directory →</button>
+        </div>
+        <div id="spotlightScroll" class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory">
+          <!-- Populated by JS below -->
+        </div>
+      </div>
+
+      <!-- Hot Right Now -->
       <div class="mb-8">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
@@ -217,24 +228,16 @@ async function loadHomePage(content) {
 
         <!-- Filter buttons -->
         <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
-          <button onclick="setHotFilter('all')" id="hotFilter-all"
-                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
-          <button onclick="setHotFilter('news')" id="hotFilter-news"
-                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
-          <button onclick="setHotFilter('event')" id="hotFilter-event"
-                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
-          <button onclick="setHotFilter('deal')" id="hotFilter-deal"
-                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
-          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout"
-                  class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">💬 Shoutouts</button>
+          <button onclick="setHotFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+          <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
+          <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
+          <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">💬 Shoutouts</button>
         </div>
 
         <div id="hotFeed" class="space-y-3"></div>
         <div id="hotLoadMoreWrapper" class="mt-4 hidden">
-          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()"
-                  class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">
-            Load More
-          </button>
+          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
         </div>
       </div>
 
@@ -296,12 +299,9 @@ async function loadHomePage(content) {
     }
   })();
 
-  // ── Fetch data (order is now correct)
+// Fetch data
   const [events, deals, newsArticles, shoutouts] = await Promise.all([
-    apiGet('/events'),
-    apiGet('/deals'),
-    apiGet('/news'),
-    apiGet('/shoutouts')
+    apiGet('/events'), apiGet('/deals'), apiGet('/news'), apiGet('/shoutouts')
   ]);
 
   // Digest (unchanged)
@@ -317,6 +317,44 @@ async function loadHomePage(content) {
       </div>
     </div>`;
   document.getElementById('todayDigest').innerHTML = digestHTML;
+
+  // ── NEW: Load trending businesses for Spotlight ─────────────────────
+  let spotlightBusinesses = [];
+  if (allBusinesses.length === 0) {
+    try {
+      const dirData = await apiGet('/directory');
+      allBusinesses = dirData.businesses || [];
+    } catch (_) {}
+  }
+  spotlightBusinesses = [...allBusinesses]
+    .filter(b => b.avgRating && b.avgRating > 0)
+    .sort((a, b) => {
+      if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating;
+      return (b.ratings ? b.ratings.length : 0) - (a.ratings ? a.ratings.length : 0);
+    })
+    .slice(0, 8);   // top 8 trending businesses
+
+  // Render Spotlight horizontal scroll
+  const spotlightHTML = spotlightBusinesses.map(b => `
+    <div onclick="showBusinessDetail('${b._id}')" 
+         class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
+      <div class="flex items-center gap-3 mb-3">
+        ${b.logo 
+          ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">` 
+          : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
+          <p class="text-xs text-white/50">${b.category?.name || ''}</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
+        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('spotlightScroll').innerHTML = spotlightHTML || 
+    `<p class="text-white/40 text-center py-8 col-span-full">No trending businesses yet</p>`;
 
   // ── Build mixed feed (same as before)
   const now = new Date();
