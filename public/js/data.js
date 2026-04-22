@@ -103,6 +103,8 @@ async function loadPage(page) {
   if (page === 'home')            { await loadHomePage(content);          return; }
   if (page === 'directory')       { await loadDirectoryPage(content);     return; }
   if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
+  if (page === 'lostfound')       { await loadLostFoundPage(content);     return; }   // ← NEW
+  if (page === 'marketplace')     { await loadMarketplacePage(content);   return; }   // ← NEW
   if (page === 'events')          { await loadEventsPage(content);           return; }
   if (page === 'deals')           { await loadDealsPage(content);            return; }
   if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
@@ -203,7 +205,7 @@ async function loadHomePage(content) {
         <div id="todayDigest" class="relative space-y-3"></div>
       </div>
 
-      <!-- ── NEW: BUSINESS SPOTLIGHT (horizontal scroll) ───────────────────── -->
+      <!-- Business Spotlight -->
       <div class="mb-8">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
@@ -257,7 +259,7 @@ async function loadHomePage(content) {
       </div>
     </div>`;
 
-  // Weather (unchanged)
+  // Weather widget
   (async () => {
     try {
       const wRes  = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
@@ -299,26 +301,26 @@ async function loadHomePage(content) {
     }
   })();
 
-// Fetch data
-  const [events, deals, newsArticles, shoutouts] = await Promise.all([
+  // Fetch all data for Hot Right Now + Digest + Spotlight
+  const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
     apiGet('/events'), apiGet('/deals'), apiGet('/news'), apiGet('/shoutouts')
   ]);
 
-  // Digest (unchanged)
+  // Digest
   const digestHTML = `
     <div class="grid grid-cols-2 gap-3">
       <div class="bg-white/15 rounded-2xl p-3">
         <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
-        <p class="font-semibold text-sm leading-snug">${events[0] ? events[0].title : 'No upcoming events'}</p>
+        <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
       </div>
       <div class="bg-white/15 rounded-2xl p-3">
         <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
-        <p class="font-semibold text-sm leading-snug">${deals[0] ? deals[0].title : 'No active deals'}</p>
+        <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
       </div>
     </div>`;
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
-  // ── NEW: Load trending businesses for Spotlight ─────────────────────
+  // Spotlight
   let spotlightBusinesses = [];
   if (allBusinesses.length === 0) {
     try {
@@ -328,13 +330,9 @@ async function loadHomePage(content) {
   }
   spotlightBusinesses = [...allBusinesses]
     .filter(b => b.avgRating && b.avgRating > 0)
-    .sort((a, b) => {
-      if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating;
-      return (b.ratings ? b.ratings.length : 0) - (a.ratings ? a.ratings.length : 0);
-    })
-    .slice(0, 8);   // top 8 trending businesses
+    .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
+    .slice(0, 8);
 
-  // Render Spotlight horizontal scroll
   const spotlightHTML = spotlightBusinesses.map(b => `
     <div onclick="showBusinessDetail('${b._id}')" 
          class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
@@ -354,162 +352,149 @@ async function loadHomePage(content) {
     </div>`).join('');
 
   document.getElementById('spotlightScroll').innerHTML = spotlightHTML || 
-    `<p class="text-white/40 text-center py-8 col-span-full">No trending businesses yet</p>`;
+    `<p class="text-white/40 text-center py-8">No trending businesses yet</p>`;
 
-  // ── Build mixed feed (same as before)
+  // ── FIXED Hot Right Now Feed (News + Shoutouts + Events + Deals) ─────────────
   const now = new Date();
 
-  const newsItems = (newsArticles || []).map(n => ({
-    type: 'news', sortDate: new Date(n.createdAt), data: n
+  const newsItems = (newsData || []).map(n => ({
+    type: 'news',
+    sortDate: new Date(n.createdAt),
+    data: n
   })).sort((a, b) => b.sortDate - a.sortDate);
 
-  const eventItems = (events || [])
+  const eventItems = (eventsData || [])
     .filter(e => new Date(e.date) >= now)
-    .map(e => ({ type: 'event', sortDate: new Date(e.date), data: e }))
+    .map(e => ({
+      type: 'event',
+      sortDate: new Date(e.date),
+      data: e
+    }))
     .sort((a, b) => a.sortDate - b.sortDate);
 
-  const activeDeals = (deals || []);
-  const dealItems = activeDeals
-    .map(d => ({ type: 'deal', sortDate: new Date(d.createdAt), expiresDate: d.expires ? new Date(d.expires) : null, data: d }))
-    .sort((a, b) => {
-      if (a.expiresDate && b.expiresDate) return a.expiresDate - b.expiresDate;
-      if (a.expiresDate && !b.expiresDate) return -1;
-      if (!a.expiresDate && b.expiresDate) return 1;
-      return b.sortDate - a.sortDate;
-    });
+  const dealItems = (dealsData || []).map(d => ({
+    type: 'deal',
+    sortDate: new Date(d.createdAt),
+    data: d
+  })).sort((a, b) => b.sortDate - a.sortDate);
 
-  const shoutoutItems = (shoutouts || [])
-    .map(s => ({ type: 'shoutout', sortDate: new Date(s.createdAt), data: s }))
-    .sort((a, b) => b.sortDate - a.sortDate);
+  const shoutoutItems = (shoutoutsData || []).map(s => ({
+    type: 'shoutout',
+    sortDate: new Date(s.createdAt),
+    data: s
+  })).sort((a, b) => b.sortDate - a.sortDate);
 
-  const otherItems = [...eventItems, ...dealItems, ...shoutoutItems]
-    .sort((a, b) => {
-      if (a.type === 'event' && b.type === 'event') return a.sortDate - b.sortDate;
-      if (a.type === 'event') return -1;
-      if (b.type === 'event') return 1;
-      return b.sortDate - a.sortDate;
-    });
+  const allHotItems = [
+    ...eventItems.slice(0, 3),
+    ...newsItems,
+    ...dealItems,
+    ...shoutoutItems
+  ].sort((a, b) => {
+    if (a.type === 'event' && b.type !== 'event') return -1;
+    if (b.type === 'event' && a.type !== 'event') return 1;
+    return b.sortDate - a.sortDate;
+  });
 
-  const allHotItems = [...newsItems, ...otherItems];
-
-  // Pagination + filter state
-  const HOT_PAGE_SIZE = 6;
   window._hotItems = allHotItems;
+  window._hotFilter = 'all';
   window._hotPage = 0;
-  window._hotFilter = 'all';   // default
+  const HOT_PAGE_SIZE = 6;
 
-  // ── NEW: Filter function
-  window.setHotFilter = function (type) {
-    window._hotFilter = type;
-    window._hotPage = 0;
+  window.renderHotFeed = function (filter = 'all') {
+    const container = document.getElementById('hotFeed');
+    if (!container) return;
 
-    // Highlight active button
-    document.querySelectorAll('[id^="hotFilter-"]').forEach(btn => {
-      if (btn.id === `hotFilter-${type}`) {
-        btn.className = 'flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white';
-      } else {
-        btn.className = 'flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80';
+    let filtered = window._hotItems;
+    if (filter !== 'all') {
+      filtered = window._hotItems.filter(item => item.type === filter);
+    }
+
+    // Accumulate all pages from 0 through current page
+    const visibleCount = (window._hotPage + 1) * HOT_PAGE_SIZE;
+    const visibleItems = filtered.slice(0, visibleCount);
+
+    let html = '';
+    visibleItems.forEach(item => {
+      if (item.type === 'news') {
+        const n = item.data;
+        html += `
+          <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+            <div class="flex-1">
+              <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
+              <h4 class="font-semibold text-lg mt-2">${n.title}</h4>
+              <p class="text-white/70 line-clamp-2">${n.summary || ''}</p>
+              <div class="text-xs text-white/50 mt-3">${timeAgo(n.createdAt)}</div>
+            </div>
+          </div>`;
+      } else if (item.type === 'event') {
+        const e = item.data;
+        html += `
+          <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+            <div class="flex-1">
+              <span class="text-xs bg-amber-500 px-3 py-1 rounded-full">📅 EVENT</span>
+              <h4 class="font-semibold text-lg mt-2">${e.title}</h4>
+              <p class="text-white/70">${e.description || ''}</p>
+              <div class="text-xs text-white/50 mt-3">${formatDate(e.date)}</div>
+            </div>
+          </div>`;
+      } else if (item.type === 'deal') {
+        const d = item.data;
+        html += `
+          <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+            <div class="flex-1">
+              <span class="text-xs bg-red-500 px-3 py-1 rounded-full">🔥 DEAL</span>
+              <h4 class="font-semibold text-lg mt-2">${d.title}</h4>
+              <p class="text-white/70">${d.description || ''}</p>
+              <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
+            </div>
+          </div>`;
+      } else if (item.type === 'shoutout') {
+        const s = item.data;
+        html += `
+          <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+            <div class="flex-1">
+              <span class="text-xs bg-emerald-500 px-3 py-1 rounded-full">💬 SHOUTOUT</span>
+              <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
+              <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
+            </div>
+          </div>`;
       }
     });
 
-    renderHotPage();
+    container.innerHTML = html || `<p class="text-white/40 text-center py-12">No activity yet — be the first to post!</p>`;
+
+    const hasMore = filtered.length > visibleCount;
+    document.getElementById('hotLoadMoreWrapper').classList.toggle('hidden', !hasMore);
   };
 
-  function renderHotItem(item) {
-    if (item.type === 'news') {
-      const n = item.data;
-      return `
-        <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
-          <div class="flex-shrink-0 w-9 h-9 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-lg">📰</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">📰 NEWS</span>
-            </div>
-            <p class="text-sm font-semibold text-white leading-snug line-clamp-2">${n.title}</p>
-            <p class="text-xs text-white/45 mt-0.5">${n.authorName || 'Staff'} • ${timeAgo(n.createdAt)}</p>
-          </div>
-        </div>`;
-    } else if (item.type === 'event') {
-      const e = item.data;
-      return `
-        <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
-          <div class="flex-shrink-0 w-9 h-9 bg-blue-500/20 rounded-2xl flex items-center justify-center text-lg">📅</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-[10px] font-bold uppercase tracking-wider text-blue-400">📅 EVENT</span>
-            </div>
-            <p class="text-sm font-semibold text-white leading-snug line-clamp-2">${e.title}</p>
-            <p class="text-xs text-white/45 mt-0.5">${new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${e.location ? ' • ' + e.location : ''}</p>
-          </div>
-        </div>`;
-    } else if (item.type === 'deal') {
-      const d = item.data;
-      return `
-        <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
-          <div class="flex-shrink-0 w-9 h-9 bg-amber-500/20 rounded-2xl flex items-center justify-center text-lg">🔥</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400">🔥 DEAL</span>
-            </div>
-            <p class="text-sm font-semibold text-white leading-snug line-clamp-2">${d.title}</p>
-            <p class="text-xs text-white/45 mt-0.5">${d.business?.name || d.owner?.name || 'Local Business'} • ${timeAgo(d.createdAt)}</p>
-          </div>
-        </div>`;
-    } else if (item.type === 'shoutout') {
-      const s = item.data;
-      return `
-        <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-3 cursor-pointer transition">
-          <div class="flex-shrink-0 w-9 h-9 bg-purple-500/20 rounded-2xl flex items-center justify-center text-lg">💬</div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-[10px] font-bold uppercase tracking-wider text-purple-400">💬 SHOUTOUT</span>
-            </div>
-            <p class="text-sm text-white/85 line-clamp-2">${s.text.substring(0, 100)}${s.text.length > 100 ? '…' : ''}</p>
-            <p class="text-xs text-white/45 mt-0.5">${s.author} • ${timeAgo(s.createdAt)}</p>
-          </div>
-        </div>`;
-    }
-    return '';
-  }
-
-  function renderHotPage() {
-    const feed = document.getElementById('hotFeed');
-    const wrapper = document.getElementById('hotLoadMoreWrapper');
-    const btn = document.getElementById('hotLoadMoreBtn');
-    if (!feed) return;
-
-    let filtered = window._hotItems;
-
-    // Apply filter
-    if (window._hotFilter !== 'all') {
-      filtered = window._hotItems.filter(item => item.type === window._hotFilter);
-    }
-
-    const start = 0;
-    const end = (window._hotPage + 1) * HOT_PAGE_SIZE;
-    const visible = filtered.slice(start, end);
-    const hasMore = end < filtered.length;
-    const remaining = filtered.length - end;
-
-    feed.innerHTML = visible.map(renderHotItem).join('') ||
-      `<p class="text-white/40 text-center py-8">No ${window._hotFilter === 'all' ? 'activity' : window._hotFilter} yet — be the first!</p>`;
-
-    if (wrapper) wrapper.classList.toggle('hidden', !hasMore);
-    if (btn && hasMore) btn.textContent = `Load More (${Math.min(remaining, HOT_PAGE_SIZE)} more)`;
-  }
+  window.setHotFilter = function (filter) {
+    window._hotFilter = filter;
+    window._hotPage = 0;
+    document.querySelectorAll('[id^="hotFilter-"]').forEach(btn => {
+      if (btn.id === `hotFilter-${filter}`) {
+        btn.classList.add('bg-emerald-600', 'text-white');
+        btn.classList.remove('bg-white/10', 'text-white/80');
+      } else {
+        btn.classList.remove('bg-emerald-600', 'text-white');
+        btn.classList.add('bg-white/10', 'text-white/80');
+      }
+    });
+    window.renderHotFeed(filter);
+  };
 
   window.loadMoreHotItems = function () {
-    window._hotPage = (window._hotPage || 0) + 1;
-    renderHotPage();
+    window._hotPage++;
+    window.renderHotFeed(window._hotFilter);
   };
 
-  renderHotPage();
+  // Render the feed
+  window.renderHotFeed('all');
 
-  // ── Community Stats Bar (unchanged) ─────────────────────────────────────
-  const activeDealsCount   = (deals || []).length;
-  const upcomingEvCount    = (events || []).filter(e => new Date(e.date) >= now).length;
-  const todayStart         = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const shoutoutsTodayCount = (shoutouts || []).filter(s => new Date(s.createdAt) >= todayStart).length;
+  // Community Stats Bar
+  const activeDealsCount = (dealsData || []).length;
+  const upcomingEvCount = (eventsData || []).filter(e => new Date(e.date) >= now).length;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const shoutoutsTodayCount = (shoutoutsData || []).filter(s => new Date(s.createdAt) >= todayStart).length;
 
   let bizCount = allBusinesses.length;
   if (!bizCount) {
@@ -3678,23 +3663,7 @@ window.removeMenu = async function () {
   }
 };
 
-// ─── NEW HELPERS ─────────────────────────────────────────────────────────────
-window.toggleRSVP = async function (eventId) {
-  if (!requireAuth('Sign in to RSVP')) return;
-  const res = await apiPost(`/events/${eventId}/rsvp`, {});
-  if (res.rsvpCount !== undefined) {
-    showToast(res.going ? '✅ You are going!' : '👋 You are no longer going');
-    if (currentPage === 'events') loadEventsPage(document.getElementById('content'));
-  }
-};
-
-window.postShoutoutWithPhoto = async function () {
-  const input = document.getElementById('shoutoutInput');
-  if (!input || !input.value.trim()) return;
-  await apiPost('/shoutouts', { text: input.value });
-  input.value = '';
-  loadPage('shoutouts');
-};
+// ─── NOTE: toggleRSVP and postShoutoutWithPhoto are defined above — duplicates removed ───
 
 // ─── BIZ PHOTO GALLERY FUNCTIONS ─────────────────────────────────────────────
 window.handleBizPhotoUpload = async function (bizId, input) {
@@ -3842,6 +3811,459 @@ function renderOwnerPhotoGrid() {
               class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>
     </div>`).join('');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOST & FOUND + MARKETPLACE — FULL MODALS & DETAIL VIEWS
+// ─────────────────────────────────────────────────────────────────────────────
+
+let currentLostItemId = null;
+let currentMarketItemId = null;
+
+// ====================== LOST & FOUND ======================
+
+window.showPostLostItemModal = function() {
+  if (!requireAuth('Sign in to post a lost/found item')) return;
+
+  let modal = document.getElementById('lostItemModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'lostItemModal';
+    modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[13000]';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div onclick="if(event.target.id==='lostItemModal')hideLostItemModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl overflow-hidden">
+      <div class="px-6 pt-6 pb-2">
+        <h2 class="text-2xl font-bold mb-4">Post Lost or Found Item</h2>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Type</label>
+            <div class="flex gap-3">
+              <button onclick="this.classList.add('bg-emerald-600','text-white');document.getElementById('lostType').value='lost';document.querySelectorAll('#lostItemModal button').forEach(b=>b!==this&&b.classList.remove('bg-emerald-600','text-white'))" class="flex-1 py-3 rounded-2xl border border-emerald-600">Lost</button>
+              <button onclick="this.classList.add('bg-emerald-600','text-white');document.getElementById('lostType').value='found';document.querySelectorAll('#lostItemModal button').forEach(b=>b!==this&&b.classList.remove('bg-emerald-600','text-white'))" class="flex-1 py-3 rounded-2xl border border-emerald-600">Found</button>
+            </div>
+            <input type="hidden" id="lostType" value="lost">
+          </div>
+
+          <input id="lostTitle" type="text" placeholder="Title (e.g. Lost Black Wallet)" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+          
+          <textarea id="lostDesc" rows="3" placeholder="Describe the item..." class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none"></textarea>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-semibold mb-1">Location</label>
+              <input id="lostLocation" type="text" placeholder="Milledgeville, GA" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold mb-1">Date</label>
+              <input id="lostDate" type="date" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+            </div>
+          </div>
+
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="isPet" class="w-5 h-5 accent-emerald-600">
+            <span class="font-medium">This is a lost pet 🐾</span>
+          </label>
+
+          <div>
+            <label class="block text-sm font-semibold mb-2">Photos (optional)</label>
+            <input type="file" id="lostImages" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+          </div>
+        </div>
+      </div>
+
+      <div class="p-6 border-t flex gap-3">
+        <button onclick="hideLostItemModal()" class="flex-1 py-4 rounded-3xl border border-slate-300 font-semibold">Cancel</button>
+        <button onclick="postLostItem()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Post Item</button>
+      </div>
+    </div>`;
+
+  modal.style.display = 'flex';
+};
+
+window.hideLostItemModal = function() {
+  const modal = document.getElementById('lostItemModal');
+  if (modal) modal.remove();
+};
+
+window.postLostItem = async function() {
+  const title = document.getElementById('lostTitle').value.trim();
+  const description = document.getElementById('lostDesc').value.trim();
+  if (!title || !description) return alert("Title and description required");
+
+  const files = document.getElementById('lostImages').files;
+  let images = [];
+  if (files.length) {
+    for (let file of files) {
+      const base64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+      images.push(base64);
+    }
+  }
+
+  const payload = {
+    title,
+    description,
+    type: document.getElementById('lostType').value,
+    isPet: document.getElementById('isPet').checked,
+    location: document.getElementById('lostLocation').value.trim(),
+    date: document.getElementById('lostDate').value || undefined,
+    images
+  };
+
+  const res = await apiPost('/lostitems', payload);
+  if (res._id) {
+    hideLostItemModal();
+    loadPage('lostfound');
+    showToast('✅ Item posted!', 'success');
+  } else {
+    alert(res.message || 'Error posting item');
+  }
+};
+
+window.showLostItemDetail = async function(id) {
+  currentLostItemId = id;
+  const items = await apiGet('/lostitems');
+  const item = items.find(i => i._id === id);
+  if (!item) return;
+
+  const isOwner = item.owner && ((item.owner._id || item.owner).toString() === (currentUser?._id || '').toString());
+
+  let html = `
+    <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
+      <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
+        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+          <h2 class="text-xl font-bold">${item.title}</h2>
+          <button onclick="hideLostDetailModal()" class="text-3xl leading-none">×</button>
+        </div>
+        
+        <div class="p-6">
+          ${item.images && item.images.length ? 
+            `<div class="grid grid-cols-2 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl w-full aspect-square object-cover">`).join('')}</div>` : ''}
+          
+          <p class="text-slate-700 leading-relaxed">${item.description}</p>
+          
+          <div class="flex gap-6 text-sm mt-6">
+            <div><span class="font-semibold">Type:</span> ${item.type.toUpperCase()}</div>
+            ${item.isPet ? `<div class="text-amber-600">🐾 Lost Pet</div>` : ''}
+            ${item.location ? `<div><span class="font-semibold">📍</span> ${item.location}</div>` : ''}
+          </div>
+
+          <div class="mt-8">
+            <h3 class="font-semibold mb-3">💬 Comments & Messages</h3>
+            <div id="lostCommentsContainer" class="space-y-4"></div>
+            
+            <div class="mt-6">
+              <textarea id="lostCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment or message..."></textarea>
+              <button onclick="postLostComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
+            </div>
+          </div>
+        </div>
+
+        ${isOwner ? `
+        <div class="p-6 border-t bg-emerald-50 flex justify-end">
+          <button onclick="markLostResolved()" class="bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Resolved ✅</button>
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  const detailDiv = document.createElement('div');
+  detailDiv.id = 'lostDetailModal';
+  detailDiv.innerHTML = html;
+  document.body.appendChild(detailDiv);
+
+  renderLostComments(item);
+};
+
+window.hideLostDetailModal = function() {
+  const modal = document.getElementById('lostDetailModal');
+  if (modal) modal.remove();
+};
+
+window.postLostComment = async function() {
+  const input = document.getElementById('lostCommentInput');
+  if (!input.value.trim()) return;
+  
+  await apiPost(`/lostitems/${currentLostItemId}/comments`, { text: input.value });
+  input.value = '';
+  const items = await apiGet('/lostitems');
+  const item = items.find(i => i._id === currentLostItemId);
+  if (item) renderLostComments(item);
+};
+
+async function renderLostComments(item) {
+  const container = document.getElementById('lostCommentsContainer');
+  if (!container) return;
+  
+  let html = '';
+  (item.comments || []).forEach(c => {
+    html += `<div class="bg-slate-100 rounded-2xl p-4"><p class="font-medium">${c.author}</p><p>${c.text}</p></div>`;
+  });
+  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No comments yet</p>';
+}
+
+window.markLostResolved = async function() {
+  if (confirm('Mark this item as resolved?')) {
+    await apiPost(`/lostitems/${currentLostItemId}/resolve`, {});
+    hideLostDetailModal();
+    loadPage('lostfound');
+  }
+};
+
+// ====================== MARKETPLACE ======================
+
+window.showPostMarketplaceModal = function() {
+  if (!requireAuth('Sign in to sell something')) return;
+
+  let modal = document.getElementById('marketModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'marketModal';
+    modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[13000]';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div onclick="if(event.target.id==='marketModal')hideMarketModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl overflow-hidden">
+      <div class="px-6 pt-6 pb-2">
+        <h2 class="text-2xl font-bold mb-4">Post Marketplace Listing</h2>
+        
+        <input id="marketTitle" type="text" placeholder="Item title" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4">
+        <textarea id="marketDesc" rows="3" placeholder="Description" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4"></textarea>
+        
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Price ($)</label>
+            <input id="marketPrice" type="number" placeholder="25" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Condition</label>
+            <select id="marketCondition" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+              <option value="new">New</option>
+              <option value="like-new">Like New</option>
+              <option value="used" selected>Used</option>
+              <option value="fair">Fair</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-sm font-semibold mb-2">Photos</label>
+          <input type="file" id="marketImages" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+        </div>
+      </div>
+
+      <div class="p-6 border-t flex gap-3">
+        <button onclick="hideMarketModal()" class="flex-1 py-4 rounded-3xl border border-slate-300 font-semibold">Cancel</button>
+        <button onclick="postMarketplaceItem()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Post Listing</button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+};
+
+window.hideMarketModal = function() {
+  const modal = document.getElementById('marketModal');
+  if (modal) modal.remove();
+};
+
+window.postMarketplaceItem = async function() {
+  const title = document.getElementById('marketTitle').value.trim();
+  const description = document.getElementById('marketDesc').value.trim();
+  const price = parseFloat(document.getElementById('marketPrice').value);
+
+  if (!title || !description || !price) return alert("Title, description and price required");
+
+  const files = document.getElementById('marketImages').files;
+  let images = [];
+  if (files.length) {
+    for (let file of files) {
+      const base64 = await new Promise(r => {
+        const reader = new FileReader();
+        reader.onload = e => r(e.target.result);
+        reader.readAsDataURL(file);
+      });
+      images.push(base64);
+    }
+  }
+
+  const payload = { title, description, price, images, condition: document.getElementById('marketCondition').value };
+  const res = await apiPost('/marketplace', payload);
+
+  if (res._id) {
+    hideMarketModal();
+    loadPage('marketplace');
+    showToast('✅ Listing posted!');
+  }
+};
+
+window.showMarketplaceDetail = async function(id) {
+  currentMarketItemId = id;
+  const items = await apiGet('/marketplace');
+  const item = items.find(i => i._id === id);
+  if (!item) return;
+
+  const isSeller = item.seller && ((item.seller._id || item.seller).toString() === (currentUser?._id || '').toString());
+
+  let html = `
+    <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
+      <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
+        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between">
+          <div>
+            <h2 class="text-xl font-bold">${item.title}</h2>
+            <p class="text-3xl font-bold text-emerald-600">$${item.price}</p>
+          </div>
+          <button onclick="hideMarketDetailModal()" class="text-3xl">×</button>
+        </div>
+        
+        <div class="p-6">
+          ${item.images && item.images.length ? `<div class="grid grid-cols-3 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl aspect-square object-cover">`).join('')}</div>` : ''}
+          <p class="text-slate-700">${item.description}</p>
+          
+          <div class="mt-8">
+            <h3 class="font-semibold mb-3">💬 Messages / Questions</h3>
+            <div id="marketCommentsContainer" class="space-y-4"></div>
+            
+            <div class="mt-6">
+              <textarea id="marketCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Message the seller..."></textarea>
+              <button onclick="postMarketComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Send Message</button>
+            </div>
+          </div>
+        </div>
+
+        ${isSeller ? `
+        <div class="p-6 border-t bg-amber-50 flex justify-end">
+          <button onclick="markMarketSold()" class="bg-amber-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Sold ✅</button>
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  const div = document.createElement('div');
+  div.id = 'marketDetailModal';
+  div.innerHTML = html;
+  document.body.appendChild(div);
+
+  renderMarketComments(item);
+};
+
+window.hideMarketDetailModal = function() {
+  const modal = document.getElementById('marketDetailModal');
+  if (modal) modal.remove();
+};
+
+window.postMarketComment = async function() {
+  const input = document.getElementById('marketCommentInput');
+  if (!input.value.trim()) return;
+  
+  await apiPost(`/marketplace/${currentMarketItemId}/comments`, { text: input.value });
+  input.value = '';
+  const items = await apiGet('/marketplace');
+  const item = items.find(i => i._id === currentMarketItemId);
+  if (item) renderMarketComments(item);
+};
+
+async function renderMarketComments(item) {
+  const container = document.getElementById('marketCommentsContainer');
+  if (!container) return;
+  let html = '';
+  (item.comments || []).forEach(c => {
+    html += `<div class="bg-slate-100 rounded-2xl p-4"><p class="font-medium">${c.author}</p><p>${c.text}</p></div>`;
+  });
+  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No messages yet</p>';
+}
+
+window.markMarketSold = async function() {
+  if (confirm('Mark this item as sold?')) {
+    await apiPost(`/marketplace/${currentMarketItemId}/sold`, {});
+    hideMarketDetailModal();
+    loadPage('marketplace');
+  }
+};
+
+// ====================== FULLY UPDATED LOST & FOUND PAGE ======================
+async function loadLostFoundPage(content) {
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🔎 Lost & Found</h1>
+        <button onclick="showPostLostItemModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Post Item
+        </button>
+      </div>
+      <div id="lostItemsList" class="space-y-6"></div>
+    </div>`;
+
+  const items = await apiGet('/lostitems');
+  const listHTML = items.map(item => `
+    <div onclick="showLostItemDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex gap-4">
+        ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🔎</div>`}
+        <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">${item.type.toUpperCase()}</span>
+            ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
+          </div>
+          <h3 class="font-semibold text-lg mt-2">${item.title}</h3>
+          <p class="text-white/70 line-clamp-2">${item.description}</p>
+          <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
+            <span>📍 ${item.location || 'Unknown'}</span>
+            <span>·</span>
+            <span>${timeAgo(item.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
+  document.getElementById('lostItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No items yet — be the first to post!</p>`;
+}
+
+// ====================== FULLY UPDATED MARKETPLACE PAGE ======================
+async function loadMarketplacePage(content) {
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🛒 Marketplace</h1>
+        <button onclick="showPostMarketplaceModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Sell Something
+        </button>
+      </div>
+      <div id="marketItemsList" class="space-y-6"></div>
+    </div>`;
+
+  const items = await apiGet('/marketplace');
+  const listHTML = items.map(item => `
+    <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex gap-4">
+        ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
+        <div class="flex-1">
+          <h3 class="font-semibold text-lg">${item.title}</h3>
+          <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
+          <p class="text-white/70 line-clamp-2">${item.description}</p>
+          <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
+            <span>${item.condition}</span>
+            <span>·</span>
+            <span>by ${item.authorName}</span>
+            <span>·</span>
+            <span>${timeAgo(item.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
+  document.getElementById('marketItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
+}
+
+// Global exports
+window.showPostLostItemModal = window.showPostLostItemModal;
+window.showLostItemDetail = window.showLostItemDetail;
+window.showPostMarketplaceModal = window.showPostMarketplaceModal;
+window.showMarketplaceDetail = window.showMarketplaceDetail;
+
+// Call these from the router
+window.loadLostFoundPage = loadLostFoundPage;
+window.loadMarketplacePage = loadMarketplacePage;
 
 // ─── Global exports ───────────────────────────────────────────────────────────
 window.loadResourcesPage     = loadResourcesPage;

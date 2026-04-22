@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const bodyParser = require('body-parser');
+const LostItem = require('./models/LostItem');
+const MarketplaceItem = require('./models/MarketplaceItem');
 
 dotenv.config();
 

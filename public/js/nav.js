@@ -1,10 +1,12 @@
 const pages = [
-  { id: 'home',      icon: '🏠', label: 'Home' },
-  { id: 'directory', icon: '📍', label: 'Directory' },
-  { id: 'shoutouts', icon: '💬', label: 'Shoutouts' },
-  { id: 'events',    icon: '📅', label: 'Events' },
-  { id: 'deals',     icon: '🔥', label: 'Deals' },
-  { id: 'resources', icon: '🌍', label: 'Resources' }   // ← NEW
+  { id: 'home',        icon: '🏠', label: 'Home' },
+  { id: 'directory',   icon: '📍', label: 'Directory' },
+  { id: 'shoutouts',   icon: '💬', label: 'Shoutouts' },
+  { id: 'lostfound',   icon: '🔎', label: 'Lost & Found' },     // ← NEW
+  { id: 'marketplace', icon: '🛒', label: 'Marketplace' },      // ← NEW
+  { id: 'events',      icon: '📅', label: 'Events' },
+  { id: 'deals',       icon: '🔥', label: 'Deals' },
+  { id: 'resources',   icon: '🌍', label: 'Resources' }
 ];
 
 function renderNav() {

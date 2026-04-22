@@ -38,7 +38,13 @@ async function apiPatch(endpoint, data) {
   return apiRequest(endpoint, data, 'PATCH');
 }
 
-window.apiGet   = apiGet;
-window.apiPost  = apiPost;
-window.apiPatch = apiPatch;
-window.setToken = setToken;
+// ─── NEW: DELETE helper for admin moderation (critical for Lost & Found + Marketplace) ───
+async function apiDelete(endpoint) {
+  return apiRequest(endpoint, null, 'DELETE');
+}
+
+window.apiGet    = apiGet;
+window.apiPost   = apiPost;
+window.apiPatch  = apiPatch;
+window.apiDelete = apiDelete;
+window.setToken  = setToken;
