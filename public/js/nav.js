@@ -6,8 +6,7 @@ const pages = [
   { id: 'marketplace', icon: '🛒', label: 'Marketplace' },
   { id: 'events',      icon: '📅', label: 'Events' },
   { id: 'deals',       icon: '🔥', label: 'Deals' },
-  { id: 'resources',   icon: '🌍', label: 'Resources' },
-  { id: 'messages',    icon: '✉️', label: 'Messages' }   // ← NEW
+  { id: 'resources',   icon: '🌍', label: 'Resources' }
 ];
 
 function renderNav() {
@@ -16,6 +15,12 @@ function renderNav() {
   const canNews = currentUser && (currentUser.canPostNews || isAdmin);
 
   const navPages = [...pages];
+
+  // Only show Messages button if logged in
+  if (currentUser) {
+    navPages.push({ id: 'messages', icon: '✉️', label: 'Messages' });
+  }
+
   if (isOwner) navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
   if (canNews) navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
 
@@ -94,7 +99,8 @@ function renderNav() {
         </button>`;
     }
   }
-  // Safe badge update - won't break the entire nav if timing is off
+
+  // Safe badge update
   setTimeout(() => {
     if (typeof updateMessageBadge === 'function') {
       updateMessageBadge();
