@@ -268,24 +268,29 @@ async function loadHomePage(content) {
       <!-- Today in Milledgeville -->
       <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-6 mb-8 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
-        <div class="relative flex items-start justify-between gap-4 mb-5">
-          <div class="flex items-center gap-3 min-w-0">
-            <span class="text-4xl flex-shrink-0">🌅</span>
-            <div class="min-w-0">
+        <div class="relative flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
+          
+          <!-- Left side -->
+          <div class="flex items-start gap-3 min-w-0">
+            <span class="text-4xl flex-shrink-0 mt-1">🌅</span>
+            <div class="min-w-0 flex-1">
               <h1 class="text-2xl font-bold leading-tight">Today in Milledgeville</h1>
-              <div class="flex items-center gap-2 mt-0.5">
+              
+              <div class="flex flex-wrap items-center gap-2 mt-1.5">
                 <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
                 
-                <!-- BIG SCREAMING PODCAST BUTTON -->
+                <!-- Podcast Button (smaller on mobile) -->
                 <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')" 
-                      class="inline-flex items-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-5 py-2 rounded-2xl text-sm shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95">
-                  <span class="text-xl">🎙️</span>
-                  <span class="font-extrabold tracking-wide">LISTEN TO THE PODCAST</span>
+                      class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-4 py-1.5 rounded-2xl text-xs md:text-sm shadow-xl cursor-pointer transition-all active:scale-95">
+                  <span class="text-lg">🎙️</span>
+                  <span class="font-extrabold tracking-wide">LISTEN</span>
                 </span>
               </div>
             </div>
           </div>
-          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5 text-right min-w-[90px]">
+
+          <!-- Weather Widget -->
+          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5 text-right min-w-[90px] self-start md:self-auto">
             <div class="text-2xl leading-none mb-0.5" id="weatherIcon">—</div>
             <div class="text-xl font-black leading-none" id="weatherTemp">—</div>
             <div class="text-[10px] text-emerald-100 mt-0.5 leading-tight" id="weatherDesc">Loading…</div>
