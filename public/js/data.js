@@ -1793,6 +1793,7 @@ window.postShoutoutWithPhoto = async function () {
   });
 
   if (res._id) {
+    showToast('✅ Shoutout posted!');
     _pendingShoutoutImages = [];
     input.value = '';
     showToast('✅ Shoutout posted!');
@@ -2967,11 +2968,11 @@ window.addOwnerDeal = async function () {
   if (!category) { showToast('Please select a category', 'error'); return; }
   const res = await apiPost('/owner/deals', { title, description, expires, category });
   if (res._id) {
+    showToast('🔥 Deal posted!');
     document.getElementById('dealTitle').value    = '';
     document.getElementById('dealDesc').value     = '';
     document.getElementById('dealExpires').value  = '';
     document.getElementById('dealCategory').value = '';
-    showToast('🔥 Deal posted!');
     loadOwnerDeals();
   } else {
     showToast(res.message || 'Error posting deal', 'error');
@@ -2996,12 +2997,12 @@ window.addOwnerEvent = async function () {
   if (!category) { showToast('Please select a category', 'error'); return; }
   const res = await apiPost('/owner/events', { title, date, location, description, category });
   if (res._id) {
+    showToast('📅 Event posted!');
     document.getElementById('eventTitle').value    = '';
     document.getElementById('eventDate').value     = '';
     document.getElementById('eventLocation').value = '';
     document.getElementById('eventDesc').value     = '';
     document.getElementById('eventCategory').value = '';
-    showToast('📅 Event posted!');
     loadOwnerEvents();
   } else {
     showToast(res.message || 'Error posting event', 'error');
@@ -4024,9 +4025,9 @@ window.postLostItem = async function() {
 
   const res = await apiPost('/lostitems', payload);
   if (res._id) {
+    showToast('✅ Item posted!');
     hideLostItemModal();
     loadPage('lostfound');
-    showToast('✅ Item posted!', 'success');
   } else {
     alert(res.message || 'Error posting item');
   }
@@ -4061,11 +4062,18 @@ window.showLostItemDetail = async function(id) {
           </div>
 
           <div class="mt-8">
-            <h3 class="font-semibold mb-3">💬 Comments & Messages</h3>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold">💬 Comments</h3>
+              ${!isOwner && item.owner ? `
+                <button onclick="showComposeMessageModal('${item.owner?._id || item.owner}', '${item.owner?.name || 'Owner'}')" 
+                        class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
+                  ✉️ Message Owner
+                </button>` : ''}
+            </div>
             <div id="lostCommentsContainer" class="space-y-4"></div>
             
             <div class="mt-6">
-              <textarea id="lostCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment or message..."></textarea>
+              <textarea id="lostCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
               <button onclick="postLostComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
             </div>
           </div>
@@ -4197,6 +4205,7 @@ window.postMarketplaceItem = async function() {
   const res = await apiPost('/marketplace', payload);
 
   if (res._id) {
+    showToast('✅ Listing posted!');
     hideMarketModal();
     loadPage('marketplace');
     showToast('✅ Listing posted!');
@@ -4227,12 +4236,19 @@ window.showMarketplaceDetail = async function(id) {
           <p class="text-slate-700">${item.description}</p>
           
           <div class="mt-8">
-            <h3 class="font-semibold mb-3">💬 Messages / Questions</h3>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold">💬 Comments</h3>
+              ${!isSeller && item.seller ? `
+                <button onclick="showComposeMessageModal('${item.seller?._id || item.seller}', '${item.seller?.name || 'Seller'}')" 
+                        class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
+                  ✉️ Message Seller
+                </button>` : ''}
+            </div>
             <div id="marketCommentsContainer" class="space-y-4"></div>
             
             <div class="mt-6">
-              <textarea id="marketCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Message the seller..."></textarea>
-              <button onclick="postMarketComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Send Message</button>
+              <textarea id="marketCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
+              <button onclick="postMarketComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
             </div>
           </div>
         </div>
@@ -4501,7 +4517,7 @@ window.showComposeMessageModal = function(preSelectedUserId = null, preSelectedN
   hideLostDetailModal();
 
   const modalHTML = `
-    <div id="composeModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[15000]">
+    <div id="composeModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[20000]">
       <div onclick="if(event.target.id==='composeModal')hideComposeModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl p-6">
         <h2 class="text-2xl font-bold mb-4">New Message</h2>
         
@@ -4549,8 +4565,8 @@ window.sendComposedMessage = async function() {
   const res = await apiPost('/messages', { receiverId, text });
 
   if (res._id || res.message?.includes('sent')) {
-    hideComposeModal();
     showToast('✅ Message sent!');
+    hideComposeModal();
     loadMessagesPage(document.getElementById('content'));
   } else {
     alert(res.message || 'Failed to send message');
