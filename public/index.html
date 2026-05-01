@@ -48,7 +48,7 @@
     </div>
   </div>
 
-  <!-- PROFILE SLIDE-UP SHEET -->
+  <!-- PROFILE SLIDE-UP SHEET (existing) -->
   <div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet"
        class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
     <div id="profileSheetPanel"
@@ -63,7 +63,19 @@
     </div>
   </div>
 
-  <!-- AUTH MODAL -->
+  <!-- OTHER USER PROFILE MODAL (NEW) -->
+  <div id="userProfileModal" onclick="if(event.target.id==='userProfileModal')hideUserProfileModal()" 
+       class="hidden fixed inset-0 bg-black/70 z-[12000] flex items-center justify-center p-4">
+    <div onclick="event.stopImmediatePropagation()" 
+         class="bg-white text-slate-900 w-full max-w-md rounded-3xl overflow-hidden">
+      <div id="userProfileContent" class="p-6"></div>
+    </div>
+  </div>
+
+  <!-- MESSAGES / INBOX MODAL / PAGE (dynamic) -->
+  <!-- (UI is rendered via JS in data.js) -->
+
+  <!-- AUTH MODAL (existing) -->
   <div id="authModal" onclick="if(event.target.id==='authModal')hideAuthModal()"
        class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[10000]">
     <div onclick="event.stopImmediatePropagation()"
@@ -102,21 +114,20 @@
   <script src="/js/profile.js"></script>
   <script src="/js/main.js"></script>
   <script>
-    
-  // PWA Install Prompt
-  let deferredPrompt;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    const installBtn = document.createElement('button');
-    installBtn.textContent = '📲 Install App';
-    installBtn.className = 'fixed bottom-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-3xl shadow-2xl text-sm font-semibold z-[99999]';
-    installBtn.onclick = () => {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(() => { installBtn.remove(); });
-    };
-    document.body.appendChild(installBtn);
-  });
-</script>
+    // PWA Install Prompt (existing)
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const installBtn = document.createElement('button');
+      installBtn.textContent = '📲 Install App';
+      installBtn.className = 'fixed bottom-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-3xl shadow-2xl text-sm font-semibold z-[99999]';
+      installBtn.onclick = () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => { installBtn.remove(); });
+      };
+      document.body.appendChild(installBtn);
+    });
+  </script>
 </body>
 </html>

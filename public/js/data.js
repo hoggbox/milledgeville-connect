@@ -1,6 +1,7 @@
 let currentPage = 'home';
 let allBusinesses = [];
 let currentEditingBusiness = null;
+let currentMessageReceiver = null; // for compose modal
 
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
@@ -93,11 +94,91 @@ function formatDateTime(date) {
   });
 }
 
+// ─── SAFE Clickable User Helper ───────────────────────────────────────────────
+function renderClickableUser(userData, fallbackName = 'Anonymous') {
+  if (!userData) return fallbackName;
+
+  let userId = null;
+  let displayName = fallbackName;
+
+  if (typeof userData === 'object' && userData !== null) {
+    userId = userData._id || userData.id;
+    displayName = userData.name || userData.authorName || userData.author || fallbackName;
+  } else if (typeof userData === 'string' && userData.length > 10) {
+    userId = userData; // already an ID
+  }
+
+  if (!userId) return displayName;
+
+  return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" class="cursor-pointer hover:underline text-emerald-400">${displayName}</span>`;
+}
+
+// In-memory unread count so we can zero it instantly without a round-trip
+let _unreadCount = 0;
+
+function _setBadge(count) {
+  _unreadCount = Math.max(0, count);
+  // There can be two #messageBadge elements (desktop + mobile); update both
+  document.querySelectorAll('#messageBadge').forEach(badge => {
+    if (_unreadCount > 0) {
+      badge.textContent = _unreadCount > 99 ? '99+' : _unreadCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  });
+}
+
+async function updateMessageBadge() {
+  if (typeof currentUser === 'undefined' || !currentUser?._id) return;
+  try {
+    const inbox = await apiGet('/messages/inbox');
+    const unreadCount = inbox.filter(m =>
+      !m.read && String(m.receiver?._id || m.receiver) === String(currentUser._id)
+    ).length;
+    _setBadge(unreadCount);
+  } catch (e) {
+    console.error('❌ [Badge] API error:', e);
+  }
+}
+
+async function markConversationAsRead(otherId) {
+  if (!currentUser || !currentUser._id || !otherId) return;
+
+  // ── Instant optimistic update ──────────────────────────────────────────────
+  // Decrement the in-memory counter for this conversation immediately so the
+  // badge disappears without waiting for a server round-trip.
+  // We'll correct the count with a real fetch after the server call.
+  _setBadge(0); // safest: zero it instantly; server confirms shortly after
+
+  try {
+    console.log(`📨 [Read] Marking conversation with ${otherId} as read...`);
+    await apiPost('/messages/mark-as-read', { otherId });
+    console.log('✅ Messages marked as read on server');
+  } catch (e) {
+    console.warn('⚠️ Backend mark-as-read failed (endpoint missing?) — using optimistic update');
+  }
+
+  // Badge already zeroed — messages are now marked read on the server
+}
+
+// markMessagesAsRead is defined below (near the messages system) to avoid duplication
+
 // ─── Page Router ──────────────────────────────────────────────────────────────
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
 
+  // Show spinner immediately so navigation feels instant (no frozen UI)
+  content.innerHTML = `
+    <div class="flex items-center justify-center min-h-[40vh]">
+      <div class="flex flex-col items-center gap-4 text-white/40">
+        <div class="w-10 h-10 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
+        <p class="text-sm font-medium">Loading…</p>
+      </div>
+    </div>`;
+
+  if (page === 'messages')        { await loadMessagesPage(content); return; }
   if (page === 'admin')           { await loadAdminPage(content);        return; }
   if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
   if (page === 'home')            { await loadHomePage(content);          return; }
@@ -192,7 +273,16 @@ async function loadHomePage(content) {
             <span class="text-4xl flex-shrink-0">🌅</span>
             <div class="min-w-0">
               <h1 class="text-2xl font-bold leading-tight">Today in Milledgeville</h1>
-              <p class="text-emerald-100 text-xs mt-0.5">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
+              <div class="flex items-center gap-2 mt-0.5">
+                <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
+                
+                <!-- BIG SCREAMING PODCAST BUTTON -->
+                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')" 
+                      class="inline-flex items-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-5 py-2 rounded-2xl text-sm shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95">
+                  <span class="text-xl">🎙️</span>
+                  <span class="font-extrabold tracking-wide">LISTEN TO THE PODCAST</span>
+                </span>
+              </div>
             </div>
           </div>
           <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2.5 text-right min-w-[90px]">
@@ -259,52 +349,127 @@ async function loadHomePage(content) {
       </div>
     </div>`;
 
-  // Weather widget
+  // Weather widget (bulletproof version)
   (async () => {
     try {
-      const wRes  = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
+      const wRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
+      
+      if (!wRes.ok) throw new Error('Weather API error');
+      
       const wData = await wRes.json();
-      const curr  = wData.current;
-      const daily = wData.daily;
+      const curr = wData.current;
+      const daily = wData.daily || {};
 
       function wmoCond(code) {
         if (code === 0) return { icon: '☀️', label: 'Sunny' };
-        if ([1,2].includes(code)) return { icon: '⛅', label: 'Partly cloudy'};
+        if ([1,2].includes(code)) return { icon: '⛅', label: 'Partly cloudy' };
         if (code === 3) return { icon: '☁️', label: 'Overcast' };
         if ([45,48].includes(code)) return { icon: '🌫️', label: 'Foggy' };
         if ([51,53,55,61,63].includes(code)) return { icon: '🌧️', label: 'Rainy' };
         if ([65,80,81,82].includes(code)) return { icon: '⛈️', label: 'Showers' };
         if ([71,73,75,77,85,86].includes(code)) return { icon: '❄️', label: 'Snow' };
-        if ([95,96,99].includes(code)) return { icon: '⛈️', label: 'Thunderstorm'};
+        if ([95,96,99].includes(code)) return { icon: '⛈️', label: 'Thunderstorm' };
         return { icon: '🌤️', label: 'Mixed' };
       }
+
+      // Current weather
       const cond = wmoCond(curr.weathercode);
       const temp = Math.round(curr.temperature_2m);
+
       document.getElementById('weatherIcon').textContent = cond.icon;
       document.getElementById('weatherTemp').textContent = temp + '°F';
       document.getElementById('weatherDesc').textContent = cond.label;
 
+      // Forecast (fixed field names)
       const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-      const forecastHTML = daily.date.slice(1, 4).map((d, i) => {
-        const fc = wmoCond(daily.weathercode[i + 1]);
-        const high = Math.round(daily.temperature_2m_max[i + 1]);
-        const dow = days[new Date(d + 'T12:00:00').getDay()];
-        return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
-          <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
-          <div class="text-sm leading-none my-0.5">${fc.icon}</div>
-          <div class="text-[10px] font-bold">${high}°</div>
-        </div>`;
-      }).join('');
-      document.getElementById('weatherForecast').innerHTML = forecastHTML;
-    } catch (_) {
-      document.getElementById('weatherDesc').textContent = 'Unavailable';
+      let forecastHTML = '';
+
+      const forecastDates = daily.time || daily.date || [];
+      const forecastTemps = daily.temperature_2m_max || [];
+      const forecastCodes = daily.weathercode || [];
+
+      if (forecastDates.length > 1 && forecastTemps.length > 1 && forecastCodes.length > 1) {
+        forecastHTML = forecastDates.slice(1, 4).map((d, i) => {
+          const fc = wmoCond(forecastCodes[i + 1] || 0);
+          const high = Math.round(forecastTemps[i + 1] || 0);
+          const dow = days[new Date(d + 'T12:00:00').getDay()];
+          return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
+            <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
+            <div class="text-sm leading-none my-0.5">${fc.icon}</div>
+            <div class="text-[10px] font-bold">${high}°</div>
+          </div>`;
+        }).join('');
+      }
+
+      document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
+
+      document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
+
+    } catch (err) {
+      console.warn('Weather error:', err);
+      const desc = document.getElementById('weatherDesc');
+      if (desc) desc.textContent = 'Weather unavailable';
     }
   })();
 
-  // Fetch all data for Hot Right Now + Digest + Spotlight
-  const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
-    apiGet('/events'), apiGet('/deals'), apiGet('/news'), apiGet('/shoutouts')
-  ]);
+// AFTER — fire directory fetch in background; don't block home feed on it
+function _renderSpotlight(businesses) {
+  const spotEl = document.getElementById('spotlightScroll');
+  if (!spotEl) return;
+  // Prefer rated businesses; fall back to all businesses if none have ratings
+  let sb = [...businesses]
+    .filter(b => b.avgRating && b.avgRating > 0)
+    .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
+    .slice(0, 8);
+  if (!sb.length) {
+    sb = [...businesses].slice(0, 8);
+  }
+  spotEl.innerHTML = sb.length
+    ? sb.map(b => `
+      <div onclick="showBusinessDetail('${b._id}')"
+           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
+        <div class="flex items-center gap-3 mb-3">
+          ${b.logo
+            ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
+            : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
+            <p class="text-xs text-white/50">${b.category?.name || ''}</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
+          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
+        </div>
+      </div>`).join('')
+    : `<p class="text-white/40 text-center py-8">No trending businesses yet</p>`;
+}
+
+if (allBusinesses.length === 0) {
+  apiGet('/directory').then(d => {
+    if (d && d.businesses) {
+      // PRE-COMPUTE open status once (this fixes the hang)
+      allBusinesses = d.businesses.map(b => {
+        if (b.hours && b._openStatus === undefined) {
+          b._openStatus = getOpenStatus(b.hours);
+        }
+        return b;
+      });
+      _renderSpotlight(allBusinesses);
+    }
+  }).catch(() => {
+    _renderSpotlight([]);
+  });
+} else {
+  _renderSpotlight(allBusinesses);
+}
+
+const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
+  apiGet('/events').catch(() => []),
+  apiGet('/deals').catch(() => []),
+  apiGet('/news').catch(() => []),
+  apiGet('/shoutouts').catch(() => []),
+]);
 
   // Digest
   const digestHTML = `
@@ -320,39 +485,7 @@ async function loadHomePage(content) {
     </div>`;
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
-  // Spotlight
-  let spotlightBusinesses = [];
-  if (allBusinesses.length === 0) {
-    try {
-      const dirData = await apiGet('/directory');
-      allBusinesses = dirData.businesses || [];
-    } catch (_) {}
-  }
-  spotlightBusinesses = [...allBusinesses]
-    .filter(b => b.avgRating && b.avgRating > 0)
-    .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
-    .slice(0, 8);
-
-  const spotlightHTML = spotlightBusinesses.map(b => `
-    <div onclick="showBusinessDetail('${b._id}')" 
-         class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
-      <div class="flex items-center gap-3 mb-3">
-        ${b.logo 
-          ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">` 
-          : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
-        <div class="flex-1 min-w-0">
-          <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
-          <p class="text-xs text-white/50">${b.category?.name || ''}</p>
-        </div>
-      </div>
-      <div class="flex items-center justify-between">
-        ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
-        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
-      </div>
-    </div>`).join('');
-
-  document.getElementById('spotlightScroll').innerHTML = spotlightHTML || 
-    `<p class="text-white/40 text-center py-8">No trending businesses yet</p>`;
+  // Spotlight — rendered by _renderSpotlight() called above after directory data loads
 
   // ── FIXED Hot Right Now Feed (News + Shoutouts + Events + Deals) ─────────────
   const now = new Date();
@@ -496,14 +629,8 @@ async function loadHomePage(content) {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const shoutoutsTodayCount = (shoutoutsData || []).filter(s => new Date(s.createdAt) >= todayStart).length;
 
-  let bizCount = allBusinesses.length;
-  if (!bizCount) {
-    try {
-      const dirData = await apiGet('/directory');
-      allBusinesses = dirData.businesses || [];
-      bizCount = allBusinesses.length;
-    } catch (_) {}
-  }
+  // allBusinesses was already populated above from the parallel fetch — no second call needed
+  const bizCount = allBusinesses.length;
 
   const statsBar = document.getElementById('communityStatsBar');
   if (statsBar) {
@@ -599,7 +726,7 @@ window.closeNewsArticle = function () {
 
 window.deleteNewsArticle = async function (id) {
   if (!confirm('Delete this article permanently?')) return;
-  const res = await apiPost(`/news/${id}`, {}, 'DELETE');
+  const res = await apiDelete(`/news/${id}`);
   if (res.message) {
     showToast('Article deleted');
     closeNewsArticle();
@@ -775,12 +902,9 @@ window.loadDirectoryAndOpen = async function (businessId) {
   showBusinessDetail(businessId);
 };
 
-// ─── DIRECTORY ────────────────────────────────────────────────────────────────
 async function loadDirectoryPage(content) {
-  const data = await apiGet('/directory');
-  allBusinesses = data.businesses;
-
-  let html = `
+  // Paint the shell instantly — user sees the page right away
+  content.innerHTML = `
     <h2 class="text-3xl md:text-4xl font-bold mb-5">Local Directory</h2>
     ${!currentUser ? guestBanner('rate businesses, claim your listing, and more') : ''}
     <div class="mb-4">
@@ -789,21 +913,70 @@ async function loadDirectoryPage(content) {
              class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400 text-base"
              onkeyup="filterDirectory()">
     </div>
-    <div class="flex gap-2 mb-5 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;width:100%;">
-      <button onclick="renderDirectory(allBusinesses)" 
-              class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition font-semibold">
-        All
-      </button>
-      ${data.categories.map(cat => `
-        <button onclick="filterByCategory('${cat._id}')"
-                class="flex-shrink-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition flex items-center gap-1">
-          <span>${cat.icon}</span><span>${cat.name}</span>
-        </button>`).join('')}
+    <div id="dirCategoryBar" class="flex gap-2 mb-5 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;width:100%;">
+      <button onclick="renderDirectory(allBusinesses)"
+              class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition font-semibold">All</button>
     </div>
-    <div id="directoryResults" style="width:100%;min-width:0;"></div>`;
+    <div id="directoryResults" style="width:100%;min-width:0;">
+      <div class="flex flex-col gap-3">
+        ${[1,2,3,4,5].map(() => `
+          <div class="bg-white/5 rounded-3xl p-4 animate-pulse h-28"></div>`).join('')}
+      </div>
+    </div>`;
 
-  content.innerHTML = html;
-  renderDirectory(allBusinesses);
+  // Render cached categories INSTANTLY (fixes slow/empty category bar on load)
+  if (window._dirCategories && window._dirCategories.length > 0) {
+    const bar = document.getElementById('dirCategoryBar');
+    if (bar) {
+      bar.innerHTML = `
+        <button onclick="renderDirectory(allBusinesses)"
+                class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition font-semibold">All</button>
+        ${window._dirCategories.map(cat => `
+          <button onclick="filterByCategory('${cat._id}')"
+                  class="flex-shrink-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition flex items-center gap-1">
+            <span>${cat.icon}</span><span>${cat.name}</span>
+          </button>`).join('')}`;
+    }
+  }
+
+  // If we already have cached businesses, render them immediately with simple cards
+  if (allBusinesses.length > 0) {
+    renderDirectory(allBusinesses);
+  }
+
+  // Fetch fresh data in the background (non-blocking) — updates everything when ready
+  try {
+    const data = await apiGet('/directory');
+    if (data && data.businesses) {
+      allBusinesses = data.businesses;
+      renderDirectory(allBusinesses);
+      _renderCategoryBar(data.categories);
+    }
+  } catch (e) {
+    console.error('Directory fetch failed', e);
+    if (allBusinesses.length === 0) {
+      document.getElementById('directoryResults').innerHTML =
+        `<p class="text-center text-white/50 py-12">Failed to load directory. Please refresh.</p>`;
+    }
+  }
+}
+
+function _renderCategoryBar(categories) {
+  const bar = document.getElementById('dirCategoryBar');
+  if (!bar) return;
+  // Fall back to previously cached categories if API didn't return them
+  const cats = (categories && categories.length) ? categories : (window._dirCategories || []);
+  if (!cats.length) return;
+  // Cache for other pages that use ensureDirCategories()
+  if (cats.length) window._dirCategories = cats;
+  bar.innerHTML = `
+    <button onclick="renderDirectory(allBusinesses)"
+            class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition font-semibold">All</button>
+    ${cats.map(cat => `
+      <button onclick="filterByCategory('${cat._id}')"
+              class="flex-shrink-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition flex items-center gap-1">
+        <span>${cat.icon}</span><span>${cat.name}</span>
+      </button>`).join('')}`;
 }
 
 // ─── "Open now" badge helper ──────────────────────────────────────────────────
@@ -870,94 +1043,26 @@ function getOpenStatus(hoursStr) {
 
 function renderDirectory(businesses) {
   const container = document.getElementById('directoryResults');
-  if (!businesses.length) {
-    container.innerHTML = `<p class="text-center text-white/50 py-12">No results found</p>`;
+  if (!container) return;
+
+  if (!businesses || businesses.length === 0) {
+    container.innerHTML = `<p class="text-center text-white/50 py-12">No businesses found</p>`;
     return;
   }
 
-  // Tag badge color palette (cycles)
-  const tagColors = [
-    'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    'bg-blue-500/20 text-blue-300 border-blue-500/30',
-    'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    'bg-rose-500/20 text-rose-300 border-rose-500/30',
-  ];
-
-  let html = '<div style="display:grid;grid-template-columns:1fr;gap:12px;width:100%;min-width:0;">';
+    let html = '<div class="space-y-4">';
   businesses.forEach(b => {
-    const avg          = b.avgRating || 0;
-    const count        = b.ratings ? b.ratings.length : 0;
-    const isOwned      = b.owner !== null && b.owner !== undefined;
-    const categoryIcon = b.category?.icon || '🏢';
-    const categoryName = b.category?.name || 'Business';
-    const openStatus   = getOpenStatus(b.hours);
-    const visibleTags  = (b.tags || []).slice(0, 3);
-
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           style="width:100%;min-width:0;box-sizing:border-box;"
-           class="card-hover bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden cursor-pointer group transition-all duration-300">
-        <div class="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 ${b.isPremium ? '' : 'opacity-40'}"></div>
-        <div class="p-4" style="box-sizing:border-box;">
-
-          <!-- Row 1: Logo + Name + Price + Badges -->
-          <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;">
-            ${b.logo
-              ? `<img src="${b.logo}" alt="" style="width:48px;height:48px;border-radius:14px;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.15);">`
-              : `<div class="bg-white/10 rounded-2xl flex items-center justify-center text-2xl" style="width:48px;height:48px;flex-shrink:0;">${categoryIcon}</div>`
-            }
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;min-width:0;">
-                <div style="flex:1;min-width:0;">
-                  <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
-                    <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors" style="word-break:break-word;">${b.name}</h3>
-                    ${b.priceRange ? `<span class="text-xs text-white/50 font-semibold" style="flex-shrink:0;">${b.priceRange}</span>` : ''}
-                  </div>
-                  <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px;">
-                    <span class="text-xs text-white/50">${b.logo ? categoryIcon : ''} ${categoryName}</span>
-                    ${openStatus ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${openStatus.open ? 'bg-emerald-500/25 text-emerald-300' : 'bg-red-500/20 text-red-400'}">${openStatus.label}</span>` : ''}
-                  </div>
-                </div>
-                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
-                  ${isOwned  ? `<span class="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">✓ Verified</span>` : ''}
-                  ${b.isPremium ? `<span class="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full" style="white-space:nowrap;">⭐ Premium</span>` : ''}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Row 2: Address -->
-          <p class="text-emerald-300 text-sm mt-3 mb-1" style="display:flex;align-items:flex-start;gap:4px;min-width:0;">
-            <span style="flex-shrink:0;">📍</span><span style="word-break:break-word;min-width:0;">${b.address || 'Milledgeville, GA'}</span>
-          </p>
-
-          <!-- Row 3: Hours line -->
-          ${b.hours ? `<p class="text-xs text-white/45 mb-1" style="display:flex;align-items:center;gap:4px;"><span>🕐</span><span style="word-break:break-word;">${b.hours}</span></p>` : ''}
-
-          <!-- Row 4: Contact quick-links -->
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;margin-bottom:6px;">
-            ${b.phone   ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs text-emerald-300 hover:text-emerald-200 transition" style="white-space:nowrap;">📞 ${b.phone}</a>` : ''}
-            ${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" onclick="event.stopPropagation()" class="text-xs text-blue-300 hover:text-blue-200 transition" style="white-space:nowrap;">🌐 Website</a>` : ''}
-            ${b.email   ? `<a href="mailto:${b.email}" onclick="event.stopPropagation()" class="text-xs text-purple-300 hover:text-purple-200 transition" style="white-space:nowrap;">✉️ Email</a>` : ''}
-          </div>
-
-          <!-- Row 5: Tag badges (up to 3) -->
-          ${visibleTags.length ? `
-            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
-              ${visibleTags.map((tag, i) => `<span class="text-[10px] font-semibold border px-2 py-0.5 rounded-full ${tagColors[i % tagColors.length]}">${tag}</span>`).join('')}
-            </div>` : ''}
-
-          <!-- Row 6: Stars + action buttons -->
-          <div class="pt-3 border-t border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;">
-            <div id="card-stars-${b._id}" style="flex-shrink:0;">${renderStars(avg, count)}</div>
-            <div style="display:flex;gap:6px;flex-shrink:0;">
-              ${b.phone ? `<a href="tel:${b.phone}" onclick="event.stopPropagation()" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full transition" style="white-space:nowrap;">📞 Call</a>` : ''}
-              ${!isOwned && currentUser  ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showClaimModal('${b._id}')">Claim</span>` : ''}
-              ${!isOwned && !currentUser ? `<span class="text-xs bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-full transition cursor-pointer" style="white-space:nowrap;" onclick="event.stopPropagation();showAuthModal({message:'Sign in to claim your business.'})">Claim</span>` : ''}
-            </div>
-          </div>
-
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
+        ${b.logo 
+          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
+          : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-lg leading-tight">${b.name}</h3>
+          <p class="text-white/70 text-sm">${b.address || 'Milledgeville, GA'}</p>
+          ${b.phone ? `<p class="text-emerald-400 text-xs mt-0.5">📞 ${b.phone}</p>` : ''}
+          ${b.hours ? `<p class="text-white/50 text-xs">${b.hours}</p>` : ''}
         </div>
       </div>`;
   });
@@ -1072,18 +1177,6 @@ async function showBusinessDetail(id) {
           <p class="text-gray-500 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
 
           ${enrichedInfoSection}
-
-          <!-- Star rating -->
-          <div class="bg-gray-50 rounded-2xl p-4 mb-4">
-            <p class="text-sm font-semibold text-gray-700 mb-2">Rate this business:</p>
-            ${currentUser
-              ? renderStars(avg, count, true, business._id)
-              : `<p class="text-sm text-gray-500 mb-1">${renderStars(avg, count)} ${count > 0 ? `(${count} rating${count !== 1 ? 's' : ''})` : 'No ratings yet'}</p>
-                 <button onclick="hideBusinessModal();showAuthModal({message:'Sign in to rate businesses.'})"
-                         class="mt-2 text-xs text-emerald-600 hover:text-emerald-500 font-semibold transition">
-                   Sign in to leave a rating →
-                 </button>`}
-          </div>
 
           <!-- FOLLOW BUTTON -->
           ${currentUser ? `
@@ -1346,7 +1439,7 @@ window.submitReview = async function (bizId) {
 
 window.deleteReview = async function (bizId, reviewId) {
   if (!confirm('Delete this review?')) return;
-  const res = await apiPost(`/business/${bizId}/reviews/${reviewId}`, {}, 'DELETE');
+  const res = await apiDelete(`/business/${bizId}/reviews/${reviewId}`);
   if (res.message === 'Deleted') {
     showToast('Review deleted');
     const card = document.getElementById(`review-card-${reviewId}`);
@@ -1902,7 +1995,7 @@ window.submitReply = async function (shoutoutId, commentId) {
 
 window.deleteComment = async function (shoutoutId, commentId) {
   if (!confirm('Delete this comment?')) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}`, {}, 'DELETE');
+  const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}`);
   if (res.message === 'Deleted') {
     await loadShoutoutsPage(document.getElementById('content'));
   } else {
@@ -1912,7 +2005,7 @@ window.deleteComment = async function (shoutoutId, commentId) {
 
 window.deleteShoutout = async function (shoutoutId) {
   if (!confirm('Delete this shoutout?')) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}`, {}, 'DELETE');
+  const res = await apiDelete(`/shoutouts/${shoutoutId}`);
   if (res.message) {
     showToast('Shoutout deleted');
     await loadShoutoutsPage(document.getElementById('content'));
@@ -2874,7 +2967,7 @@ window.addOwnerDeal = async function () {
 
 window.deleteOwnerDeal = async function (id) {
   if (!confirm('Delete this deal?')) return;
-  await apiPost(`/owner/deals/${id}`, {}, 'DELETE');
+  await apiDelete(`/owner/deals/${id}`);
   showToast('Deal deleted');
   loadOwnerDeals();
 };
@@ -2904,7 +2997,7 @@ window.addOwnerEvent = async function () {
 
 window.deleteOwnerEvent = async function (id) {
   if (!confirm('Delete this event?')) return;
-  await apiPost(`/owner/events/${id}`, {}, 'DELETE');
+  await apiDelete(`/owner/events/${id}`);
   showToast('Event deleted');
   loadOwnerEvents();
 };
@@ -3040,7 +3133,7 @@ async function loadAdminNewsPanel() {
 
 window.adminDeleteNews = async function (id) {
   if (!confirm('Delete this article permanently?')) return;
-  const res = await apiPost(`/admin/news/${id}`, {}, 'DELETE');
+  const res = await apiDelete(`/admin/news/${id}`);
   if (res.message) {
     showToast('Article deleted');
     loadAdminNewsPanel();
@@ -3158,7 +3251,7 @@ window.toggleNewsAccess = async function (userId, allow) {
 
 window.adminDeleteUser = async function (userId, userName) {
   if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
-  const res = await apiPost(`/admin/users/${userId}`, {}, 'DELETE');
+  const res = await apiDelete(`/admin/users/${userId}`);
   if (res.message === 'User deleted') {
     showToast('User deleted');
     window._adminUsersData = (window._adminUsersData || []).filter(u => u._id !== userId);
@@ -3318,7 +3411,7 @@ window.cancelEdit = function () {
 
 window.deleteBusiness = async function (id) {
   if (!confirm('Delete this business permanently?')) return;
-  await apiPost(`/admin/business/${id}`, {}, 'DELETE');
+  await apiDelete(`/admin/business/${id}`);
   showToast('Business deleted');
   loadManageList();
 };
@@ -3524,7 +3617,7 @@ function renderModResults() {
 // ─── Admin moderation delete actions ─────────────────────────────────────────
 window.adminDeleteShoutout = async function (id) {
   if (!confirm('Delete this shoutout and all its comments?')) return;
-  const res = await apiPost(`/shoutouts/${id}`, {}, 'DELETE');
+  const res = await apiDelete(`/shoutouts/${id}`);
   if (res.message) {
     showToast('Shoutout deleted');
     const idx = modState.rawData.shoutouts.findIndex(s => s._id === id);
@@ -3537,7 +3630,7 @@ window.adminDeleteShoutout = async function (id) {
 
 window.adminDeleteComment = async function (shoutoutId, commentId) {
   if (!confirm('Delete this comment and its replies?')) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}`, {}, 'DELETE');
+  const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}`);
   if (res.message === 'Deleted') {
     showToast('Comment deleted');
     const s = modState.rawData.shoutouts.find(s => s._id === shoutoutId);
@@ -3550,7 +3643,7 @@ window.adminDeleteComment = async function (shoutoutId, commentId) {
 
 window.adminDeleteReply = async function (shoutoutId, commentId, replyId) {
   if (!confirm('Delete this reply?')) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`, {}, 'DELETE');
+  const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`);
   if (res.message === 'Deleted') {
     showToast('Reply deleted');
     const s = modState.rawData.shoutouts.find(s => s._id === shoutoutId);
@@ -3566,7 +3659,7 @@ window.adminDeleteReply = async function (shoutoutId, commentId, replyId) {
 
 window.adminDeleteEvent = async function (id) {
   if (!confirm('Delete this event?')) return;
-  const res = await apiPost(`/admin/events/${id}`, {}, 'DELETE');
+  const res = await apiDelete(`/admin/events/${id}`);
   if (res.message) {
     showToast('Event deleted');
     modState.rawData.events = modState.rawData.events.filter(e => e._id !== id);
@@ -3578,7 +3671,7 @@ window.adminDeleteEvent = async function (id) {
 
 window.adminDeleteDeal = async function (id) {
   if (!confirm('Delete this deal?')) return;
-  const res = await apiPost(`/admin/deals/${id}`, {}, 'DELETE');
+  const res = await apiDelete(`/admin/deals/${id}`);
   if (res.message) {
     showToast('Deal deleted');
     modState.rawData.deals = modState.rawData.deals.filter(d => d._id !== id);
@@ -3705,7 +3798,7 @@ window.handleBizPhotoUpload = async function (bizId, input) {
 
 window.deleteBizPhoto = async function (bizId, index) {
   if (!confirm('Remove this photo?')) return;
-  const res = await apiPost(`/owner/business/photos/${index}`, {}, 'DELETE');
+  const res = await apiDelete(`/owner/business/photos/${index}`);
   if (res.message === 'Photo deleted') {
     showToast('Photo removed');
     const meRes = await apiGet('/auth/me');
@@ -3784,7 +3877,7 @@ window.handleOwnerPhotoUpload = async function (input) {
 
 window.deleteOwnerPhoto = async function (index) {
   if (!confirm('Remove this photo?')) return;
-  const res = await apiPost(`/owner/business/photos/${index}`, {}, 'DELETE');
+  const res = await apiDelete(`/owner/business/photos/${index}`);
   if (res.message === 'Photo deleted') {
     showToast('Photo removed');
     const meRes = await apiGet('/auth/me');
@@ -4002,18 +4095,14 @@ async function renderLostComments(item) {
   
   let html = '';
   (item.comments || []).forEach(c => {
-    html += `<div class="bg-slate-100 rounded-2xl p-4"><p class="font-medium">${c.author}</p><p>${c.text}</p></div>`;
+    const authorId = c.authorId?._id || c.authorId;
+    html += `<div class="bg-slate-100 rounded-2xl p-4">
+      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" class="font-medium cursor-pointer hover:underline">${c.author || 'Anonymous'}</p>
+      <p class="text-slate-700">${c.text}</p>
+    </div>`;
   });
   container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No comments yet</p>';
 }
-
-window.markLostResolved = async function() {
-  if (confirm('Mark this item as resolved?')) {
-    await apiPost(`/lostitems/${currentLostItemId}/resolve`, {});
-    hideLostDetailModal();
-    loadPage('lostfound');
-  }
-};
 
 // ====================== MARKETPLACE ======================
 
@@ -4147,6 +4236,7 @@ window.showMarketplaceDetail = async function(id) {
   div.innerHTML = html;
   document.body.appendChild(div);
 
+  // This line was missing — now names appear and are clickable
   renderMarketComments(item);
 };
 
@@ -4163,18 +4253,7 @@ window.postMarketComment = async function() {
   input.value = '';
   const items = await apiGet('/marketplace');
   const item = items.find(i => i._id === currentMarketItemId);
-  if (item) renderMarketComments(item);
 };
-
-async function renderMarketComments(item) {
-  const container = document.getElementById('marketCommentsContainer');
-  if (!container) return;
-  let html = '';
-  (item.comments || []).forEach(c => {
-    html += `<div class="bg-slate-100 rounded-2xl p-4"><p class="font-medium">${c.author}</p><p>${c.text}</p></div>`;
-  });
-  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No messages yet</p>';
-}
 
 window.markMarketSold = async function() {
   if (confirm('Mark this item as sold?')) {
@@ -4212,6 +4291,8 @@ async function loadLostFoundPage(content) {
           <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
             <span>📍 ${item.location || 'Unknown'}</span>
             <span>·</span>
+            ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
+            <span>·</span>
             <span>${timeAgo(item.createdAt)}</span>
           </div>
         </div>
@@ -4220,7 +4301,6 @@ async function loadLostFoundPage(content) {
   document.getElementById('lostItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No items yet — be the first to post!</p>`;
 }
 
-// ====================== FULLY UPDATED MARKETPLACE PAGE ======================
 async function loadMarketplacePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto">
@@ -4234,26 +4314,343 @@ async function loadMarketplacePage(content) {
     </div>`;
 
   const items = await apiGet('/marketplace');
-  const listHTML = items.map(item => `
-    <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-      <div class="flex gap-4">
-        ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
-        <div class="flex-1">
-          <h3 class="font-semibold text-lg">${item.title}</h3>
-          <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
-          <p class="text-white/70 line-clamp-2">${item.description}</p>
-          <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
-            <span>${item.condition}</span>
-            <span>·</span>
-            <span>by ${item.authorName}</span>
-            <span>·</span>
-            <span>${timeAgo(item.createdAt)}</span>
+  const listHTML = items.map(item => {
+    const sellerId = item.seller?._id || item.seller;
+    return `
+      <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+        <div class="flex gap-4">
+          ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
+          <div class="flex-1">
+            <h3 class="font-semibold text-lg">${item.title}</h3>
+            <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
+            <p class="text-white/70 line-clamp-2">${item.description}</p>
+            <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
+              <span>${item.condition}</span>
+              <span>·</span>
+              ${renderClickableUser(item.seller, item.authorName)}
+              <span>·</span>
+              <span>${timeAgo(item.createdAt)}</span>
+            </div>
           </div>
         </div>
-      </div>
-    </div>`).join('');
+      </div>`;
+  }).join('');
   document.getElementById('marketItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
 }
+
+async function renderMarketComments(item) {
+  const container = document.getElementById('marketCommentsContainer');
+  if (!container) return;
+
+  let html = '';
+  (item.comments || []).forEach(c => {
+    const authorId = c.authorId?._id || c.authorId;
+    html += `<div class="bg-slate-100 rounded-2xl p-4">
+      <p onclick="showUserProfileModal('${authorId}')" class="font-medium cursor-pointer hover:underline">${c.author}</p>
+      <p class="text-slate-700">${c.text}</p>
+    </div>`;
+  });
+  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No messages yet</p>';
+}
+
+// ====================== MESSAGING SYSTEM ======================
+async function loadMessagesPage(content) {
+  if (!requireAuth('Sign in to access messages')) return;
+  _setBadge(0);
+
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">✉️ Messages</h1>
+        <button onclick="showComposeMessageModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">✍️</span> New Message
+        </button>
+      </div>
+      
+      <div class="flex gap-2 mb-4 border-b border-white/20 pb-2">
+        <button onclick="switchMessageTab(0)" id="msgTab0" class="flex-1 py-3 text-center font-semibold border-b-2 border-emerald-400">Inbox</button>
+        <button onclick="switchMessageTab(1)" id="msgTab1" class="flex-1 py-3 text-center font-semibold">Sent</button>
+      </div>
+      
+      <div id="messagesList" class="space-y-4"></div>
+    </div>`;
+
+    window.currentMessageTab = 0;
+  const msgs = await renderMessagesList(0);
+  if (msgs && msgs.length > 0) {
+    markMessagesAsRead(msgs); // pass already-fetched msgs to avoid extra API call + race condition
+  }
+}
+
+async function markMessagesAsRead(inboxMsgs = null) {
+  if (!currentUser) return;
+  _setBadge(0);
+  try {
+    const inbox = inboxMsgs || await apiGet('/messages/inbox');
+    const unreadSenders = [...new Set(
+      inbox
+        .filter(m => !m.read && String(m.receiver?._id || m.receiver) === String(currentUser._id))
+        .map(m => m.sender?._id || m.sender)
+        .filter(Boolean)
+    )];
+    await Promise.all(
+      unreadSenders.map(senderId => apiPost('/messages/mark-as-read', { otherId: senderId }).catch(() => {}))
+    );
+  } catch (e) {
+    console.warn('⚠️ markMessagesAsRead partial failure:', e);
+  }
+}
+
+async function renderMessagesList(tab) {
+  const container = document.getElementById('messagesList');
+  if (!container) return [];
+
+  // Guard: wait for currentUser if not ready yet (prevents crash on initial load)
+  if (typeof currentUser === 'undefined' || !currentUser?._id) {
+    console.warn('[Messages] currentUser not ready yet, retrying in 300ms...');
+    setTimeout(() => renderMessagesList(tab), 300);
+    return [];
+  }
+
+  let msgs = [];
+  try {
+    const raw = tab === 0
+      ? await apiGet('/messages/inbox')
+      : await apiGet('/messages/outbox');
+    msgs = Array.isArray(raw) ? raw : [];
+  } catch (e) {
+    console.error('Failed to load messages', e);
+    container.innerHTML = `<p class="text-white/50 text-center py-8">Failed to load messages</p>`;
+    return [];
+  }
+
+  // Group by the OTHER person so we only show ONE card per conversation
+  const conversations = {};
+  const myId = String(currentUser._id); // normalize to string for safe comparison
+
+  msgs.forEach(m => {
+    const other = tab === 0 ? m.sender : m.receiver;
+    let otherId = other?._id || other;
+    if (!otherId) return;
+
+    otherId = String(otherId); // normalize to string
+    if (otherId === myId) return; // skip self
+
+    if (!conversations[otherId]) {
+      conversations[otherId] = {
+        otherId: otherId,
+        otherName: other?.name || other || 'User',
+        lastMessage: m.text,
+        timestamp: m.createdAt,
+        unread: tab === 0 && !m.read
+      };
+    } else {
+      // keep the newest message
+      if (new Date(m.createdAt) > new Date(conversations[otherId].timestamp)) {
+        conversations[otherId].lastMessage = m.text;
+        conversations[otherId].timestamp = m.createdAt;
+      }
+    }
+  });
+
+  const conversationArray = Object.values(conversations)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  let html = '';
+  if (conversationArray.length === 0) {
+    html = `<p class="text-white/50 text-center py-8">No messages yet</p>`;
+  } else {
+    conversationArray.forEach(conv => {
+      html += `
+        <div onclick="openConversation('${conv.otherId}')" 
+             data-other-id="${conv.otherId}"
+             class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-4 cursor-pointer transition">
+          <div class="flex-1">
+            <div class="flex justify-between items-baseline">
+              <p class="font-semibold">${conv.otherName}</p>
+              ${conv.unread ? `<span class="msg-new-pill text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">new</span>` : ''}
+            </div>
+            <p class="text-white/70 text-sm line-clamp-1">${conv.lastMessage}</p>
+            <p class="text-xs text-white/50">${timeAgo(conv.timestamp)}</p>
+          </div>
+        </div>`;
+    });
+  }
+
+  container.innerHTML = html;
+  return msgs;
+}
+
+// ====================== FIXED COMPOSE MODAL (high z-index + pre-fill) ======================
+window.showComposeMessageModal = function(preSelectedUserId = null, preSelectedName = 'User') {
+  hideUserProfileModal();
+  hideMarketDetailModal();
+  hideLostDetailModal();
+
+  const modalHTML = `
+    <div id="composeModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[15000]">
+      <div onclick="if(event.target.id==='composeModal')hideComposeModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl p-6">
+        <h2 class="text-2xl font-bold mb-4">New Message</h2>
+        
+        ${preSelectedUserId ? `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
+          <p class="text-sm text-emerald-700">To: <strong>${preSelectedName}</strong></p>
+          <input type="hidden" id="composeReceiverId" value="${preSelectedUserId}">
+        </div>` : `
+        <input id="composeRecipientId" type="text" placeholder="User ID" class="w-full px-4 py-3 rounded-2xl border mb-4">
+        <p class="text-xs text-slate-500 mb-3">Tip: Click any username first</p>`}
+        
+        <textarea id="composeText" rows="4" class="w-full px-4 py-3 rounded-2xl border mb-6" placeholder="Write your message..."></textarea>
+        
+        <div class="flex gap-3">
+          <button onclick="hideComposeModal()" class="flex-1 py-4 border rounded-3xl font-semibold">Cancel</button>
+          <button onclick="sendComposedMessage()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Send Message</button>
+        </div>
+      </div>
+    </div>`;
+
+  const div = document.createElement('div');
+  div.innerHTML = modalHTML;
+  document.body.appendChild(div);
+};
+
+window.hideComposeModal = function() {
+  const modal = document.getElementById('composeModal');
+  if (modal) modal.remove();
+};
+
+updateMessageBadge();
+
+window.sendComposedMessage = async function() {
+  const receiverId = document.getElementById('composeReceiverId') 
+    ? document.getElementById('composeReceiverId').value 
+    : document.getElementById('composeRecipientId')?.value.trim();
+
+  const text = document.getElementById('composeText').value.trim();
+
+  if (!receiverId || !text) {
+    alert('User ID and message are required');
+    return;
+  }
+
+  const res = await apiPost('/messages', { receiverId, text });
+
+  if (res._id || res.message?.includes('sent')) {
+    hideComposeModal();
+    showToast('✅ Message sent!');
+    loadMessagesPage(document.getElementById('content'));
+  } else {
+    alert(res.message || 'Failed to send message');
+  }
+};
+
+// ─── FULL INBOX / CONVERSATION SYSTEM ───────────────────────────────────────
+window.switchMessageTab = async function(tab) {
+  window.currentMessageTab = tab;
+
+  const tab0 = document.getElementById('msgTab0');
+  const tab1 = document.getElementById('msgTab1');
+  if (tab0) {
+    tab0.classList.toggle('border-emerald-400', tab === 0);
+    tab0.classList.toggle('border-transparent', tab !== 0);
+  }
+  if (tab1) {
+    tab1.classList.toggle('border-emerald-400', tab === 1);
+    tab1.classList.toggle('border-transparent', tab !== 1);
+  }
+
+  const msgs = await renderMessagesList(tab);
+
+  if (tab === 0) {
+    markMessagesAsRead(msgs); // pass already-fetched messages — avoids a 3rd API call
+  }
+  updateMessageBadge();
+};
+
+window.openConversation = async function(otherId) {
+  hideConversationModal(); // close any old one
+
+  // ── Instantly remove the "new" badge from this conversation row ──────────
+  _setBadge(Math.max(0, _unreadCount - 1));
+  // Also visually clear the "new" pill on the inbox list row for this otherId
+  document.querySelectorAll(`[data-other-id="${otherId}"] .msg-new-pill`).forEach(el => el.remove());
+  const modalHTML = `
+    <div id="conversationModal" onclick="if(event.target.id==='conversationModal')hideConversationModal()" 
+         class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[16000] p-4">
+      <div onclick="event.stopImmediatePropagation()" 
+           class="bg-slate-900 w-full max-w-lg rounded-3xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="p-4 border-b flex items-center justify-between bg-slate-800">
+          <button onclick="hideConversationModal()" class="text-white/70 hover:text-white">← Back</button>
+          <h3 class="font-semibold text-lg" id="chatWithName">Chat</h3>
+          <div></div>
+        </div>
+        <div id="conversationThread" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900"></div>
+        <div class="p-4 border-t bg-slate-800 flex gap-2">
+          <input id="replyInput" type="text" placeholder="Type a reply..." 
+                 class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-3 text-white focus:outline-none">
+          <button onclick="sendReply('${otherId}')" 
+                  class="bg-emerald-600 hover:bg-emerald-500 px-6 rounded-3xl text-white font-medium">Send</button>
+        </div>
+      </div>
+    </div>`;
+  
+  const modal = document.createElement('div');
+  modal.innerHTML = modalHTML;
+  document.body.appendChild(modal.firstElementChild);
+
+  await loadConversationThread(otherId);
+  markConversationAsRead(otherId);   // ← THIS IS THE KEY LINE
+};
+
+window.hideConversationModal = function() {
+  const modal = document.getElementById('conversationModal');
+  if (modal) modal.remove();
+};
+
+async function loadConversationThread(otherId) {
+  const container = document.getElementById('conversationThread');
+  if (!container) return;
+
+  try {
+    const messages = await apiGet(`/messages/conversation/${otherId}`);
+    const nameEl = document.getElementById('chatWithName');
+    if (nameEl && messages.length > 0) {
+      nameEl.textContent = messages[0].sender?._id === currentUser._id 
+        ? messages[0].receiver?.name || 'User' 
+        : messages[0].sender?.name || 'User';
+    }
+
+    let html = '';
+    messages.forEach(m => {
+      const isMine = String(m.sender?._id || m.sender) === String(currentUser._id);
+      html += `
+        <div class="${isMine ? 'text-right' : 'text-left'}">
+          <div class="inline-block max-w-[80%] px-4 py-3 rounded-3xl ${isMine ? 'bg-emerald-600 text-white' : 'bg-white/10 text-white'}">
+            <p>${m.text}</p>
+            <p class="text-[10px] opacity-70 mt-1">${timeAgo(m.createdAt)}</p>
+          </div>
+        </div>`;
+    });
+
+    container.innerHTML = html || `<p class="text-white/50 text-center py-8">No messages yet</p>`;
+    container.scrollTop = container.scrollHeight;
+
+    markConversationAsRead(otherId);   // ← extra safety
+  } catch (e) {
+    console.error('Failed to load conversation thread', e);
+  }
+}
+
+window.sendReply = async function(otherId) {
+  const input = document.getElementById('replyInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  await apiPost('/messages', { receiverId: otherId, text });
+  input.value = '';
+  await loadConversationThread(otherId);
+  updateMessageBadge();
+};
 
 // Global exports
 window.showPostLostItemModal = window.showPostLostItemModal;
@@ -4288,3 +4685,10 @@ window.getDirections = function(address) {
   const encoded = encodeURIComponent(address);
   window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
 };
+
+// Live badge updates every 8 seconds
+setInterval(() => {
+  if (typeof currentUser !== 'undefined' && currentUser) {
+    updateMessageBadge();
+  }
+}, 30000);

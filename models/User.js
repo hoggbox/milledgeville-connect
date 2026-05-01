@@ -29,6 +29,12 @@ const userSchema = new mongoose.Schema({
   following: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Business'
+  }],
+
+  // NEW: Blocked users for messaging privacy
+  blockedUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }]
 });
 

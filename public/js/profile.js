@@ -487,6 +487,70 @@ function escHtml(str) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── NEW: Other user profile modal (called from anywhere names appear) ───────
+window.showUserProfileModal = async function(userId) {
+  if (!currentUser) return showAuthModal({ message: 'Sign in to view profiles and message users.' });
+
+  const modal = document.getElementById('userProfileModal');
+  const content = document.getElementById('userProfileContent');
+
+  try {
+    const user = await apiGet(`/users/${userId}`);
+    const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(userId);
+
+    content.innerHTML = `
+      <div class="flex justify-center -mt-2 mb-6">
+        <div class="w-24 h-24 rounded-3xl overflow-hidden ring-4 ring-emerald-200 flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
+          ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover">` : user.name[0].toUpperCase()}
+        </div>
+      </div>
+      <h2 class="text-3xl font-bold text-center">${user.name}</h2>
+      ${user.neighborhood ? `<p class="text-center text-slate-500 text-sm mt-1">📍 ${user.neighborhood}</p>` : ''}
+      ${user.bio ? `<p class="mt-6 text-slate-600 italic text-center">"${user.bio}"</p>` : ''}
+      
+      <div class="mt-8 flex gap-3">
+ <button onclick="startDirectMessage('${userId}'); hideUserProfileModal();" 
+        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg flex items-center justify-center gap-2">
+  ✉️ Message
+</button>
+        <button onclick="toggleBlockUser('${userId}')" 
+                class="flex-1 ${isBlocked ? 'bg-red-500' : 'bg-slate-700'} hover:bg-slate-800 text-white py-4 rounded-3xl font-semibold text-lg">
+          ${isBlocked ? '✅ Unblock' : '🚫 Block'}
+        </button>
+      </div>
+      
+      <button onclick="hideUserProfileModal()" class="w-full mt-4 text-slate-400">Close</button>
+    `;
+    modal.classList.remove('hidden');
+  } catch (e) {
+    content.innerHTML = `<p class="text-red-500 text-center">Could not load profile.</p>`;
+  }
+};
+
+window.hideUserProfileModal = function() {
+  const modal = document.getElementById('userProfileModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+// ─── Improved: Open compose directly with pre-filled user ─────────────────────
+window.startDirectMessage = function(receiverId) {
+  hideUserProfileModal();           // close profile first
+  hideComposeModal();               // close any old compose
+  showComposeMessageModal(receiverId);  // open compose with user pre-selected
+};
+
+window.toggleBlockUser = async function(userId) {
+  const res = await apiPost(`/users/${userId}/block`, {});
+  if (res.blocked !== undefined) {
+    currentUser.blockedUsers = currentUser.blockedUsers || [];
+    const idx = currentUser.blockedUsers.indexOf(userId);
+    if (idx === -1) currentUser.blockedUsers.push(userId);
+    else currentUser.blockedUsers.splice(idx, 1);
+    showUserProfileModal(userId); // refresh modal
+    showToast(res.blocked ? 'User blocked' : 'User unblocked');
+  }
+};
+
 // ─── Override updateUserUI ────────────────────────────────────────────────────
 window.updateUserUI = function () { renderNav(); };
 
@@ -499,3 +563,66 @@ window.handleAvatarSelect    = handleAvatarSelect;
 window.saveProfile           = saveProfile;
 window.requestPushPermission = requestPushPermission;
 window.disablePushNotifications = disablePushNotifications;
+
+// ─── NEW: Other user profile modal ───────────────────────────────────────────
+window.showUserProfileModal = async function(userId) {
+  if (!currentUser) return showAuthModal({ message: 'Sign in to view profiles and message users.' });
+
+  const modal = document.getElementById('userProfileModal');
+  const content = document.getElementById('userProfileContent');
+
+  try {
+    const user = await apiGet(`/users/${userId}`);
+    const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(userId);
+
+    content.innerHTML = `
+      <div class="flex justify-center -mt-2 mb-6">
+        <div class="w-24 h-24 rounded-3xl overflow-hidden ring-4 ring-emerald-200 flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
+          ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover">` : user.name[0].toUpperCase()}
+        </div>
+      </div>
+      <h2 class="text-3xl font-bold text-center">${user.name}</h2>
+      ${user.neighborhood ? `<p class="text-center text-slate-500 text-sm mt-1">📍 ${user.neighborhood}</p>` : ''}
+      ${user.bio ? `<p class="mt-6 text-slate-600 italic text-center">"${user.bio}"</p>` : ''}
+      
+      <div class="mt-8 flex gap-3">
+        <button onclick="startDirectMessage('${userId}'); hideUserProfileModal();" 
+                class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg flex items-center justify-center gap-2">
+          ✉️ Message
+        </button>
+        <button onclick="toggleBlockUser('${userId}')" 
+                class="flex-1 ${isBlocked ? 'bg-red-500' : 'bg-slate-700'} hover:bg-slate-800 text-white py-4 rounded-3xl font-semibold text-lg">
+          ${isBlocked ? '✅ Unblock' : '🚫 Block'}
+        </button>
+      </div>
+      
+      <button onclick="hideUserProfileModal()" class="w-full mt-4 text-slate-400">Close</button>
+    `;
+    modal.classList.remove('hidden');
+  } catch (e) {
+    content.innerHTML = `<p class="text-red-500 text-center">Could not load profile.</p>`;
+  }
+};
+
+window.hideUserProfileModal = function() {
+  const modal = document.getElementById('userProfileModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.startDirectMessage = function(receiverId) {
+  hideUserProfileModal();
+  hideComposeModal();
+  showComposeMessageModal(receiverId, 'Selected User');
+};
+
+window.toggleBlockUser = async function(userId) {
+  const res = await apiPost(`/users/${userId}/block`, {});
+  if (res.blocked !== undefined) {
+    currentUser.blockedUsers = currentUser.blockedUsers || [];
+    const idx = currentUser.blockedUsers.indexOf(userId);
+    if (idx === -1) currentUser.blockedUsers.push(userId);
+    else currentUser.blockedUsers.splice(idx, 1);
+    showUserProfileModal(userId);
+    showToast(res.blocked ? '✅ User blocked' : '✅ User unblocked');
+  }
+};

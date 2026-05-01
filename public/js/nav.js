@@ -2,11 +2,12 @@ const pages = [
   { id: 'home',        icon: '🏠', label: 'Home' },
   { id: 'directory',   icon: '📍', label: 'Directory' },
   { id: 'shoutouts',   icon: '💬', label: 'Shoutouts' },
-  { id: 'lostfound',   icon: '🔎', label: 'Lost & Found' },     // ← NEW
-  { id: 'marketplace', icon: '🛒', label: 'Marketplace' },      // ← NEW
+  { id: 'lostfound',   icon: '🔎', label: 'Lost & Found' },
+  { id: 'marketplace', icon: '🛒', label: 'Marketplace' },
   { id: 'events',      icon: '📅', label: 'Events' },
   { id: 'deals',       icon: '🔥', label: 'Deals' },
-  { id: 'resources',   icon: '🌍', label: 'Resources' }
+  { id: 'resources',   icon: '🌍', label: 'Resources' },
+  { id: 'messages',    icon: '✉️', label: 'Messages' }   // ← NEW
 ];
 
 function renderNav() {
@@ -18,20 +19,25 @@ function renderNav() {
   if (isOwner) navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
   if (canNews) navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
 
-  // ── Desktop sidebar nav ──
+  // Desktop sidebar nav
   let desktopHTML = '';
   navPages.forEach(page => {
+    let badge = '';
+    if (page.id === 'messages') {
+      badge = `<span id="messageBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-md hidden"></span>`;
+    }
     desktopHTML += `
-      <button onclick="navigate('${page.id}')"
-              class="flex items-center gap-3 w-full text-left px-6 py-4 rounded-3xl hover:bg-white/10 transition text-white">
+      <button onclick="navigate('${page.id}')" 
+              class="flex items-center gap-3 w-full text-left px-6 py-4 rounded-3xl hover:bg-white/10 transition text-white relative">
         <span class="text-3xl">${page.icon}</span>
         <span class="font-medium">${page.label}</span>
+        ${badge}
       </button>`;
   });
   const desktopNavEl = document.getElementById('desktop-nav');
   if (desktopNavEl) desktopNavEl.innerHTML = desktopHTML;
 
-  // ── Desktop sidebar bottom user area ──
+  // Desktop sidebar bottom user area
   const sidebarUserArea = document.getElementById('sidebar-user-area');
   if (sidebarUserArea) {
     if (currentUser) {
@@ -52,19 +58,24 @@ function renderNav() {
     }
   }
 
-  // ── Mobile bottom nav ──
+  // Mobile bottom nav
   let mobileHTML = '';
   navPages.forEach(page => {
+    let badge = '';
+    if (page.id === 'messages') {
+      badge = `<span id="messageBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-md hidden"></span>`;
+    }
     mobileHTML += `
-      <button onclick="navigate('${page.id}')" class="flex flex-col items-center text-white/70 hover:text-white transition">
+      <button onclick="navigate('${page.id}')" class="flex flex-col items-center text-white/70 hover:text-white transition relative">
         <span class="text-3xl">${page.icon}</span>
+        ${badge}
         <span class="text-[10px]">${page.label}</span>
       </button>`;
   });
   const mobileNavEl = document.getElementById('mobile-nav');
   if (mobileNavEl) mobileNavEl.innerHTML = mobileHTML;
 
-  // ── Mobile topbar user area ──
+  // Mobile topbar user area
   const topbarUserArea = document.getElementById('topbar-user-area');
   if (topbarUserArea) {
     if (currentUser) {
@@ -83,6 +94,12 @@ function renderNav() {
         </button>`;
     }
   }
+  // Safe badge update - won't break the entire nav if timing is off
+  setTimeout(() => {
+    if (typeof updateMessageBadge === 'function') {
+      updateMessageBadge();
+    }
+  }, 300);
 }
 
 window.navigate = loadPage; // defined in data.js
