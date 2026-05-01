@@ -4302,7 +4302,11 @@ async function loadLostFoundPage(content) {
           <span class="text-xl">📤</span> Post Item
         </button>
       </div>
-      <div id="lostItemsList" class="space-y-6"></div>
+      <div id="lostItemsList">
+        <div class="flex justify-center py-12">
+          <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
     </div>`;
 
   const items = await apiGet('/lostitems');
@@ -4327,6 +4331,7 @@ async function loadLostFoundPage(content) {
         </div>
       </div>
     </div>`).join('');
+
   document.getElementById('lostItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No items yet — be the first to post!</p>`;
 }
 
@@ -4339,16 +4344,23 @@ async function loadMarketplacePage(content) {
           <span class="text-xl">📤</span> Sell Something
         </button>
       </div>
-      <div id="marketItemsList" class="space-y-6"></div>
+      <div id="marketItemsList">
+        <div class="flex justify-center py-12">
+          <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
     </div>`;
 
   const items = await apiGet('/marketplace');
+
   const listHTML = items.map(item => {
     const sellerId = item.seller?._id || item.seller;
     return `
       <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
-          ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
+          ${item.images && item.images.length ? 
+            `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : 
+            `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
           <div class="flex-1">
             <h3 class="font-semibold text-lg">${item.title}</h3>
             <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
@@ -4364,7 +4376,11 @@ async function loadMarketplacePage(content) {
         </div>
       </div>`;
   }).join('');
-  document.getElementById('marketItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
+
+  const container = document.getElementById('marketItemsList');
+  if (container) {
+    container.innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
+  }
 }
 
 async function renderMarketComments(item) {
