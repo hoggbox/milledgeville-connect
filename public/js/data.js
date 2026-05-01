@@ -2262,16 +2262,21 @@ window.renderEventsFiltered = function () {
       }).join('')}`;
   }
 
-  let events = allEvents.filter(e => {
-    const eDate = new Date(e.date);
-    if (time === 'upcoming' && eDate < now)  return false;
-    if (time === 'past'     && eDate >= now) return false;
-    if (currentFilter !== 'All' && e.category !== currentFilter) return false;
-    if (search && !e.title.toLowerCase().includes(search) &&
-        !(e.description||'').toLowerCase().includes(search) &&
-        !(e.location||'').toLowerCase().includes(search)) return false;
-    return true;
-  });
+let events = allEvents.filter(e => {
+  const eDate = new Date(e.date);
+  const threeDaysAgo = new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000));
+
+  // Hide events older than 3 days
+  if (eDate < threeDaysAgo) return false;
+
+  if (time === 'upcoming' && eDate < now)  return false;
+  if (time === 'past'     && eDate >= now) return false;
+  if (currentFilter !== 'All' && e.category !== currentFilter) return false;
+  if (search && !e.title.toLowerCase().includes(search) &&
+      !(e.description||'').toLowerCase().includes(search) &&
+      !(e.location||'').toLowerCase().includes(search)) return false;
+  return true;
+});
 
   time === 'past' ? events.sort((a,b) => new Date(b.date) - new Date(a.date))
                   : events.sort((a,b) => new Date(a.date) - new Date(a.date));
@@ -2318,46 +2323,48 @@ function renderEventCard(e, now) {
 
   const rsvpCount = e.rsvps ? e.rsvps.length : 0;
 
-  const rsvpHTML = currentUser ? `
+  // Gray out + Past badge for events that have already happened
+  const pastStyles = isPast 
+    ? 'opacity-60 grayscale-[0.3] border border-white/10' 
+    : 'border border-white/10 hover:border-emerald-500/30';
+
+  const pastBadge = isPast 
+    ? `<span class="text-[10px] bg-gray-500/30 text-gray-300 px-2 py-0.5 rounded-full">Past Event</span>` 
+    : '';
+
+  const rsvpHTML = currentUser && !isPast ? `
     <button onclick="toggleRSVP('${e._id}'); event.stopImmediatePropagation()" 
             class="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2 rounded-2xl text-sm font-semibold transition">
-      👋 ${rsvpCount} going • I'm going!
+      ${e.rsvps && e.rsvps.includes(currentUser._id) ? '✅ Going' : '🎟️ RSVP'}
     </button>` : '';
 
   return `
-    <div class="bg-white/10 backdrop-blur-xl border ${isPast ? 'border-white/5 opacity-70' : 'border-white/10 hover:bg-white/15'} rounded-3xl overflow-hidden transition">
-      <div class="h-1 ${isPast ? 'bg-white/10' : 'bg-gradient-to-r from-emerald-500 to-teal-400'}"></div>
-      <div class="p-5 flex items-start gap-4">
-        <div class="flex-shrink-0 w-14 text-center bg-white/10 rounded-2xl py-2 px-1">
-          <div class="text-[10px] font-bold uppercase text-white/50">${eDate.toLocaleDateString('en-US', { weekday:'short' })}</div>
-          <div class="text-2xl font-black leading-tight ${isPast ? 'text-white/40' : 'text-white'}">${eDate.getDate()}</div>
-          <div class="text-[10px] font-bold uppercase text-emerald-400">${eDate.toLocaleDateString('en-US', { month:'short' })}</div>
-        </div>
+    <div onclick="showEventDetail('${e._id}')" 
+         class="bg-white/10 ${pastStyles} rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex items-start justify-between gap-3">
         <div class="flex-1 min-w-0">
-          <div class="flex items-start justify-between gap-2 mb-1">
-            <h3 class="font-bold text-base leading-snug ${isPast ? 'text-white/50' : 'text-white'}">${e.title}</h3>
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
+            ${pastBadge}
           </div>
-          <div class="flex items-center gap-2 flex-wrap mb-2">
-            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
-            <span class="text-xs text-white/40">🕐 ${eDate.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' })}</span>
+          <h3 class="font-bold text-lg leading-snug">${e.title}</h3>
+          <p class="text-white/70 text-sm mt-1 line-clamp-2">${e.description || ''}</p>
+          
+          <div class="flex items-center gap-2 text-xs text-white/50 mt-3">
+            <span>📅 ${formatDate(e.date)}</span>
+            ${e.location ? `<span>· 📍 ${e.location}</span>` : ''}
           </div>
-          ${e.description ? `<p class="text-sm text-white/60 leading-relaxed line-clamp-2 mb-2">${e.description}</p>` : ''}
-          ${e.location ? `<p class="text-xs text-white/40 flex items-center gap-1">📍 ${e.location}</p>` : ''}
-          ${e.owner?.name ? `<p class="text-xs text-white/30 mt-1">Posted by ${e.owner.name}</p>` : ''}
-          ${rsvpHTML}
         </div>
       </div>
+      
+      ${rsvpHTML}
+      
+      ${rsvpCount > 0 ? `
+        <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+          <span>🎟️</span> <span>${rsvpCount} going</span>
+        </div>` : ''}
     </div>`;
 }
-
-window.toggleRSVP = async function (eventId) {
-  if (!requireAuth('Sign in to RSVP')) return;
-  const res = await apiPost(`/events/${eventId}/rsvp`, {});
-  if (res.rsvpCount !== undefined) {
-    showToast(res.going ? '✅ You are going!' : '👋 You are no longer going');
-    if (currentPage === 'events') loadEventsPage(document.getElementById('content'));
-  }
-};
 
 // ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
 let _allResources = [];
@@ -4729,6 +4736,106 @@ window.getDirections = function(address) {
   }
   const encoded = encodeURIComponent(address);
   window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+};
+
+window.toggleRSVP = async function(eventId) {
+  if (!requireAuth('Sign in to RSVP for events.')) return;
+
+  try {
+    const res = await apiPost(`/events/${eventId}/rsvp`, {});
+
+    console.log('RSVP response:', res);
+
+    // Success if we get rsvpCount or going back from server
+    if (res.rsvpCount !== undefined || res.going !== undefined || res.message) {
+      if (res.message) {
+        showToast(res.message);
+      } else {
+        showToast(res.going ? '✅ You are now going!' : '👋 You are no longer going');
+      }
+      
+      // Refresh the events page so the count updates live
+      if (currentPage === 'events') {
+        loadEventsPage(document.getElementById('content'));
+      }
+    } else {
+      showToast('RSVP failed — please try again', 'error');
+    }
+  } catch (err) {
+    console.error('RSVP error:', err);
+    showToast('Network error — could not RSVP', 'error');
+  }
+};
+
+window.showEventDetail = async function(eventId) {
+  const events = await apiGet('/events');
+  const event = events.find(e => e._id === eventId);
+  if (!event) return;
+
+  const isPast = new Date(event.date) < new Date();
+  const rsvpCount = event.rsvps ? event.rsvps.length : 0;
+  const isGoing = currentUser && event.rsvps && event.rsvps.includes(currentUser._id);
+
+  const modalHTML = `
+    <div onclick="if(event.target.id==='eventDetailModal') document.getElementById('eventDetailModal').remove()" 
+         id="eventDetailModal" class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[15000]">
+      <div onclick="event.stopImmediatePropagation()" 
+           class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
+        
+        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+          <h2 class="text-2xl font-bold">${event.title}</h2>
+          <button onclick="document.getElementById('eventDetailModal').remove()" class="text-3xl text-gray-400 hover:text-gray-600">×</button>
+        </div>
+
+        <div class="p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">${event.category || 'General'}</span>
+            ${isPast ? `<span class="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full">Past Event</span>` : ''}
+          </div>
+
+          <p class="text-gray-700 leading-relaxed">${event.description || 'No description provided.'}</p>
+
+          <div class="mt-6 space-y-3 text-sm">
+            <div class="flex items-center gap-3">
+              <span class="text-xl">📅</span>
+              <div>
+                <p class="font-semibold">${formatDate(event.date)}</p>
+                <p class="text-gray-500 text-xs">${new Date(event.date).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})}</p>
+              </div>
+            </div>
+            
+            ${event.location ? `
+            <div class="flex items-center gap-3">
+              <span class="text-xl">📍</span>
+              <p>${event.location}</p>
+            </div>` : ''}
+          </div>
+
+          <div class="mt-8">
+            <div class="flex items-center justify-between mb-2">
+              <p class="font-semibold">Going (${rsvpCount})</p>
+              ${currentUser && !isPast ? `
+                <button onclick="toggleRSVP('${event._id}'); document.getElementById('eventDetailModal').remove()" 
+                        class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${isGoing ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-700'}">
+                  ${isGoing ? '✅ You\'re Going' : '🎟️ RSVP'}
+                </button>` : ''}
+            </div>
+            
+            ${rsvpCount > 0 ? `
+              <div class="text-xs text-gray-500">This event has ${rsvpCount} people going</div>` : ''}
+          </div>
+        </div>
+
+        <div class="p-6 border-t">
+          <button onclick="document.getElementById('eventDetailModal').remove()" 
+                  class="w-full py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
 };
 
 // Live badge updates every 8 seconds
