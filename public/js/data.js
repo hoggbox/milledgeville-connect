@@ -265,31 +265,31 @@ async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
-      <!-- Today in Milledgeville -->
-      <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-6 mb-8 text-white overflow-hidden relative">
+      <!-- Today in Milledgeville (Compact) -->
+      <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-5 md:p-6 mb-8 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
         
-        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
           
-          <!-- Left Column: Title + Date + Podcast -->
+          <!-- Left: Title + Date + Podcast -->
           <div class="flex items-start gap-3 min-w-0">
-            <span class="text-4xl flex-shrink-0 mt-1">🌅</span>
+            <span class="text-3xl flex-shrink-0 mt-0.5">🌅</span>
             <div class="min-w-0 flex-1">
-              <h1 class="text-2xl font-bold leading-tight">Today in Milledgeville</h1>
+              <h1 class="text-[22px] font-bold leading-tight">Today in Milledgeville</h1>
               
-              <div class="flex flex-wrap items-center gap-2 mt-2">
+              <div class="flex flex-wrap items-center gap-2 mt-1.5">
                 <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
                 
                 <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')" 
-                      class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-4 py-1.5 rounded-2xl text-xs md:text-sm shadow-xl cursor-pointer transition-all active:scale-95">
-                  <span class="text-lg">🎙️</span>
-                  <span class="font-extrabold tracking-wide">LISTEN</span>
+                      class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-3.5 py-1 rounded-2xl text-xs shadow-lg cursor-pointer transition-all active:scale-95">
+                  <span>🎙️</span>
+                  <span class="font-extrabold">LISTEN</span>
                 </span>
               </div>
             </div>
           </div>
 
-          <!-- Right Column: Weather Widget -->
+          <!-- Right: Weather -->
           <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-4 py-3 text-right self-start md:self-auto">
             <div class="flex items-center justify-between md:justify-end gap-3">
               <div>
@@ -304,8 +304,8 @@ async function loadHomePage(content) {
           </div>
         </div>
 
-        <!-- Bottom: Upcoming + Hot Deal -->
-        <div id="todayDigest" class="relative grid grid-cols-2 gap-3"></div>
+        <!-- Compact Digest -->
+        <div id="todayDigest" class="relative grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
       </div>
 
       <!-- Business Spotlight -->
