@@ -169,6 +169,15 @@ async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
 
+  // ── Close any open profile toolbox / modals before navigating ─────────────
+  const profileModal = document.getElementById('userProfileModal');
+  if (profileModal) profileModal.remove();
+
+  // Also close any other floating modals (safe cleanup)
+  document.querySelectorAll('[id$="Modal"], [id$="modal"], .modal').forEach(el => {
+    if (el.id !== 'content') el.remove();
+  });
+
   // Show spinner immediately so navigation feels instant (no frozen UI)
   content.innerHTML = `
     <div class="flex items-center justify-center min-h-[40vh]">
