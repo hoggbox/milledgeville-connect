@@ -38,7 +38,14 @@ async function requestPushPermission() {
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    showToast('Notification permission denied. Enable it in browser settings.', 'error');
+    // Denied — make sure DB reflects disabled state
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.pushEnabled) {
+      currentUser.pushEnabled = false;
+      apiPost('/push/unsubscribe', {}).catch(() => {});
+    }
+    if (permission === 'denied') {
+      showToast('Notifications blocked. Enable them in browser settings to receive alerts.', 'error');
+    }
     return false;
   }
 
@@ -51,7 +58,9 @@ async function requestPushPermission() {
 
     const res = await apiPost('/push/subscribe', { subscription: subscription.toJSON() });
     if (res.message === 'Subscribed') {
-      currentUser.pushEnabled = true;
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        currentUser.pushEnabled = true;
+      }
       return true;
     }
   } catch (err) {
@@ -75,11 +84,60 @@ async function disablePushNotifications() {
   }
 }
 
-// Register service worker on load
+// ─── Service Worker Registration + First-Visit Push Prompt ───────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(err => {
-    console.warn('SW registration failed:', err);
-  });
+  navigator.serviceWorker.register('/sw.js')
+    .then(() => {
+      // Only auto-prompt if:
+      //  1. The browser hasn't decided yet (permission === 'default')
+      //  2. The user is logged in
+      //  3. We haven't already asked this session
+      if (
+        Notification.permission === 'default' &&
+        !sessionStorage.getItem('pushPrompted')
+      ) {
+        sessionStorage.setItem('pushPrompted', '1');
+        // Small delay so the page finishes loading first
+        setTimeout(async () => {
+          if (typeof currentUser !== 'undefined' && currentUser) {
+            const granted = await requestPushPermission();
+            // Sync the toggle in the edit profile modal if it's open
+            const cb = document.getElementById('ep-pushEnabled');
+            if (cb) cb.checked = granted;
+            if (granted) currentUser.pushEnabled = true;
+          }
+        }, 2500);
+      }
+    })
+    .catch(err => {
+      console.warn('SW registration failed:', err);
+    });
+}
+
+// ─── Sync push toggle state with actual browser permission ───────────────────
+// Call this whenever the edit profile modal opens so the toggle always reflects reality
+function syncPushToggle() {
+  const cb = document.getElementById('ep-pushEnabled');
+  if (!cb) return;
+  const browserPermission = ('Notification' in window) ? Notification.permission : 'denied';
+  if (browserPermission === 'denied') {
+    cb.checked   = false;
+    cb.disabled  = true;
+    const msg = document.getElementById('pushStatusMsg');
+    if (msg) {
+      msg.textContent = '⚠️ Notifications blocked in browser settings. To enable, click the lock icon in your address bar.';
+      msg.classList.remove('hidden');
+      msg.classList.add('text-amber-600');
+    }
+  } else if (browserPermission === 'granted') {
+    // Trust what the server says — user may have subscribed on another device
+    cb.checked  = !!(typeof currentUser !== 'undefined' && currentUser?.pushEnabled);
+    cb.disabled = false;
+  } else {
+    // 'default' — not decided yet; reflect server state
+    cb.checked  = false;
+    cb.disabled = false;
+  }
 }
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
@@ -354,6 +412,9 @@ function showEditProfileModal() {
 
   // Attach push toggle properly after modal is created
   setTimeout(() => {
+    // Sync the toggle with actual browser permission state
+    syncPushToggle();
+
     const pushCheckbox = document.getElementById('ep-pushEnabled');
     if (pushCheckbox) {
       pushCheckbox.onchange = async function () {
@@ -571,4 +632,5 @@ window.handleAvatarSelect    = handleAvatarSelect;
 window.saveProfile           = saveProfile;
 window.requestPushPermission = requestPushPermission;
 window.disablePushNotifications = disablePushNotifications;
+window.syncPushToggle        = syncPushToggle;
 window.updateUserUI          = () => renderNav();
