@@ -2,7 +2,7 @@
 // Enhanced user profile: sheet display, edit modal, avatar upload, push notifications
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
-const ALLOWED_TYPES    = ['image/jpeg', 'image/png', 'image/webp'];
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 // ─── Push Notification Helpers ────────────────────────────────────────────────
 let _vapidPublicKey = null;
@@ -18,11 +18,25 @@ async function getVapidKey() {
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
-  const output  = new Uint8Array(rawData.length);
+  const output = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
   return output;
+}
+
+// ─── Check whether the browser actually has an active push subscription ───────
+// This is the ground-truth source — more reliable than currentUser.pushEnabled
+// because the server flag can get out of sync with the browser state.
+async function _browserHasPushSubscription() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    return !!sub;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function requestPushPermission() {
@@ -35,32 +49,25 @@ async function requestPushPermission() {
     showToast('Push notifications are not configured on this server yet.', 'error');
     return false;
   }
-
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    // Denied — make sure DB reflects disabled state
-    if (typeof currentUser !== 'undefined' && currentUser && currentUser.pushEnabled) {
-      currentUser.pushEnabled = false;
-      apiPost('/push/unsubscribe', {}).catch(() => {});
-    }
-    if (permission === 'denied') {
-      showToast('Notifications blocked. Enable them in browser settings to receive alerts.', 'error');
-    }
-    return false;
-  }
-
   try {
     const reg = await navigator.serviceWorker.ready;
+
+    // Unsubscribe from any stale subscription first so we always get a fresh one
+    const existingSub = await reg.pushManager.getSubscription();
+    if (existingSub) await existingSub.unsubscribe();
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      showToast('Notification permission denied. Enable it in browser settings.', 'error');
+      return false;
+    }
     const subscription = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidKey)
     });
-
     const res = await apiPost('/push/subscribe', { subscription: subscription.toJSON() });
     if (res.message === 'Subscribed') {
-      if (typeof currentUser !== 'undefined' && currentUser) {
-        currentUser.pushEnabled = true;
-      }
+      currentUser.pushEnabled = true;
       return true;
     }
   } catch (err) {
@@ -84,67 +91,18 @@ async function disablePushNotifications() {
   }
 }
 
-// ─── Service Worker Registration + First-Visit Push Prompt ───────────────────
+// Register service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
-    .then(() => {
-      // Only auto-prompt if:
-      //  1. The browser hasn't decided yet (permission === 'default')
-      //  2. The user is logged in
-      //  3. We haven't already asked this session
-      if (
-        Notification.permission === 'default' &&
-        !sessionStorage.getItem('pushPrompted')
-      ) {
-        sessionStorage.setItem('pushPrompted', '1');
-        // Small delay so the page finishes loading first
-        setTimeout(async () => {
-          if (typeof currentUser !== 'undefined' && currentUser) {
-            const granted = await requestPushPermission();
-            // Sync the toggle in the edit profile modal if it's open
-            const cb = document.getElementById('ep-pushEnabled');
-            if (cb) cb.checked = granted;
-            if (granted) currentUser.pushEnabled = true;
-          }
-        }, 2500);
-      }
-    })
-    .catch(err => {
-      console.warn('SW registration failed:', err);
-    });
-}
-
-// ─── Sync push toggle state with actual browser permission ───────────────────
-// Call this whenever the edit profile modal opens so the toggle always reflects reality
-function syncPushToggle() {
-  const cb = document.getElementById('ep-pushEnabled');
-  if (!cb) return;
-  const browserPermission = ('Notification' in window) ? Notification.permission : 'denied';
-  if (browserPermission === 'denied') {
-    cb.checked   = false;
-    cb.disabled  = true;
-    const msg = document.getElementById('pushStatusMsg');
-    if (msg) {
-      msg.textContent = '⚠️ Notifications blocked in browser settings. To enable, click the lock icon in your address bar.';
-      msg.classList.remove('hidden');
-      msg.classList.add('text-amber-600');
-    }
-  } else if (browserPermission === 'granted') {
-    // Trust what the server says — user may have subscribed on another device
-    cb.checked  = !!(typeof currentUser !== 'undefined' && currentUser?.pushEnabled);
-    cb.disabled = false;
-  } else {
-    // 'default' — not decided yet; reflect server state
-    cb.checked  = false;
-    cb.disabled = false;
-  }
+  navigator.serviceWorker.register('/sw.js').catch(err => {
+    console.warn('SW registration failed:', err);
+  });
 }
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
 function showProfileSheet() {
   if (!currentUser) { showAuthModal(); return; }
 
-  const sheet   = document.getElementById('profileSheet');
+  const sheet = document.getElementById('profileSheet');
   const content = document.getElementById('sheet-content');
   if (!sheet || !content) return;
 
@@ -152,9 +110,9 @@ function showProfileSheet() {
     ? `Last active: ${new Date(currentUser.lastLogin).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
     : 'Just now';
 
-  const isAdmin    = currentUser.email === 'imhoggbox@gmail.com';
+  const isAdmin = currentUser.email === 'imhoggbox@gmail.com';
   const isVerified = !!currentUser.verifiedBusiness;
-  const bizName    = isVerified ? (currentUser.verifiedBusiness?.name || 'Your Business') : '';
+  const bizName = isVerified ? (currentUser.verifiedBusiness?.name || 'Your Business') : '';
 
   const joinedStr = currentUser.joinedAt
     ? new Date(currentUser.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -162,9 +120,12 @@ function showProfileSheet() {
 
   const socials = [
     currentUser.instagram ? `<a href="https://instagram.com/${currentUser.instagram.replace('@','')}" target="_blank" class="flex items-center gap-2 text-pink-400 hover:text-pink-300 text-sm font-medium transition"><span class="text-lg">📸</span> @${currentUser.instagram.replace('@','')}</a>` : '',
-    currentUser.facebook  ? `<a href="${currentUser.facebook.startsWith('http') ? currentUser.facebook : 'https://facebook.com/'+currentUser.facebook}" target="_blank" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition"><span class="text-lg">👤</span> Facebook</a>` : '',
-    currentUser.website   ? `<a href="${currentUser.website.startsWith('http') ? currentUser.website : 'https://'+currentUser.website}" target="_blank" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"><span class="text-lg">🔗</span> ${currentUser.website.replace(/^https?:\/\//,'')}</a>` : ''
+    currentUser.facebook ? `<a href="${currentUser.facebook.startsWith('http') ? currentUser.facebook : 'https://facebook.com/'+currentUser.facebook}" target="_blank" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition"><span class="text-lg">👤</span> Facebook</a>` : '',
+    currentUser.website ? `<a href="${currentUser.website.startsWith('http') ? currentUser.website : 'https://'+currentUser.website}" target="_blank" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"><span class="text-lg">🔗</span> ${currentUser.website.replace(/^https?:\/\//,'')}</a>` : ''
   ].filter(Boolean).join('');
+
+  const pushSupported = ('serviceWorker' in navigator) && ('PushManager' in window);
+  const pushBlocked   = Notification.permission === 'denied';
 
   content.innerHTML = `
     <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
@@ -215,10 +176,28 @@ function showProfileSheet() {
       ${socials}
     </div>` : ''}
 
+    <!-- ─── Push notification quick-toggle in profile sheet ─────────────── -->
+    ${pushSupported ? `
+    <div class="mt-5 bg-slateald-50 border border-slate-100 rounded-2xl p-4">
+      <label for="sheetPushToggle" class="flex items-center justify-between gap-3 cursor-pointer select-none">
+        <div class="text-left">
+          <p class="text-sm font-semibold text-slate-800">🔔 Push Notifications</p>
+          <p id="sheetPushStatus" class="text-xs text-slate-500 mt-0.5">
+            ${pushBlocked ? '⚠️ Blocked in browser settings' : 'Receive alerts when the app is closed'}
+          </p>
+        </div>
+        <div class="relative flex-shrink-0">
+          <input type="checkbox" id="sheetPushToggle" class="sr-only peer" ${pushBlocked ? 'disabled' : ''}>
+          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${pushBlocked ? 'opacity-40' : ''}"></div>
+          <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
+        </div>
+      </label>
+    </div>` : ''}
+
     <p class="text-slate-400 text-xs mt-4">${lastLoginText}</p>
 
     <div class="mt-8 space-y-3">
-      ${isAdmin    ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
+      ${isAdmin ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
       ${isVerified ? `<button onclick="navigate('owner-dashboard');hideProfileSheet();" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
       <button onclick="showEditProfileModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">✏️ Edit Profile</button>
       <button onclick="logout()" class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">Logout</button>
@@ -233,6 +212,53 @@ function showProfileSheet() {
       if (panel) panel.classList.remove('translate-y-full');
     });
   });
+
+  // ── Wire up the sheet push toggle after render ────────────────────────────
+  if (pushSupported && !pushBlocked) {
+    _initSheetPushToggle();
+  }
+}
+
+// Initialise the push toggle in the profile sheet.
+// Reads the REAL browser subscription state so the toggle is always accurate.
+async function _initSheetPushToggle() {
+  const toggle   = document.getElementById('sheetPushToggle');
+  const statusEl = document.getElementById('sheetPushStatus');
+  if (!toggle) return;
+
+  // Set initial state from the browser — this is ground truth
+  const hasSub = await _browserHasPushSubscription();
+  toggle.checked = hasSub;
+
+  // Keep currentUser in sync
+  if (currentUser) currentUser.pushEnabled = hasSub;
+
+  toggle.onchange = async function () {
+    const enabling = this.checked;
+    toggle.disabled = true;
+    if (statusEl) statusEl.textContent = enabling ? '⏳ Enabling...' : '⏳ Disabling...';
+
+    if (enabling) {
+      const success = await requestPushPermission();
+      if (success) {
+        if (statusEl) statusEl.textContent = '✅ Notifications on';
+        showToast('✅ Push notifications enabled!');
+      } else {
+        toggle.checked = false;
+        if (statusEl) {
+          statusEl.textContent = Notification.permission === 'denied'
+            ? '⚠️ Blocked — allow in browser settings then try again'
+            : 'Could not enable — try again';
+        }
+      }
+    } else {
+      await disablePushNotifications();
+      if (statusEl) statusEl.textContent = 'Receive alerts when the app is closed';
+      showToast('Push notifications turned off');
+    }
+
+    toggle.disabled = false;
+  };
 }
 
 function hideProfileSheet() {
@@ -260,9 +286,9 @@ function showEditProfileModal() {
     document.body.appendChild(modal);
   }
 
-  const u           = currentUser;
+  const u = currentUser;
   const pushSupported = ('serviceWorker' in navigator) && ('PushManager' in window);
-  const pushEnabled = !!u.pushEnabled;
+  const pushBlocked   = Notification.permission === 'denied';
 
   modal.innerHTML = `
     <div onclick="event.stopPropagation()"
@@ -363,9 +389,9 @@ function showEditProfileModal() {
 
           <!-- In-app toggles -->
           ${[
-            { id: 'ep-notifyDeals',     label: '🔥 New Deals',       checked: u.notifyDeals !== false },
-            { id: 'ep-notifyEvents',    label: '📅 Upcoming Events',  checked: u.notifyEvents !== false },
-            { id: 'ep-notifyShoutouts', label: '💬 Shoutout Activity',checked: !!u.notifyShoutouts },
+            { id: 'ep-notifyDeals',     label: '🔥 New Deals',          checked: u.notifyDeals !== false },
+            { id: 'ep-notifyEvents',    label: '📅 Upcoming Events',     checked: u.notifyEvents !== false },
+            { id: 'ep-notifyShoutouts', label: '💬 Shoutout Activity',   checked: !!u.notifyShoutouts },
           ].map(n => `
             <label class="flex items-center justify-between cursor-pointer select-none">
               <span class="text-sm font-medium text-slate-700">${n.label}</span>
@@ -378,20 +404,25 @@ function showEditProfileModal() {
 
           <!-- Push notification toggle -->
           <div class="border-t border-emerald-200 pt-4 mt-2">
-            <div class="flex items-start justify-between gap-3">
+            <label for="ep-pushEnabled" class="flex items-start justify-between gap-3 ${pushSupported && !pushBlocked ? 'cursor-pointer' : ''} select-none">
               <div class="flex-1">
                 <p class="text-sm font-semibold text-slate-700">🔔 Push Notifications</p>
-                <p class="text-xs text-slate-500 mt-0.5">Receive alerts on your phone even when the app is closed. Requires browser permission.</p>
+                <p class="text-xs text-slate-500 mt-0.5">Receive alerts even when the app is closed.</p>
               </div>
-              <div class="relative flex-shrink-0">
-                <input type="checkbox" id="ep-pushEnabled" ${pushEnabled ? 'checked' : ''} ${!pushSupported ? 'disabled' : ''}
-                       class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors peer-disabled:opacity-40"></div>
-                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+              <div class="relative flex-shrink-0 mt-0.5">
+                <input type="checkbox" id="ep-pushEnabled"
+                       class="sr-only peer"
+                       ${!pushSupported || pushBlocked ? 'disabled' : ''}>
+                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${!pushSupported || pushBlocked ? 'opacity-40' : ''}"></div>
+                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
               </div>
-            </div>
-            ${!pushSupported ? `<p class="text-xs text-amber-600 mt-2">⚠️ Push notifications require a modern browser with service worker support.</p>` : ''}
-            <div id="pushStatusMsg" class="text-xs text-emerald-600 mt-2 hidden"></div>
+            </label>
+            ${!pushSupported
+              ? `<p class="text-xs text-amber-600 mt-2">⚠️ Push notifications require a modern browser with service worker support.</p>`
+              : pushBlocked
+                ? `<p class="text-xs text-amber-600 mt-2">⚠️ Notifications are blocked in your browser. Tap the 🔒 icon in the address bar → allow notifications → then toggle again.</p>`
+                : ''}
+            <div id="pushStatusMsg" class="text-xs mt-2 hidden"></div>
           </div>
         </div>
 
@@ -410,51 +441,75 @@ function showEditProfileModal() {
 
   modal.classList.remove('hidden');
 
-  // Attach push toggle properly after modal is created
-  setTimeout(() => {
-    // Sync the toggle with actual browser permission state
-    syncPushToggle();
+  // ── Wire up push toggle AFTER the modal renders ───────────────────────────
+  // We use a short setTimeout so the DOM is fully painted before we query it,
+  // then async-check the real browser subscription to set the initial state.
+  setTimeout(() => _initEditPushToggle(), 150);
 
-    const pushCheckbox = document.getElementById('ep-pushEnabled');
-    if (pushCheckbox) {
-      pushCheckbox.onchange = async function () {
-        const checked = this.checked;
-        const statusEl = document.getElementById('pushStatusMsg');
-
-        if (statusEl) {
-          statusEl.textContent = checked ? 'Enabling push notifications...' : 'Disabling...';
-          statusEl.classList.remove('hidden');
-        }
-
-        if (checked) {
-          const success = await requestPushPermission();
-          if (success) {
-            currentUser.pushEnabled = true;
-            if (statusEl) statusEl.textContent = '✅ Push notifications enabled!';
-            showToast('✅ Push notifications turned on');
-          } else {
-            this.checked = false;
-            if (statusEl) statusEl.textContent = 'Failed to enable. Check browser settings.';
-          }
-        } else {
-          await disablePushNotifications();
-          currentUser.pushEnabled = false;
-          if (statusEl) statusEl.textContent = 'Push notifications disabled.';
-          showToast('Push notifications turned off');
-        }
-
-        setTimeout(() => {
-          if (statusEl) statusEl.classList.add('hidden');
-        }, 3000);
-      };
-    }
-  }, 150);
-
+  // Bio character counter
   const bioTextarea = document.getElementById('ep-bio');
   const bioCount    = document.getElementById('bioCount');
   if (bioTextarea && bioCount) {
     bioTextarea.addEventListener('input', () => { bioCount.textContent = bioTextarea.value.length; });
   }
+}
+
+// Wire up the push toggle inside the Edit Profile modal.
+// Always reads the real browser subscription state — never trusts currentUser.pushEnabled alone.
+async function _initEditPushToggle() {
+  const pushCheckbox = document.getElementById('ep-pushEnabled');
+  const statusEl     = document.getElementById('pushStatusMsg');
+  if (!pushCheckbox || pushCheckbox.disabled) return;
+
+  // Set initial checked state from the browser, not the server flag
+  const hasSub = await _browserHasPushSubscription();
+  pushCheckbox.checked = hasSub;
+  if (currentUser) currentUser.pushEnabled = hasSub; // keep in sync
+
+  pushCheckbox.onchange = async function () {
+    const enabling = this.checked;
+
+    // Guard: browser has since denied the permission
+    if (enabling && Notification.permission === 'denied') {
+      this.checked = false;
+      if (statusEl) {
+        statusEl.textContent = '⚠️ Notifications are blocked. Tap the 🔒 lock icon in the address bar → allow notifications → then toggle again.';
+        statusEl.style.color = '#d97706';
+        statusEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    this.disabled = true;
+    if (statusEl) {
+      statusEl.style.color = '';
+      statusEl.textContent = enabling ? '⏳ Requesting permission...' : '⏳ Disabling...';
+      statusEl.classList.remove('hidden');
+    }
+
+    if (enabling) {
+      const success = await requestPushPermission();
+      if (success) {
+        if (statusEl) { statusEl.textContent = '✅ Push notifications enabled!'; statusEl.style.color = '#059669'; }
+        showToast('✅ Push notifications turned on');
+      } else {
+        this.checked = false;
+        if (statusEl) {
+          statusEl.textContent = Notification.permission === 'denied'
+            ? '⚠️ Blocked in browser. Allow notifications in site settings.'
+            : 'Could not enable — please try again.';
+          statusEl.style.color = '#d97706';
+        }
+      }
+    } else {
+      await disablePushNotifications();
+      if (statusEl) { statusEl.textContent = 'Push notifications disabled.'; statusEl.style.color = ''; }
+      showToast('Push notifications turned off');
+    }
+
+    this.disabled = false;
+    setTimeout(() => { if (statusEl) statusEl.classList.add('hidden'); }, 4000);
+  };
 }
 
 // ─── Hide Edit Profile Modal ──────────────────────────────────────────────────
@@ -467,7 +522,7 @@ function hideEditProfileModal() {
 let pendingAvatarData = undefined;
 
 function handleAvatarSelect(input) {
-  const file  = input.files[0];
+  const file = input.files[0];
   if (!file) return;
   const errEl = document.getElementById('avatarError');
   if (errEl) errEl.classList.add('hidden');
@@ -504,7 +559,7 @@ function handleAvatarSelect(input) {
 window.removeAvatar = function () {
   pendingAvatarData = null;
   const preview = document.getElementById('avatarPreview');
-  const letter  = (currentUser.name || '?')[0].toUpperCase();
+  const letter = (currentUser.name || '?')[0].toUpperCase();
   if (preview) {
     preview.innerHTML = `
       <span id="avatarLetter">${letter}</span>
@@ -520,20 +575,24 @@ async function saveProfile() {
   const name = document.getElementById('ep-name')?.value.trim();
   if (!name) { alert('Name is required.'); return; }
 
-  btn.disabled  = true;
+  btn.disabled = true;
   btn.innerHTML = '⏳ Saving…';
+
+  // Read the ACTUAL browser subscription state so we persist the correct value
+  const pushIsOn = await _browserHasPushSubscription();
 
   const payload = {
     name,
-    bio:           document.getElementById('ep-bio')?.value.trim()          || '',
-    neighborhood:  document.getElementById('ep-neighborhood')?.value.trim() || '',
-    phone:         document.getElementById('ep-phone')?.value.trim()        || '',
-    website:       document.getElementById('ep-website')?.value.trim()      || '',
-    instagram:     document.getElementById('ep-instagram')?.value.trim()    || '',
-    facebook:      document.getElementById('ep-facebook')?.value.trim()     || '',
-    notifyDeals:   document.getElementById('ep-notifyDeals')?.checked       ?? true,
-    notifyEvents:  document.getElementById('ep-notifyEvents')?.checked      ?? true,
-    notifyShoutouts: document.getElementById('ep-notifyShoutouts')?.checked ?? false,
+    bio:              document.getElementById('ep-bio')?.value.trim() || '',
+    neighborhood:     document.getElementById('ep-neighborhood')?.value.trim() || '',
+    phone:            document.getElementById('ep-phone')?.value.trim() || '',
+    website:          document.getElementById('ep-website')?.value.trim() || '',
+    instagram:        document.getElementById('ep-instagram')?.value.trim() || '',
+    facebook:         document.getElementById('ep-facebook')?.value.trim() || '',
+    notifyDeals:      document.getElementById('ep-notifyDeals')?.checked ?? true,
+    notifyEvents:     document.getElementById('ep-notifyEvents')?.checked ?? true,
+    notifyShoutouts:  document.getElementById('ep-notifyShoutouts')?.checked ?? false,
+    pushEnabled:      pushIsOn,   // ← was missing before; now always saved
   };
 
   if (pendingAvatarData !== undefined) payload.avatar = pendingAvatarData;
@@ -541,7 +600,9 @@ async function saveProfile() {
   const res = await apiPatch('/auth/profile', payload);
 
   if (res.user) {
-    currentUser       = res.user;
+    currentUser = res.user;
+    // Make sure client-side pushEnabled matches browser reality
+    currentUser.pushEnabled = pushIsOn;
     pendingAvatarData = undefined;
     updateUserUI();
     hideEditProfileModal();
@@ -549,7 +610,7 @@ async function saveProfile() {
     showToast('✅ Profile updated!');
   } else {
     showToast(res.message || 'Failed to save profile.', 'error');
-    btn.disabled  = false;
+    btn.disabled = false;
     btn.innerHTML = '💾 Save Changes';
   }
 }
@@ -564,11 +625,11 @@ function escHtml(str) {
 window.showUserProfileModal = async function(userId) {
   if (!currentUser) return showAuthModal({ message: 'Sign in to view profiles and message users.' });
 
-  const modal = document.getElementById('userProfileModal');
+  const modal   = document.getElementById('userProfileModal');
   const content = document.getElementById('userProfileContent');
 
   try {
-    const user = await apiGet(`/users/${userId}`);
+    const user      = await apiGet(`/users/${userId}`);
     const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(userId);
 
     content.innerHTML = `
@@ -632,5 +693,4 @@ window.handleAvatarSelect    = handleAvatarSelect;
 window.saveProfile           = saveProfile;
 window.requestPushPermission = requestPushPermission;
 window.disablePushNotifications = disablePushNotifications;
-window.syncPushToggle        = syncPushToggle;
 window.updateUserUI          = () => renderNav();
