@@ -38,7 +38,7 @@ async function requestPushPermission() {
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    showToast('Notification permission denied. You can enable it in browser settings.', 'error');
+    showToast('Notification permission denied. Enable it in browser settings.', 'error');
     return false;
   }
 
@@ -80,12 +80,6 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(err => {
     console.warn('SW registration failed:', err);
   });
-}
-
-// ─── Avatar helpers ───────────────────────────────────────────────────────────
-function updateSidebarAvatars() {
-  if (!currentUser) return;
-  renderNav();
 }
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
@@ -365,32 +359,39 @@ function showEditProfileModal() {
   }
 }
 
-// Handle the push toggle interaction
+// ─── Push Toggle Handler (Improved) ───────────────────────────────────────────
 window.handlePushToggle = async function (checked) {
+  const checkbox = document.getElementById('ep-pushEnabled');
   const statusEl = document.getElementById('pushStatusMsg');
-  if (statusEl) { statusEl.textContent = checked ? 'Enabling…' : 'Disabling…'; statusEl.classList.remove('hidden'); }
+
+  if (statusEl) {
+    statusEl.textContent = checked ? 'Enabling push notifications...' : 'Disabling...';
+    statusEl.classList.remove('hidden');
+  }
 
   if (checked) {
     const success = await requestPushPermission();
-    if (!success) {
-      const cb = document.getElementById('ep-pushEnabled');
-      if (cb) cb.checked = false;
-      if (statusEl) statusEl.classList.add('hidden');
+    if (success) {
+      currentUser.pushEnabled = true;
+      if (statusEl) statusEl.textContent = '✅ Push notifications enabled!';
+      showToast('✅ Push notifications turned on');
     } else {
-      if (statusEl) { statusEl.textContent = '✅ Push notifications enabled!'; }
+      if (checkbox) checkbox.checked = false;
+      if (statusEl) statusEl.textContent = 'Failed to enable. Check browser settings.';
     }
   } else {
     await disablePushNotifications();
-    if (statusEl) { statusEl.textContent = 'Push notifications disabled.'; }
+    currentUser.pushEnabled = false;
+    if (statusEl) statusEl.textContent = 'Push notifications disabled.';
+    showToast('Push notifications turned off');
   }
+
+  setTimeout(() => {
+    if (statusEl) statusEl.classList.add('hidden');
+  }, 3000);
 };
 
-function hideEditProfileModal() {
-  const modal = document.getElementById('editProfileModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-// ─── Avatar selection & validation ───────────────────────────────────────────
+// ─── Avatar helpers ───────────────────────────────────────────────────────────
 let pendingAvatarData = undefined;
 
 function handleAvatarSelect(input) {
@@ -487,84 +488,7 @@ function escHtml(str) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── NEW: Other user profile modal (called from anywhere names appear) ───────
-window.showUserProfileModal = async function(userId) {
-  if (!currentUser) return showAuthModal({ message: 'Sign in to view profiles and message users.' });
-
-  const modal = document.getElementById('userProfileModal');
-  const content = document.getElementById('userProfileContent');
-
-  try {
-    const user = await apiGet(`/users/${userId}`);
-    const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(userId);
-
-    content.innerHTML = `
-      <div class="flex justify-center -mt-2 mb-6">
-        <div class="w-24 h-24 rounded-3xl overflow-hidden ring-4 ring-emerald-200 flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
-          ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover">` : user.name[0].toUpperCase()}
-        </div>
-      </div>
-      <h2 class="text-3xl font-bold text-center">${user.name}</h2>
-      ${user.neighborhood ? `<p class="text-center text-slate-500 text-sm mt-1">📍 ${user.neighborhood}</p>` : ''}
-      ${user.bio ? `<p class="mt-6 text-slate-600 italic text-center">"${user.bio}"</p>` : ''}
-      
-      <div class="mt-8 flex gap-3">
- <button onclick="startDirectMessage('${userId}'); hideUserProfileModal();" 
-        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg flex items-center justify-center gap-2">
-  ✉️ Message
-</button>
-        <button onclick="toggleBlockUser('${userId}')" 
-                class="flex-1 ${isBlocked ? 'bg-red-500' : 'bg-slate-700'} hover:bg-slate-800 text-white py-4 rounded-3xl font-semibold text-lg">
-          ${isBlocked ? '✅ Unblock' : '🚫 Block'}
-        </button>
-      </div>
-      
-      <button onclick="hideUserProfileModal()" class="w-full mt-4 text-slate-400">Close</button>
-    `;
-    modal.classList.remove('hidden');
-  } catch (e) {
-    content.innerHTML = `<p class="text-red-500 text-center">Could not load profile.</p>`;
-  }
-};
-
-window.hideUserProfileModal = function() {
-  const modal = document.getElementById('userProfileModal');
-  if (modal) modal.classList.add('hidden');
-};
-
-// ─── Improved: Open compose directly with pre-filled user ─────────────────────
-window.startDirectMessage = function(receiverId) {
-  hideUserProfileModal();           // close profile first
-  hideComposeModal();               // close any old compose
-  showComposeMessageModal(receiverId);  // open compose with user pre-selected
-};
-
-window.toggleBlockUser = async function(userId) {
-  const res = await apiPost(`/users/${userId}/block`, {});
-  if (res.blocked !== undefined) {
-    currentUser.blockedUsers = currentUser.blockedUsers || [];
-    const idx = currentUser.blockedUsers.indexOf(userId);
-    if (idx === -1) currentUser.blockedUsers.push(userId);
-    else currentUser.blockedUsers.splice(idx, 1);
-    showUserProfileModal(userId); // refresh modal
-    showToast(res.blocked ? 'User blocked' : 'User unblocked');
-  }
-};
-
-// ─── Override updateUserUI ────────────────────────────────────────────────────
-window.updateUserUI = function () { renderNav(); };
-
-// ─── Exports ──────────────────────────────────────────────────────────────────
-window.showProfileSheet      = showProfileSheet;
-window.hideProfileSheet      = hideProfileSheet;
-window.showEditProfileModal  = showEditProfileModal;
-window.hideEditProfileModal  = hideEditProfileModal;
-window.handleAvatarSelect    = handleAvatarSelect;
-window.saveProfile           = saveProfile;
-window.requestPushPermission = requestPushPermission;
-window.disablePushNotifications = disablePushNotifications;
-
-// ─── NEW: Other user profile modal ───────────────────────────────────────────
+// ─── Other User Profile Modal ─────────────────────────────────────────────────
 window.showUserProfileModal = async function(userId) {
   if (!currentUser) return showAuthModal({ message: 'Sign in to view profiles and message users.' });
 
@@ -626,3 +550,14 @@ window.toggleBlockUser = async function(userId) {
     showToast(res.blocked ? '✅ User blocked' : '✅ User unblocked');
   }
 };
+
+// ─── Exports ──────────────────────────────────────────────────────────────────
+window.showProfileSheet      = showProfileSheet;
+window.hideProfileSheet      = hideProfileSheet;
+window.showEditProfileModal  = showEditProfileModal;
+window.hideEditProfileModal  = hideEditProfileModal;
+window.handleAvatarSelect    = handleAvatarSelect;
+window.saveProfile           = saveProfile;
+window.requestPushPermission = requestPushPermission;
+window.disablePushNotifications = disablePushNotifications;
+window.updateUserUI          = () => renderNav();
