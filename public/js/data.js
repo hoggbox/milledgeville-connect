@@ -174,8 +174,10 @@ async function loadPage(page) {
   if (profileModal) profileModal.remove();
 
   // Also close any other floating modals (safe cleanup)
+  // Exclude permanent modals that live in the HTML and must never be removed
+  const PERMANENT_MODALS = new Set(['authModal', 'profileSheet', 'userProfileModal']);
   document.querySelectorAll('[id$="Modal"], [id$="modal"], .modal').forEach(el => {
-    if (el.id !== 'content') el.remove();
+    if (el.id !== 'content' && !PERMANENT_MODALS.has(el.id)) el.remove();
   });
 
   // Show spinner immediately so navigation feels instant (no frozen UI)
@@ -2382,6 +2384,13 @@ let _resourceCategories = [];
 async function loadResourcesPage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-10">
+          <!-- RESOURCES TABS -->
+      <div class="flex gap-2 mb-6 border-b border-white/20 pb-2">
+        <button onclick="showResourcesTab('all')" id="resTab-all"
+                class="px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+        <button onclick="showResourcesTab('new-residents')" id="resTab-new-residents"
+                class="px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🏠 New Residents</button>
+      </div>
       <h2 class="text-3xl md:text-4xl font-bold mb-6">🌍 Community Resources</h2>
       <div class="space-y-3">
         ${[1,2,3,4].map(() => `
@@ -2430,6 +2439,7 @@ async function loadResourcesPage(content) {
 
     content.innerHTML = `
       <div class="max-w-2xl mx-auto px-2 pb-10">
+      
         <div class="flex items-center justify-between mb-5">
           <h2 class="text-3xl md:text-4xl font-bold">🌍 Community Resources</h2>
           <span class="text-sm text-white/40">${_allResources.length} listed</span>
@@ -4523,10 +4533,9 @@ async function renderMessagesList(tab) {
   } else {
     conversationArray.forEach(conv => {
       html += `
-        <div onclick="openConversation('${conv.otherId}')" 
-             data-other-id="${conv.otherId}"
-             class="bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-4 cursor-pointer transition">
-          <div class="flex-1">
+        <div data-other-id="${conv.otherId}"
+             class="group bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-4 items-center transition">
+          <div class="flex-1 min-w-0 cursor-pointer" onclick="openConversation('${conv.otherId}')">
             <div class="flex justify-between items-baseline">
               <p class="font-semibold">${conv.otherName}</p>
               ${conv.unread ? `<span class="msg-new-pill text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">new</span>` : ''}
@@ -4534,6 +4543,11 @@ async function renderMessagesList(tab) {
             <p class="text-white/70 text-sm line-clamp-1">${conv.lastMessage}</p>
             <p class="text-xs text-white/50">${timeAgo(conv.timestamp)}</p>
           </div>
+          <button onclick="event.stopPropagation(); confirmDeleteConversation('${conv.otherId}', '${conv.otherName.replace(/'/g, "\\'")}', ${tab})"
+                  title="Delete conversation"
+                  class="flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-red-500/20 hover:bg-red-500/40 text-red-300 hover:text-red-200 w-9 h-9 rounded-2xl flex items-center justify-center text-lg">
+            🗑️
+          </button>
         </div>`;
     });
   }
@@ -4541,6 +4555,58 @@ async function renderMessagesList(tab) {
   container.innerHTML = html;
   return msgs;
 }
+
+// ─── Delete conversation ─────────────────────────────────────────────────────
+window.confirmDeleteConversation = function(otherId, otherName, tab) {
+  const modalHTML = `
+    <div id="deleteConvModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[25000]">
+      <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full mx-4 p-6 shadow-2xl">
+        <div class="text-center mb-5">
+          <div class="text-4xl mb-3">🗑️</div>
+          <h3 class="text-xl font-bold">Delete Conversation</h3>
+          <p class="text-slate-500 text-sm mt-2">
+            Remove your copy of all messages with <strong>${otherName}</strong>?
+            This only affects your view — the other person's messages are unaffected.
+          </p>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="document.getElementById('deleteConvModal').remove()"
+                  class="flex-1 py-3 border border-slate-200 rounded-3xl font-semibold hover:bg-slate-50 transition">
+            Cancel
+          </button>
+          <button onclick="deleteConversation('${otherId}', ${tab})"
+                  class="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-3xl font-semibold transition">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+};
+
+window.deleteConversation = async function(otherId, tab) {
+  const modal = document.getElementById('deleteConvModal');
+  if (modal) modal.remove();
+
+  // Optimistically remove the row immediately so it feels instant
+  const row = document.querySelector(`[data-other-id="${otherId}"]`);
+  if (row) row.remove();
+
+  try {
+    const res = await apiDelete(`/messages/conversation/${otherId}`);
+    if (res.deleted !== undefined || res.message) {
+      showToast('🗑️ Conversation deleted');
+      updateMessageBadge();
+    } else {
+      showToast('Could not delete — please try again', 'error');
+      renderMessagesList(tab); // restore on failure
+    }
+  } catch (e) {
+    console.error('Delete conversation error:', e);
+    showToast('Network error — could not delete', 'error');
+    renderMessagesList(tab);
+  }
+};
 
 // ====================== FIXED COMPOSE MODAL (high z-index + pre-fill) ======================
 window.showComposeMessageModal = function(preSelectedUserId = null, preSelectedName = 'User') {

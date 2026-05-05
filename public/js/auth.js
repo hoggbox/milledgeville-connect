@@ -4,6 +4,13 @@ let verificationPollInterval = null;
 // ─── Auth Modal ───────────────────────────────────────────────────────────────
 function showAuthModal(opts = {}) {
   const modal = document.getElementById('authModal');
+  
+  if (!modal) {
+    console.error('❌ ERROR: authModal not found in the page!');
+    alert('Login window is missing. Please hard refresh the page (Ctrl + Shift + R).');
+    return;
+  }
+
   modal.classList.remove('hidden');
 
   // If a specific prompt message was requested, show it above the form
@@ -30,19 +37,30 @@ function showAuthModal(opts = {}) {
 }
 
 function hideAuthModal() {
-  document.getElementById('authModal').classList.add('hidden');
+  const modal = document.getElementById('authModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
 }
 
 function switchToLogin() {
-  document.getElementById('loginForm').classList.remove('hidden');
-  document.getElementById('registerForm').classList.add('hidden');
-  document.getElementById('modalTitle').textContent = 'Welcome back';
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  const modalTitle = document.getElementById('modalTitle');
+
+  if (loginForm) loginForm.classList.remove('hidden');
+  if (registerForm) registerForm.classList.add('hidden');
+  if (modalTitle) modalTitle.textContent = 'Welcome back';
 }
 
 function switchToRegister() {
-  document.getElementById('loginForm').classList.add('hidden');
-  document.getElementById('registerForm').classList.remove('hidden');
-  document.getElementById('modalTitle').textContent = 'Create account';
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  const modalTitle = document.getElementById('modalTitle');
+
+  if (loginForm) loginForm.classList.add('hidden');
+  if (registerForm) registerForm.classList.remove('hidden');
+  if (modalTitle) modalTitle.textContent = 'Create account';
 }
 
 // ─── Prompt guests to sign in for gated actions ───────────────────────────────
@@ -64,10 +82,13 @@ async function handleRegister() {
   const result = await apiPost('/auth/register', { name, email, password });
 
   if (result.token) {
-    document.getElementById('modalTitle').innerHTML = `
-      <div class="text-emerald-600 text-5xl mb-4">✅</div>
-      Account Created!<br>
-      <span class="text-xl text-slate-600">Logging you in...</span>`;
+    const modalTitle = document.getElementById('modalTitle');
+    if (modalTitle) {
+      modalTitle.innerHTML = `
+        <div class="text-emerald-600 text-5xl mb-4">✅</div>
+        Account Created!<br>
+        <span class="text-xl text-slate-600">Logging you in...</span>`;
+    }
     setTimeout(() => {
       setToken(result.token);
       currentUser = result.user;
@@ -91,7 +112,38 @@ async function handleLogin() {
     currentUser = result.user;
     updateUserUI();
     hideAuthModal();
-    // Reload current page so gated content appears
+
+    // ─── SAFE Auto-prompt for push notifications ───
+    if (currentUser.pushEnabled && typeof requestPushPermission === 'function') {
+      setTimeout(() => {
+        // Extra safety check
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker) return;
+
+        navigator.serviceWorker.ready
+          .then(reg => reg.pushManager.getSubscription())
+          .then(sub => {
+            if (!sub) {
+              // Show friendly toast prompt
+              const toast = document.createElement('div');
+              toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 z-[99999] max-w-[90%]';
+              toast.innerHTML = `
+                <div class="flex-1">🔔 Get instant alerts for deals, events & messages?</div>
+                <button class="bg-white text-emerald-600 px-5 py-2 rounded-2xl font-semibold text-sm whitespace-nowrap">Enable</button>
+              `;
+              document.body.appendChild(toast);
+
+              toast.querySelector('button').onclick = async () => {
+                toast.remove();
+                await requestPushPermission();
+              };
+
+              setTimeout(() => toast.remove(), 12000);
+            }
+          })
+          .catch(() => {}); // Silent fail if service worker not ready
+      }, 1800);
+    }
+
     loadPage(currentPage || 'home');
   } else {
     alert(result.message || 'Login failed');

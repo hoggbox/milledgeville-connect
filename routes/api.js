@@ -234,6 +234,46 @@ router.delete('/messages/:id', authenticate, async (req, res) => {
   }
 });
 
+// DELETE /api/messages/conversation/:otherId
+// Deletes all messages between the current user and another user
+router.delete('/messages/conversation/:otherId', authenticate, async (req, res) => {
+  try {
+    const myId    = req.userId;
+    const otherId = req.params.otherId;
+    const result  = await Message.deleteMany({
+      $or: [
+        { sender: myId,    receiver: otherId },
+        { sender: otherId, receiver: myId    }
+      ]
+    });
+    res.json({ deleted: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/messages/inbox
+// Clears all messages received by the current user
+router.delete('/messages/inbox', authenticate, async (req, res) => {
+  try {
+    const result = await Message.deleteMany({ receiver: req.userId });
+    res.json({ deleted: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/messages/outbox
+// Clears all messages sent by the current user
+router.delete('/messages/outbox', authenticate, async (req, res) => {
+  try {
+    const result = await Message.deleteMany({ sender: req.userId });
+    res.json({ deleted: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/users/:id/block', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -256,6 +296,47 @@ router.get('/users/:id', optionalAuth, async (req, res) => {
     const user = await User.findById(req.params.id).select('-password -email -blockedUsers');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUSH NOTIFICATION ROUTES (Added May 2026)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/push/vapid-public-key', (req, res) => {
+  if (!process.env.VAPID_PUBLIC_KEY) {
+    return res.status(500).json({ message: 'VAPID keys not configured on server' });
+  }
+  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
+router.post('/push/subscribe', authenticate, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription) {
+      return res.status(400).json({ message: 'Subscription object required' });
+    }
+
+    await PushSubscription.deleteOne({ user: req.userId });
+    await PushSubscription.create({
+      user: req.userId,
+      subscription: subscription
+    });
+
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    res.json({ message: 'Subscribed' });
+  } catch (err) {
+    console.error('Push subscribe error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/push/unsubscribe', authenticate, async (req, res) => {
+  try {
+    await PushSubscription.deleteOne({ user: req.userId });
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: false });
+    res.json({ message: 'Unsubscribed' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

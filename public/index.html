@@ -48,7 +48,7 @@
     </div>
   </div>
 
-  <!-- PROFILE SLIDE-UP SHEET (existing) -->
+  <!-- PROFILE SLIDE-UP SHEET -->
   <div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet"
        class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
     <div id="profileSheetPanel"
@@ -63,7 +63,7 @@
     </div>
   </div>
 
-  <!-- OTHER USER PROFILE MODAL (NEW) -->
+  <!-- OTHER USER PROFILE MODAL -->
   <div id="userProfileModal" onclick="if(event.target.id==='userProfileModal')hideUserProfileModal()" 
        class="hidden fixed inset-0 bg-black/70 z-[12000] flex items-center justify-center p-4">
     <div onclick="event.stopImmediatePropagation()" 
@@ -72,16 +72,14 @@
     </div>
   </div>
 
-  <!-- MESSAGES / INBOX MODAL / PAGE (dynamic) -->
-  <!-- (UI is rendered via JS in data.js) -->
-
-  <!-- AUTH MODAL (existing) -->
+  <!-- AUTH MODAL — must be in DOM before scripts run -->
   <div id="authModal" onclick="if(event.target.id==='authModal')hideAuthModal()"
        class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[10000]">
     <div onclick="event.stopImmediatePropagation()"
          class="bg-white text-slate-900 rounded-3xl max-w-md w-full mx-4 shadow-2xl">
       <div class="p-8">
         <h2 id="modalTitle" class="text-3xl font-bold mb-6 text-center">Welcome back</h2>
+        
         <div id="loginForm">
           <input id="loginEmail" type="email" placeholder="Email"
                  class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
@@ -91,6 +89,7 @@
                   class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Log In</button>
           <p onclick="switchToRegister()" class="text-center text-sm mt-6 text-emerald-600 cursor-pointer">Don't have an account? Register</p>
         </div>
+
         <div id="registerForm" class="hidden">
           <input id="regName" type="text" placeholder="Full Name"
                  class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
@@ -106,26 +105,32 @@
     </div>
   </div>
 
-  <!-- Scripts — ORDER MATTERS -->
+  <!-- Scripts load after all HTML is parsed -->
   <script src="/js/api.js"></script>
   <script src="/js/data.js"></script>
   <script src="/js/nav.js"></script>
-  <script src="/js/auth.js"></script>
   <script src="/js/profile.js"></script>
+  <script src="/js/auth.js"></script>
   <script src="/js/main.js"></script>
+
   <script>
-    // PWA Install Prompt (existing)
+    // PWA Install Prompt
     let deferredPrompt;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
+
       const installBtn = document.createElement('button');
       installBtn.textContent = '📲 Install App';
       installBtn.className = 'fixed bottom-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-3xl shadow-2xl text-sm font-semibold z-[99999]';
+      
       installBtn.onclick = () => {
         deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(() => { installBtn.remove(); });
+        deferredPrompt.userChoice.then(() => {
+          installBtn.remove();
+        });
       };
+
       document.body.appendChild(installBtn);
     });
   </script>
