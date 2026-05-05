@@ -113,17 +113,17 @@ async function handleLogin() {
     updateUserUI();
     hideAuthModal();
 
-    // ─── SAFE Auto-prompt for push notifications ───
-    if (currentUser.pushEnabled && typeof requestPushPermission === 'function') {
+    // ─── IMPROVED Auto-prompt for push notifications ───
+    // Only show if user hasn't explicitly turned it off AND browser hasn't blocked it
+    if (currentUser.pushEnabled !== false && typeof requestPushPermission === 'function') {
       setTimeout(() => {
-        // Extra safety check
         if (!('serviceWorker' in navigator) || !navigator.serviceWorker) return;
 
         navigator.serviceWorker.ready
           .then(reg => reg.pushManager.getSubscription())
           .then(sub => {
-            if (!sub) {
-              // Show friendly toast prompt
+            // Only show toast if no subscription AND user hasn't denied notifications
+            if (!sub && Notification.permission !== 'denied') {
               const toast = document.createElement('div');
               toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 z-[99999] max-w-[90%]';
               toast.innerHTML = `
@@ -134,7 +134,11 @@ async function handleLogin() {
 
               toast.querySelector('button').onclick = async () => {
                 toast.remove();
-                await requestPushPermission();
+                const success = await requestPushPermission();
+                if (success) {
+                  currentUser.pushEnabled = true;
+                  showToast('✅ Push notifications enabled!');
+                }
               };
 
               setTimeout(() => toast.remove(), 12000);

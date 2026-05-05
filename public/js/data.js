@@ -4430,20 +4430,36 @@ async function loadMessagesPage(content) {
   _setBadge(0);
 
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">✉️ Messages</h1>
-        <button onclick="showComposeMessageModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
-          <span class="text-xl">✍️</span> New Message
+    <div class="max-w-2xl mx-auto px-2 pb-10">
+
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight">Messages</h1>
+          <p class="text-white/40 text-sm mt-0.5">Your private conversations</p>
+        </div>
+        <button onclick="showComposeMessageModal()"
+                class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition-all shadow-lg shadow-emerald-900/40 px-5 py-2.5 rounded-2xl font-semibold text-sm flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Compose
         </button>
       </div>
-      
-      <div class="flex gap-2 mb-4 border-b border-white/20 pb-2">
-        <button onclick="switchMessageTab(0)" id="msgTab0" class="flex-1 py-3 text-center font-semibold border-b-2 border-emerald-400">Inbox</button>
-        <button onclick="switchMessageTab(1)" id="msgTab1" class="flex-1 py-3 text-center font-semibold">Sent</button>
+
+      <!-- Tab switcher -->
+      <div class="relative flex bg-white/5 border border-white/10 rounded-2xl p-1 mb-6 gap-1">
+        <button onclick="switchMessageTab(0)" id="msgTab0"
+                class="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all bg-emerald-600 text-white shadow-sm">
+          📥 Inbox
+        </button>
+        <button onclick="switchMessageTab(1)" id="msgTab1"
+                class="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all text-white/50 hover:text-white/80">
+          📤 Sent
+        </button>
       </div>
-      
-      <div id="messagesList" class="space-y-4"></div>
+
+      <div id="messagesList" class="space-y-3"></div>
     </div>`;
 
     window.currentMessageTab = 0;
@@ -4529,24 +4545,48 @@ async function renderMessagesList(tab) {
 
   let html = '';
   if (conversationArray.length === 0) {
-    html = `<p class="text-white/50 text-center py-8">No messages yet</p>`;
+    html = `
+      <div class="flex flex-col items-center justify-center py-20 text-center">
+        <div class="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-3xl mb-4">💬</div>
+        <p class="text-white/40 font-medium">No messages yet</p>
+        <p class="text-white/25 text-sm mt-1">Start a conversation with someone</p>
+      </div>`;
   } else {
     conversationArray.forEach(conv => {
+      // Generate a consistent avatar color from the name
+      const colors = ['bg-violet-500','bg-sky-500','bg-rose-500','bg-amber-500','bg-teal-500','bg-pink-500','bg-indigo-500'];
+      const colorIdx = conv.otherName.charCodeAt(0) % colors.length;
+      const initials = conv.otherName.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+
       html += `
         <div data-other-id="${conv.otherId}"
-             class="group bg-white/10 hover:bg-white/15 rounded-3xl p-4 flex gap-4 items-center transition">
-          <div class="flex-1 min-w-0 cursor-pointer" onclick="openConversation('${conv.otherId}')">
-            <div class="flex justify-between items-baseline">
-              <p class="font-semibold">${conv.otherName}</p>
-              ${conv.unread ? `<span class="msg-new-pill text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">new</span>` : ''}
+             class="group relative bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.08] hover:border-white/[0.16] rounded-2xl p-4 flex gap-4 items-center transition-all cursor-pointer"
+             onclick="openConversation('${conv.otherId}')">
+
+          <!-- Avatar -->
+          <div class="flex-shrink-0 relative">
+            <div class="w-12 h-12 ${colors[colorIdx]} rounded-2xl flex items-center justify-center font-bold text-white text-sm shadow-lg">
+              ${initials}
             </div>
-            <p class="text-white/70 text-sm line-clamp-1">${conv.lastMessage}</p>
-            <p class="text-xs text-white/50">${timeAgo(conv.timestamp)}</p>
+            ${conv.unread ? `<span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 shadow msg-new-pill"></span>` : ''}
           </div>
+
+          <!-- Content -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-baseline justify-between gap-2 mb-0.5">
+              <p class="font-semibold text-[15px] ${conv.unread ? 'text-white' : 'text-white/80'} truncate">${conv.otherName}</p>
+              <span class="flex-shrink-0 text-[11px] text-white/35">${timeAgo(conv.timestamp)}</span>
+            </div>
+            <p class="text-sm ${conv.unread ? 'text-white/70 font-medium' : 'text-white/40'} truncate">${conv.lastMessage}</p>
+          </div>
+
+          <!-- Delete button -->
           <button onclick="event.stopPropagation(); confirmDeleteConversation('${conv.otherId}', '${conv.otherName.replace(/'/g, "\\'")}', ${tab})"
                   title="Delete conversation"
-                  class="flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-red-500/20 hover:bg-red-500/40 text-red-300 hover:text-red-200 w-9 h-9 rounded-2xl flex items-center justify-center text-lg">
-            🗑️
+                  class="flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all p-2 rounded-xl bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
           </button>
         </div>`;
     });
@@ -4615,23 +4655,55 @@ window.showComposeMessageModal = function(preSelectedUserId = null, preSelectedN
   hideLostDetailModal();
 
   const modalHTML = `
-    <div id="composeModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[20000]">
-      <div onclick="if(event.target.id==='composeModal')hideComposeModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl p-6">
-        <h2 class="text-2xl font-bold mb-4">New Message</h2>
-        
-        ${preSelectedUserId ? `
-        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
-          <p class="text-sm text-emerald-700">To: <strong>${preSelectedName}</strong></p>
-          <input type="hidden" id="composeReceiverId" value="${preSelectedUserId}">
-        </div>` : `
-        <input id="composeRecipientId" type="text" placeholder="User ID" class="w-full px-4 py-3 rounded-2xl border mb-4">
-        <p class="text-xs text-slate-500 mb-3">Tip: Click any username first</p>`}
-        
-        <textarea id="composeText" rows="4" class="w-full px-4 py-3 rounded-2xl border mb-6" placeholder="Write your message..."></textarea>
-        
-        <div class="flex gap-3">
-          <button onclick="hideComposeModal()" class="flex-1 py-4 border rounded-3xl font-semibold">Cancel</button>
-          <button onclick="sendComposedMessage()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Send Message</button>
+    <div id="composeModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center z-[20000]">
+      <div onclick="if(event.target.id==='composeModal')hideComposeModal()"
+           class="bg-slate-950 border border-white/10 w-full max-w-lg mx-0 md:mx-4 rounded-t-3xl md:rounded-3xl overflow-hidden shadow-2xl">
+
+        <!-- Header -->
+        <div class="px-6 py-5 border-b border-white/10 bg-slate-900/60 flex items-center justify-between">
+          <h2 class="text-lg font-bold tracking-tight">New Message</h2>
+          <button onclick="hideComposeModal()"
+                  class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/60 hover:text-white transition-all text-lg leading-none">
+            ×
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4">
+          ${preSelectedUserId ? `
+          <div class="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <div class="w-8 h-8 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400 text-sm font-bold flex-shrink-0">
+              ${preSelectedName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p class="text-[11px] text-emerald-400/70 font-medium uppercase tracking-wide">To</p>
+              <p class="text-sm font-semibold text-emerald-300">${preSelectedName}</p>
+            </div>
+            <input type="hidden" id="composeReceiverId" value="${preSelectedUserId}">
+          </div>` : `
+          <div>
+            <label class="block text-xs font-semibold text-white/40 uppercase tracking-wide mb-2">Recipient ID</label>
+            <input id="composeRecipientId" type="text" placeholder="Paste user ID…"
+                   class="w-full bg-white/[0.07] border border-white/[0.12] focus:border-emerald-500/50 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none transition-all">
+            <p class="text-[11px] text-white/30 mt-1.5">Tip: click any username on the site to message them directly</p>
+          </div>`}
+
+          <div>
+            <label class="block text-xs font-semibold text-white/40 uppercase tracking-wide mb-2">Message</label>
+            <textarea id="composeText" rows="5"
+                      class="w-full bg-white/[0.07] border border-white/[0.12] focus:border-emerald-500/50 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none transition-all resize-none"
+                      placeholder="Write your message…"></textarea>
+          </div>
+
+          <div class="flex gap-3 pt-1">
+            <button onclick="hideComposeModal()"
+                    class="flex-1 py-3.5 bg-white/[0.06] hover:bg-white/[0.10] border border-white/10 rounded-2xl font-semibold text-sm transition-all">
+              Cancel
+            </button>
+            <button onclick="sendComposedMessage()"
+                    class="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] rounded-2xl font-semibold text-sm transition-all shadow-lg shadow-emerald-900/40">
+              Send Message
+            </button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -4678,12 +4750,16 @@ window.switchMessageTab = async function(tab) {
   const tab0 = document.getElementById('msgTab0');
   const tab1 = document.getElementById('msgTab1');
   if (tab0) {
-    tab0.classList.toggle('border-emerald-400', tab === 0);
-    tab0.classList.toggle('border-transparent', tab !== 0);
+    tab0.className = tab === 0
+      ? 'flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all bg-emerald-600 text-white shadow-sm'
+      : 'flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all text-white/50 hover:text-white/80';
+    tab0.textContent = '📥 Inbox';
   }
   if (tab1) {
-    tab1.classList.toggle('border-emerald-400', tab === 1);
-    tab1.classList.toggle('border-transparent', tab !== 1);
+    tab1.className = tab === 1
+      ? 'flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all bg-emerald-600 text-white shadow-sm'
+      : 'flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all text-white/50 hover:text-white/80';
+    tab1.textContent = '📤 Sent';
   }
 
   const msgs = await renderMessagesList(tab);
@@ -4703,20 +4779,40 @@ window.openConversation = async function(otherId) {
   document.querySelectorAll(`[data-other-id="${otherId}"] .msg-new-pill`).forEach(el => el.remove());
   const modalHTML = `
     <div id="conversationModal" onclick="if(event.target.id==='conversationModal')hideConversationModal()" 
-         class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[16000] p-4">
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center z-[16000] p-0 md:p-4">
       <div onclick="event.stopImmediatePropagation()" 
-           class="bg-slate-900 w-full max-w-lg rounded-3xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div class="p-4 border-b flex items-center justify-between bg-slate-800">
-          <button onclick="hideConversationModal()" class="text-white/70 hover:text-white">← Back</button>
-          <h3 class="font-semibold text-lg" id="chatWithName">Chat</h3>
-          <div></div>
+           class="bg-slate-950 border border-white/10 w-full max-w-lg rounded-t-3xl md:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col shadow-2xl">
+
+        <!-- Chat header -->
+        <div class="px-5 py-4 border-b border-white/10 flex items-center gap-3 bg-slate-900/80 backdrop-blur">
+          <button onclick="hideConversationModal()"
+                  class="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white transition-all -ml-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold text-[16px] truncate" id="chatWithName">Chat</h3>
+            <p class="text-[11px] text-white/40">Private message</p>
+          </div>
         </div>
-        <div id="conversationThread" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900"></div>
-        <div class="p-4 border-t bg-slate-800 flex gap-2">
-          <input id="replyInput" type="text" placeholder="Type a reply..." 
-                 class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-3 text-white focus:outline-none">
-          <button onclick="sendReply('${otherId}')" 
-                  class="bg-emerald-600 hover:bg-emerald-500 px-6 rounded-3xl text-white font-medium">Send</button>
+
+        <!-- Message thread -->
+        <div id="conversationThread" class="flex-1 overflow-y-auto px-4 py-5 space-y-3 bg-slate-950"
+             style="background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0); background-size: 28px 28px;">
+        </div>
+
+        <!-- Reply bar -->
+        <div class="px-4 py-4 border-t border-white/10 bg-slate-900/80 backdrop-blur flex gap-3 items-end">
+          <input id="replyInput" type="text" placeholder="Type a message…"
+                 onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendReply('${otherId}');}"
+                 class="flex-1 bg-white/[0.07] border border-white/[0.12] focus:border-emerald-500/50 focus:bg-white/[0.09] rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:outline-none transition-all">
+          <button onclick="sendReply('${otherId}')"
+                  class="flex-shrink-0 bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition-all w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-900/50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>`;
@@ -4751,15 +4847,24 @@ async function loadConversationThread(otherId) {
     messages.forEach(m => {
       const isMine = String(m.sender?._id || m.sender) === String(currentUser._id);
       html += `
-        <div class="${isMine ? 'text-right' : 'text-left'}">
-          <div class="inline-block max-w-[80%] px-4 py-3 rounded-3xl ${isMine ? 'bg-emerald-600 text-white' : 'bg-white/10 text-white'}">
-            <p>${m.text}</p>
-            <p class="text-[10px] opacity-70 mt-1">${timeAgo(m.createdAt)}</p>
+        <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+          <div class="max-w-[78%]">
+            <div class="px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm
+                        ${isMine
+                          ? 'bg-emerald-600 text-white rounded-br-md'
+                          : 'bg-white/10 text-white/90 rounded-bl-md border border-white/[0.08]'}">
+              ${m.text}
+            </div>
+            <p class="text-[10px] text-white/30 mt-1 ${isMine ? 'text-right pr-1' : 'pl-1'}">${timeAgo(m.createdAt)}</p>
           </div>
         </div>`;
     });
 
-    container.innerHTML = html || `<p class="text-white/50 text-center py-8">No messages yet</p>`;
+    container.innerHTML = html || `
+      <div class="flex flex-col items-center justify-center py-16 text-center">
+        <div class="text-4xl mb-3 opacity-30">💬</div>
+        <p class="text-white/30 text-sm">No messages yet — say hello!</p>
+      </div>`;
     container.scrollTop = container.scrollHeight;
 
     markConversationAsRead(otherId);   // ← extra safety
