@@ -359,7 +359,13 @@ function showEditProfileModal() {
   }
 }
 
-// ─── Push Toggle Handler (Improved) ───────────────────────────────────────────
+// ─── Hide Edit Profile Modal (MISSING FUNCTION - NOW FIXED) ───────────────────
+function hideEditProfileModal() {
+  const modal = document.getElementById('editProfileModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// ─── Push Toggle Handler ──────────────────────────────────────────────────────
 window.handlePushToggle = async function (checked) {
   const checkbox = document.getElementById('ep-pushEnabled');
   const statusEl = document.getElementById('pushStatusMsg');
