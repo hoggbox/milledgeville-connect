@@ -327,7 +327,7 @@ function showEditProfileModal() {
               </div>
               <div class="relative flex-shrink-0">
                 <input type="checkbox" id="ep-pushEnabled" ${pushEnabled ? 'checked' : ''} ${!pushSupported ? 'disabled' : ''}
-                       class="sr-only peer" onchange="handlePushToggle(this.checked)">
+                       class="sr-only peer">
                 <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors peer-disabled:opacity-40"></div>
                 <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
               </div>
@@ -352,6 +352,43 @@ function showEditProfileModal() {
 
   modal.classList.remove('hidden');
 
+  // Attach push toggle properly after modal is created
+  setTimeout(() => {
+    const pushCheckbox = document.getElementById('ep-pushEnabled');
+    if (pushCheckbox) {
+      pushCheckbox.onchange = async function () {
+        const checked = this.checked;
+        const statusEl = document.getElementById('pushStatusMsg');
+
+        if (statusEl) {
+          statusEl.textContent = checked ? 'Enabling push notifications...' : 'Disabling...';
+          statusEl.classList.remove('hidden');
+        }
+
+        if (checked) {
+          const success = await requestPushPermission();
+          if (success) {
+            currentUser.pushEnabled = true;
+            if (statusEl) statusEl.textContent = '✅ Push notifications enabled!';
+            showToast('✅ Push notifications turned on');
+          } else {
+            this.checked = false;
+            if (statusEl) statusEl.textContent = 'Failed to enable. Check browser settings.';
+          }
+        } else {
+          await disablePushNotifications();
+          currentUser.pushEnabled = false;
+          if (statusEl) statusEl.textContent = 'Push notifications disabled.';
+          showToast('Push notifications turned off');
+        }
+
+        setTimeout(() => {
+          if (statusEl) statusEl.classList.add('hidden');
+        }, 3000);
+      };
+    }
+  }, 150);
+
   const bioTextarea = document.getElementById('ep-bio');
   const bioCount    = document.getElementById('bioCount');
   if (bioTextarea && bioCount) {
@@ -359,43 +396,11 @@ function showEditProfileModal() {
   }
 }
 
-// ─── Hide Edit Profile Modal (MISSING FUNCTION - NOW FIXED) ───────────────────
+// ─── Hide Edit Profile Modal ──────────────────────────────────────────────────
 function hideEditProfileModal() {
   const modal = document.getElementById('editProfileModal');
   if (modal) modal.classList.add('hidden');
 }
-
-// ─── Push Toggle Handler ──────────────────────────────────────────────────────
-window.handlePushToggle = async function (checked) {
-  const checkbox = document.getElementById('ep-pushEnabled');
-  const statusEl = document.getElementById('pushStatusMsg');
-
-  if (statusEl) {
-    statusEl.textContent = checked ? 'Enabling push notifications...' : 'Disabling...';
-    statusEl.classList.remove('hidden');
-  }
-
-  if (checked) {
-    const success = await requestPushPermission();
-    if (success) {
-      currentUser.pushEnabled = true;
-      if (statusEl) statusEl.textContent = '✅ Push notifications enabled!';
-      showToast('✅ Push notifications turned on');
-    } else {
-      if (checkbox) checkbox.checked = false;
-      if (statusEl) statusEl.textContent = 'Failed to enable. Check browser settings.';
-    }
-  } else {
-    await disablePushNotifications();
-    currentUser.pushEnabled = false;
-    if (statusEl) statusEl.textContent = 'Push notifications disabled.';
-    showToast('Push notifications turned off');
-  }
-
-  setTimeout(() => {
-    if (statusEl) statusEl.classList.add('hidden');
-  }, 3000);
-};
 
 // ─── Avatar helpers ───────────────────────────────────────────────────────────
 let pendingAvatarData = undefined;
