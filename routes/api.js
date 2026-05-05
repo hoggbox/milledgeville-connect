@@ -381,9 +381,21 @@ router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     const { text, images } = req.body;
+
     const shoutout = await Shoutout.create({
-      text, author: user.name, authorId: user._id, images: images || []
+      text,
+      author: user.name,
+      authorId: user._id,
+      images: images || []
     });
+
+    // === SEND PUSH TO EVERYONE ===
+    broadcastPush({
+      title: `💬 New Shoutout from ${user.name}`,
+      body: text.length > 80 ? text.substring(0, 77) + '...' : text,
+      url: '/shoutouts'
+    });
+
     res.json(shoutout);
   } catch (err) {
     res.status(500).json({ message: err.message });
