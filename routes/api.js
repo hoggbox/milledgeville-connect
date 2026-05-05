@@ -1059,7 +1059,22 @@ router.post('/news', authenticate, async (req, res) => {
     if (!title || !summary || !content)
       return res.status(400).json({ message: 'Title, summary, and content are required' });
 
-    const article = await News.create({ title, summary, content, images: images || [], author: user._id, authorName: user.name });
+    const article = await News.create({ 
+      title, 
+      summary, 
+      content, 
+      images: images || [], 
+      author: user._id, 
+      authorName: user.name 
+    });
+
+    // === SEND PUSH NOTIFICATION ===
+    broadcastPush({
+      title: `📰 New News: ${title}`,
+      body: summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
+      url: '/news'
+    });
+
     res.json(article);
   } catch (err) {
     res.status(500).json({ message: err.message });
