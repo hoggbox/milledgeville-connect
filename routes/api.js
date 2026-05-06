@@ -83,14 +83,6 @@ function requireAdmin(req, res, next) {
 // ─── FIREBASE + PUSH NOTIFICATIONS ──────────────────────────────────────────
 const admin = require('firebase-admin');
 
-// Initialize Firebase (only once)
-if (!admin.apps.length) {
-  const serviceAccount = require('./firebase-service-account.json');
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-}
-
 // Send push to a single user (supports both web + native)
 async function sendPushToUser(userId, payload) {
   try {
