@@ -119,38 +119,69 @@ async function sendPushToUser(userId, payload) {
 // Broadcast push to everyone (used for shoutouts, deals, events, etc.)
 async function broadcastPush(payload, filter = {}) {
   try {
+    // Batch-fetch all subscriptions and all relevant users in two queries
     const subs = await PushSubscription.find({});
+    if (!subs.length) return;
+
+    const userIds = subs.map(s => s.user);
+    const users   = await User.find({ _id: { $in: userIds }, pushEnabled: true }).lean();
+    const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
+    // Build FCM batch messages and collect web-push tasks
+    const fcmMessages = [];
+    const webTasks    = [];
+
     for (const sub of subs) {
-      const user = await User.findById(sub.user);
-      if (!user || !user.pushEnabled) continue;
+      const user = userMap.get(sub.user.toString());
+      if (!user) continue;
 
-      // Apply filters
-      if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
-      if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
+      // Apply per-preference filters
+      if (filter.notifyDeals     !== undefined && !user.notifyDeals)     continue;
+      if (filter.notifyEvents    !== undefined && !user.notifyEvents)    continue;
+      if (filter.notifyShoutouts !== undefined && !user.notifyShoutouts) continue;
 
-      try {
-        if (sub.nativeToken) {
-          // Native push
-          await admin.messaging().send({
-            token: sub.nativeToken,
-            notification: {
-              title: payload.title,
-              body: payload.body
-            },
-            data: payload.data || {}
-          });
-        } else if (sub.subscription) {
-          // Web push
-          await webpush.sendNotification(
-            sub.subscription,
-            JSON.stringify(payload),
-            { TTL: 86400 }
-          );
-        }
-      } catch (err) {
-        console.error('broadcastPush error:', err.message);
+      if (sub.nativeToken) {
+        fcmMessages.push({
+          token: sub.nativeToken,
+          notification: { title: payload.title, body: payload.body },
+          data: payload.data || {}
+        });
+      } else if (sub.subscription) {
+        webTasks.push(
+          webpush.sendNotification(sub.subscription, JSON.stringify(payload), { TTL: 86400 })
+            .catch(err => {
+              console.error('broadcastPush web error:', err.message);
+              if (err.statusCode === 410) {
+                PushSubscription.deleteOne({ user: sub.user }).catch(() => {});
+              }
+            })
+        );
       }
     }
+
+    // Send FCM messages in a single batch (up to 500 per sendEach call)
+    if (fcmMessages.length) {
+      const chunks = [];
+      for (let i = 0; i < fcmMessages.length; i += 500) {
+        chunks.push(fcmMessages.slice(i, i + 500));
+      }
+      for (const chunk of chunks) {
+        const result = await admin.messaging().sendEach(chunk);
+        result.responses.forEach((r, idx) => {
+          if (!r.success) {
+            console.error('FCM send error:', r.error?.message);
+            if (r.error?.code === 'messaging/registration-token-not-registered') {
+              const token = chunk[idx].token;
+              PushSubscription.deleteOne({ nativeToken: token }).catch(() => {});
+            }
+          }
+        });
+      }
+    }
+
+    // Fire all web-push sends in parallel
+    if (webTasks.length) await Promise.all(webTasks);
+
   } catch (err) {
     console.error('broadcastPush error:', err.message);
   }
@@ -436,7 +467,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       title: `💬 New Shoutout from ${user.name}`,
       body: text.length > 80 ? text.substring(0, 77) + '...' : text,
       url: '/shoutouts'
-    });
+    }, { notifyShoutouts: true });
 
     res.json(shoutout);
   } catch (err) {
@@ -994,9 +1025,9 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     shoutout.comments.push(comment);
     await shoutout.save();
 
-    if (comment.authorId && comment.authorId.toString() !== req.userId) {
-      sendPushToUser(comment.authorId, {
-        title: '💬 New comment on shoutout',
+    if (shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
+      sendPushToUser(shoutout.authorId, {
+        title: '💬 New comment on your shoutout',
         body: `${user.name}: ${req.body.text.substring(0, 60)}...`,
         url: '/shoutouts'
       });
@@ -1555,23 +1586,5 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
   }
 });
 
-// Native Push Token Storage
-router.post('/push/native-subscribe', authenticate, async (req, res) => {
-  try {
-    const { token, platform } = req.body;
-    if (!token) return res.status(400).json({ message: 'Token required' });
-
-    await PushSubscription.findOneAndUpdate(
-      { user: req.userId },
-      { user: req.userId, nativeToken: token, platform: platform || 'android' },
-      { upsert: true }
-    );
-
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
-    res.json({ message: 'Token saved' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
 module.exports = router;
