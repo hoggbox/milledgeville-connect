@@ -1491,4 +1491,23 @@ function sanitizeUser(user) {
   return u;
 }
 
+// Native Push Token Storage
+router.post('/push/native-subscribe', authenticate, async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token) return res.status(400).json({ message: 'Token required' });
+
+    await PushSubscription.findOneAndUpdate(
+      { user: req.userId },
+      { user: req.userId, nativeToken: token, platform: platform || 'android' },
+      { upsert: true }
+    );
+
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    res.json({ message: 'Token saved' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
