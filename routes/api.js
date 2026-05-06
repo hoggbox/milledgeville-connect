@@ -84,107 +84,73 @@ function requireAdmin(req, res, next) {
 }
 
 // Send push to a single user (supports both web + native)
-async function sendPushToUser(userId, payload) {
+async function sendPushToUser(userId, title, body, data = {}) {
   try {
     const sub = await PushSubscription.findOne({ user: userId });
-    if (!sub) return;
-
-    const user = await User.findById(userId);
-    if (!user || !user.pushEnabled) return;
-
-    // Native push (FCM)
-    if (sub.nativeToken) {
-      await admin.messaging().send({
-        token: sub.nativeToken,
-        notification: {
-          title: payload.title,
-          body: payload.body
-        },
-        data: payload.data || {}
-      });
-    } 
-    // Web push (fallback)
-    else if (sub.subscription) {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify(payload),
-        { TTL: 86400 }
-      );
+    if (!sub?.nativeToken) {
+      console.log(`[Push] No native token for user ${userId}`);
+      return false;
     }
+
+    const message = {
+      token: sub.nativeToken,
+      notification: { title, body },
+      data: { ...data, page: data.page || 'home' },
+      android: { priority: 'high' }
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log(`✅ Native push sent to ${userId}:`, response);
+    return true;
   } catch (err) {
-    console.error('sendPushToUser error:', err.message);
+    console.error(`[Push] Failed to send to ${userId}:`, err.message);
     if (err.code === 'messaging/registration-token-not-registered') {
       await PushSubscription.deleteOne({ user: userId });
     }
+    return false;
   }
 }
 
 // Broadcast push to everyone (used for shoutouts, deals, events, etc.)
 async function broadcastPush(payload, filter = {}) {
   try {
-    // Batch-fetch all subscriptions and all relevant users in two queries
-    const subs = await PushSubscription.find({});
-    if (!subs.length) return;
+    const subs = await PushSubscription.find({ nativeToken: { $exists: true } });
+    if (subs.length === 0) return;
 
     const userIds = subs.map(s => s.user);
-    const users   = await User.find({ _id: { $in: userIds }, pushEnabled: true }).lean();
+    const users = await User.find({ _id: { $in: userIds }, pushEnabled: true }).lean();
     const userMap = new Map(users.map(u => [u._id.toString(), u]));
 
-    // Build FCM batch messages and collect web-push tasks
-    const fcmMessages = [];
-    const webTasks    = [];
+    const messages = [];
 
     for (const sub of subs) {
       const user = userMap.get(sub.user.toString());
       if (!user) continue;
 
-      // Apply per-preference filters
-      if (filter.notifyDeals     !== undefined && !user.notifyDeals)     continue;
-      if (filter.notifyEvents    !== undefined && !user.notifyEvents)    continue;
       if (filter.notifyShoutouts !== undefined && !user.notifyShoutouts) continue;
+      if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
+      if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
 
       if (sub.nativeToken) {
-        fcmMessages.push({
+        messages.push({
           token: sub.nativeToken,
-          notification: { title: payload.title, body: payload.body },
-          data: payload.data || {}
-        });
-      } else if (sub.subscription) {
-        webTasks.push(
-          webpush.sendNotification(sub.subscription, JSON.stringify(payload), { TTL: 86400 })
-            .catch(err => {
-              console.error('broadcastPush web error:', err.message);
-              if (err.statusCode === 410) {
-                PushSubscription.deleteOne({ user: sub.user }).catch(() => {});
-              }
-            })
-        );
-      }
-    }
-
-    // Send FCM messages in a single batch (up to 500 per sendEach call)
-    if (fcmMessages.length) {
-      const chunks = [];
-      for (let i = 0; i < fcmMessages.length; i += 500) {
-        chunks.push(fcmMessages.slice(i, i + 500));
-      }
-      for (const chunk of chunks) {
-        const result = await admin.messaging().sendEach(chunk);
-        result.responses.forEach((r, idx) => {
-          if (!r.success) {
-            console.error('FCM send error:', r.error?.message);
-            if (r.error?.code === 'messaging/registration-token-not-registered') {
-              const token = chunk[idx].token;
-              PushSubscription.deleteOne({ nativeToken: token }).catch(() => {});
-            }
-          }
+          notification: { 
+            title: payload.title, 
+            body: payload.body 
+          },
+          data: payload.data || { page: 'home' },
+          android: { priority: 'high' }
         });
       }
     }
 
-    // Fire all web-push sends in parallel
-    if (webTasks.length) await Promise.all(webTasks);
+    if (messages.length === 0) return;
 
+    for (let i = 0; i < messages.length; i += 500) {
+      const chunk = messages.slice(i, i + 500);
+      const result = await admin.messaging().sendEach(chunk);
+      console.log(`✅ Broadcast sent ${result.successCount} native pushes`);
+    }
   } catch (err) {
     console.error('broadcastPush error:', err.message);
   }
