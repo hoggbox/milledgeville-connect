@@ -8,6 +8,11 @@
     "generate-vapid": "node -e \"const wp=require('web-push'); const keys=wp.generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY='+keys.publicKey); console.log('VAPID_PRIVATE_KEY='+keys.privateKey);\""
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1",
+    "@capacitor/push-notifications": "^8.0.3",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
@@ -18,5 +23,18 @@
     "mongoose": "^8.9.0",
     "nodemailer": "^8.0.5",
     "web-push": "^3.6.7"
-  }
+  },
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoggbox/milledgeville-connect.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/hoggbox/milledgeville-connect/issues"
+  },
+  "homepage": "https://github.com/hoggbox/milledgeville-connect#readme"
 }

@@ -80,7 +80,18 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ─── Native + Web Push Sending Functions ─────────────────────────────────────
+// ─── FIREBASE + PUSH NOTIFICATIONS ──────────────────────────────────────────
+const admin = require('firebase-admin');
+
+// Initialize Firebase (only once)
+if (!admin.apps.length) {
+  const serviceAccount = require('./firebase-service-account.json');
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+}
+
+// Send push to a single user (supports both web + native)
 async function sendPushToUser(userId, payload) {
   try {
     const sub = await PushSubscription.findOne({ user: userId });
@@ -89,7 +100,7 @@ async function sendPushToUser(userId, payload) {
     const user = await User.findById(userId);
     if (!user || !user.pushEnabled) return;
 
-    // Native Push (FCM)
+    // Native push (FCM)
     if (sub.nativeToken) {
       await admin.messaging().send({
         token: sub.nativeToken,
@@ -100,7 +111,7 @@ async function sendPushToUser(userId, payload) {
         data: payload.data || {}
       });
     } 
-    // Web Push (fallback)
+    // Web push (fallback)
     else if (sub.subscription) {
       await webpush.sendNotification(
         sub.subscription,
@@ -110,9 +121,13 @@ async function sendPushToUser(userId, payload) {
     }
   } catch (err) {
     console.error('sendPushToUser error:', err.message);
+    if (err.code === 'messaging/registration-token-not-registered') {
+      await PushSubscription.deleteOne({ user: userId });
+    }
   }
 }
 
+// Broadcast push to everyone (used for shoutouts, deals, events, etc.)
 async function broadcastPush(payload, filter = {}) {
   try {
     const subs = await PushSubscription.find({});
@@ -120,11 +135,13 @@ async function broadcastPush(payload, filter = {}) {
       const user = await User.findById(sub.user);
       if (!user || !user.pushEnabled) continue;
 
+      // Apply filters
       if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
       if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
 
       try {
         if (sub.nativeToken) {
+          // Native push
           await admin.messaging().send({
             token: sub.nativeToken,
             notification: {
@@ -134,6 +151,7 @@ async function broadcastPush(payload, filter = {}) {
             data: payload.data || {}
           });
         } else if (sub.subscription) {
+          // Web push
           await webpush.sendNotification(
             sub.subscription,
             JSON.stringify(payload),
@@ -1525,6 +1543,25 @@ function sanitizeUser(user) {
   delete u.password;
   return u;
 }
+
+// Native Push Token Storage
+router.post('/push/native-subscribe', authenticate, async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token) return res.status(400).json({ message: 'Token required' });
+
+    await PushSubscription.findOneAndUpdate(
+      { user: req.userId },
+      { user: req.userId, nativeToken: token, platform: platform || 'android' },
+      { upsert: true }
+    );
+
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    res.json({ message: 'Token saved' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // Native Push Token Storage
 router.post('/push/native-subscribe', authenticate, async (req, res) => {

@@ -1,2 +1,19 @@
-"node_modules/" 
-"public/js/" 
+# Dependencies
+node_modules/
+
+# Build folders
+android/
+ios/
+www/
+
+# Environment & secrets
+.env
+firebase-service-account.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

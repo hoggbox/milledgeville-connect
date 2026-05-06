@@ -1,0 +1,14 @@
+{
+  "appId": "com.ghogg.milledgevilleconnect",
+  "appName": "Milledgeville Connect",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "Camera": {
+      "saveToGallery": false
+    }
+  }
+}
