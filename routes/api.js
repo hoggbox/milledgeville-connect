@@ -1589,5 +1589,34 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
   }
 });
 
+// TEMP TEST - DELETE LATER
+router.post('/debug-push', authenticate, async (req, res) => {
+  try {
+    const sub = await PushSubscription.findOne({ user: req.userId });
+    
+    if (!sub || !sub.nativeToken) {
+      return res.json({ 
+        success: false, 
+        message: 'No native token found for this user',
+        hasToken: !!sub?.nativeToken 
+      });
+    }
+
+    console.log('Sending test push to token:', sub.nativeToken.substring(0, 20) + '...');
+
+    await admin.messaging().send({
+      token: sub.nativeToken,
+      notification: {
+        title: '🔥 Test Push',
+        body: 'This is a direct test from the server'
+      }
+    });
+
+    res.json({ success: true, message: 'Test push sent!' });
+  } catch (err) {
+    console.error('Debug push error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 module.exports = router;
