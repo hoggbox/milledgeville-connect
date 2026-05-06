@@ -80,9 +80,6 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ─── FIREBASE + PUSH NOTIFICATIONS ──────────────────────────────────────────
-const admin = require('firebase-admin');
-
 // Send push to a single user (supports both web + native)
 async function sendPushToUser(userId, payload) {
   try {
