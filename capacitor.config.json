@@ -3,9 +3,16 @@
   "appName": "Milledgeville Connect",
   "webDir": "www",
   "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
   "plugins": {
     "PushNotifications": {
-      "presentationOptions": ["badge", "sound", "alert"]
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
     },
     "Camera": {
       "saveToGallery": false

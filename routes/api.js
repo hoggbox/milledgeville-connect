@@ -240,11 +240,12 @@ router.post('/messages', authenticate, async (req, res) => {
       text: text.trim()
     });
 
-    sendPushToUser(receiverId, {
-      title: `💬 New message from ${sender.name}`,
-      body: text.substring(0, 80) + (text.length > 80 ? '...' : ''),
-      url: '/messages'
-    });
+    sendPushToUser(
+      receiverId,
+      `💬 New message from ${sender.name}`,
+      text.substring(0, 80) + (text.length > 80 ? '...' : ''),
+      { page: 'messages' }
+    );
 
     res.json(message);
   } catch (err) {
@@ -432,12 +433,13 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     });
 
     // === SEND PUSH TO EVERYONE ===
-broadcastPush(
-  `💬 New Shoutout from ${user.name}`,
-  text.length > 80 ? text.substring(0, 77) + '...' : text,
-  { page: 'shoutouts' },
-  { notifyShoutouts: true }
-);
+    // No filter — shoutouts go to all users with pushEnabled (notifyShoutouts
+    // defaults false so filtering by it would silently drop everyone)
+    broadcastPush(
+      `💬 New Shoutout from ${user.name}`,
+      text.length > 80 ? text.substring(0, 77) + '...' : text,
+      { page: 'shoutouts' }
+    );
 
     res.json(shoutout);
   } catch (err) {
@@ -487,11 +489,11 @@ router.post('/lostitems', authenticate, async (req, res) => {
       authorName: user.name
     });
 
-    broadcastPush({
-      title: isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
-      body: `${user.name} posted: ${title}`,
-      url: '/lostfound'
-    });
+    broadcastPush(
+      isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
+      `${user.name} posted: ${title}`,
+      { page: 'lostfound' }
+    );
 
     res.json(item);
   } catch (err) {
@@ -510,11 +512,12 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
     await lost.save();
 
     if (lost.owner && lost.owner.toString() !== req.userId) {
-      sendPushToUser(lost.owner, {
-        title: '💬 New comment on your lost item',
-        body: `${user.name}: ${req.body.text.substring(0, 60)}...`,
-        url: '/lostfound'
-      });
+      sendPushToUser(
+        lost.owner,
+        '💬 New comment on your lost item',
+        `${user.name}: ${req.body.text.substring(0, 60)}`,
+        { page: 'lostfound' }
+      );
     }
     res.json(lost.comments[lost.comments.length - 1]);
   } catch (err) {
@@ -564,11 +567,11 @@ router.post('/marketplace', authenticate, async (req, res) => {
       condition: condition || 'used'
     });
 
-    broadcastPush({
-      title: '🛒 New Marketplace Listing',
-      body: `${user.name} listed: ${title} - $${price}`,
-      url: '/marketplace'
-    });
+    broadcastPush(
+      '🛒 New Marketplace Listing',
+      `${user.name} listed: ${title} - $${price}`,
+      { page: 'marketplace' }
+    );
 
     res.json(item);
   } catch (err) {
@@ -587,11 +590,12 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
     await item.save();
 
     if (item.seller && item.seller.toString() !== req.userId) {
-      sendPushToUser(item.seller, {
-        title: '💬 New message on your listing',
-        body: `${user.name}: ${req.body.text.substring(0, 60)}...`,
-        url: '/marketplace'
-      });
+      sendPushToUser(
+        item.seller,
+        '💬 New message on your listing',
+        `${user.name}: ${req.body.text.substring(0, 60)}`,
+        { page: 'marketplace' }
+      );
     }
     res.json(item.comments[item.comments.length - 1]);
   } catch (err) {
@@ -996,11 +1000,12 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     await shoutout.save();
 
     if (shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
-      sendPushToUser(shoutout.authorId, {
-        title: '💬 New comment on your shoutout',
-        body: `${user.name}: ${req.body.text.substring(0, 60)}...`,
-        url: '/shoutouts'
-      });
+      sendPushToUser(
+        shoutout.authorId,
+        '💬 New comment on your shoutout',
+        `${user.name}: ${req.body.text.substring(0, 60)}`,
+        { page: 'shoutouts' }
+      );
     }
     res.json(shoutout.comments[shoutout.comments.length - 1]);
   } catch (err) {
@@ -1021,11 +1026,12 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
     await shoutout.save();
 
     if (comment.authorId && comment.authorId.toString() !== req.userId) {
-      sendPushToUser(comment.authorId, {
-        title: '↩️ New Reply',
-        body:  `${user.name} replied to your comment`,
-        url:   '/shoutouts'
-      });
+      sendPushToUser(
+        comment.authorId,
+        '↩️ New Reply',
+        `${user.name} replied to your comment`,
+        { page: 'shoutouts' }
+      );
     }
 
     res.json(comment.replies[comment.replies.length - 1]);
@@ -1112,11 +1118,11 @@ router.post('/news', authenticate, async (req, res) => {
     });
 
     // === SEND PUSH NOTIFICATION ===
-    broadcastPush({
-      title: `📰 New News: ${title}`,
-      body: summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
-      url: '/news'
-    });
+    broadcastPush(
+      `📰 Breaking News: ${title}`,
+      summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
+      { page: 'news' }
+    );
 
     res.json(article);
   } catch (err) {
@@ -1288,11 +1294,12 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-    broadcastPush({
-      title: '🔥 New Deal Available!',
-      body:  title,
-      url:   '/deals'
-    }, { notifyDeals: true });
+    broadcastPush(
+      '🔥 New Deal Available!',
+      title,
+      { page: 'deals' },
+      { notifyDeals: true }
+    );
 
     res.json(deal);
   } catch (err) {
@@ -1334,11 +1341,12 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    broadcastPush({
-      title: '📅 New Event Posted!',
-      body:  title + (location ? ` · ${location}` : ''),
-      url:   '/events'
-    }, { notifyEvents: true });
+    broadcastPush(
+      '📅 New Event Posted!',
+      title + (location ? ` · ${location}` : ''),
+      { page: 'events' },
+      { notifyEvents: true }
+    );
 
     res.json(event);
   } catch (err) {
