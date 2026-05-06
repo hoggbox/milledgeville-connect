@@ -112,6 +112,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
 }
 
 // Broadcast push to everyone (used for shoutouts, deals, events, etc.)
+// Broadcast push to everyone (used for shoutouts, deals, events, etc.)
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
     console.log(`[Broadcast] Starting push for: ${title}`);
