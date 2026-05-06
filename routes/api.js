@@ -29,18 +29,21 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   );
 }
 
-// ─── Firebase Admin Setup (for Native Push) ───────────────────────────────────
+// ─── Firebase Admin Setup (Environment Variables - Render Safe) ──────────────
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
   try {
-    const serviceAccount = require('./firebase-service-account.json');
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      }),
     });
-    console.log('✅ Firebase Admin initialized');
+    console.log('✅ Firebase Admin initialized via environment variables');
   } catch (err) {
-    console.warn('⚠️ Firebase service account not found. Native push disabled.');
+    console.warn('⚠️ Firebase initialization failed:', err.message);
   }
 }
 
