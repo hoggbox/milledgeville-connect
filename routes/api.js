@@ -112,9 +112,13 @@ async function sendPushToUser(userId, title, body, data = {}) {
 }
 
 // Broadcast push to everyone (used for shoutouts, deals, events, etc.)
-async function broadcastPush(payload, filter = {}) {
+async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
+    console.log(`[Broadcast] Starting push for: ${title}`);
+
     const subs = await PushSubscription.find({ nativeToken: { $exists: true } });
+    console.log(`[Broadcast] Found ${subs.length} native subscriptions`);
+
     if (subs.length === 0) return;
 
     const userIds = subs.map(s => s.user);
@@ -131,25 +135,20 @@ async function broadcastPush(payload, filter = {}) {
       if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
       if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
 
-      if (sub.nativeToken) {
-        messages.push({
-          token: sub.nativeToken,
-          notification: { 
-            title: payload.title, 
-            body: payload.body 
-          },
-          data: payload.data || { page: 'home' },
-          android: { priority: 'high' }
-        });
-      }
+      messages.push({
+        token: sub.nativeToken,
+        notification: { title, body },
+        data: { ...data, page: data.page || 'home' },
+        android: { priority: 'high' }
+      });
     }
 
-    if (messages.length === 0) return;
+    console.log(`[Broadcast] Sending ${messages.length} native messages`);
 
     for (let i = 0; i < messages.length; i += 500) {
       const chunk = messages.slice(i, i + 500);
       const result = await admin.messaging().sendEach(chunk);
-      console.log(`✅ Broadcast sent ${result.successCount} native pushes`);
+      console.log(`✅ Broadcast sent ${result.successCount} pushes successfully`);
     }
   } catch (err) {
     console.error('broadcastPush error:', err.message);
@@ -432,11 +431,12 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     });
 
     // === SEND PUSH TO EVERYONE ===
-    broadcastPush({
-      title: `💬 New Shoutout from ${user.name}`,
-      body: text.length > 80 ? text.substring(0, 77) + '...' : text,
-      url: '/shoutouts'
-    }, { notifyShoutouts: true });
+broadcastPush(
+  `💬 New Shoutout from ${user.name}`,
+  text.length > 80 ? text.substring(0, 77) + '...' : text,
+  { page: 'shoutouts' },
+  { notifyShoutouts: true }
+);
 
     res.json(shoutout);
   } catch (err) {
