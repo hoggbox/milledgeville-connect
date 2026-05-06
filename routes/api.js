@@ -1572,7 +1572,9 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
     const { token, platform } = req.body;
     if (!token) return res.status(400).json({ message: 'Token required' });
 
-    // Delete any old web push subscription for this user
+    console.log('Saving native token for user:', req.userId);
+
+    // Delete any old web push subscription
     await PushSubscription.deleteOne({ user: req.userId, subscription: { $exists: true } });
 
     // Save the new native token
@@ -1583,8 +1585,10 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
     );
 
     await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    console.log('✅ Native token saved successfully');
     res.json({ message: 'Native token saved' });
   } catch (err) {
+    console.error('Native subscribe error:', err);
     res.status(500).json({ message: err.message });
   }
 });
