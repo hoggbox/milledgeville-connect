@@ -29,6 +29,21 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   );
 }
 
+// ─── Firebase Admin Setup (for Native Push) ───────────────────────────────────
+const admin = require('firebase-admin');
+
+if (!admin.apps.length) {
+  try {
+    const serviceAccount = require('./firebase-service-account.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('✅ Firebase Admin initialized');
+  } catch (err) {
+    console.warn('⚠️ Firebase service account not found. Native push disabled.');
+  }
+}
+
 // ─── Auth Middleware ──────────────────────────────────────────────────────────
 function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -65,48 +80,68 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ─── Helper: send push to a single user ──────────────────────────────────────
+// ─── Native + Web Push Sending Functions ─────────────────────────────────────
 async function sendPushToUser(userId, payload) {
   try {
     const sub = await PushSubscription.findOne({ user: userId });
     if (!sub) return;
+
     const user = await User.findById(userId);
     if (!user || !user.pushEnabled) return;
-    await webpush.sendNotification(
-      sub.subscription,
-      JSON.stringify(payload),
-      { TTL: 86400 }
-    );
+
+    // Native Push (FCM)
+    if (sub.nativeToken) {
+      await admin.messaging().send({
+        token: sub.nativeToken,
+        notification: {
+          title: payload.title,
+          body: payload.body
+        },
+        data: payload.data || {}
+      });
+    } 
+    // Web Push (fallback)
+    else if (sub.subscription) {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify(payload),
+        { TTL: 86400 }
+      );
+    }
   } catch (err) {
     console.error('sendPushToUser error:', err.message);
-    if (err.statusCode === 410) {
-      await PushSubscription.deleteOne({ user: userId });
-      await User.findByIdAndUpdate(userId, { pushEnabled: false });
-    }
   }
 }
 
-// ─── Helper: broadcast push ──────────────────────────────────────────────────
 async function broadcastPush(payload, filter = {}) {
   try {
     const subs = await PushSubscription.find({});
     for (const sub of subs) {
       const user = await User.findById(sub.user);
       if (!user || !user.pushEnabled) continue;
+
       if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
       if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
+
       try {
-        await webpush.sendNotification(
-          sub.subscription,
-          JSON.stringify(payload),
-          { TTL: 86400 }
-        );
-      } catch (err) {
-        console.error('broadcastPush single error:', err.message);
-        if (err.statusCode === 410) {
-          await PushSubscription.deleteOne({ user: sub.user });
-          await User.findByIdAndUpdate(sub.user, { pushEnabled: false });
+        if (sub.nativeToken) {
+          await admin.messaging().send({
+            token: sub.nativeToken,
+            notification: {
+              title: payload.title,
+              body: payload.body
+            },
+            data: payload.data || {}
+          });
+        } else if (sub.subscription) {
+          await webpush.sendNotification(
+            sub.subscription,
+            JSON.stringify(payload),
+            { TTL: 86400 }
+          );
         }
+      } catch (err) {
+        console.error('broadcastPush error:', err.message);
       }
     }
   } catch (err) {
