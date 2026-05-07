@@ -114,58 +114,39 @@ async function sendPushToUser(userId, title, body, data = {}) {
 // Broadcast push to everyone (used for shoutouts, deals, events, etc.)
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
-    console.log(`[Broadcast] Starting for: "${title}" | Body: "${body}"`);
+    console.log(`🔥 BROADCAST STARTED: "${title}"`);
 
-    const subs = await PushSubscription.find({ nativeToken: { $exists: true, $ne: null } });
-    console.log(`[Broadcast] Found ${subs.length} native subscriptions`);
+    // Get all valid native tokens
+    const subs = await PushSubscription.find({ 
+      nativeToken: { $exists: true, $ne: null } 
+    });
+
+    console.log(`Found ${subs.length} native tokens in DB`);
 
     if (subs.length === 0) return;
 
-    const userIds = subs.map(s => s.user);
-    const users = await User.find({ _id: { $in: userIds }, pushEnabled: true }).lean();
-    console.log(`[Broadcast] ${users.length} users with pushEnabled: true`);
+    const messages = subs.map(sub => ({
+      token: sub.nativeToken,
+      notification: { 
+        title: title || "Milledgeville Connect",
+        body: body 
+      },
+      data: { 
+        ...data, 
+        page: data.page || 'home' 
+      },
+      android: { priority: 'high' }
+    }));
 
-    const messages = [];
+    console.log(`Sending ${messages.length} push messages...`);
 
-    for (const sub of subs) {
-      const user = users.find(u => u._id.toString() === sub.user.toString());
-      if (!user) continue;
-
-      // Simple filter check
-      if (filter.notifyShoutouts !== undefined && !user.notifyShoutouts) continue;
-
-      messages.push({
-        token: sub.nativeToken,
-        notification: { 
-          title: title || "Milledgeville Connect",
-          body: body 
-        },
-        data: { 
-          ...data, 
-          page: data.page || 'home' 
-        },
-        android: { priority: 'high' }
-      });
-    }
-
-    console.log(`[Broadcast] Preparing to send ${messages.length} messages`);
-
-    if (messages.length === 0) return;
-
-    // Send them
     const result = await admin.messaging().sendEach(messages);
-    
-    console.log(`[Broadcast] ✅ Sent ${result.successCount} / ${result.failureCount} failed`);
 
-    // Log failures
-    result.responses.forEach((resp, idx) => {
-      if (!resp.success) {
-        console.error(`[Broadcast] Failed to token #${idx}:`, resp.error?.message || resp.error);
-      }
-    });
+    console.log(`✅ Firebase accepted ${result.successCount} messages | ${result.failureCount} failed`);
 
   } catch (err) {
-    console.error('❌ broadcastPush CRASHED:', err.message, err);
+    console.error("💥 broadcastPush FAILED:", err.message);
+    console.error(err);
   }
 }
 
