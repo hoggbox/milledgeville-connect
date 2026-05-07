@@ -1,7 +1,7 @@
 const pages = [
   { id: 'home',        icon: '🏠', label: 'Home' },
   { id: 'directory',   icon: '📍', label: 'Directory' },
-  { id: 'shoutouts',   icon: '💬', label: 'Shoutouts' },
+  { id: 'shoutouts',   icon: '🚗', label: 'Traffic' },
   { id: 'lostfound',   icon: '🔎', label: 'Lost & Found' },
   { id: 'marketplace', icon: '🛒', label: 'Marketplace' },
   { id: 'events',      icon: '📅', label: 'Events' },
@@ -63,20 +63,24 @@ function renderNav() {
     }
   }
 
-  // Mobile bottom nav
-  let mobileHTML = '';
+  // Mobile bottom nav — clean + scrollable
+  let mobileHTML = `
+    <div class="flex overflow-x-auto snap-x snap-mandatory gap-2 px-3 pb-2 hide-scrollbar" style="-webkit-overflow-scrolling: touch; scrollbar-width: none;">
+  `;
   navPages.forEach(page => {
     let badge = '';
     if (page.id === 'messages') {
       badge = `<span id="messageBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-md hidden"></span>`;
     }
     mobileHTML += `
-      <button onclick="navigate('${page.id}')" class="flex flex-col items-center text-white/70 hover:text-white transition relative">
-        <span class="text-3xl">${page.icon}</span>
+      <button onclick="navigate('${page.id}')" 
+              class="flex-shrink-0 snap-center flex flex-col items-center justify-center text-white/70 hover:text-white transition relative w-[68px] py-1">
+        <span class="text-2xl">${page.icon}</span>
         ${badge}
-        <span class="text-[10px]">${page.label}</span>
+        <span class="text-[9px] mt-0.5 leading-none">${page.label}</span>
       </button>`;
   });
+  mobileHTML += `</div>`;
   const mobileNavEl = document.getElementById('mobile-nav');
   if (mobileNavEl) mobileNavEl.innerHTML = mobileHTML;
 

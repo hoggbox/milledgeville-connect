@@ -277,16 +277,16 @@ async function loadHomePage(content) {
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
       <!-- Today in Milledgeville (Compact) -->
-      <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-5 md:p-6 mb-8 text-white overflow-hidden relative">
+      <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-2 md:p-3 mb-3 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
         
-        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-3">
           
           <!-- Left: Title + Date + Podcast -->
           <div class="flex items-start gap-3 min-w-0">
             <span class="text-3xl flex-shrink-0 mt-0.5">🌅</span>
             <div class="min-w-0 flex-1">
-              <h1 class="text-[22px] font-bold leading-tight">Today in Milledgeville</h1>
+              <h1 class="text-[18px] font-bold leading-tight">Today in Milledgeville</h1>
               
               <div class="flex flex-wrap items-center gap-2 mt-1.5">
                 <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
@@ -301,11 +301,11 @@ async function loadHomePage(content) {
           </div>
 
           <!-- Right: Weather -->
-          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-4 py-3 text-right self-start md:self-auto">
+          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-3 py-2 text-right self-start md:self-auto">
             <div class="flex items-center justify-between md:justify-end gap-3">
               <div>
-                <div class="text-3xl leading-none mb-0.5" id="weatherIcon">—</div>
-                <div class="text-2xl font-black leading-none" id="weatherTemp">—</div>
+                <div class="text-2xl leading-none mb-0.5" id="weatherIcon">—</div>
+                <div class="text-xl font-black leading-none" id="weatherTemp">—</div>
               </div>
               <div>
                 <div class="text-[11px] text-emerald-100" id="weatherDesc">Loading…</div>
@@ -610,7 +610,7 @@ const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
         html += `
           <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
             <div class="flex-1">
-              <span class="text-xs bg-emerald-500 px-3 py-1 rounded-full">💬 SHOUTOUT</span>
+              <span class="text-xs bg-emerald-500 px-3 py-1 rounded-full">🚗 Traffic Alert</span>
               <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
               <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
             </div>
@@ -1678,7 +1678,7 @@ async function loadShoutoutsPage(content) {
   const shoutouts = await apiGet('/shoutouts');
 
   let html = `<div class="max-w-2xl mx-auto px-2">
-    <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
+    <h2 class="text-3xl md:text-4xl font-bold mb-6">Local Traffic Alerts</h2>`;
 
   if (currentUser) {
     html += `
@@ -5024,3 +5024,8 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+// initPushAfterLogin is defined in profile.js (_initNativePush).
+// That version correctly checks existing permissions before re-requesting,
+// preventing the black-screen bug on startup. No duplicate needed here.

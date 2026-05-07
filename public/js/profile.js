@@ -4,6 +4,19 @@
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+// Notification API is undefined in Android WebView (Capacitor uses native push).
+// Use this helper everywhere instead of accessing getNotificationPermission() directly.
+function getNotificationPermission() {
+  return (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+}
+
+// True when running inside a Capacitor native shell (Android / iOS APK).
+function isNativePlatform() {
+  const isCap = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  console.log('🔍 isNativePlatform check:', isCap);
+  return isCap;
+}
+
 // ─── Push Notification Helpers ────────────────────────────────────────────────
 let _vapidPublicKey = null;
 
@@ -56,7 +69,9 @@ async function requestPushPermission() {
     const existingSub = await reg.pushManager.getSubscription();
     if (existingSub) await existingSub.unsubscribe();
 
-    const permission = await Notification.requestPermission();
+    const permission = (typeof Notification !== 'undefined')
+      ? await Notification.requestPermission()
+      : 'denied';  // Capacitor handles permissions natively — web path shouldn't reach here
     if (permission !== 'granted') {
       showToast('Notification permission denied. Enable it in browser settings.', 'error');
       return false;
@@ -98,6 +113,92 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+async function _initNativePush() {
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+    console.log('🔔 Not running on native platform');
+    return;
+  }
+
+  console.log('🚀 Starting native push initialization...');
+
+  const { PushNotifications } = window.Capacitor.Plugins;
+
+  try {
+    // 1. Check current permission
+    const existing = await PushNotifications.checkPermissions();
+    console.log('📍 Permission status:', existing.receive);
+
+    if (existing.receive !== 'granted') {
+      console.log('Requesting permission...');
+      const requested = await PushNotifications.requestPermissions();
+      console.log('Permission after request:', requested.receive);
+
+      if (requested.receive !== 'granted') {
+        console.warn('❌ Push permission denied by user');
+        return;
+      }
+    }
+
+    // 2. Register
+    console.log('Registering for push...');
+    await PushNotifications.register();
+    console.log('✅ register() called');
+
+  } catch (err) {
+    console.error('❌ Error during native push init:', err);
+  }
+}
+
+// ─── FCM TOKEN LISTENER (FINAL FIXED VERSION) ─────────────────────────────
+console.log('📡 Push listener registered');
+
+if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
+  const { PushNotifications } = window.Capacitor.Plugins;
+
+  PushNotifications.addListener('registration', async (token) => {
+    console.log('🎉🎉🎉 FCM TOKEN RECEIVED - LENGTH:', token.value.length);
+    console.log('First 100 chars:', token.value.substring(0, 100));
+
+    try {
+      const res = await apiPost('/push/native-subscribe', {
+        token: token.value,
+        platform: 'android'
+      });
+      console.log('✅✅✅ TOKEN SUCCESSFULLY SENT TO SERVER!', res);
+      showToast('✅ Push token registered');
+    } catch (e) {
+      console.error('❌ FAILED to send token to server:', e);
+      showToast('Push registration failed', 'error');
+    }
+  });
+
+  PushNotifications.addListener('registrationError', (err) => {
+    console.error('💥 Push registration ERROR:', err);
+  });
+} else {
+  console.log('⚠️ PushNotifications plugin not available');
+}
+
+// ─── FOREGROUND NOTIFICATION HANDLER ────────────────────────────────────────
+if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
+  const { PushNotifications } = window.Capacitor.Plugins;
+
+  PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    console.log('📬 FOREGROUND PUSH RECEIVED:', notification);
+    
+    if (notification.notification) {
+      showToast(`${notification.notification.title}\n${notification.notification.body}`);
+    }
+  });
+
+  PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+    console.log('📬 NOTIFICATION TAPPED:', action);
+  });
+}
+
+// Exposed globally so auth.js can call it right after a successful login
+window.initPushAfterLogin = _initNativePush;
+
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
 function showProfileSheet() {
   if (!currentUser) { showAuthModal(); return; }
@@ -124,8 +225,9 @@ function showProfileSheet() {
     currentUser.website ? `<a href="${currentUser.website.startsWith('http') ? currentUser.website : 'https://'+currentUser.website}" target="_blank" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"><span class="text-lg">🔗</span> ${currentUser.website.replace(/^https?:\/\//,'')}</a>` : ''
   ].filter(Boolean).join('');
 
-  const pushSupported = ('serviceWorker' in navigator) && ('PushManager' in window);
-  const pushBlocked   = Notification.permission === 'denied';
+  const isNative      = isNativePlatform();
+  const pushSupported = isNative || (('serviceWorker' in navigator) && ('PushManager' in window));
+  const pushBlocked   = !isNative && getNotificationPermission() === 'denied';
 
   content.innerHTML = `
     <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
@@ -183,7 +285,7 @@ function showProfileSheet() {
         <div class="text-left">
           <p class="text-sm font-semibold text-slate-800">🔔 Push Notifications</p>
           <p id="sheetPushStatus" class="text-xs text-slate-500 mt-0.5">
-            ${pushBlocked ? '⚠️ Blocked in browser settings' : 'Receive alerts when the app is closed'}
+            ${pushBlocked ? '⚠️ Blocked in browser settings' : isNative ? 'Loading...' : 'Receive alerts when the app is closed'}
           </p>
         </div>
         <div class="relative flex-shrink-0">
@@ -214,51 +316,44 @@ function showProfileSheet() {
   });
 
   // ── Wire up the sheet push toggle after render ────────────────────────────
-  if (pushSupported && !pushBlocked) {
+  if (pushSupported && (isNative || !pushBlocked)) {
     _initSheetPushToggle();
   }
 }
 
 // Initialise the push toggle in the profile sheet.
-// Reads the REAL browser subscription state so the toggle is always accurate.
+// Handles both native Capacitor (FCM) and web push (VAPID) paths.
 async function _initSheetPushToggle() {
   const toggle   = document.getElementById('sheetPushToggle');
   const statusEl = document.getElementById('sheetPushStatus');
   if (!toggle) return;
 
-  // Set initial state from the browser — this is ground truth
-  const hasSub = await _browserHasPushSubscription();
-  toggle.checked = hasSub;
+  const native = isNativePlatform();
+  console.log('🔔 Native platform in toggle:', native);
 
-  // Keep currentUser in sync
-  if (currentUser) currentUser.pushEnabled = hasSub;
+  if (native) {
+    toggle.checked = true;
+    if (statusEl) statusEl.textContent = '✅ Push notifications enabled';
 
-  toggle.onchange = async function () {
-    const enabling = this.checked;
-    toggle.disabled = true;
-    if (statusEl) statusEl.textContent = enabling ? '⏳ Enabling...' : '⏳ Disabling...';
+    toggle.onchange = async function () {
+      const enabling = this.checked;
+      toggle.disabled = true;
 
-    if (enabling) {
-      const success = await requestPushPermission();
-      if (success) {
+      if (enabling) {
+        await _initNativePush();
         if (statusEl) statusEl.textContent = '✅ Notifications on';
         showToast('✅ Push notifications enabled!');
       } else {
-        toggle.checked = false;
-        if (statusEl) {
-          statusEl.textContent = Notification.permission === 'denied'
-            ? '⚠️ Blocked — allow in browser settings then try again'
-            : 'Could not enable — try again';
-        }
+        if (statusEl) statusEl.textContent = 'Push notifications turned off';
+        showToast('Push notifications turned off');
       }
-    } else {
-      await disablePushNotifications();
-      if (statusEl) statusEl.textContent = 'Receive alerts when the app is closed';
-      showToast('Push notifications turned off');
-    }
-
-    toggle.disabled = false;
-  };
+      toggle.disabled = false;
+    };
+  } else {
+    const hasSub = await _browserHasPushSubscription();
+    toggle.checked = hasSub;
+    if (statusEl) statusEl.textContent = hasSub ? '✅ Notifications on' : 'Tap to enable';
+  }
 }
 
 function hideProfileSheet() {
@@ -287,8 +382,9 @@ function showEditProfileModal() {
   }
 
   const u = currentUser;
-  const pushSupported = ('serviceWorker' in navigator) && ('PushManager' in window);
-  const pushBlocked   = Notification.permission === 'denied';
+  const isNative      = isNativePlatform();
+  const pushSupported = isNative || (('serviceWorker' in navigator) && ('PushManager' in window));
+  const pushBlocked   = !isNative && getNotificationPermission() === 'denied';
 
   modal.innerHTML = `
     <div onclick="event.stopPropagation()"
@@ -470,7 +566,7 @@ async function _initEditPushToggle() {
     const enabling = this.checked;
 
     // Guard: browser has since denied the permission
-    if (enabling && Notification.permission === 'denied') {
+    if (enabling && getNotificationPermission() === 'denied') {
       this.checked = false;
       if (statusEl) {
         statusEl.textContent = '⚠️ Notifications are blocked. Tap the 🔒 lock icon in the address bar → allow notifications → then toggle again.';
@@ -495,7 +591,7 @@ async function _initEditPushToggle() {
       } else {
         this.checked = false;
         if (statusEl) {
-          statusEl.textContent = Notification.permission === 'denied'
+          statusEl.textContent = getNotificationPermission() === 'denied'
             ? '⚠️ Blocked in browser. Allow notifications in site settings.'
             : 'Could not enable — please try again.';
           statusEl.style.color = '#d97706';

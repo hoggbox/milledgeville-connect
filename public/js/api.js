@@ -1,4 +1,13 @@
-const API_BASE = '/api';
+// ─── CAPACITOR / MOBILE READY ───────────────────────────────────────────────
+// Change the line below AFTER you deploy your backend
+const PRODUCTION_API_BASE = 'https://www.milledgevilleconnect.com/api';
+const isCapacitor = typeof window !== 'undefined' && 
+  (window.Capacitor || 
+   window.location.protocol === 'capacitor:' || 
+   /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+
+const API_BASE = isCapacitor ? PRODUCTION_API_BASE : '/api';
+
 let token = localStorage.getItem('token');
 
 function setToken(newToken) {
