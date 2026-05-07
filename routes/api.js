@@ -83,22 +83,29 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// TEMP DEBUG ROUTE - TEST THIS FIRST
-router.post('/debug-shoutout', authenticate, async (req, res) => {
-  console.log("🚨 DEBUG SHOUTOUT HIT");
-  console.log("User:", req.userId);
-  console.log("Body:", req.body);
-
+// SUPER SIMPLE DEBUG ROUTE - NO FILTERS
+router.post('/test-push', authenticate, async (req, res) => {
+  console.log("🚨 TEST-PUSH ROUTE HIT by user", req.userId);
+  
   try {
-    broadcastPush(
-      "🧪 DEBUG TEST NOTIFICATION",
-      "If you see this, notifications are working",
-      { page: 'shoutouts' },
-      { notifyShoutouts: true }
-    );
-    res.json({ message: "Debug push sent" });
+    const sub = await PushSubscription.findOne({ user: req.userId });
+    if (!sub?.nativeToken) {
+      return res.json({ error: "No token found for you" });
+    }
+
+    await admin.messaging().send({
+      token: sub.nativeToken,
+      notification: {
+        title: "🧪 MANUAL TEST",
+        body: "This should appear on your phone right now"
+      },
+      android: { priority: 'high' }
+    });
+
+    console.log("✅ Manual test push sent to your token");
+    res.json({ success: true, message: "Push sent" });
   } catch (e) {
-    console.error("Debug failed", e);
+    console.error("❌ Test push failed", e);
     res.status(500).json({ error: e.message });
   }
 });
