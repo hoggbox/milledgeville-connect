@@ -83,35 +83,36 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ULTRA SIMPLE PUBLIC TEST ROUTE (no auth needed)
+// === ULTRA LOUD PUBLIC TEST ===
 router.get('/test-push-public', async (req, res) => {
-  console.log("🚨 PUBLIC TEST PUSH ROUTE HIT");
+  console.log("🔥🔥🔥 TEST-PUSH-PUBLIC ROUTE WAS HIT 🔥🔥🔥");
+  console.log("Time:", new Date().toISOString());
 
   try {
-    // Use YOUR user ID from earlier (Jay Hogg)
-    const userId = "69d80c47794ce175ab26f594";
+    const userId = "69d80c47794ce175ab26f594"; // your Jay Hogg ID
 
     const sub = await PushSubscription.findOne({ user: userId });
-    
+    console.log("PushSubscription lookup:", sub ? "FOUND" : "NOT FOUND");
+
     if (!sub?.nativeToken) {
-      console.log("❌ No token found for Jay");
-      return res.json({ error: "No token in DB for this user" });
+      console.log("❌ No nativeToken in DB");
+      return res.json({ error: "No token in DB", hasSub: !!sub });
     }
 
-    console.log("✅ Found token, sending test push...");
+    console.log("✅ Token found, length:", sub.nativeToken.length);
 
-    await admin.messaging().send({
+    const message = {
       token: sub.nativeToken,
-      notification: {
-        title: "🧪 PUBLIC TEST",
-        body: "If you see this on your phone → notifications work"
-      },
+      notification: { title: "🧪 TEST PUSH", body: "Should appear now" },
       android: { priority: 'high' }
-    });
+    };
 
-    res.json({ success: true, message: "Test push sent!" });
+    const response = await admin.messaging().send(message);
+    console.log("✅ Firebase send success:", response);
+
+    res.json({ success: true, message: "Push sent!" });
   } catch (e) {
-    console.error("❌ Test failed:", e.message);
+    console.error("💥 TEST ROUTE CRASHED:", e.message);
     res.status(500).json({ error: e.message });
   }
 });
