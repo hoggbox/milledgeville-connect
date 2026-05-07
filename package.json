@@ -8,6 +8,7 @@
     "generate-vapid": "node -e \"const wp=require('web-push'); const keys=wp.generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY='+keys.publicKey); console.log('VAPID_PRIVATE_KEY='+keys.privateKey);\""
   },
   "dependencies": {
+    "@capacitor-community/fcm": "^8.1.0",
     "@capacitor/android": "^8.3.1",
     "@capacitor/cli": "^8.3.1",
     "@capacitor/core": "^8.3.1",
