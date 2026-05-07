@@ -816,37 +816,6 @@ router.patch('/auth/profile', authenticate, async (req, res) => {
   }
 });
 
-router.get('/push/vapid-public-key', (req, res) => {
-  res.json({ key: process.env.VAPID_PUBLIC_KEY || '' });
-});
-
-router.post('/push/subscribe', authenticate, async (req, res) => {
-  try {
-    const { subscription } = req.body;
-    if (!subscription) return res.status(400).json({ message: 'Subscription required' });
-
-    await PushSubscription.findOneAndUpdate(
-      { user: req.userId },
-      { user: req.userId, subscription },
-      { upsert: true, new: true }
-    );
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
-    res.json({ message: 'Subscribed' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.post('/push/unsubscribe', authenticate, async (req, res) => {
-  try {
-    await PushSubscription.deleteOne({ user: req.userId });
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: false });
-    res.json({ message: 'Unsubscribed' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 router.get('/directory', optionalAuth, async (req, res) => {
   try {
     // Fast lean query + manual avgRating + phone/hours for directory cards

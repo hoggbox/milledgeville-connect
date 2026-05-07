@@ -1,11 +1,37 @@
 const mongoose = require('mongoose');
 
-const pushSubSchema = new mongoose.Schema({
-  user:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  subscription: { type: Object, required: true },  // Web Push subscription JSON
-  createdAt:    { type: Date, default: Date.now }
-});
+const pushSubscriptionSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    unique: true
+  },
 
-pushSubSchema.index({ user: 1 }, { unique: true });
+  // Web Push (VAPID) - original field
+  subscription: {
+    type: Object,           // full PushSubscription JSON from browser
+    default: null
+  },
 
-module.exports = mongoose.model('PushSubscription', pushSubSchema);
+  // Native FCM Token (Capacitor / Android)
+  nativeToken: {
+    type: String,
+    default: null,
+    index: true
+  },
+
+  platform: {
+    type: String,
+    enum: ['android', 'ios', 'web'],
+    default: 'android'
+  },
+
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Ensure only one record per user
+pushSubscriptionSchema.index({ user: 1 }, { unique: true });
+
+module.exports = mongoose.model('PushSubscription', pushSubscriptionSchema);
