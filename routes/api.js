@@ -493,7 +493,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     // === SEND PUSH NOTIFICATION (with proper filter) ===
     broadcastPush(
-      `💬 New Shoutout from ${user.name}`,
+      `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
       { page: 'shoutouts' },
       { notifyShoutouts: true }
