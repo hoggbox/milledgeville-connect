@@ -83,6 +83,26 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
+// TEMP DEBUG ROUTE - TEST THIS FIRST
+router.post('/debug-shoutout', authenticate, async (req, res) => {
+  console.log("🚨 DEBUG SHOUTOUT HIT");
+  console.log("User:", req.userId);
+  console.log("Body:", req.body);
+
+  try {
+    broadcastPush(
+      "🧪 DEBUG TEST NOTIFICATION",
+      "If you see this, notifications are working",
+      { page: 'shoutouts' },
+      { notifyShoutouts: true }
+    );
+    res.json({ message: "Debug push sent" });
+  } catch (e) {
+    console.error("Debug failed", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Send push to a single user (supports both web + native)
 async function sendPushToUser(userId, title, body, data = {}) {
   try {
