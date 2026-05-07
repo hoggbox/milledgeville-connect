@@ -112,47 +112,60 @@ async function sendPushToUser(userId, title, body, data = {}) {
 }
 
 // Broadcast push to everyone (used for shoutouts, deals, events, etc.)
-// Broadcast push to everyone (used for shoutouts, deals, events, etc.)
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
-    console.log(`[Broadcast] Starting push for: ${title}`);
+    console.log(`[Broadcast] Starting for: "${title}" | Body: "${body}"`);
 
-    const subs = await PushSubscription.find({ nativeToken: { $exists: true } });
+    const subs = await PushSubscription.find({ nativeToken: { $exists: true, $ne: null } });
     console.log(`[Broadcast] Found ${subs.length} native subscriptions`);
 
     if (subs.length === 0) return;
 
     const userIds = subs.map(s => s.user);
     const users = await User.find({ _id: { $in: userIds }, pushEnabled: true }).lean();
-    const userMap = new Map(users.map(u => [u._id.toString(), u]));
+    console.log(`[Broadcast] ${users.length} users with pushEnabled: true`);
 
     const messages = [];
 
     for (const sub of subs) {
-      const user = userMap.get(sub.user.toString());
+      const user = users.find(u => u._id.toString() === sub.user.toString());
       if (!user) continue;
 
+      // Simple filter check
       if (filter.notifyShoutouts !== undefined && !user.notifyShoutouts) continue;
-      if (filter.notifyEvents !== undefined && !user.notifyEvents) continue;
-      if (filter.notifyDeals !== undefined && !user.notifyDeals) continue;
 
       messages.push({
         token: sub.nativeToken,
-        notification: { title, body },
-        data: { ...data, page: data.page || 'home' },
+        notification: { 
+          title: title || "Milledgeville Connect",
+          body: body 
+        },
+        data: { 
+          ...data, 
+          page: data.page || 'home' 
+        },
         android: { priority: 'high' }
       });
     }
 
-    console.log(`[Broadcast] Sending ${messages.length} native messages`);
+    console.log(`[Broadcast] Preparing to send ${messages.length} messages`);
 
-    for (let i = 0; i < messages.length; i += 500) {
-      const chunk = messages.slice(i, i + 500);
-      const result = await admin.messaging().sendEach(chunk);
-      console.log(`✅ Broadcast sent ${result.successCount} pushes successfully`);
-    }
+    if (messages.length === 0) return;
+
+    // Send them
+    const result = await admin.messaging().sendEach(messages);
+    
+    console.log(`[Broadcast] ✅ Sent ${result.successCount} / ${result.failureCount} failed`);
+
+    // Log failures
+    result.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        console.error(`[Broadcast] Failed to token #${idx}:`, resp.error?.message || resp.error);
+      }
+    });
+
   } catch (err) {
-    console.error('broadcastPush error:', err.message);
+    console.error('❌ broadcastPush CRASHED:', err.message, err);
   }
 }
 
