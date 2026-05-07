@@ -111,42 +111,56 @@ async function sendPushToUser(userId, title, body, data = {}) {
   }
 }
 
-// Broadcast push to everyone (used for shoutouts, deals, events, etc.)
+// Broadcast push to everyone (respects notifyShoutouts, notifyDeals, notifyEvents)
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
-    console.log(`🔥 BROADCAST STARTED: "${title}"`);
+    console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
 
-    // Get all valid native tokens
     const subs = await PushSubscription.find({ 
       nativeToken: { $exists: true, $ne: null } 
     });
 
-    console.log(`Found ${subs.length} native tokens in DB`);
+    console.log(`Found ${subs.length} native tokens`);
 
     if (subs.length === 0) return;
 
-    const messages = subs.map(sub => ({
-      token: sub.nativeToken,
-      notification: { 
-        title: title || "Milledgeville Connect",
-        body: body 
-      },
-      data: { 
-        ...data, 
-        page: data.page || 'home' 
-      },
-      android: { priority: 'high' }
-    }));
+    const userIds = subs.map(s => s.user);
+    const users = await User.find({ 
+      _id: { $in: userIds }, 
+      pushEnabled: true 
+    }).lean();
 
-    console.log(`Sending ${messages.length} push messages...`);
+    const messages = [];
+
+    for (const sub of subs) {
+      const user = users.find(u => u._id.toString() === sub.user.toString());
+      if (!user) continue;
+
+      // Respect notification preferences
+      if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
+      if (filter.notifyDeals && !user.notifyDeals) continue;
+      if (filter.notifyEvents && !user.notifyEvents) continue;
+
+      messages.push({
+        token: sub.nativeToken,
+        notification: { title, body },
+        data: { ...data, page: data.page || 'home' },
+        android: { priority: 'high' }
+      });
+    }
+
+    if (messages.length === 0) {
+      console.log("No users matched the notification filters");
+      return;
+    }
+
+    console.log(`Sending to ${messages.length} users...`);
 
     const result = await admin.messaging().sendEach(messages);
-
-    console.log(`✅ Firebase accepted ${result.successCount} messages | ${result.failureCount} failed`);
+    console.log(`✅ Sent ${result.successCount} | Failed: ${result.failureCount}`);
 
   } catch (err) {
     console.error("💥 broadcastPush FAILED:", err.message);
-    console.error(err);
   }
 }
 
@@ -414,29 +428,46 @@ router.post('/events/:id/rsvp', authenticate, async (req, res) => {
 });
 
 // Updated Shoutout
+// ─── SHOUTOUTS ─────────────────────────────────────────────────────────────
+router.get('/shoutouts', optionalAuth, async (req, res) => {
+  try {
+    const shoutouts = await Shoutout.find()
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('authorId', 'name avatar');
+    res.json(shoutouts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     const { text, images } = req.body;
 
+    if (!text?.trim()) {
+      return res.status(400).json({ message: 'Text is required' });
+    }
+
     const shoutout = await Shoutout.create({
-      text,
+      text: text.trim(),
       author: user.name,
       authorId: user._id,
       images: images || []
     });
 
-    // === SEND PUSH TO EVERYONE ===
-    // No filter — shoutouts go to all users with pushEnabled (notifyShoutouts
-    // defaults false so filtering by it would silently drop everyone)
+    // === SEND PUSH NOTIFICATION (with proper filter) ===
     broadcastPush(
       `💬 New Shoutout from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { page: 'shoutouts' }
+      { page: 'shoutouts' },
+      { notifyShoutouts: true }
     );
 
     res.json(shoutout);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -486,7 +517,8 @@ router.post('/lostitems', authenticate, async (req, res) => {
     broadcastPush(
       isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
       `${user.name} posted: ${title}`,
-      { page: 'lostfound' }
+      { page: 'lostfound' },
+      { notifyShoutouts: true }
     );
 
     res.json(item);
@@ -564,7 +596,8 @@ router.post('/marketplace', authenticate, async (req, res) => {
     broadcastPush(
       '🛒 New Marketplace Listing',
       `${user.name} listed: ${title} - $${price}`,
-      { page: 'marketplace' }
+      { page: 'marketplace' },
+      { notifyShoutouts: true }
     );
 
     res.json(item);
@@ -643,16 +676,6 @@ router.delete('/admin/marketplace/:id', authenticate, requireAdmin, async (req, 
   try {
     await MarketplaceItem.findByIdAndDelete(req.params.id);
     res.json({ message: 'Marketplace item deleted by admin' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ─── MISSING SHOUTOUT ROUTES ────────────────────────────────────────────────
-router.get('/shoutouts', optionalAuth, async (req, res) => {
-  try {
-    const shoutouts = await Shoutout.find().sort({ createdAt: -1 }).limit(50);
-    res.json(shoutouts);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
