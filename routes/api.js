@@ -83,29 +83,35 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// SUPER SIMPLE DEBUG ROUTE (GET for easy browser testing)
-router.get('/test-push', authenticate, async (req, res) => {
-  console.log("🚨 TEST-PUSH ROUTE HIT by user", req.userId);
-  
+// ULTRA SIMPLE PUBLIC TEST ROUTE (no auth needed)
+router.get('/test-push-public', async (req, res) => {
+  console.log("🚨 PUBLIC TEST PUSH ROUTE HIT");
+
   try {
-    const sub = await PushSubscription.findOne({ user: req.userId });
+    // Use YOUR user ID from earlier (Jay Hogg)
+    const userId = "69d80c47794ce175ab26f594";
+
+    const sub = await PushSubscription.findOne({ user: userId });
+    
     if (!sub?.nativeToken) {
-      return res.json({ error: "No token found for you" });
+      console.log("❌ No token found for Jay");
+      return res.json({ error: "No token in DB for this user" });
     }
+
+    console.log("✅ Found token, sending test push...");
 
     await admin.messaging().send({
       token: sub.nativeToken,
       notification: {
-        title: "🧪 MANUAL TEST",
-        body: "This should appear on your phone right now"
+        title: "🧪 PUBLIC TEST",
+        body: "If you see this on your phone → notifications work"
       },
       android: { priority: 'high' }
     });
 
-    console.log("✅ Manual test push sent to your token");
-    res.json({ success: true, message: "Push sent to your phone" });
+    res.json({ success: true, message: "Test push sent!" });
   } catch (e) {
-    console.error("❌ Test push failed", e);
+    console.error("❌ Test failed:", e.message);
     res.status(500).json({ error: e.message });
   }
 });
