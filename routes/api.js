@@ -83,8 +83,8 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// SUPER SIMPLE DEBUG ROUTE - NO FILTERS
-router.post('/test-push', authenticate, async (req, res) => {
+// SUPER SIMPLE DEBUG ROUTE (GET for easy browser testing)
+router.get('/test-push', authenticate, async (req, res) => {
   console.log("🚨 TEST-PUSH ROUTE HIT by user", req.userId);
   
   try {
@@ -103,7 +103,7 @@ router.post('/test-push', authenticate, async (req, res) => {
     });
 
     console.log("✅ Manual test push sent to your token");
-    res.json({ success: true, message: "Push sent" });
+    res.json({ success: true, message: "Push sent to your phone" });
   } catch (e) {
     console.error("❌ Test push failed", e);
     res.status(500).json({ error: e.message });
