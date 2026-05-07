@@ -1514,14 +1514,20 @@ function sanitizeUser(user) {
 router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
     const { token, platform } = req.body;
-    if (!token) return res.status(400).json({ message: 'Token required' });
+    
+    console.log('🔔 NATIVE SUBSCRIBE REQUEST');
+    console.log('User ID:', req.userId);
+    console.log('Token received (first 50 chars):', token ? token.substring(0, 50) + '...' : 'MISSING');
+    console.log('Platform:', platform);
 
-    console.log('🔔 [Native Subscribe] User:', req.userId, 'Token:', token.substring(0, 30) + '...');
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
 
-    await PushSubscription.findOneAndUpdate(
+    const updated = await PushSubscription.findOneAndUpdate(
       { user: req.userId },
       { 
-        user: req.userId, 
+        user: req.userId,
         nativeToken: token,
         platform: platform || 'android'
       },
@@ -1530,10 +1536,12 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
 
     await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
 
-    console.log('✅ Native token saved successfully');
+    console.log('✅ Native token SAVED successfully for user', req.userId);
+    console.log('Document ID:', updated._id);
+
     res.json({ message: 'Native token saved' });
   } catch (err) {
-    console.error('Native subscribe error:', err);
+    console.error('❌ Native subscribe error:', err);
     res.status(500).json({ message: err.message });
   }
 });
