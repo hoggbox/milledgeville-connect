@@ -179,7 +179,6 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       messages.push({
         token: sub.nativeToken,
         notification: { title, body },
-        data: { ...data, page: data.page || 'home' },
         android: { priority: 'high' }
       });
     }
