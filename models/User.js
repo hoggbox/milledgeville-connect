@@ -28,6 +28,8 @@ const userSchema = new mongoose.Schema({
   notifyMessages:          { type: Boolean, default: true },
 
   pushEnabled: { type: Boolean, default: false },
+    // Anti-spam
+  lastPostAt: { type: Date, default: null },
 
   // ─── Token Storage ─────────────────────────────────────────────────
   fcmTokens: [{ type: String }],                    // Native Android/iOS tokens

@@ -540,20 +540,29 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
 router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    const { text, images } = req.body;
 
-    if (!text?.trim()) {
-      return res.status(400).json({ message: 'Text is required' });
+    // === ANTI-SPAM: Max 1 post every 45 seconds ===
+    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
+      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
     }
+
+    const { text, images } = req.body;
+    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
 
     const shoutout = await Shoutout.create({
       text: text.trim(),
       author: user.name,
       authorId: user._id,
-      images: images || []
+      images: images || [],
+      expiresAt
     });
 
-    // === SEND PUSH NOTIFICATION (with proper filter) ===
+    // Update last post time
+    user.lastPostAt = new Date();
+    await user.save();
+
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
