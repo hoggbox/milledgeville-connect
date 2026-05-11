@@ -342,6 +342,9 @@ async function loadHomePage(content) {
           </div>
         </div>
 
+        <div id="hotFeed" class="space-y-3"></div>
+      </div>
+
         <!-- Filter buttons -->
         <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
           <button onclick="setHotFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
@@ -4234,7 +4237,7 @@ window.markMarketSold = async function() {
   }
 };
 
-// ─── LOST & FOUND PAGE (with Pagination) ─────────────────────────────────────
+// ─── LOST & FOUND PAGE (with Pagination + Post Button) ───────────────────────
 async function loadLostFoundPage(content) {
   let currentPageNum = 1;
   const limit = 12;
@@ -4246,6 +4249,14 @@ async function loadLostFoundPage(content) {
           <span>🔍</span> Lost & Found
         </h1>
         <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
+      </div>
+
+      <!-- Post Button -->
+      <div class="bg-white/10 backdrop-blur rounded-3xl p-5 mb-8">
+        <button onclick="showPostLostItemModal()" 
+                class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg transition">
+          ➕ Post Lost or Found Item
+        </button>
       </div>
 
       <div class="flex gap-3 mb-6">
@@ -4323,7 +4334,7 @@ async function loadLostFoundPage(content) {
   window.loadLostItems = loadLostItems;
 }
 
-// ─── MARKETPLACE PAGE (with Pagination) ──────────────────────────────────────
+// ─── MARKETPLACE PAGE (with Pagination + Post Button) ────────────────────────
 async function loadMarketplacePage(content) {
   let currentPageNum = 1;
   const limit = 12;
@@ -4335,6 +4346,14 @@ async function loadMarketplacePage(content) {
           <span>🛒</span> Marketplace
         </h1>
         <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
+      </div>
+
+      <!-- Post New Item Button -->
+      <div class="bg-white/10 backdrop-blur rounded-3xl p-5 mb-8">
+        <button onclick="showPostMarketplaceModal()" 
+                class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg transition">
+          ➕ Sell Something New
+        </button>
       </div>
 
       <div id="marketList" class="space-y-4"></div>
@@ -4392,21 +4411,6 @@ async function loadMarketplacePage(content) {
 
   await loadMarketplace(1);
   window.loadMarketplace = loadMarketplace;
-}
-
-async function renderMarketComments(item) {
-  const container = document.getElementById('marketCommentsContainer');
-  if (!container) return;
-
-  let html = '';
-  (item.comments || []).forEach(c => {
-    const authorId = c.authorId?._id || c.authorId;
-    html += `<div class="bg-slate-100 rounded-2xl p-4">
-      <p onclick="showUserProfileModal('${authorId}')" class="font-medium cursor-pointer hover:underline">${c.author}</p>
-      <p class="text-slate-700">${c.text}</p>
-    </div>`;
-  });
-  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No messages yet</p>';
 }
 
 // ====================== MESSAGING SYSTEM ======================
