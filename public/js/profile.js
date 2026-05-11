@@ -428,18 +428,16 @@ function showEditProfileModal() {
           <div class="text-right text-xs text-slate-400 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
         </div>
 
-        <!-- Notification Preferences -->
+        <!-- Notification preferences -->
         <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-4">
           <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notification Preferences</p>
 
+          <!-- In-app toggles -->
           ${[
-            { id: 'ep-notifyDeals',            label: '🔥 New Deals',                    checked: u.notifyDeals !== false },
-            { id: 'ep-notifyEvents',           label: '📅 Upcoming Events',               checked: u.notifyEvents !== false },
-            { id: 'ep-notifyShoutouts',        label: '🚗 New Traffic Alerts',            checked: !!u.notifyShoutouts },
-            { id: 'ep-notifyShoutoutComments', label: '💬 Comments on Traffic Alerts',    checked: !!u.notifyShoutoutComments },
-            { id: 'ep-notifyLostFound',        label: '🔍 Lost & Found Posts',            checked: u.notifyLostFound !== false },
-            { id: 'ep-notifyMarketplace',      label: '🛒 New Marketplace Listings',      checked: u.notifyMarketplace !== false },
-            { id: 'ep-notifyMessages',         label: '✉️ Direct Messages',               checked: u.notifyMessages !== false },
+            { id: 'ep-notifyDeals',           label: '🔥 New Deals',                    checked: u.notifyDeals !== false },
+            { id: 'ep-notifyEvents',          label: '📅 Upcoming Events',               checked: u.notifyEvents !== false },
+            { id: 'ep-notifyShoutouts',       label: '🚗 New Traffic Alerts',            checked: !!u.notifyShoutouts },
+            { id: 'ep-notifyShoutoutComments',label: '💬 Comments on Traffic Alerts',    checked: !!u.notifyShoutoutComments },
           ].map(n => `
             <label class="flex items-center justify-between cursor-pointer select-none">
               <span class="text-sm font-medium text-slate-700">${n.label}</span>
@@ -629,7 +627,7 @@ async function saveProfile() {
     notifyMarketplace:       document.getElementById('ep-notifyMarketplace')?.checked ?? true,
     notifyMessages:          document.getElementById('ep-notifyMessages')?.checked ?? true,
 
-    pushEnabled:             pushIsOn,
+    pushEnabled: pushIsOn,
   };
 
   if (pendingAvatarData !== undefined) payload.avatar = pendingAvatarData;

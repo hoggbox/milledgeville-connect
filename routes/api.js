@@ -206,28 +206,19 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       const user = users.find(u => u._id.toString() === sub.user.toString());
       if (!user) continue;
 
-// Respect notification preference flags
+      // Respect notification preference flags
       if (filter.notifyShoutouts        && !user.notifyShoutouts)        continue;
       if (filter.notifyDeals             && !user.notifyDeals)            continue;
       if (filter.notifyEvents            && !user.notifyEvents)           continue;
       if (filter.notifyShoutoutComments  && !user.notifyShoutoutComments) continue;
       if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
       if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
-      if (filter.notifyMessages          && !user.notifyMessages)         continue;
-
-      // If we reach here, the user wants this type of notification
 
       if (sub.nativeToken) {
         fcmMessages.push({
           token: sub.nativeToken,
           notification: { title, body },
-          android: { 
-            priority: 'high',
-            notification: {
-              sound: 'default',
-              channelId: 'default'
-            }
-          }
+          android: { priority: 'high' }
         });
       }
 
@@ -1637,33 +1628,25 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
     const { token, platform } = req.body;
     
-    console.log('🔔 NATIVE SUBSCRIBE REQUEST');
-    console.log('User ID:', req.userId);
-    console.log('Token received (first 50 chars):', token ? token.substring(0, 50) + '...' : 'MISSING');
-    console.log('Platform:', platform);
-
-    if (!token) {
-      return res.status(400).json({ message: 'Token is required' });
-    }
+    if (!token) return res.status(400).json({ message: 'Token is required' });
 
     const updated = await PushSubscription.findOneAndUpdate(
       { user: req.userId },
       { 
         user: req.userId,
         nativeToken: token,
-        platform: platform || 'android'
+        platform: platform || 'android',
+        updatedAt: new Date()
       },
       { upsert: true, new: true }
     );
 
     await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
 
-    console.log('✅ Native token SAVED successfully for user', req.userId);
-    console.log('Document ID:', updated._id);
-
+    console.log('✅ Native token SAVED for user', req.userId);
     res.json({ message: 'Native token saved' });
   } catch (err) {
-    console.error('❌ Native subscribe error:', err);
+    console.error('Native subscribe error:', err);
     res.status(500).json({ message: err.message });
   }
 });
