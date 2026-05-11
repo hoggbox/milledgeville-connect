@@ -436,6 +436,58 @@ async function loadHomePage(content) {
       console.warn('Weather error:', err);
       const desc = document.getElementById('weatherDesc');
       if (desc) desc.textContent = 'Weather unavailable';
+        // ─── Load Hot Right Now Feed ───────────────────────────────────────────────
+  async function loadHotFeed() {
+    try {
+      const [shoutoutsRes, dealsRes, eventsRes] = await Promise.all([
+        apiGet('/shoutouts?page=1&limit=6'),
+        apiGet('/deals?page=1&limit=4'),
+        apiGet('/events?page=1&limit=4')
+      ]);
+
+      let html = '';
+
+      // Traffic Alerts
+      (shoutoutsRes.items || shoutoutsRes).forEach(s => {
+        html += `
+          <div onclick="navigate('shoutouts')" class="bg-white/10 backdrop-blur rounded-3xl p-4 cursor-pointer hover:bg-white/15 transition">
+            <div class="flex justify-between text-xs mb-1.5">
+              <span class="text-emerald-400">🚗 Traffic Alert</span>
+              <span class="text-white/50">${timeAgo(s.createdAt)}</span>
+            </div>
+            <p class="text-white line-clamp-2">${s.text}</p>
+          </div>`;
+      });
+
+      // Deals & Events grid
+      html += `<div class="grid grid-cols-2 gap-3 mt-4">`;
+
+      (dealsRes.items || dealsRes).slice(0, 2).forEach(d => {
+        html += `
+          <div onclick="navigate('deals')" class="bg-white/10 backdrop-blur rounded-3xl p-4 cursor-pointer hover:bg-white/15 transition">
+            <span class="text-amber-400 text-xs">🔥 Deal</span>
+            <p class="font-semibold text-white text-sm mt-1 line-clamp-2">${d.title}</p>
+          </div>`;
+      });
+
+      (eventsRes.items || eventsRes).slice(0, 2).forEach(e => {
+        html += `
+          <div onclick="navigate('events')" class="bg-white/10 backdrop-blur rounded-3xl p-4 cursor-pointer hover:bg-white/15 transition">
+            <span class="text-sky-400 text-xs">📅 Event</span>
+            <p class="font-semibold text-white text-sm mt-1 line-clamp-2">${e.title}</p>
+          </div>`;
+      });
+
+      html += `</div>`;
+
+      document.getElementById('hotFeed').innerHTML = html || '<p class="text-white/40 text-center py-8">Nothing hot right now...</p>';
+    } catch (err) {
+      console.error("Hot feed failed", err);
+      document.getElementById('hotFeed').innerHTML = `<p class="text-white/40 text-center py-8">Couldn't load hot feed</p>`;
+    }
+  }
+
+  await loadHotFeed();
     }
   })();
 
