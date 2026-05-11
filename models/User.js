@@ -17,6 +17,8 @@ const userSchema = new mongoose.Schema({
 
   instagram: { type: String, default: '' },
   facebook:  { type: String, default: '' },
+    // Anti-spam
+  lastPostAt: { type: Date, default: null },
 
   // ─── Notification Preferences ─────────────────────────────────────
   notifyDeals:             { type: Boolean, default: true },

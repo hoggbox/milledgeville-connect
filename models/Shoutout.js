@@ -21,9 +21,10 @@ const shoutoutSchema = new mongoose.Schema({
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   comments: [commentSchema],
-  
-  // NEW: Photo support
-  images: [{ type: String }],   // base64 data URIs
+  images: [{ type: String }],
+
+  // Auto-delete after 4 hours
+  expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
 
   createdAt: { type: Date, default: Date.now }
 });
