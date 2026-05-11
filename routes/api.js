@@ -206,13 +206,16 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       const user = users.find(u => u._id.toString() === sub.user.toString());
       if (!user) continue;
 
-      // Respect notification preference flags
+// Respect notification preference flags
       if (filter.notifyShoutouts        && !user.notifyShoutouts)        continue;
       if (filter.notifyDeals             && !user.notifyDeals)            continue;
       if (filter.notifyEvents            && !user.notifyEvents)           continue;
-      if (filter.notifyShoutoutComments && !user.notifyShoutoutComments) continue;   // ← THIS ONE
+      if (filter.notifyShoutoutComments  && !user.notifyShoutoutComments) continue;
       if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
       if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
+      if (filter.notifyMessages          && !user.notifyMessages)         continue;
+
+      // If we reach here, the user wants this type of notification
 
       if (sub.nativeToken) {
         fcmMessages.push({
@@ -1695,22 +1698,22 @@ router.post('/debug-push', authenticate, async (req, res) => {
   }
 });
 
-// ─── ONE-TIME FIX: Set default for notifyShoutoutComments on old users ───
-router.get('/fix-notify-comments', async (req, res) => {
+// ====================== ONE-TIME FIX ======================
+router.get('/fix-notify-fields', async (req, res) => {
   try {
     const result = await User.updateMany(
-      { notifyShoutoutComments: { $exists: false } },  // only users missing the field
-      { $set: { notifyShoutoutComments: false } }
+      { },
+      { 
+        $set: { 
+          notifyShoutoutComments: false,
+          notifyLostFound: true,
+          notifyMarketplace: true,
+          notifyMessages: true
+        } 
+      }
     );
-
-    console.log(`✅ Fixed ${result.modifiedCount} users`);
-    res.json({ 
-      success: true, 
-      message: `Updated ${result.modifiedCount} users. notifyShoutoutComments default applied.` 
-    });
+    res.json({ success: true, modified: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-module.exports = router;
