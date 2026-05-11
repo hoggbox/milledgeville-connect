@@ -205,7 +205,7 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       if (filter.notifyShoutouts        && !user.notifyShoutouts)        continue;
       if (filter.notifyDeals             && !user.notifyDeals)            continue;
       if (filter.notifyEvents            && !user.notifyEvents)           continue;
-      if (filter.notifyShoutoutComments  && !user.notifyShoutoutComments) continue;
+      if (filter.notifyShoutoutComments && !user.notifyShoutoutComments) continue;   // ← THIS ONE
       if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
       if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
 
