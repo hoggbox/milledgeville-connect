@@ -382,13 +382,12 @@ function showEditProfileModal() {
   }
 
   const u = currentUser;
-  const isNative      = isNativePlatform();
+  const isNative = isNativePlatform();
   const pushSupported = isNative || (('serviceWorker' in navigator) && ('PushManager' in window));
-  const pushBlocked   = !isNative && getNotificationPermission() === 'denied';
+  const pushBlocked = !isNative && getNotificationPermission() === 'denied';
 
   modal.innerHTML = `
-    <div onclick="event.stopPropagation()"
-         class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
+    <div onclick="event.stopPropagation()" class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
 
       <div class="sticky top-0 bg-white z-10 pt-4 pb-3 px-6 border-b border-slate-100 flex items-center justify-between">
         <h2 class="text-xl font-bold">Edit Profile</h2>
@@ -402,22 +401,16 @@ function showEditProfileModal() {
           <div id="avatarPreview"
                class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-emerald-200 shadow-lg flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white cursor-pointer relative group"
                onclick="document.getElementById('avatarFileInput').click()">
-            ${u.avatar
-              ? `<img src="${u.avatar}" class="w-full h-full object-cover" id="avatarImg">`
-              : `<span id="avatarLetter">${(u.name||'?')[0].toUpperCase()}</span>`}
+            ${u.avatar ? `<img src="${u.avatar}" class="w-full h-full object-cover" id="avatarImg">` : `<span id="avatarLetter">${(u.name||'?')[0].toUpperCase()}</span>`}
             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-3xl">
               <span class="text-white text-3xl">📷</span>
             </div>
           </div>
           <div class="text-center">
-            <button onclick="document.getElementById('avatarFileInput').click()"
-                    class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-semibold px-5 py-2 rounded-full transition">
-              📷 Change Photo
-            </button>
+            <button onclick="document.getElementById('avatarFileInput').click()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-semibold px-5 py-2 rounded-full transition">📷 Change Photo</button>
             ${u.avatar ? `<button onclick="removeAvatar()" class="ml-2 text-red-500 hover:text-red-700 text-sm font-medium transition">Remove</button>` : ''}
           </div>
-          <input id="avatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
-                 onchange="handleAvatarSelect(this)">
+          <input id="avatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="handleAvatarSelect(this)">
           <p class="text-xs text-slate-400">JPG, PNG or WebP · Max 2 MB</p>
           <div id="avatarError" class="hidden text-xs text-red-500 font-medium text-center"></div>
         </div>
@@ -425,69 +418,28 @@ function showEditProfileModal() {
         <!-- Name -->
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Full Name *</label>
-          <input id="ep-name" type="text" value="${escHtml(u.name || '')}" maxlength="60"
-                 class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-base">
+          <input id="ep-name" type="text" value="${escHtml(u.name || '')}" maxlength="60" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-base">
         </div>
 
         <!-- Bio -->
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Bio <span class="normal-case font-normal text-slate-400">(max 280 chars)</span></label>
-          <textarea id="ep-bio" maxlength="280" rows="3"
-                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm resize-none"
-                    placeholder="Tell the community a little about yourself…">${escHtml(u.bio || '')}</textarea>
+          <textarea id="ep-bio" maxlength="280" rows="3" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm resize-none" placeholder="Tell the community a little about yourself…">${escHtml(u.bio || '')}</textarea>
           <div class="text-right text-xs text-slate-400 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
         </div>
 
-        <!-- Neighborhood -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Neighborhood / Area</label>
-          <input id="ep-neighborhood" type="text" value="${escHtml(u.neighborhood || '')}" maxlength="80"
-                 placeholder="e.g. Downtown Milledgeville, North Campus…"
-                 class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm">
-        </div>
-
-        <!-- Phone -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Phone (optional)</label>
-          <input id="ep-phone" type="tel" value="${escHtml(u.phone || '')}" maxlength="20"
-                 placeholder="(478) 555-0100"
-                 class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm">
-        </div>
-
-        <!-- Website -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Website</label>
-          <input id="ep-website" type="url" value="${escHtml(u.website || '')}" maxlength="120"
-                 placeholder="yoursite.com"
-                 class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm">
-        </div>
-
-        <!-- Social links -->
-        <div class="bg-slate-50 rounded-2xl p-4 space-y-3">
-          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Social Links</p>
-          <div class="flex items-center gap-3">
-            <span class="text-xl w-7 flex-shrink-0">📸</span>
-            <input id="ep-instagram" type="text" value="${escHtml(u.instagram || '')}" maxlength="60"
-                   placeholder="@yourhandle"
-                   class="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 focus:border-pink-400 outline-none text-sm">
-          </div>
-          <div class="flex items-center gap-3">
-            <span class="text-xl w-7 flex-shrink-0">👤</span>
-            <input id="ep-facebook" type="text" value="${escHtml(u.facebook || '')}" maxlength="120"
-                   placeholder="facebook.com/you or username"
-                   class="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 focus:border-blue-400 outline-none text-sm">
-          </div>
-        </div>
-
-        <!-- Notification preferences -->
+        <!-- Notification Preferences -->
         <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-4">
           <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notification Preferences</p>
 
-          <!-- In-app toggles -->
           ${[
-            { id: 'ep-notifyDeals',     label: '🔥 New Deals',          checked: u.notifyDeals !== false },
-            { id: 'ep-notifyEvents',    label: '📅 Upcoming Events',     checked: u.notifyEvents !== false },
-            { id: 'ep-notifyShoutouts', label: '💬 Shoutout Activity',   checked: !!u.notifyShoutouts },
+            { id: 'ep-notifyDeals',            label: '🔥 New Deals',                    checked: u.notifyDeals !== false },
+            { id: 'ep-notifyEvents',           label: '📅 Upcoming Events',               checked: u.notifyEvents !== false },
+            { id: 'ep-notifyShoutouts',        label: '🚗 New Traffic Alerts',            checked: !!u.notifyShoutouts },
+            { id: 'ep-notifyShoutoutComments', label: '💬 Comments on Traffic Alerts',    checked: !!u.notifyShoutoutComments },
+            { id: 'ep-notifyLostFound',        label: '🔍 Lost & Found Posts',            checked: u.notifyLostFound !== false },
+            { id: 'ep-notifyMarketplace',      label: '🛒 New Marketplace Listings',      checked: u.notifyMarketplace !== false },
+            { id: 'ep-notifyMessages',         label: '✉️ Direct Messages',               checked: u.notifyMessages !== false },
           ].map(n => `
             <label class="flex items-center justify-between cursor-pointer select-none">
               <span class="text-sm font-medium text-slate-700">${n.label}</span>
@@ -498,7 +450,7 @@ function showEditProfileModal() {
               </div>
             </label>`).join('')}
 
-          <!-- Push notification toggle -->
+          <!-- Push notification master toggle -->
           <div class="border-t border-emerald-200 pt-4 mt-2">
             <label for="ep-pushEnabled" class="flex items-start justify-between gap-3 ${pushSupported && !pushBlocked ? 'cursor-pointer' : ''} select-none">
               <div class="flex-1">
@@ -506,47 +458,31 @@ function showEditProfileModal() {
                 <p class="text-xs text-slate-500 mt-0.5">Receive alerts even when the app is closed.</p>
               </div>
               <div class="relative flex-shrink-0 mt-0.5">
-                <input type="checkbox" id="ep-pushEnabled"
-                       class="sr-only peer"
-                       ${!pushSupported || pushBlocked ? 'disabled' : ''}>
+                <input type="checkbox" id="ep-pushEnabled" class="sr-only peer" ${!pushSupported || pushBlocked ? 'disabled' : ''}>
                 <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${!pushSupported || pushBlocked ? 'opacity-40' : ''}"></div>
                 <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
               </div>
             </label>
-            ${!pushSupported
-              ? `<p class="text-xs text-amber-600 mt-2">⚠️ Push notifications require a modern browser with service worker support.</p>`
-              : pushBlocked
-                ? `<p class="text-xs text-amber-600 mt-2">⚠️ Notifications are blocked in your browser. Tap the 🔒 icon in the address bar → allow notifications → then toggle again.</p>`
-                : ''}
-            <div id="pushStatusMsg" class="text-xs mt-2 hidden"></div>
           </div>
         </div>
 
         <!-- Save -->
-        <button onclick="saveProfile()"
-                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2"
-                id="saveProfileBtn">
+        <button onclick="saveProfile()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2" id="saveProfileBtn">
           💾 Save Changes
         </button>
-
-        <p class="text-center text-xs text-slate-400 pb-2">
-          Want to change your email or password? Contact support.
-        </p>
       </div>
     </div>`;
 
   modal.classList.remove('hidden');
-
-  // ── Wire up push toggle AFTER the modal renders ───────────────────────────
-  // We use a short setTimeout so the DOM is fully painted before we query it,
-  // then async-check the real browser subscription to set the initial state.
   setTimeout(() => _initEditPushToggle(), 150);
 
   // Bio character counter
   const bioTextarea = document.getElementById('ep-bio');
   const bioCount    = document.getElementById('bioCount');
   if (bioTextarea && bioCount) {
-    bioTextarea.addEventListener('input', () => { bioCount.textContent = bioTextarea.value.length; });
+    bioTextarea.addEventListener('input', () => { 
+      bioCount.textContent = bioTextarea.value.length; 
+    });
   }
 }
 
@@ -674,21 +610,26 @@ async function saveProfile() {
   btn.disabled = true;
   btn.innerHTML = '⏳ Saving…';
 
-  // Read the ACTUAL browser subscription state so we persist the correct value
   const pushIsOn = await _browserHasPushSubscription();
 
   const payload = {
     name,
-    bio:              document.getElementById('ep-bio')?.value.trim() || '',
-    neighborhood:     document.getElementById('ep-neighborhood')?.value.trim() || '',
-    phone:            document.getElementById('ep-phone')?.value.trim() || '',
-    website:          document.getElementById('ep-website')?.value.trim() || '',
-    instagram:        document.getElementById('ep-instagram')?.value.trim() || '',
-    facebook:         document.getElementById('ep-facebook')?.value.trim() || '',
-    notifyDeals:      document.getElementById('ep-notifyDeals')?.checked ?? true,
-    notifyEvents:     document.getElementById('ep-notifyEvents')?.checked ?? true,
-    notifyShoutouts:  document.getElementById('ep-notifyShoutouts')?.checked ?? false,
-    pushEnabled:      pushIsOn,   // ← was missing before; now always saved
+    bio:                     document.getElementById('ep-bio')?.value.trim() || '',
+    neighborhood:            document.getElementById('ep-neighborhood')?.value.trim() || '',
+    phone:                   document.getElementById('ep-phone')?.value.trim() || '',
+    website:                 document.getElementById('ep-website')?.value.trim() || '',
+    instagram:               document.getElementById('ep-instagram')?.value.trim() || '',
+    facebook:                document.getElementById('ep-facebook')?.value.trim() || '',
+
+    notifyDeals:             document.getElementById('ep-notifyDeals')?.checked ?? true,
+    notifyEvents:            document.getElementById('ep-notifyEvents')?.checked ?? true,
+    notifyShoutouts:         document.getElementById('ep-notifyShoutouts')?.checked ?? false,
+    notifyShoutoutComments:  document.getElementById('ep-notifyShoutoutComments')?.checked ?? false,
+    notifyLostFound:         document.getElementById('ep-notifyLostFound')?.checked ?? true,
+    notifyMarketplace:       document.getElementById('ep-notifyMarketplace')?.checked ?? true,
+    notifyMessages:          document.getElementById('ep-notifyMessages')?.checked ?? true,
+
+    pushEnabled:             pushIsOn,
   };
 
   if (pendingAvatarData !== undefined) payload.avatar = pendingAvatarData;
@@ -697,7 +638,6 @@ async function saveProfile() {
 
   if (res.user) {
     currentUser = res.user;
-    // Make sure client-side pushEnabled matches browser reality
     currentUser.pushEnabled = pushIsOn;
     pendingAvatarData = undefined;
     updateUserUI();
@@ -706,9 +646,10 @@ async function saveProfile() {
     showToast('✅ Profile updated!');
   } else {
     showToast(res.message || 'Failed to save profile.', 'error');
-    btn.disabled = false;
-    btn.innerHTML = '💾 Save Changes';
   }
+
+  btn.disabled = false;
+  btn.innerHTML = '💾 Save Changes';
 }
 
 // ─── Escape helper ────────────────────────────────────────────────────────────
