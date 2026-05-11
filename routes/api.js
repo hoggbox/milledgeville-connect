@@ -1717,3 +1717,6 @@ router.get('/fix-notify-fields', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ←←← MUST BE AT THE VERY BOTTOM ←←←
+module.exports = router;
