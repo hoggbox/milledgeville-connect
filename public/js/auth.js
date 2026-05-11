@@ -93,7 +93,7 @@ async function handleRegister() {
       updateUserUI();
       hideAuthModal();
       loadPage('home');
-      // ─── Wire up native push for new accounts too ─────────────────────────
+      // ─── Wire up native push for new accounts ────────────────────────────
       if (typeof window.initPushAfterLogin === 'function') {
         setTimeout(() => window.initPushAfterLogin(), 800);
       }
@@ -115,9 +115,10 @@ async function handleLogin() {
     updateUserUI();
     hideAuthModal();
 
-    // ─── Native push: wire up FCM token after login ───────────────────────────
-    // initPushAfterLogin is defined in profile.js. It handles permission check,
-    // register(), and all 4 PushNotifications listeners. No-ops on web (non-Capacitor).
+    // ─── Native push: flush buffered FCM token + (re-)register ───────────────
+    // initPushAfterLogin is defined in profile.js. Handles permission check,
+    // register(), all 4 PushNotifications listeners, and token flush.
+    // No-ops on web (non-Capacitor). Also handles web push re-subscription check.
     if (typeof window.initPushAfterLogin === 'function') {
       setTimeout(() => window.initPushAfterLogin(), 800);
     }
@@ -155,8 +156,8 @@ async function checkAuth() {
     if (result.user) {
       currentUser = result.user;
       updateUserUI();
-      // ─── Re-wire native push for returning logged-in users ──────────────────
-      // Small delay ensures profile.js has fully loaded and exposed initPushAfterLogin.
+      // ─── Re-wire push for returning logged-in users ──────────────────────
+      // Delay ensures profile.js has fully loaded and exposed initPushAfterLogin.
       if (typeof window.initPushAfterLogin === 'function') {
         setTimeout(() => window.initPushAfterLogin(), 1000);
       }
