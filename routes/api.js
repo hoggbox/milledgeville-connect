@@ -171,16 +171,17 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       const user = users.find(u => u._id.toString() === sub.user.toString());
       if (!user) continue;
 
-      // Respect notification preferences
-      if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
-      if (filter.notifyDeals && !user.notifyDeals) continue;
-      if (filter.notifyEvents && !user.notifyEvents) continue;
+    // Respect notification preferences
+    if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
+    if (filter.notifyDeals && !user.notifyDeals) continue;
+    if (filter.notifyEvents && !user.notifyEvents) continue;
+    if (filter.notifyShoutoutComments && !user.notifyShoutoutComments) continue;   // ← THIS WAS MISSING
 
-      messages.push({
-        token: sub.nativeToken,
-        notification: { title, body },
-        android: { priority: 'high' }
-      });
+    messages.push({
+      token: sub.nativeToken,
+      notification: { title, body },
+      android: { priority: 'high' }
+    });
     }
 
     if (messages.length === 0) {
