@@ -129,12 +129,18 @@ async function sendPushToUser(userId, title, body, data = {}) {
   let sent = false;
 
   // ── Native FCM path ───────────────────────────────────────────────────────
-  if (sub.nativeToken) {
+if (sub.nativeToken) {
     try {
       const message = {
         token: sub.nativeToken,
         notification: { title, body },
-        android: { priority: 'high' }   // ← Clean like the working test push
+        android: { 
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default'
+          }
+        }
       };
       const response = await admin.messaging().send(message);
       console.log(`✅ Native push sent to ${userId}:`, response);
@@ -212,7 +218,13 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
         fcmMessages.push({
           token: sub.nativeToken,
           notification: { title, body },
-          android: { priority: 'high' }
+          android: { 
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channelId: 'default'
+            }
+          }
         });
       }
 
