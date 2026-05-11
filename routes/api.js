@@ -134,8 +134,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
       const message = {
         token: sub.nativeToken,
         notification: { title, body },
-        data: { ...data, page: data.page || 'home' },
-        android: { priority: 'high' }
+        android: { priority: 'high' }   // ← Clean like the working test push
       };
       const response = await admin.messaging().send(message);
       console.log(`✅ Native push sent to ${userId}:`, response);
@@ -1076,19 +1075,13 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     shoutout.comments.push(comment);
     await shoutout.save();
 
-    // Only notify the post author — and only if they have comment notifications on.
-    // This matches the pattern used by marketplace + lost item comments.
-    if (shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
-      const postAuthor = await User.findById(shoutout.authorId).lean();
-      if (postAuthor && postAuthor.notifyShoutoutComments) {
-        sendPushToUser(
-          shoutout.authorId,
-          `💬 New comment on your Traffic Alert`,
-          `${user.name}: ${req.body.text.substring(0, 60)}`,
-          { page: 'shoutouts' }
-        );
-      }
-    }
+    // Broadcast to everyone who enabled "Comments on Traffic Alerts"
+    broadcastPush(
+      `💬 New comment on Traffic Alert`,
+      `${user.name}: ${req.body.text.substring(0, 65)}${req.body.text.length > 65 ? '...' : ''}`,
+      { page: 'shoutouts' },                    // data object (kept for future use)
+      { notifyShoutoutComments: true }          // filter
+    );
 
     res.json(shoutout.comments[shoutout.comments.length - 1]);
   } catch (err) {
