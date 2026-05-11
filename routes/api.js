@@ -1634,4 +1634,22 @@ router.post('/debug-push', authenticate, async (req, res) => {
   }
 });
 
+// ─── ONE-TIME FIX: Set default for notifyShoutoutComments on old users ───
+router.get('/fix-notify-comments', async (req, res) => {
+  try {
+    const result = await User.updateMany(
+      { notifyShoutoutComments: { $exists: false } },  // only users missing the field
+      { $set: { notifyShoutoutComments: false } }
+    );
+
+    console.log(`✅ Fixed ${result.modifiedCount} users`);
+    res.json({ 
+      success: true, 
+      message: `Updated ${result.modifiedCount} users. notifyShoutoutComments default applied.` 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
