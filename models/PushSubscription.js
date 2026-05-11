@@ -5,20 +5,20 @@ const pushSubscriptionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    unique: true          // one record per user — the right uniqueness constraint
+    unique: true
   },
 
-  // Web Push (VAPID) — full PushSubscription JSON from the browser
+  // Web Push (VAPID) - original field
   subscription: {
-    type: Object,
+    type: Object,           // full PushSubscription JSON from browser
     default: null
   },
 
-  // Native FCM Token (Capacitor / Android / iOS)
-  // sparse: true so multiple null values don't violate the index
+  // Native FCM Token (Capacitor / Android)
   nativeToken: {
     type: String,
-    default: null
+    default: null,
+    index: true
   },
 
   platform: {
@@ -31,7 +31,7 @@ const pushSubscriptionSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-// Sparse index on nativeToken so null values are excluded (prevents unique-null conflicts)
-pushSubscriptionSchema.index({ nativeToken: 1 }, { sparse: true });
+// Ensure only one record per user
+pushSubscriptionSchema.index({ user: 1 }, { unique: true });
 
 module.exports = mongoose.model('PushSubscription', pushSubscriptionSchema);

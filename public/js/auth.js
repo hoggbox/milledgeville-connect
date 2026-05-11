@@ -64,8 +64,10 @@ function switchToRegister() {
 }
 
 // ─── Prompt guests to sign in for gated actions ───────────────────────────────
+// Call this anywhere a write action requires auth.
+// msg = short description of what they need to sign in to do.
 function requireAuth(msg) {
-  if (currentUser) return true;
+  if (currentUser) return true; // already logged in — proceed
   showAuthModal({ message: msg || 'Sign in to access this feature.' });
   return false;
 }
@@ -93,10 +95,6 @@ async function handleRegister() {
       updateUserUI();
       hideAuthModal();
       loadPage('home');
-      // ─── Wire up native push for new accounts ────────────────────────────
-      if (typeof window.initPushAfterLogin === 'function') {
-        setTimeout(() => window.initPushAfterLogin(), 800);
-      }
     }, 1600);
   } else {
     alert(result.message || 'Registration failed');
@@ -115,12 +113,39 @@ async function handleLogin() {
     updateUserUI();
     hideAuthModal();
 
-    // ─── Native push: flush buffered FCM token + (re-)register ───────────────
-    // initPushAfterLogin is defined in profile.js. Handles permission check,
-    // register(), all 4 PushNotifications listeners, and token flush.
-    // No-ops on web (non-Capacitor). Also handles web push re-subscription check.
-    if (typeof window.initPushAfterLogin === 'function') {
-      setTimeout(() => window.initPushAfterLogin(), 800);
+    // ─── IMPROVED Auto-prompt for push notifications ───
+    // Only show if user hasn't explicitly turned it off AND browser hasn't blocked it
+    if (currentUser.pushEnabled !== false && typeof requestPushPermission === 'function') {
+      setTimeout(() => {
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker) return;
+
+        navigator.serviceWorker.ready
+          .then(reg => reg.pushManager.getSubscription())
+          .then(sub => {
+            // Only show toast if no subscription AND user hasn't denied notifications
+            if (!sub && Notification.permission !== 'denied') {
+              const toast = document.createElement('div');
+              toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 z-[99999] max-w-[90%]';
+              toast.innerHTML = `
+                <div class="flex-1">🔔 Get instant alerts for deals, events & messages?</div>
+                <button class="bg-white text-emerald-600 px-5 py-2 rounded-2xl font-semibold text-sm whitespace-nowrap">Enable</button>
+              `;
+              document.body.appendChild(toast);
+
+              toast.querySelector('button').onclick = async () => {
+                toast.remove();
+                const success = await requestPushPermission();
+                if (success) {
+                  currentUser.pushEnabled = true;
+                  showToast('✅ Push notifications enabled!');
+                }
+              };
+
+              setTimeout(() => toast.remove(), 12000);
+            }
+          })
+          .catch(() => {}); // Silent fail if service worker not ready
+      }, 1800);
     }
 
     loadPage(currentPage || 'home');
@@ -148,6 +173,7 @@ function logout() {
 async function checkAuth() {
   const storedToken = localStorage.getItem('token');
   if (!storedToken) {
+    // Guest — show app but without user-specific UI
     updateUserUI();
     return;
   }
@@ -156,12 +182,8 @@ async function checkAuth() {
     if (result.user) {
       currentUser = result.user;
       updateUserUI();
-      // ─── Re-wire push for returning logged-in users ──────────────────────
-      // Delay ensures profile.js has fully loaded and exposed initPushAfterLogin.
-      if (typeof window.initPushAfterLogin === 'function') {
-        setTimeout(() => window.initPushAfterLogin(), 1000);
-      }
     } else {
+      // Token invalid / expired
       localStorage.removeItem('token');
       updateUserUI();
     }
