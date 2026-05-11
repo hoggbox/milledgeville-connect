@@ -536,28 +536,11 @@ router.post('/events/:id/rsvp', authenticate, async (req, res) => {
 // ─── SHOUTOUTS ─────────────────────────────────────────────────────────────
 router.get('/shoutouts', optionalAuth, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 15;
-    const skip = (page - 1) * limit;
-
     const shoutouts = await Shoutout.find()
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
+      .limit(50)
       .populate('authorId', 'name avatar');
-
-    const total = await Shoutout.countDocuments();
-
-    res.json({
-      items: shoutouts,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page * limit < total
-      }
-    });
+    res.json(shoutouts);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -566,29 +549,20 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
 router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-
-    // === ANTI-SPAM: Max 1 post every 45 seconds ===
-    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
-      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
-    }
-
     const { text, images } = req.body;
-    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
+    if (!text?.trim()) {
+      return res.status(400).json({ message: 'Text is required' });
+    }
 
     const shoutout = await Shoutout.create({
       text: text.trim(),
       author: user.name,
       authorId: user._id,
-      images: images || [],
-      expiresAt
+      images: images || []
     });
 
-    // Update last post time
-    user.lastPostAt = new Date();
-    await user.save();
-
+    // === SEND PUSH NOTIFICATION (with proper filter) ===
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -620,27 +594,8 @@ router.post('/business/:id/follow', authenticate, async (req, res) => {
 // ─── LOST & FOUND ROUTES (FULLY FUNCTIONAL + PUSH) ─────────────────────────────
 router.get('/lostitems', optionalAuth, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 15;
-    const skip = (page - 1) * limit;
-
-    const lostitems = await LostItem.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await LostItem.countDocuments();
-
-    res.json({
-      items: lostitems,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page * limit < total
-      }
-    });
+    const items = await LostItem.find().sort({ createdAt: -1 }).populate('owner', 'name');
+    res.json(items);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -718,27 +673,10 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
 // ─── MARKETPLACE ROUTES (FULLY FUNCTIONAL + PUSH) ─────────────────────────────
 router.get('/marketplace', optionalAuth, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 15;
-    const skip = (page - 1) * limit;
-
-    const items = await MarketplaceItem.find()
+    const items = await MarketplaceItem.find({ status: 'available' })
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await MarketplaceItem.countDocuments();
-
-    res.json({
-      items: items,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page * limit < total
-      }
-    });
+      .populate('seller', 'name');
+    res.json(items);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1215,27 +1153,8 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
 
 router.get('/events', optionalAuth, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 15;
-    const skip = (page - 1) * limit;
-
-    const events = await Event.find()
-      .sort({ date: 1 })                    // Upcoming events first
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Event.countDocuments();
-
-    res.json({
-      items: events,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page * limit < total
-      }
-    });
+    const events = await Event.find().sort({ date: 1 }).populate('owner', 'name email');
+    res.json(events);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1243,28 +1162,8 @@ router.get('/events', optionalAuth, async (req, res) => {
 
 router.get('/deals', optionalAuth, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 15;
-    const skip = (page - 1) * limit;
-
-    const deals = await Deal.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('business', 'name');
-
-    const total = await Deal.countDocuments();
-
-    res.json({
-      items: deals,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page * limit < total
-      }
-    });
+    const deals = await Deal.find().populate('business', 'name').populate('owner', 'name email');
+    res.json(deals);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -1,7 +1,7 @@
 let currentPage = 'home';
 let allBusinesses = [];
 let currentEditingBusiness = null;
-let currentMessageReceiver = null;
+let currentMessageReceiver = null; // for compose modal
 
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
@@ -37,10 +37,14 @@ window.submitRating = async function (businessId, score) {
       const countEl = starsEl.nextElementSibling;
       if (countEl) countEl.textContent = `${res.count} rating${res.count !== 1 ? 's' : ''} · avg ${res.avg}`;
     }
+    const cardStars = document.getElementById(`card-stars-${businessId}`);
+    if (cardStars) {
+      cardStars.innerHTML = renderStars(res.avg, res.count);
+    }
   }
 };
 
-// ─── Guest Banner ─────────────────────────────────────────────────────────────
+// ─── Guest auth nudge banner ──────────────────────────────────────────────────
 function guestBanner(action) {
   return `
     <div class="bg-emerald-900/40 border border-emerald-500/30 rounded-3xl p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -52,13 +56,19 @@ function guestBanner(action) {
         </div>
       </div>
       <div class="flex gap-2 flex-shrink-0">
-        <button onclick="showAuthModal({register:true})" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition">Register Free</button>
-        <button onclick="showAuthModal()" class="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition">Sign In</button>
+        <button onclick="showAuthModal({register:true})"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition">
+          Register Free
+        </button>
+        <button onclick="showAuthModal()"
+                class="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold transition">
+          Sign In
+        </button>
       </div>
     </div>`;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Time helper ──────────────────────────────────────────────────────────────
 function timeAgo(date) {
   const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
   if (seconds < 60) return 'just now';
@@ -71,11 +81,106 @@ function timeAgo(date) {
   return new Date(date).toLocaleDateString();
 }
 
+function formatDate(date) {
+  return new Date(date).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+function formatDateTime(date) {
+  return new Date(date).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit'
+  });
+}
+
+// ─── SAFE Clickable User Helper ───────────────────────────────────────────────
+function renderClickableUser(userData, fallbackName = 'Anonymous') {
+  if (!userData) return fallbackName;
+
+  let userId = null;
+  let displayName = fallbackName;
+
+  if (typeof userData === 'object' && userData !== null) {
+    userId = userData._id || userData.id;
+    displayName = userData.name || userData.authorName || userData.author || fallbackName;
+  } else if (typeof userData === 'string' && userData.length > 10) {
+    userId = userData; // already an ID
+  }
+
+  if (!userId) return displayName;
+
+  return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" class="cursor-pointer hover:underline text-emerald-400">${displayName}</span>`;
+}
+
+// In-memory unread count so we can zero it instantly without a round-trip
+let _unreadCount = 0;
+
+function _setBadge(count) {
+  _unreadCount = Math.max(0, count);
+  // There can be two #messageBadge elements (desktop + mobile); update both
+  document.querySelectorAll('#messageBadge').forEach(badge => {
+    if (_unreadCount > 0) {
+      badge.textContent = _unreadCount > 99 ? '99+' : _unreadCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  });
+}
+
+async function updateMessageBadge() {
+  if (typeof currentUser === 'undefined' || !currentUser?._id) return;
+  try {
+    const inbox = await apiGet('/messages/inbox');
+    const unreadCount = inbox.filter(m =>
+      !m.read && String(m.receiver?._id || m.receiver) === String(currentUser._id)
+    ).length;
+    _setBadge(unreadCount);
+  } catch (e) {
+    console.error('❌ [Badge] API error:', e);
+  }
+}
+
+async function markConversationAsRead(otherId) {
+  if (!currentUser || !currentUser._id || !otherId) return;
+
+  // ── Instant optimistic update ──────────────────────────────────────────────
+  // Decrement the in-memory counter for this conversation immediately so the
+  // badge disappears without waiting for a server round-trip.
+  // We'll correct the count with a real fetch after the server call.
+  _setBadge(0); // safest: zero it instantly; server confirms shortly after
+
+  try {
+    console.log(`📨 [Read] Marking conversation with ${otherId} as read...`);
+    await apiPost('/messages/mark-as-read', { otherId });
+    console.log('✅ Messages marked as read on server');
+  } catch (e) {
+    console.warn('⚠️ Backend mark-as-read failed (endpoint missing?) — using optimistic update');
+  }
+
+  // Badge already zeroed — messages are now marked read on the server
+}
+
+// markMessagesAsRead is defined below (near the messages system) to avoid duplication
+
 // ─── Page Router ──────────────────────────────────────────────────────────────
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
 
+  // ── Close any open profile toolbox / modals before navigating ─────────────
+  const profileModal = document.getElementById('userProfileModal');
+  if (profileModal) profileModal.remove();
+
+  // Also close any other floating modals (safe cleanup)
+  // Exclude permanent modals that live in the HTML and must never be removed
+  const PERMANENT_MODALS = new Set(['authModal', 'profileSheet', 'userProfileModal']);
+  document.querySelectorAll('[id$="Modal"], [id$="modal"], .modal').forEach(el => {
+    if (el.id !== 'content' && !PERMANENT_MODALS.has(el.id)) el.remove();
+  });
+
+  // Show spinner immediately so navigation feels instant (no frozen UI)
   content.innerHTML = `
     <div class="flex items-center justify-center min-h-[40vh]">
       <div class="flex flex-col items-center gap-4 text-white/40">
@@ -84,38 +189,119 @@ async function loadPage(page) {
       </div>
     </div>`;
 
-  if (page === 'home')            { await loadHomePage(content); return; }
-  if (page === 'directory')       { await loadDirectoryPage(content); return; }
-  if (page === 'shoutouts')       { await loadShoutoutsPage(content); return; }
-  if (page === 'lostfound')       { await loadLostFoundPage(content); return; }
-  if (page === 'marketplace')     { await loadMarketplacePage(content); return; }
-  if (page === 'events')          { await loadEventsPage(content); return; }
-  if (page === 'deals')           { await loadDealsPage(content); return; }
-  // Add other pages as needed...
+  if (page === 'messages')        { await loadMessagesPage(content); return; }
+  if (page === 'admin')           { await loadAdminPage(content);        return; }
+  if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
+  if (page === 'home')            { await loadHomePage(content);          return; }
+  if (page === 'directory')       { await loadDirectoryPage(content);     return; }
+  if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
+  if (page === 'lostfound')       { await loadLostFoundPage(content);     return; }   // ← NEW
+  if (page === 'marketplace')     { await loadMarketplacePage(content);   return; }   // ← NEW
+  if (page === 'events')          { await loadEventsPage(content);           return; }
+  if (page === 'deals')           { await loadDealsPage(content);            return; }
+  if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
+  if (page === 'resources')       { await loadResourcesPage(content);     return; }
 }
 
-// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+// ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
+let searchTimeout = null;
+
+window.initGlobalSearch = function () {
+  const input = document.getElementById('globalSearchInput');
+  const resultsContainer = document.getElementById('globalSearchResults');
+
+  if (!input || !resultsContainer) return;
+
+  input.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+
+    const q = input.value.trim();
+    if (q.length < 2) {
+      resultsContainer.innerHTML = '';
+      resultsContainer.classList.add('hidden');
+      return;
+    }
+
+    searchTimeout = setTimeout(async () => {
+      const res = await apiGet(`/search?q=${encodeURIComponent(q)}`);
+      if (!res.results || res.results.length === 0) {
+        resultsContainer.innerHTML = `<div class="p-4 text-white/60 text-sm">No results found for "${q}"</div>`;
+        resultsContainer.classList.remove('hidden');
+        return;
+      }
+
+      let html = '';
+      res.results.forEach(item => {
+        html += `
+          <div onclick="handleSearchResultClick('${item.type}', '${item.id}')" 
+               class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-none">
+            <span class="text-2xl">${item.icon}</span>
+            <div class="flex-1 min-w-0">
+              <p class="font-medium text-white text-sm leading-tight">${item.title}</p>
+              <p class="text-white/60 text-xs line-clamp-1">${item.subtitle}</p>
+            </div>
+          </div>`;
+      });
+
+      resultsContainer.innerHTML = html;
+      resultsContainer.classList.remove('hidden');
+    }, 300);
+  });
+
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+      resultsContainer.classList.add('hidden');
+    }
+  });
+};
+
+window.handleSearchResultClick = function (type, id) {
+  const resultsContainer = document.getElementById('globalSearchResults');
+  resultsContainer.classList.add('hidden');
+  document.getElementById('globalSearchInput').value = '';
+
+  if (type === 'business') loadDirectoryAndOpen(id);
+  else if (type === 'event') navigate('events');
+  else if (type === 'deal') navigate('deals');
+  else if (type === 'news') openNewsArticle(id);
+  else if (type === 'shoutout') navigate('shoutouts');
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  initGlobalSearch();
+});
+
+// ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
 async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
-      <!-- Today in Milledgeville -->
+      <!-- Today in Milledgeville (Compact) -->
       <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-5 md:p-6 mb-8 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
         
         <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+          
+          <!-- Left: Title + Date + Podcast -->
           <div class="flex items-start gap-3 min-w-0">
             <span class="text-3xl flex-shrink-0 mt-0.5">🌅</span>
             <div class="min-w-0 flex-1">
               <h1 class="text-[22px] font-bold leading-tight">Today in Milledgeville</h1>
+              
               <div class="flex flex-wrap items-center gap-2 mt-1.5">
                 <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
-                <span onclick="showToast('🎙️ Podcast coming soon!')" class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-black px-3.5 py-1 rounded-2xl text-xs shadow-lg cursor-pointer">🎙️ LISTEN</span>
+                
+                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')" 
+                      class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-3.5 py-1 rounded-2xl text-xs shadow-lg cursor-pointer transition-all active:scale-95">
+                  <span>🎙️</span>
+                  <span class="font-extrabold">LISTEN</span>
+                </span>
               </div>
             </div>
           </div>
 
-          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-4 py-3 text-right">
+          <!-- Right: Weather -->
+          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-4 py-3 text-right self-start md:self-auto">
             <div class="flex items-center justify-between md:justify-end gap-3">
               <div>
                 <div class="text-3xl leading-none mb-0.5" id="weatherIcon">—</div>
@@ -129,6 +315,7 @@ async function loadHomePage(content) {
           </div>
         </div>
 
+        <!-- Compact Digest -->
         <div id="todayDigest" class="relative grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
       </div>
 
@@ -139,9 +326,11 @@ async function loadHomePage(content) {
             <span class="text-xl">⭐</span>
             <h2 class="text-lg font-bold">Business Spotlight</h2>
           </div>
-          <button onclick="navigate('directory')" class="text-xs text-emerald-400 font-semibold">See all →</button>
+          <button onclick="navigate('directory')" class="text-xs text-emerald-400 font-semibold flex items-center gap-1">See all directory →</button>
         </div>
-        <div id="spotlightScroll" class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory"></div>
+        <div id="spotlightScroll" class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory">
+          <!-- Populated by JS below -->
+        </div>
       </div>
 
       <!-- Hot Right Now -->
@@ -152,15 +341,31 @@ async function loadHomePage(content) {
             <h2 class="text-lg font-bold">Hot Right Now</h2>
           </div>
         </div>
+
+        <!-- Filter buttons -->
+        <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
+          <button onclick="setHotFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+          <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
+          <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
+          <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">💬 Shoutouts</button>
+        </div>
+
         <div id="hotFeed" class="space-y-3"></div>
+        <div id="hotLoadMoreWrapper" class="mt-4 hidden">
+          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
+        </div>
       </div>
 
-      <!-- Quick Actions -->
-      <div class="grid grid-cols-2 gap-3">
-        <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-          <span class="text-3xl">🚗</span>
-          <p class="font-semibold mt-3">Post Traffic Alert</p>
-        </button>
+      <!-- Community Stats Bar -->
+      <div id="communityStatsBar" class="mb-8"></div>
+
+      <!-- Quick actions -->
+      <div class="grid grid-cols-2 gap-3 mb-8">
+      <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
+      <span class="text-3xl">🚗</span>
+      <p class="font-semibold mt-3">Post Traffic Alert</p>
+      </button>
         <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
           <span class="text-3xl">📅</span>
           <p class="font-semibold mt-3">See Events</p>
@@ -168,112 +373,100 @@ async function loadHomePage(content) {
       </div>
     </div>`;
 
-  // Weather
+  // Weather widget (bulletproof version)
   (async () => {
     try {
-      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode&temperature_unit=fahrenheit&timezone=America%2FNew_York');
-      const data = await res.json();
-      const curr = data.current;
-      const cond = { icon: '☀️', label: 'Sunny' }; // simplified
+      const wRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
+      
+      if (!wRes.ok) throw new Error('Weather API error');
+      
+      const wData = await wRes.json();
+      const curr = wData.current;
+      const daily = wData.daily || {};
+
+      function wmoCond(code) {
+        if (code === 0) return { icon: '☀️', label: 'Sunny' };
+        if ([1,2].includes(code)) return { icon: '⛅', label: 'Partly cloudy' };
+        if (code === 3) return { icon: '☁️', label: 'Overcast' };
+        if ([45,48].includes(code)) return { icon: '🌫️', label: 'Foggy' };
+        if ([51,53,55,61,63].includes(code)) return { icon: '🌧️', label: 'Rainy' };
+        if ([65,80,81,82].includes(code)) return { icon: '⛈️', label: 'Showers' };
+        if ([71,73,75,77,85,86].includes(code)) return { icon: '❄️', label: 'Snow' };
+        if ([95,96,99].includes(code)) return { icon: '⛈️', label: 'Thunderstorm' };
+        return { icon: '🌤️', label: 'Mixed' };
+      }
+
+      // Current weather
+      const cond = wmoCond(curr.weathercode);
+      const temp = Math.round(curr.temperature_2m);
+
       document.getElementById('weatherIcon').textContent = cond.icon;
-      document.getElementById('weatherTemp').textContent = Math.round(curr.temperature_2m) + '°F';
+      document.getElementById('weatherTemp').textContent = temp + '°F';
       document.getElementById('weatherDesc').textContent = cond.label;
-    } catch (e) {
-      document.getElementById('weatherDesc').textContent = 'Weather unavailable';
+
+      // Forecast (fixed field names)
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      let forecastHTML = '';
+
+      const forecastDates = daily.time || daily.date || [];
+      const forecastTemps = daily.temperature_2m_max || [];
+      const forecastCodes = daily.weathercode || [];
+
+      if (forecastDates.length > 1 && forecastTemps.length > 1 && forecastCodes.length > 1) {
+        forecastHTML = forecastDates.slice(1, 4).map((d, i) => {
+          const fc = wmoCond(forecastCodes[i + 1] || 0);
+          const high = Math.round(forecastTemps[i + 1] || 0);
+          const dow = days[new Date(d + 'T12:00:00').getDay()];
+          return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
+            <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
+            <div class="text-sm leading-none my-0.5">${fc.icon}</div>
+            <div class="text-[10px] font-bold">${high}°</div>
+          </div>`;
+        }).join('');
+      }
+
+      document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
+
+      document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
+
+    } catch (err) {
+      console.warn('Weather error:', err);
+      const desc = document.getElementById('weatherDesc');
+      if (desc) desc.textContent = 'Weather unavailable';
     }
   })();
 
-  // Hot Feed
-  async function loadHotFeed() {
-    try {
-      const [shoutoutsRes, dealsRes, eventsRes] = await Promise.all([
-        apiGet('/shoutouts?page=1&limit=6'),
-        apiGet('/deals?page=1&limit=4'),
-        apiGet('/events?page=1&limit=4')
-      ]);
-
-      let html = '';
-
-      (shoutoutsRes.items || shoutoutsRes).slice(0, 3).forEach(s => {
-        html += `
-          <div onclick="navigate('shoutouts')" class="bg-white/10 backdrop-blur rounded-3xl p-4 cursor-pointer hover:bg-white/15 transition">
-            <div class="flex justify-between text-xs mb-1.5">
-              <span class="text-emerald-400">🚗 Traffic Alert</span>
-              <span class="text-white/50">${timeAgo(s.createdAt)}</span>
-            </div>
-            <p class="text-white line-clamp-2">${s.text}</p>
-          </div>`;
-      });
-
-      html += `<div class="grid grid-cols-2 gap-3 mt-4">`;
-
-      (dealsRes.items || dealsRes).slice(0, 2).forEach(d => {
-        html += `
-          <div onclick="navigate('deals')" class="bg-white/10 backdrop-blur rounded-3xl p-4 cursor-pointer hover:bg-white/15 transition">
-            <span class="text-amber-400 text-xs">🔥 Deal</span>
-            <p class="font-semibold text-white text-sm mt-1 line-clamp-2">${d.title}</p>
-          </div>`;
-      });
-
-      (eventsRes.items || eventsRes).slice(0, 2).forEach(e => {
-        html += `
-          <div onclick="navigate('events')" class="bg-white/10 backdrop-blur rounded-3xl p-4 cursor-pointer hover:bg-white/15 transition">
-            <span class="text-sky-400 text-xs">📅 Event</span>
-            <p class="font-semibold text-white text-sm mt-1 line-clamp-2">${e.title}</p>
-          </div>`;
-      });
-
-      html += `</div>`;
-
-      document.getElementById('hotFeed').innerHTML = html || '<p class="text-white/40 text-center py-8">Nothing hot right now...</p>';
-    } catch (err) {
-      console.error(err);
-      const el = document.getElementById('hotFeed');
-      if (el) el.innerHTML = `<p class="text-white/40 text-center py-8">Couldn't load feed</p>`;
-    }
-  }
-
-  await loadHotFeed();
-
-  // Spotlight
-  if (allBusinesses.length === 0) {
-    apiGet('/directory').then(d => {
-      if (d?.businesses) {
-        allBusinesses = d.businesses;
-        _renderSpotlight(allBusinesses);
-      }
-    }).catch(() => _renderSpotlight([]));
-  } else {
-    _renderSpotlight(allBusinesses);
-  }
-}
-
+// AFTER — fire directory fetch in background; don't block home feed on it
 function _renderSpotlight(businesses) {
   const spotEl = document.getElementById('spotlightScroll');
   if (!spotEl) return;
-
+  // Prefer rated businesses; fall back to all businesses if none have ratings
   let sb = [...businesses]
     .filter(b => b.avgRating && b.avgRating > 0)
     .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
     .slice(0, 8);
-
-  if (!sb.length) sb = [...businesses].slice(0, 8);
-
-  spotEl.innerHTML = sb.map(b => `
-    <div onclick="showBusinessDetail('${b._id}')" class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
-      <div class="flex items-center gap-3 mb-3">
-        ${b.logo ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">` 
-                 : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
-        <div class="flex-1 min-w-0">
-          <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
-          <p class="text-xs text-white/50">${b.category?.name || ''}</p>
+  if (!sb.length) {
+    sb = [...businesses].slice(0, 8);
+  }
+  spotEl.innerHTML = sb.length
+    ? sb.map(b => `
+      <div onclick="showBusinessDetail('${b._id}')"
+           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
+        <div class="flex items-center gap-3 mb-3">
+          ${b.logo
+            ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
+            : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
+            <p class="text-xs text-white/50">${b.category?.name || ''}</p>
+          </div>
         </div>
-      </div>
-      <div class="flex items-center justify-between">
-        ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
-        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
-      </div>
-    </div>`).join('');
+        <div class="flex items-center justify-between">
+          ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
+          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
+        </div>
+      </div>`).join('')
+    : `<p class="text-white/40 text-center py-8">No trending businesses yet</p>`;
 }
 
 if (allBusinesses.length === 0) {
@@ -492,6 +685,7 @@ const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
         </div>
       </div>`;
   }
+}
 // ─── NEWS ARTICLE VIEWER ──────────────────────────────────────────────────────
 window.openNewsArticle = async function (articleId) {
   const article = await apiGet(`/news/${articleId}`);
@@ -1481,110 +1675,87 @@ window.closeClaimModal = function () {
 
 // ─── SHOUTOUTS — UPDATED WITH PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
-  let currentPageNum = 1;
-  const limit = 15;
+  const shoutouts = await apiGet('/shoutouts');
 
-  content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-4 py-6">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold flex items-center gap-3">
-          <span>🚗</span> Traffic Alerts
-        </h1>
-        <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
-      </div>
+  let html = `<div class="max-w-2xl mx-auto px-2">
+    <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
 
-      <div id="shoutoutsList" class="space-y-4"></div>
-      <div id="shoutoutsPagination" class="mt-8 flex flex-col items-center gap-4"></div>
-    </div>`;
+  if (currentUser) {
+    html += `
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 mb-6">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+          <div class="flex-1">
+            <textarea id="shoutoutInput" rows="2" 
+              class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
+              placeholder="What's happening in Milledgeville?"></textarea>
 
-  async function loadShoutouts(pageNum = 1) {
-    currentPageNum = pageNum;
+            <!-- Photo picker -->
+            <div class="mt-3 flex items-center gap-3">
+              <button onclick="document.getElementById('shoutoutImageInput').click()" 
+                      class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-2xl text-sm font-semibold text-white/80 transition">
+                📷 Add photos
+              </button>
+              <input id="shoutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                     onchange="handleShoutoutImages(this)">
+              <div id="shoutoutImagePreviews" class="flex gap-2 flex-wrap"></div>
+            </div>
 
-    const res = await apiGet(`/shoutouts?page=${pageNum}&limit=${limit}`);
-    const container = document.getElementById('shoutoutsList');
-    const paginationDiv = document.getElementById('shoutoutsPagination');
-
-    if (!res.items || res.items.length === 0) {
-      container.innerHTML = `<p class="text-center text-white/60 py-12">No traffic alerts yet. Be the first to post!</p>`;
-      paginationDiv.innerHTML = '';
-      return;
-    }
-
-    let html = '';
-    res.items.forEach(s => {
-      html += `
-        <div class="bg-white/10 backdrop-blur rounded-3xl p-5">
-          <div class="flex justify-between text-xs text-white/50 mb-2">
-            <span>${renderClickableUser(s.authorId || s.author)}</span>
-            <span>${timeAgo(s.createdAt)}</span>
+            <div class="flex justify-end mt-4">
+              <button onclick="postShoutoutWithPhoto()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">Post Shoutout</button>
+            </div>
           </div>
-          <p class="text-white leading-relaxed">${s.text}</p>
-          
-          ${s.images && s.images.length ? 
-            `<div class="mt-4 grid grid-cols-2 gap-2">
-              ${s.images.map((img, i) => `
-                <img src="${img}" class="rounded-2xl cursor-pointer" 
-                     onclick="openShoutoutImageViewer('${s._id}', ${i})">
-              `).join('')}
-            </div>` : ''}
-        </div>`;
-    });
-
-    container.innerHTML = html;
-
-    paginationDiv.innerHTML = `
-      <div class="flex items-center gap-4 text-sm">
-        <button onclick="loadShoutouts(${pageNum-1})" ${pageNum <= 1 ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Previous</button>
-        
-        <span class="text-white/70 px-4">Page <strong>${pageNum}</strong> of ${res.pagination.pages}</span>
-        
-        <button onclick="loadShoutouts(${pageNum+1})" ${!res.pagination.hasMore ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Next</button>
-      </div>
-      
-      ${res.pagination.hasMore ? 
-        `<button onclick="loadShoutouts(${pageNum+1})" class="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg">Load More Traffic Alerts</button>` 
-        : ''}
-    `;
+        </div>
+      </div>`;
+  } else {
+    html += guestBanner('post shoutouts, comment, and like');
   }
 
-  await loadShoutouts(1);
-  window.loadShoutouts = loadShoutouts;
+  if (!shoutouts.length) {
+    html += `<p class="text-center text-white/50 py-12">No shoutouts yet — be the first!</p>`;
+  } else {
+    html += `<div class="space-y-4" id="shoutoutsFeed">`;
+    shoutouts.forEach(s => { html += renderShoutoutCard(s); });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  content.innerHTML = html;
 }
 
-// ─── Image Lightbox ─────────────────────────────────────────────────────────────
-window.openShoutoutImageViewer = function(shoutoutId, startIndex) {
-  const images = Array.from(document.querySelectorAll('#shoutoutsList img')).map(img => img.src);
-  if (!images.length) return;
+// ─── SHOUTOUT IMAGE LIGHTBOX ──────────────────────────────────────────────────
+window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
+  // Find the shoutout's images from the DOM's img src attributes within its card
+  const card = document.getElementById(`shoutout-${shoutoutId}`);
+  if (!card) return;
+  const imgs = Array.from(card.querySelectorAll('.hide-scrollbar img')).map(img => img.src);
+  if (!imgs.length) return;
 
   let current = startIndex;
 
-  function renderLightbox() {
-    const existing = document.getElementById('imageLightbox');
+  function render() {
+    const existing = document.getElementById('shoutoutImgLightbox');
     if (existing) existing.remove();
 
     const html = `
-      <div id="imageLightbox" onclick="if(event.target.id==='imageLightbox') this.remove()" 
-           class="fixed inset-0 bg-black/95 z-[15000] flex items-center justify-center p-4">
-        <button onclick="document.getElementById('imageLightbox').remove()" 
-                class="absolute top-6 right-6 text-white text-4xl font-light z-10">✕</button>
-        
-        ${images.length > 1 ? `
-        <button onclick="prevImage()" class="absolute left-6 text-white text-5xl font-light z-10">‹</button>
-        <button onclick="nextImage()" class="absolute right-6 text-white text-5xl font-light z-10">›</button>` : ''}
-        
-        <img src="${images[current]}" class="max-h-[85vh] max-w-full object-contain rounded-3xl shadow-2xl" alt="Image">
-        ${images.length > 1 ? `<p class="absolute bottom-8 text-white/70">${current + 1} / ${images.length}</p>` : ''}
+      <div id="shoutoutImgLightbox" class="fixed inset-0 bg-black/95 z-[14000] flex items-center justify-center">
+        <button onclick="document.getElementById('shoutoutImgLightbox').remove()"
+                class="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl font-bold transition z-10">✕</button>
+        ${imgs.length > 1 ? `
+          <button onclick="shoutoutLightboxPrev()" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">‹</button>
+          <button onclick="shoutoutLightboxNext()" class="absolute right-16 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">›</button>` : ''}
+        <div class="max-w-full max-h-full flex flex-col items-center px-16">
+          <img src="${imgs[current]}" alt="Photo ${current+1}" class="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl">
+          ${imgs.length > 1 ? `<p class="text-white/50 text-sm mt-3">${current+1} / ${imgs.length}</p>` : ''}
+        </div>
       </div>`;
-
     document.body.insertAdjacentHTML('beforeend', html);
   }
 
-  window.prevImage = () => { current = (current - 1 + images.length) % images.length; renderLightbox(); };
-  window.nextImage = () => { current = (current + 1) % images.length; renderLightbox(); };
+  window.shoutoutLightboxPrev = function () { current = (current - 1 + imgs.length) % imgs.length; render(); };
+  window.shoutoutLightboxNext = function () { current = (current + 1) % imgs.length; render(); };
 
-  renderLightbox();
+  render();
 };
 
 // ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
@@ -1902,203 +2073,310 @@ function catIcon(name) {
 }
 
 // ─── DEALS PAGE ───────────────────────────────────────────────────────────────
-// ─── DEALS PAGE (Filters + Pagination) ─────────────────────────────────────
 async function loadDealsPage(content) {
-  let currentPageNum = 1;
-  const limit = 12;
-
-  content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-4 py-6">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold flex items-center gap-3">
-          <span>🔥</span> Deals
-        </h1>
-        <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
-      </div>
-
-      <!-- Search -->
-      <input id="dealSearchInput" type="text" placeholder="Search deals..." 
-             class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-3 text-white placeholder-white/40 focus:outline-none mb-6">
-
-      <!-- Category Chips -->
-      <div id="dealChips" class="flex gap-2 overflow-x-auto pb-4 hide-scrollbar mb-6"></div>
-
-      <div id="dealsList" class="space-y-4"></div>
-      <div id="dealsPagination" class="mt-8 flex flex-col items-center gap-4"></div>
-    </div>`;
-
-  // Load all deals for filtering
-  let allDeals = [];
-  try {
-    const res = await apiGet('/deals?limit=200');
-    allDeals = res.items || [];
-  } catch (e) { console.error(e); }
-
-  window._allDeals = allDeals;
+  const [allDeals] = await Promise.all([apiGet('/deals'), ensureDirCategories()]);
+  window._allDeals   = allDeals;
   window._dealFilter = 'All';
+  window._dealSearch = '';
+  window._dealSort   = 'newest';
 
-  async function renderDeals(pageNum = 1) {
-    currentPageNum = pageNum;
-    const searchTerm = (document.getElementById('dealSearchInput')?.value || '').toLowerCase().trim();
-    const currentFilter = window._dealFilter || 'All';
-
-    let filtered = allDeals.filter(d => {
-      const matchesSearch = !searchTerm || 
-        d.title.toLowerCase().includes(searchTerm) || 
-        (d.description || '').toLowerCase().includes(searchTerm);
-      
-      const matchesCategory = currentFilter === 'All' || d.category === currentFilter;
-      return matchesSearch && matchesCategory;
-    });
-
-    // Sort newest first
-    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    const total = filtered.length;
-    const skip = (pageNum - 1) * limit;
-    const paginated = filtered.slice(skip, skip + limit);
-
-    const container = document.getElementById('dealsList');
-    const paginationDiv = document.getElementById('dealsPagination');
-
-    if (paginated.length === 0) {
-      container.innerHTML = `<p class="text-center text-white/60 py-12">No deals match your search.</p>`;
-      paginationDiv.innerHTML = '';
-      return;
-    }
-
-    let html = '';
-    paginated.forEach(deal => {
-      html += `
-        <div class="bg-white/10 backdrop-blur rounded-3xl p-5">
-          <div class="flex justify-between text-xs text-white/50 mb-2">
-            <span>${deal.business?.name || 'Local Business'}</span>
-            <span>${timeAgo(deal.createdAt)}</span>
-          </div>
-          <h3 class="text-xl font-bold text-white">${deal.title}</h3>
-          <p class="text-white/80 mt-2">${deal.description || ''}</p>
-          ${deal.expires ? `<p class="text-xs text-emerald-400 mt-3">Expires: ${new Date(deal.expires).toLocaleDateString()}</p>` : ''}
-        </div>`;
-    });
-
-    container.innerHTML = html;
-
-    const totalPages = Math.ceil(total / limit);
-
-    paginationDiv.innerHTML = `
-      <div class="flex items-center gap-4 text-sm">
-        <button onclick="renderDeals(${pageNum-1})" ${pageNum <= 1 ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Previous</button>
-        <span class="text-white/70 px-4">Page <strong>${pageNum}</strong> of ${totalPages}</span>
-        <button onclick="renderDeals(${pageNum+1})" ${pageNum >= totalPages ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Next</button>
-      </div>
-      
-      ${pageNum < totalPages ? 
-        `<button onclick="renderDeals(${pageNum+1})" class="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg">Load More Deals</button>` 
-        : ''}
-    `;
-  }
-
-  // Initial render
-  renderDeals(1);
-  window.renderDeals = renderDeals;
-
-  // Live search
-  const searchInput = document.getElementById('dealSearchInput');
-  if (searchInput) searchInput.addEventListener('input', () => renderDeals(1));
-
-  // Category chips
-  const chipsDiv = document.getElementById('dealChips');
-  if (chipsDiv && allDeals.length) {
-    const categories = [...new Set(allDeals.map(d => d.category).filter(Boolean))];
-    let chipsHTML = `<button onclick="window._dealFilter='All'; renderDeals(1)" class="px-5 py-2 rounded-full text-sm font-medium bg-emerald-600 text-white whitespace-nowrap">All</button>`;
-    
-    categories.forEach(cat => {
-      chipsHTML += `<button onclick="window._dealFilter='${cat}'; renderDeals(1)" class="px-5 py-2 rounded-full text-sm font-medium bg-white/10 hover:bg-white/20 text-white/80 whitespace-nowrap">${cat}</button>`;
-    });
-    chipsDiv.innerHTML = chipsHTML;
-  }
-}
-
-// ─── EVENTS PAGE (with Pagination) ───────────────────────────────────────────
-async function loadEventsPage(content) {
-  let currentPageNum = 1;
-  const limit = 12;
+  const now         = new Date();
+  const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
 
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-4 py-6">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold flex items-center gap-3">
-          <span>📅</span> Upcoming Events
-        </h1>
-        <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
+    <div class="max-w-3xl mx-auto px-2 pb-10">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-3xl md:text-4xl font-bold">🔥 Deals</h2>
+        <span class="text-sm text-white/40">${activeDeals.length} active</span>
       </div>
 
-      <div id="eventsList" class="space-y-4"></div>
-      <div id="eventsPagination" class="mt-8 flex flex-col items-center gap-4"></div>
+      ${!currentUser ? guestBanner('post deals and get notified about new offers') : ''}
+
+      <div class="flex gap-2 mb-4">
+        <input id="dealSearchInput" type="text" placeholder="Search deals…"
+               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400"
+               oninput="window._dealSearch=this.value; renderDealsFiltered()">
+        <select id="dealSortSelect" onchange="window._dealSort=this.value; renderDealsFiltered()"
+                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                style="background:#1e293b;color-scheme:dark;">
+          <option value="newest">Newest</option>
+          <option value="expiring">Expiring Soon</option>
+          <option value="az">A–Z</option>
+        </select>
+      </div>
+
+      <div id="dealChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
+      <div id="dealResults"></div>
     </div>`;
 
-  async function loadEvents(pageNum = 1) {
-    currentPageNum = pageNum;
+  renderDealsFiltered();
+}
 
-    const res = await apiGet(`/events?page=${pageNum}&limit=${limit}`);
-    const container = document.getElementById('eventsList');
-    const paginationDiv = document.getElementById('eventsPagination');
+window.renderDealsFiltered = function () {
+  const search    = (window._dealSearch || '').toLowerCase();
+  const filter    = window._dealFilter  || 'All';
+  const sort      = window._dealSort    || 'newest';
+  const now       = new Date();
+  const allDeals  = window._allDeals    || [];
 
-    if (!res.items || res.items.length === 0) {
-      container.innerHTML = `<p class="text-center text-white/60 py-12">No upcoming events right now.</p>`;
-      paginationDiv.innerHTML = '';
-      return;
-    }
+  const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
+  const activeCats  = [...new Set(activeDeals.map(d => d.category).filter(Boolean))].sort();
 
-    let html = '';
-    res.items.forEach(event => {
-      const eventDate = new Date(event.date);
-      const isPast = eventDate < new Date();
+  if (filter !== 'All' && !activeCats.includes(filter)) window._dealFilter = 'All';
+  const currentFilter = window._dealFilter || 'All';
 
-      html += `
-        <div class="bg-white/10 backdrop-blur rounded-3xl p-5">
-          <div class="flex justify-between text-xs text-white/50 mb-2">
-            <span>${event.category || 'General'}</span>
-            <span>${timeAgo(event.createdAt)}</span>
-          </div>
-          <h3 class="text-xl font-bold text-white">${event.title}</h3>
-          <p class="text-white/80 mt-2">${event.description || ''}</p>
-          
-          <div class="mt-4 flex items-center gap-3 text-sm">
-            <span class="text-emerald-400">📅</span>
-            <span>${eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
-            <span class="text-white/50">•</span>
-            <span>${eventDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-          </div>
-          
-          ${event.location ? `<p class="text-white/70 text-sm mt-2">📍 ${event.location}</p>` : ''}
-        </div>`;
-    });
-
-    container.innerHTML = html;
-
-    paginationDiv.innerHTML = `
-      <div class="flex items-center gap-4 text-sm">
-        <button onclick="loadEvents(${pageNum-1})" ${pageNum <= 1 ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Previous</button>
-        
-        <span class="text-white/70 px-4">Page <strong>${pageNum}</strong> of ${res.pagination.pages}</span>
-        
-        <button onclick="loadEvents(${pageNum+1})" ${!res.pagination.hasMore ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Next</button>
-      </div>
-      
-      ${res.pagination.hasMore ? 
-        `<button onclick="loadEvents(${pageNum+1})" class="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg">Load More Events</button>` 
-        : ''}
-    `;
+  const chips = document.getElementById('dealChips');
+  if (chips) {
+    chips.innerHTML = `
+      <button onclick="window._dealFilter='All'; renderDealsFiltered()"
+              class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+        All
+      </button>
+      ${activeCats.map(name => {
+        const safe = name.replace(/'/g, "\\'");
+        return `
+        <button onclick="window._dealFilter='${safe}'; renderDealsFiltered()"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === name ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+          <span>${catIcon(name)}</span><span>${name}</span>
+        </button>`;
+      }).join('')}`;
   }
 
-  await loadEvents(1);
-  window.loadEvents = loadEvents;
+  let deals = allDeals.filter(d => {
+    if (currentFilter !== 'All' && d.category !== currentFilter) return false;
+    if (search && !d.title.toLowerCase().includes(search) && !(d.description||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (sort === 'expiring') {
+    const withExpiry    = deals.filter(d => d.expires).sort((a,b) => new Date(a.expires) - new Date(b.expires));
+    const withoutExpiry = deals.filter(d => !d.expires);
+    deals = [...withExpiry, ...withoutExpiry];
+  } else if (sort === 'az') {
+    deals.sort((a, b) => a.title.localeCompare(b.title));
+  } else {
+    deals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  const container = document.getElementById('dealResults');
+  if (!container) return;
+
+  if (!deals.length) {
+    container.innerHTML = `
+      <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+        <p class="text-4xl mb-3">🏷️</p>
+        <p class="text-white/50 text-sm">No deals found</p>
+        ${currentFilter !== 'All' ? `<button onclick="window._dealFilter='All';renderDealsFiltered()" class="mt-3 text-amber-400 text-sm font-semibold hover:text-amber-300 transition">Clear filter</button>` : ''}
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">` +
+    deals.map(d => {
+      const expired   = d.expires && new Date(d.expires) < now;
+      const expiresIn = d.expires ? Math.ceil((new Date(d.expires) - now) / (1000*60*60*24)) : null;
+      const urgency   = expiresIn !== null && expiresIn <= 3 && !expired;
+      const icon      = catIcon(d.category);
+      const label     = d.category || 'General';
+      return `
+        <div class="bg-white/10 backdrop-blur-xl border ${urgency ? 'border-amber-500/50' : expired ? 'border-white/5 opacity-60' : 'border-white/10'} rounded-3xl overflow-hidden transition hover:bg-white/15">
+          <div class="h-1.5 ${expired ? 'bg-white/10' : urgency ? 'bg-gradient-to-r from-amber-500 to-orange-400' : 'bg-gradient-to-r from-amber-500/60 to-yellow-500/60'}"></div>
+          <div class="p-5">
+            <div class="flex items-start justify-between gap-3 mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-2xl flex items-center justify-center text-xl ${expired ? 'bg-white/5' : 'bg-amber-500/20'} flex-shrink-0">${icon}</div>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${expired ? 'bg-white/10 text-white/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">${label}</span>
+              </div>
+              ${expired ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/20 flex-shrink-0">Expired</span>`
+                : urgency ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0 animate-pulse">⚡ ${expiresIn}d left</span>`
+                : ''}
+            </div>
+            <h3 class="font-bold text-base leading-snug mb-2 ${expired ? 'text-white/40 line-through' : 'text-white'}">${d.title}</h3>
+            ${d.description ? `<p class="text-sm text-white/60 leading-relaxed mb-3 line-clamp-2">${d.description}</p>` : ''}
+            <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
+              <div class="text-xs text-white/40">${d.business?.name ? `🏪 ${d.business.name}` : d.owner?.name ? `👤 ${d.owner.name}` : ''}</div>
+              <div class="text-xs text-white/40">${d.expires ? (expired ? `Expired ${new Date(d.expires).toLocaleDateString()}` : `Expires ${new Date(d.expires).toLocaleDateString()}`) : 'No expiry'}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('') + `</div>`;
+};
+
+// ─── EVENTS PAGE — WITH RSVP BUTTONS ──────────────────────────────────────────
+async function loadEventsPage(content) {
+  const [allEvents] = await Promise.all([apiGet('/events'), ensureDirCategories()]);
+  window._allEvents   = allEvents;
+  window._eventFilter = 'All';
+  window._eventSearch = '';
+  window._eventTime   = 'upcoming';
+
+  const now            = new Date();
+  const upcomingEvents = allEvents.filter(e => new Date(e.date) >= now);
+
+  content.innerHTML = `
+    <div class="max-w-3xl mx-auto px-2 pb-10">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-3xl md:text-4xl font-bold">📅 Events</h2>
+        <span class="text-sm text-white/40">${upcomingEvents.length} upcoming</span>
+      </div>
+
+      ${!currentUser ? guestBanner('post events and connect with the community') : ''}
+
+      <div class="flex gap-2 mb-4">
+        <input id="eventSearchInput" type="text" placeholder="Search events…"
+               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
+               oninput="window._eventSearch=this.value; renderEventsFiltered()">
+        <select id="eventTimeSelect" onchange="window._eventTime=this.value; renderEventsFiltered()"
+                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
+                style="background:#1e293b;color-scheme:dark;">
+          <option value="upcoming">Upcoming</option>
+          <option value="all">All</option>
+          <option value="past">Past</option>
+        </select>
+      </div>
+
+      <div id="eventChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
+      <div id="eventResults"></div>
+    </div>`;
+
+  renderEventsFiltered();
 }
+
+window.renderEventsFiltered = function () {
+  const search    = (window._eventSearch || '').toLowerCase();
+  const filter    = window._eventFilter  || 'All';
+  const time      = window._eventTime    || 'upcoming';
+  const now       = new Date();
+  const allEvents = window._allEvents    || [];
+
+  const pool       = time === 'past' ? allEvents.filter(e => new Date(e.date) < now) : allEvents.filter(e => new Date(e.date) >= now);
+  const poolCatSet = new Set(pool.map(e => e.category).filter(Boolean));
+  const activeCats = EVENT_CATEGORIES.filter(c => poolCatSet.has(c.name));
+
+  if (filter !== 'All' && !activeCats.find(c => c.name === filter)) window._eventFilter = 'All';
+  const currentFilter = window._eventFilter || 'All';
+
+  const chips = document.getElementById('eventChips');
+  if (chips) {
+    chips.innerHTML = `
+      <button onclick="window._eventFilter='All'; renderEventsFiltered()"
+              class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+        All
+      </button>
+      ${activeCats.map(cat => {
+        const safe = cat.name.replace(/'/g, "\\'");
+        return `
+        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered()"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === cat.name ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+          <span>${cat.icon}</span><span>${cat.name}</span>
+        </button>`;
+      }).join('')}`;
+  }
+
+let events = allEvents.filter(e => {
+  const eDate = new Date(e.date);
+  const threeDaysAgo = new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000));
+
+  // Hide events older than 3 days
+  if (eDate < threeDaysAgo) return false;
+
+  if (time === 'upcoming' && eDate < now)  return false;
+  if (time === 'past'     && eDate >= now) return false;
+  if (currentFilter !== 'All' && e.category !== currentFilter) return false;
+  if (search && !e.title.toLowerCase().includes(search) &&
+      !(e.description||'').toLowerCase().includes(search) &&
+      !(e.location||'').toLowerCase().includes(search)) return false;
+  return true;
+});
+
+  time === 'past' ? events.sort((a,b) => new Date(b.date) - new Date(a.date))
+                  : events.sort((a,b) => new Date(a.date) - new Date(a.date));
+
+  const container = document.getElementById('eventResults');
+  if (!container) return;
+
+  if (!events.length) {
+    const msg = time === 'upcoming' ? 'No upcoming events' : time === 'past' ? 'No past events' : 'No events found';
+    container.innerHTML = `
+      <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+        <p class="text-4xl mb-3">📅</p>
+        <p class="text-white/50 text-sm">${msg}</p>
+        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+      </div>`;
+    return;
+  }
+
+  if (time !== 'past') {
+    const grouped = {};
+    events.forEach(e => {
+      const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(e);
+    });
+    container.innerHTML = Object.entries(grouped).map(([month, mes]) => `
+      <div class="mb-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">${month}</span>
+          <div class="flex-1 h-px bg-white/10"></div>
+        </div>
+        <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
+      </div>`).join('');
+  } else {
+    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
+  }
+}
+
+function renderEventCard(e, now) {
+  const eDate   = new Date(e.date);
+  const isPast  = eDate < now;
+  const icon    = catIcon(e.category);
+  const label   = e.category || 'General';
+
+  const rsvpCount = e.rsvps ? e.rsvps.length : 0;
+
+  // Gray out + Past badge for events that have already happened
+  const pastStyles = isPast 
+    ? 'opacity-60 grayscale-[0.3] border border-white/10' 
+    : 'border border-white/10 hover:border-emerald-500/30';
+
+  const pastBadge = isPast 
+    ? `<span class="text-[10px] bg-gray-500/30 text-gray-300 px-2 py-0.5 rounded-full">Past Event</span>` 
+    : '';
+
+  const rsvpHTML = currentUser && !isPast ? `
+    <button onclick="toggleRSVP('${e._id}'); event.stopImmediatePropagation()" 
+            class="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2 rounded-2xl text-sm font-semibold transition">
+      ${e.rsvps && e.rsvps.includes(currentUser._id) ? '✅ Going' : '🎟️ RSVP'}
+    </button>` : '';
+
+  return `
+    <div onclick="showEventDetail('${e._id}')" 
+         class="bg-white/10 ${pastStyles} rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
+            ${pastBadge}
+          </div>
+          <h3 class="font-bold text-lg leading-snug">${e.title}</h3>
+          <p class="text-white/70 text-sm mt-1 line-clamp-2">${e.description || ''}</p>
+          
+          <div class="flex items-center gap-2 text-xs text-white/50 mt-3">
+            <span>📅 ${formatDate(e.date)}</span>
+            ${e.location ? `<span>· 📍 ${e.location}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      
+      ${rsvpHTML}
+      
+      ${rsvpCount > 0 ? `
+        <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+          <span>🎟️</span> <span>${rsvpCount} going</span>
+        </div>` : ''}
+    </div>`;
+}
+
 // ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
 let _allResources = [];
 let _resourceCategories = [];
@@ -4040,180 +4318,110 @@ window.markMarketSold = async function() {
   }
 };
 
-// ─── LOST & FOUND PAGE (with Pagination + Post Button) ───────────────────────
+// ====================== FULLY UPDATED LOST & FOUND PAGE ======================
 async function loadLostFoundPage(content) {
-  let currentPageNum = 1;
-  const limit = 12;
-
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-4 py-6">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold flex items-center gap-3">
-          <span>🔍</span> Lost & Found
-        </h1>
-        <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
-      </div>
-
-      <!-- Post Button -->
-      <div class="bg-white/10 backdrop-blur rounded-3xl p-5 mb-8">
-        <button onclick="showPostLostItemModal()" 
-                class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg transition">
-          ➕ Post Lost or Found Item
+    <div class="max-w-2xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🔎 Lost & Found</h1>
+        <button onclick="showPostLostItemModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Post Item
         </button>
       </div>
-
-      <div class="flex gap-3 mb-6">
-        <button onclick="filterLostType('all')" id="lostFilter-all" 
-                class="flex-1 py-3 rounded-3xl font-semibold bg-emerald-600 text-white">All</button>
-        <button onclick="filterLostType('lost')" id="lostFilter-lost" 
-                class="flex-1 py-3 rounded-3xl font-semibold bg-white/10 hover:bg-white/20 text-white/80">Lost</button>
-        <button onclick="filterLostType('found')" id="lostFilter-found" 
-                class="flex-1 py-3 rounded-3xl font-semibold bg-white/10 hover:bg-white/20 text-white/80">Found</button>
+      <div id="lostItemsList">
+        <div class="flex justify-center py-12">
+          <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
       </div>
-
-      <div id="lostList" class="space-y-4"></div>
-      <div id="lostPagination" class="mt-8 flex flex-col items-center gap-4"></div>
     </div>`;
 
-  let currentType = 'all';
-
-  window.filterLostType = function(type) {
-    currentType = type;
-    document.querySelectorAll('[id^="lostFilter-"]').forEach(btn => {
-      btn.classList.toggle('bg-emerald-600', btn.id === `lostFilter-${type}`);
-      btn.classList.toggle('text-white', btn.id === `lostFilter-${type}`);
-      btn.classList.toggle('bg-white/10', btn.id !== `lostFilter-${type}`);
-    });
-    loadLostItems(1);
-  };
-
-  async function loadLostItems(pageNum = 1) {
-    currentPageNum = pageNum;
-
-    let url = `/lostitems?page=${pageNum}&limit=${limit}`;
-    if (currentType !== 'all') url += `&type=${currentType}`;
-
-    const res = await apiGet(url);
-    const container = document.getElementById('lostList');
-    const paginationDiv = document.getElementById('lostPagination');
-
-    if (!res.items || res.items.length === 0) {
-      container.innerHTML = `<p class="text-center text-white/60 py-12">No lost & found posts yet.</p>`;
-      paginationDiv.innerHTML = '';
-      return;
-    }
-
-    let html = '';
-    res.items.forEach(item => {
-      html += `
-        <div onclick="showLostItemDetail('${item._id}')" class="bg-white/10 backdrop-blur rounded-3xl p-5 cursor-pointer hover:bg-white/15 transition">
-          <div class="flex justify-between text-xs text-white/50 mb-2">
-            <span class="uppercase font-semibold">${item.type}</span>
+  const items = await apiGet('/lostitems');
+  const listHTML = items.map(item => `
+    <div onclick="showLostItemDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex gap-4">
+        ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🔎</div>`}
+        <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">${item.type.toUpperCase()}</span>
+            ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
+          </div>
+          <h3 class="font-semibold text-lg mt-2">${item.title}</h3>
+          <p class="text-white/70 line-clamp-2">${item.description}</p>
+          <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
+            <span>📍 ${item.location || 'Unknown'}</span>
+            <span>·</span>
+            ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
+            <span>·</span>
             <span>${timeAgo(item.createdAt)}</span>
           </div>
-          <h3 class="font-bold text-lg text-white">${item.title}</h3>
-          <p class="text-white/80 mt-1 line-clamp-2">${item.description}</p>
-          ${item.location ? `<p class="text-xs text-emerald-400 mt-3">📍 ${item.location}</p>` : ''}
-        </div>`;
-    });
-
-    container.innerHTML = html;
-
-    paginationDiv.innerHTML = `
-      <div class="flex items-center gap-4 text-sm">
-        <button onclick="loadLostItems(${pageNum-1})" ${pageNum <= 1 ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Previous</button>
-        <span class="text-white/70 px-4">Page <strong>${pageNum}</strong> of ${res.pagination.pages}</span>
-        <button onclick="loadLostItems(${pageNum+1})" ${!res.pagination.hasMore ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Next</button>
+        </div>
       </div>
-      ${res.pagination.hasMore ? 
-        `<button onclick="loadLostItems(${pageNum+1})" class="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg">Load More</button>` 
-        : ''}
-    `;
-  }
+    </div>`).join('');
 
-  await loadLostItems(1);
-  window.loadLostItems = loadLostItems;
+  document.getElementById('lostItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No items yet — be the first to post!</p>`;
 }
 
-// ─── MARKETPLACE PAGE (with Pagination + Post Button) ────────────────────────
 async function loadMarketplacePage(content) {
-  let currentPageNum = 1;
-  const limit = 12;
-
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-4 py-6">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold flex items-center gap-3">
-          <span>🛒</span> Marketplace
-        </h1>
-        <button onclick="navigate('home')" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">← Back</button>
-      </div>
-
-      <!-- Post New Item Button -->
-      <div class="bg-white/10 backdrop-blur rounded-3xl p-5 mb-8">
-        <button onclick="showPostMarketplaceModal()" 
-                class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg transition">
-          ➕ Sell Something New
+    <div class="max-w-2xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🛒 Marketplace</h1>
+        <button onclick="showPostMarketplaceModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Sell Something
         </button>
       </div>
-
-      <div id="marketList" class="space-y-4"></div>
-      <div id="marketPagination" class="mt-8 flex flex-col items-center gap-4"></div>
+      <div id="marketItemsList">
+        <div class="flex justify-center py-12">
+          <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
     </div>`;
 
-  async function loadMarketplace(pageNum = 1) {
-    currentPageNum = pageNum;
+  const items = await apiGet('/marketplace');
 
-    const res = await apiGet(`/marketplace?page=${pageNum}&limit=${limit}`);
-    const container = document.getElementById('marketList');
-    const paginationDiv = document.getElementById('marketPagination');
-
-    if (!res.items || res.items.length === 0) {
-      container.innerHTML = `<p class="text-center text-white/60 py-12">No items in the marketplace yet.</p>`;
-      paginationDiv.innerHTML = '';
-      return;
-    }
-
-    let html = '';
-    res.items.forEach(item => {
-      html += `
-        <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 backdrop-blur rounded-3xl p-5 cursor-pointer hover:bg-white/15 transition">
-          <div class="flex justify-between text-xs text-white/50 mb-2">
-            <span>${item.category || 'General'}</span>
-            <span>${timeAgo(item.createdAt)}</span>
+  const listHTML = items.map(item => {
+    const sellerId = item.seller?._id || item.seller;
+    return `
+      <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+        <div class="flex gap-4">
+          ${item.images && item.images.length ? 
+            `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : 
+            `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
+          <div class="flex-1">
+            <h3 class="font-semibold text-lg">${item.title}</h3>
+            <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
+            <p class="text-white/70 line-clamp-2">${item.description}</p>
+            <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
+              <span>${item.condition}</span>
+              <span>·</span>
+              ${renderClickableUser(item.seller, item.authorName)}
+              <span>·</span>
+              <span>${timeAgo(item.createdAt)}</span>
+            </div>
           </div>
-          
-          <h3 class="font-bold text-lg text-white">${item.title}</h3>
-          <p class="text-emerald-400 font-semibold mt-1">$${item.price}</p>
-          <p class="text-white/80 mt-2 line-clamp-2">${item.description}</p>
-          
-          ${item.condition ? `<p class="text-xs text-white/60 mt-3">Condition: ${item.condition}</p>` : ''}
-        </div>`;
-    });
+        </div>
+      </div>`;
+  }).join('');
 
-    container.innerHTML = html;
-
-    paginationDiv.innerHTML = `
-      <div class="flex items-center gap-4 text-sm">
-        <button onclick="loadMarketplace(${pageNum-1})" ${pageNum <= 1 ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Previous</button>
-        
-        <span class="text-white/70 px-4">Page <strong>${pageNum}</strong> of ${res.pagination.pages}</span>
-        
-        <button onclick="loadMarketplace(${pageNum+1})" ${!res.pagination.hasMore ? 'disabled' : ''} 
-                class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl disabled:opacity-40 transition">Next</button>
-      </div>
-      
-      ${res.pagination.hasMore ? 
-        `<button onclick="loadMarketplace(${pageNum+1})" class="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 rounded-3xl font-semibold text-lg">Load More Items</button>` 
-        : ''}
-    `;
+  const container = document.getElementById('marketItemsList');
+  if (container) {
+    container.innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
   }
+}
 
-  await loadMarketplace(1);
-  window.loadMarketplace = loadMarketplace;
+async function renderMarketComments(item) {
+  const container = document.getElementById('marketCommentsContainer');
+  if (!container) return;
+
+  let html = '';
+  (item.comments || []).forEach(c => {
+    const authorId = c.authorId?._id || c.authorId;
+    html += `<div class="bg-slate-100 rounded-2xl p-4">
+      <p onclick="showUserProfileModal('${authorId}')" class="font-medium cursor-pointer hover:underline">${c.author}</p>
+      <p class="text-slate-700">${c.text}</p>
+    </div>`;
+  });
+  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No messages yet</p>';
 }
 
 // ====================== MESSAGING SYSTEM ======================
