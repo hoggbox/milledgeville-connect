@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
   notifyDeals:    { type: Boolean, default: true },
   notifyEvents:   { type: Boolean, default: true },
   notifyShoutouts:{ type: Boolean, default: false },
+  notifyShoutoutComments: { type: Boolean, default: false },
   pushEnabled: { type: Boolean, default: false },
 
   canPostNews: { type: Boolean, default: false },

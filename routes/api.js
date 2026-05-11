@@ -855,7 +855,7 @@ router.patch('/auth/profile', authenticate, async (req, res) => {
   try {
     const allowed = ['name', 'bio', 'phone', 'neighborhood', 'website',
                      'instagram', 'facebook', 'notifyDeals', 'notifyEvents',
-                     'notifyShoutouts', 'avatar', 'pushEnabled'];
+                     'notifyShoutouts', 'notifyShoutoutComments', 'avatar', 'pushEnabled'];
     const updates = {};
     allowed.forEach(k => { if (k in req.body) updates[k] = req.body[k]; });
 
@@ -1019,14 +1019,14 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     shoutout.comments.push(comment);
     await shoutout.save();
 
-    if (shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
-      sendPushToUser(
-        shoutout.authorId,
-        '💬 New comment on your shoutout',
-        `${user.name}: ${req.body.text.substring(0, 60)}`,
-        { page: 'shoutouts' }
-      );
-    }
+    // === ONLY notify users who enabled "Comments on Traffic Alerts" ===
+    broadcastPush(
+      `💬 New comment on Traffic Alert`,
+      `${user.name}: ${req.body.text.substring(0, 70)}${req.body.text.length > 70 ? '...' : ''}`,
+      { page: 'shoutouts' },
+      { notifyShoutoutComments: true }     // ← This is what stops spam
+    );
+
     res.json(shoutout.comments[shoutout.comments.length - 1]);
   } catch (err) {
     res.status(500).json({ message: err.message });
