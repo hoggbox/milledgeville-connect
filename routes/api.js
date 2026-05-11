@@ -118,81 +118,128 @@ router.get('/test-push-public', async (req, res) => {
   }
 });
 
-// Send push to a single user (supports both web + native)
+// Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}) {
-  try {
-    const sub = await PushSubscription.findOne({ user: userId });
-    if (!sub?.nativeToken) {
-      console.log(`[Push] No native token for user ${userId}`);
-      return false;
-    }
-
-    const message = {
-      token: sub.nativeToken,
-      notification: { title, body },
-      data: { ...data, page: data.page || 'home' },
-      android: { priority: 'high' }
-    };
-
-    const response = await admin.messaging().send(message);
-    console.log(`✅ Native push sent to ${userId}:`, response);
-    return true;
-  } catch (err) {
-    console.error(`[Push] Failed to send to ${userId}:`, err.message);
-    if (err.code === 'messaging/registration-token-not-registered') {
-      await PushSubscription.deleteOne({ user: userId });
-    }
+  const sub = await PushSubscription.findOne({ user: userId });
+  if (!sub) {
+    console.log(`[Push] No subscription record for user ${userId}`);
     return false;
   }
+
+  let sent = false;
+
+  // ── Native FCM path ───────────────────────────────────────────────────────
+  if (sub.nativeToken) {
+    try {
+      const message = {
+        token: sub.nativeToken,
+        notification: { title, body },
+        data: { ...data, page: data.page || 'home' },
+        android: { priority: 'high' }
+      };
+      const response = await admin.messaging().send(message);
+      console.log(`✅ Native push sent to ${userId}:`, response);
+      sent = true;
+    } catch (err) {
+      console.error(`[Push] FCM failed for ${userId}:`, err.message);
+      if (err.code === 'messaging/registration-token-not-registered') {
+        sub.nativeToken = null;
+        await sub.save();
+      }
+    }
+  }
+
+  // ── Web VAPID path ────────────────────────────────────────────────────────
+  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+    try {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({ title, body, data })
+      );
+      console.log(`✅ Web push sent to ${userId}`);
+      sent = true;
+    } catch (err) {
+      console.error(`[Push] Web push failed for ${userId}:`, err.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        // Subscription expired — clear it but keep native token if present
+        sub.subscription = null;
+        await sub.save();
+      }
+    }
+  }
+
+  return sent;
 }
 
-// Broadcast push to everyone (respects notifyShoutouts, notifyDeals, notifyEvents)
+// Broadcast push to everyone (respects notification preference flags)
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
     console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
 
-    const subs = await PushSubscription.find({ 
-      nativeToken: { $exists: true, $ne: null } 
+    // Fetch ALL subscription records that have either a token or a web sub
+    const subs = await PushSubscription.find({
+      $or: [
+        { nativeToken: { $exists: true, $ne: null } },
+        { 'subscription.endpoint': { $exists: true, $ne: null } }
+      ]
     });
 
-    console.log(`Found ${subs.length} native tokens`);
-
+    console.log(`Found ${subs.length} total subscription records`);
     if (subs.length === 0) return;
 
     const userIds = subs.map(s => s.user);
-    const users = await User.find({ 
-      _id: { $in: userIds }, 
-      pushEnabled: true 
+    const users = await User.find({
+      _id: { $in: userIds },
+      pushEnabled: true
     }).lean();
 
-    const messages = [];
+    // Build FCM batch + track web subs to send individually
+    const fcmMessages = [];
+    const webSubs = [];
 
     for (const sub of subs) {
       const user = users.find(u => u._id.toString() === sub.user.toString());
       if (!user) continue;
 
-    // Respect notification preferences
-    if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
-    if (filter.notifyDeals && !user.notifyDeals) continue;
-    if (filter.notifyEvents && !user.notifyEvents) continue;
-    if (filter.notifyShoutoutComments && !user.notifyShoutoutComments) continue;   // ← THIS WAS MISSING
+      // Respect notification preference flags
+      if (filter.notifyShoutouts        && !user.notifyShoutouts)        continue;
+      if (filter.notifyDeals             && !user.notifyDeals)            continue;
+      if (filter.notifyEvents            && !user.notifyEvents)           continue;
+      if (filter.notifyShoutoutComments  && !user.notifyShoutoutComments) continue;
+      if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
+      if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
 
-    messages.push({
-      token: sub.nativeToken,
-      notification: { title, body },
-      android: { priority: 'high' }
-    });
+      if (sub.nativeToken) {
+        fcmMessages.push({
+          token: sub.nativeToken,
+          notification: { title, body },
+          android: { priority: 'high' }
+        });
+      }
+
+      if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+        webSubs.push(sub.subscription);
+      }
     }
 
-    if (messages.length === 0) {
-      console.log("No users matched the notification filters");
-      return;
+    console.log(`Sending to ${fcmMessages.length} FCM + ${webSubs.length} web subscribers...`);
+
+    // ── FCM batch send ──────────────────────────────────────────────────────
+    if (fcmMessages.length > 0) {
+      const result = await admin.messaging().sendEach(fcmMessages);
+      console.log(`✅ FCM: ${result.successCount} sent | ${result.failureCount} failed`);
     }
 
-    console.log(`Sending to ${messages.length} users...`);
-
-    const result = await admin.messaging().sendEach(messages);
-    console.log(`✅ Sent ${result.successCount} | Failed: ${result.failureCount}`);
+    // ── Web VAPID individual sends ──────────────────────────────────────────
+    if (webSubs.length > 0) {
+      const payload = JSON.stringify({ title, body, data });
+      const results = await Promise.allSettled(
+        webSubs.map(ws => webpush.sendNotification(ws, payload))
+      );
+      const ok  = results.filter(r => r.status === 'fulfilled').length;
+      const bad = results.filter(r => r.status === 'rejected').length;
+      console.log(`✅ Web push: ${ok} sent | ${bad} failed`);
+    }
 
   } catch (err) {
     console.error("💥 broadcastPush FAILED:", err.message);
@@ -404,14 +451,23 @@ router.post('/push/subscribe', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Subscription object required' });
     }
 
-    await PushSubscription.deleteOne({ user: req.userId });
-    await PushSubscription.create({
-      user: req.userId,
-      subscription: subscription
-    });
+    // ── IMPORTANT: use findOneAndUpdate + upsert so we never wipe a nativeToken ──
+    // Deleting + recreating would erase the FCM token for users who have both.
+    await PushSubscription.findOneAndUpdate(
+      { user: req.userId },
+      {
+        $set: {
+          user: req.userId,
+          subscription: subscription,
+          platform: 'web',
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
 
     await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
-    res.json({ message: 'Subscribed' });
+    res.json({ message: 'Web push subscription saved' });
   } catch (err) {
     console.error('Push subscribe error:', err);
     res.status(500).json({ message: err.message });
