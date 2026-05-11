@@ -362,10 +362,10 @@ async function loadHomePage(content) {
 
       <!-- Quick actions -->
       <div class="grid grid-cols-2 gap-3 mb-8">
-        <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-          <span class="text-3xl">💬</span>
-          <p class="font-semibold mt-3">Post a Shoutout</p>
-        </button>
+      <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
+      <span class="text-3xl">🚗</span>
+      <p class="font-semibold mt-3">Post Traffic Alert</p>
+      </button>
         <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
           <span class="text-3xl">📅</span>
           <p class="font-semibold mt-3">See Events</p>
@@ -5024,3 +5024,8 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+// initPushAfterLogin is defined in profile.js (_initNativePush).
+// That version correctly checks existing permissions before re-requesting,
+// preventing the black-screen bug on startup. No duplicate needed here.
