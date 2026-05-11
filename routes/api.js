@@ -1020,13 +1020,19 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     shoutout.comments.push(comment);
     await shoutout.save();
 
-    // === ONLY notify users who enabled "Comments on Traffic Alerts" ===
-    broadcastPush(
-      `💬 New comment on Traffic Alert`,
-      `${user.name}: ${req.body.text.substring(0, 70)}${req.body.text.length > 70 ? '...' : ''}`,
-      { page: 'shoutouts' },
-      { notifyShoutoutComments: true }     // ← This is what stops spam
-    );
+    // Only notify the post author — and only if they have comment notifications on.
+    // This matches the pattern used by marketplace + lost item comments.
+    if (shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
+      const postAuthor = await User.findById(shoutout.authorId).lean();
+      if (postAuthor && postAuthor.notifyShoutoutComments) {
+        sendPushToUser(
+          shoutout.authorId,
+          `💬 New comment on your Traffic Alert`,
+          `${user.name}: ${req.body.text.substring(0, 60)}`,
+          { page: 'shoutouts' }
+        );
+      }
+    }
 
     res.json(shoutout.comments[shoutout.comments.length - 1]);
   } catch (err) {
