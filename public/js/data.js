@@ -3483,7 +3483,7 @@ async function loadModerationPanel() {
             ${['all','shoutouts','comments','events','deals'].map(t => `
               <button onclick="setModType('${t}')" id="modtype-${t}"
                       class="px-4 py-2 rounded-2xl text-sm font-semibold transition ${t === 'all' ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}">
-                ${{ all:'All', shoutouts:'💬 Shoutouts', comments:'🗨️ Comments', events:'📅 Events', deals:'🔥 Deals' }[t]}
+                ${{ all:'All', shoutouts:'🚦 Traffic Alerts', comments:'🗨️ Comments', events:'📅 Events', deals:'🔥 Deals' }[t]}
               </button>`).join('')}
           </div>
         </div>

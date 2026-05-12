@@ -1,7 +1,7 @@
 const pages = [
   { id: 'home',        icon: '🏠', label: 'Home' },
   { id: 'directory',   icon: '📍', label: 'Directory' },
-  { id: 'shoutouts',   icon: '🚗', label: 'Traffic' },
+  { id: 'shoutouts',   icon: '🚦', label: 'Traffic' },
   { id: 'lostfound',   icon: '🔎', label: 'Lost & Found' },
   { id: 'marketplace', icon: '🛒', label: 'Marketplace' },
   { id: 'events',      icon: '📅', label: 'Events' },
