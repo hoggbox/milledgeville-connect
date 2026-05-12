@@ -348,7 +348,7 @@ async function loadHomePage(content) {
           <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
           <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
           <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
-          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">💬 Shoutouts</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
         </div>
 
         <div id="hotFeed" class="space-y-3"></div>
@@ -363,7 +363,7 @@ async function loadHomePage(content) {
       <!-- Quick actions -->
       <div class="grid grid-cols-2 gap-3 mb-8">
       <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-      <span class="text-3xl">🚗</span>
+      <span class="text-3xl">🚦</span>
       <p class="font-semibold mt-3">Post Traffic Alert</p>
       </button>
         <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
@@ -605,17 +605,17 @@ const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
               <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
             </div>
           </div>`;
-      } else if (item.type === 'shoutout') {
-        const s = item.data;
-        html += `
-          <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-emerald-500 px-3 py-1 rounded-full">💬 SHOUTOUT</span>
-              <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
-              <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
-            </div>
-          </div>`;
-      }
+} else if (item.type === 'shoutout') {
+  const s = item.data;
+  html += `
+    <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+      <div class="flex-1">
+        <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
+        <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
+        <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
+      </div>
+    </div>`;
+}
     });
 
     container.innerHTML = html || `<p class="text-white/40 text-center py-12">No activity yet — be the first to post!</p>`;
@@ -677,9 +677,9 @@ const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
             <span class="text-xl font-black text-white group-hover:text-blue-300 transition">${upcomingEvCount}</span>
             <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Upcoming<br>Events</span>
           </div>
-          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition text-center">
-            <span class="text-2xl mb-1">💬</span>
-            <span class="text-xl font-black text-white group-hover:text-purple-300 transition">${shoutoutsTodayCount}</span>
+          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">🚦</span>
+            <span class="text-xl font-black text-white group-hover:text-red-300 transition">${shoutoutsTodayCount}</span>
             <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Shoutouts<br>Today</span>
           </div>
         </div>
@@ -3545,7 +3545,7 @@ function renderModResults() {
       if (!matchesSearch(s.text) && !matchesSearch(s.author)) return;
       if (!matchesUser(s.author)) return;
       items.push({
-        kind: 'Traffic Alert', id: s._id, title: s.text, author: s.author || 'Unknown',
+        kind: 'shoutout', id: s._id, title: s.text, author: s.author || 'Unknown',
         authorId: s.authorId, date: s.createdAt,
         meta: `❤️ ${s.likes?.length || 0} likes · 💬 ${s.comments?.length || 0} comments`,
         deleteLabel: 'Delete Shoutout', deleteFn: `adminDeleteShoutout('${s._id}')`
