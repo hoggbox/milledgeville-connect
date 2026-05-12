@@ -63,20 +63,66 @@ function renderNav() {
     }
   }
 
-  // Mobile bottom nav
-  let mobileHTML = '';
+  // Mobile bottom nav — horizontally scrollable / swipeable strip
+  // Inject scrollbar-hiding styles once
+  if (!document.getElementById('mobile-nav-style')) {
+    const style = document.createElement('style');
+    style.id = 'mobile-nav-style';
+    style.textContent = `
+      #mobile-nav-scroll {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;        /* Firefox */
+        -ms-overflow-style: none;     /* IE/Edge */
+        padding: 0 8px;
+      }
+      #mobile-nav-scroll::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+      #mobile-nav-scroll .nav-btn {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        min-width: 64px;
+        padding: 6px 8px;
+        color: rgba(255,255,255,0.65);
+        transition: color 0.15s;
+        scroll-snap-align: start;
+        position: relative;
+        background: none;
+        border: none;
+        cursor: pointer;
+      }
+      #mobile-nav-scroll .nav-btn:active,
+      #mobile-nav-scroll .nav-btn:hover { color: #fff; }
+      #mobile-nav-scroll .nav-btn .nav-icon { font-size: 1.6rem; line-height: 1; }
+      #mobile-nav-scroll .nav-btn .nav-label { font-size: 9px; white-space: nowrap; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  let mobileHTML = '<div id="mobile-nav-scroll">';
   navPages.forEach(page => {
     let badge = '';
     if (page.id === 'messages') {
       badge = `<span id="messageBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-md hidden"></span>`;
     }
     mobileHTML += `
-      <button onclick="navigate('${page.id}')" class="flex flex-col items-center text-white/70 hover:text-white transition relative">
-        <span class="text-3xl">${page.icon}</span>
+      <button onclick="navigate('${page.id}')" class="nav-btn">
+        <span class="nav-icon">${page.icon}</span>
         ${badge}
-        <span class="text-[10px]">${page.label}</span>
+        <span class="nav-label">${page.label}</span>
       </button>`;
   });
+  mobileHTML += '</div>';
+
   const mobileNavEl = document.getElementById('mobile-nav');
   if (mobileNavEl) mobileNavEl.innerHTML = mobileHTML;
 
