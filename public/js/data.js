@@ -3,6 +3,16 @@ let allBusinesses = [];
 let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 
+// ─── Reputation Title Helper ──────────────────────────────────────────────────
+function getRepTitle(rep) {
+  if (rep >= 200) return { label: 'Legend',      icon: '🦁', color: 'text-amber-400',   bg: 'bg-amber-500/20 border-amber-500/30' };
+  if (rep >= 100) return { label: 'Veteran',     icon: '🏆', color: 'text-yellow-400',  bg: 'bg-yellow-500/20 border-yellow-500/30' };
+  if (rep >= 50)  return { label: 'Trusted',     icon: '💫', color: 'text-purple-400',  bg: 'bg-purple-500/20 border-purple-500/30' };
+  if (rep >= 25)  return { label: 'Contributor', icon: '🌟', color: 'text-emerald-400', bg: 'bg-emerald-500/20 border-emerald-500/30' };
+  if (rep >= 10)  return { label: 'Regular',     icon: '👋', color: 'text-sky-400',     bg: 'bg-sky-500/20 border-sky-500/30' };
+  return           { label: 'Newcomer',    icon: '🌱', color: 'text-white/50',    bg: 'bg-white/10 border-white/10' };
+}
+
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
   const full = Math.round(avg);
@@ -1788,6 +1798,37 @@ function renderShoutoutImagePreviews() {
     </div>`).join('');
 }
 
+window.flagAlert = async function (shoutoutId) {
+  if (!requireAuth('Sign in to flag posts.')) return;
+
+  const btn = document.getElementById(`flag-btn-${shoutoutId}`);
+  if (btn) { btn.style.opacity = '0.4'; btn.style.pointerEvents = 'none'; }
+
+  try {
+    const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
+
+    if (res.removed) {
+      showToast('🚩 Post removed by community vote', 'error');
+      const card = document.getElementById(`shoutout-${shoutoutId}`);
+      if (card) {
+        card.style.opacity = '0';
+        card.style.transition = 'opacity 0.4s';
+        setTimeout(() => card.remove(), 400);
+      }
+    } else if (res.alreadyFlagged) {
+      showToast('You already flagged this post');
+      if (btn) { btn.style.opacity = '1'; btn.style.pointerEvents = ''; }
+    } else {
+      const remaining = 10 - (res.flagCount || 1);
+      showToast(`🚩 Flagged — needs ${remaining} more vote${remaining !== 1 ? 's' : ''} to remove`);
+      if (btn) btn.classList.add('text-red-400');
+    }
+  } catch (err) {
+    showToast('Could not flag post', 'error');
+    if (btn) { btn.style.opacity = '1'; btn.style.pointerEvents = ''; }
+  }
+};
+
 window.removeShoutoutImage = function (index) {
   _pendingShoutoutImages.splice(index, 1);
   renderShoutoutImagePreviews();
@@ -1864,6 +1905,13 @@ function renderShoutoutCard(s) {
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
           ${commentLabel}
         </button>
+                ${(!isAuthor && !isAdmin) ? `
+        <button onclick="${currentUser ? `flagAlert('${s._id}')` : `showAuthModal({message:'Sign in to flag posts.'})`}"
+                id="flag-btn-${s._id}"
+                class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-white/30 hover:text-red-400 hover:bg-white/5 transition text-sm"
+                title="Flag as inappropriate">
+          🚩
+        </button>` : ''}</div>
       </div>
       <div id="comment-section-${s._id}" class="hidden mt-3 border-t border-white/10 pt-3 space-y-2">
         ${allCommentsHtml}
@@ -2109,10 +2157,12 @@ async function loadDealsPage(content) {
       <div id="dealResults"></div>
     </div>`;
 
+  window._dealPage = 0;
   renderDealsFiltered();
 }
 
-window.renderDealsFiltered = function () {
+window.renderDealsFiltered = function (resetPage = false) {
+  if (resetPage) window._dealPage = 0;
   const search    = (window._dealSearch || '').toLowerCase();
   const filter    = window._dealFilter  || 'All';
   const sort      = window._dealSort    || 'newest';
@@ -2158,10 +2208,16 @@ window.renderDealsFiltered = function () {
     deals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
-  const container = document.getElementById('dealResults');
+const container = document.getElementById('dealResults');
   if (!container) return;
 
-  if (!deals.length) {
+  const PAGE_SIZE   = 12;
+  const page        = window._dealPage || 0;
+  const total       = deals.length;
+  const totalPages  = Math.ceil(total / PAGE_SIZE);
+  const paginated   = deals.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  if (!paginated.length) {
     container.innerHTML = `
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">🏷️</p>
@@ -2171,8 +2227,24 @@ window.renderDealsFiltered = function () {
     return;
   }
 
+  const now = new Date(); // re-declare here since it's used in the map below
+  const paginationHTML = totalPages > 1 ? `
+    <div class="flex items-center justify-between mt-6">
+      <button onclick="window._dealPage=Math.max(0,window._dealPage-1); renderDealsFiltered()"
+              ${page === 0 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page === 0 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        ← Prev
+      </button>
+      <span class="text-sm text-white/40">Page ${page + 1} of ${totalPages} · ${total} deals</span>
+      <button onclick="window._dealPage=Math.min(${totalPages - 1},window._dealPage+1); renderDealsFiltered()"
+              ${page >= totalPages - 1 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page >= totalPages - 1 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        Next →
+      </button>
+    </div>` : '';
+
   container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">` +
-    deals.map(d => {
+    paginated.map(d => {
       const expired   = d.expires && new Date(d.expires) < now;
       const expiresIn = d.expires ? Math.ceil((new Date(d.expires) - now) / (1000*60*60*24)) : null;
       const urgency   = expiresIn !== null && expiresIn <= 3 && !expired;
@@ -2199,7 +2271,7 @@ window.renderDealsFiltered = function () {
             </div>
           </div>
         </div>`;
-    }).join('') + `</div>`;
+    }).join('') + `</div>${paginationHTML}`;
 };
 
 // ─── EVENTS PAGE — WITH RSVP BUTTONS ──────────────────────────────────────────
@@ -2209,6 +2281,7 @@ async function loadEventsPage(content) {
   window._eventFilter = 'All';
   window._eventSearch = '';
   window._eventTime   = 'upcoming';
+  window._eventPage   = 0;     // ← NEW
 
   const now            = new Date();
   const upcomingEvents = allEvents.filter(e => new Date(e.date) >= now);
@@ -2306,9 +2379,30 @@ let events = allEvents.filter(e => {
     return;
   }
 
+const PAGE_SIZE  = 12;
+  const page       = window._eventPage || 0;
+  const total      = events.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const paginated  = events.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const paginationHTML = totalPages > 1 ? `
+    <div class="flex items-center justify-between mt-6">
+      <button onclick="window._eventPage=Math.max(0,window._eventPage-1); renderEventsFiltered()"
+              ${page === 0 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page === 0 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        ← Prev
+      </button>
+      <span class="text-sm text-white/40">Page ${page + 1} of ${totalPages} · ${total} events</span>
+      <button onclick="window._eventPage=Math.min(${totalPages - 1},window._eventPage+1); renderEventsFiltered()"
+              ${page >= totalPages - 1 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page >= totalPages - 1 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        Next →
+      </button>
+    </div>` : '';
+
   if (time !== 'past') {
     const grouped = {};
-    events.forEach(e => {
+    paginated.forEach(e => {
       const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(e);
@@ -2320,9 +2414,9 @@ let events = allEvents.filter(e => {
           <div class="flex-1 h-px bg-white/10"></div>
         </div>
         <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
-      </div>`).join('');
+      </div>`).join('') + paginationHTML;
   } else {
-    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
+    container.innerHTML = `<div class="space-y-3">${paginated.map(e => renderEventCard(e, now)).join('')}</div>` + paginationHTML;
   }
 }
 
@@ -4321,13 +4415,36 @@ window.markMarketSold = async function() {
 // ====================== FULLY UPDATED LOST & FOUND PAGE ======================
 async function loadLostFoundPage(content) {
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">🔎 Lost & Found</h1>
-        <button onclick="showPostLostItemModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
-          <span class="text-xl">📤</span> Post Item
+    <div class="max-w-2xl mx-auto px-2 pb-10">
+      <div class="flex justify-between items-center mb-5">
+        <h1 class="text-3xl font-bold">🔎 Lost &amp; Found</h1>
+        <button onclick="showPostLostItemModal()" class="bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 rounded-3xl font-semibold flex items-center gap-2 text-sm">
+          <span>📤</span> Post Item
         </button>
       </div>
+
+      <!-- Filters -->
+      <div class="flex gap-2 mb-4">
+        <input id="lfSearch" type="text" placeholder="Search items…"
+               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
+               oninput="renderLostFoundFiltered()">
+        <select id="lfSort" onchange="renderLostFoundFiltered()"
+                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
+                style="background:#1e293b;color-scheme:dark;">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+        </select>
+      </div>
+
+      <!-- Type chips -->
+      <div class="flex gap-2 mb-5 overflow-x-auto pb-1 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
+        ${[['All','All'],['Lost','lost'],['Found','found'],['Pets 🐾','pet']].map(([label, val]) => `
+          <button onclick="window._lfFilter='${val}'; document.querySelectorAll('.lf-chip').forEach(b=>b.classList.remove('bg-emerald-500','text-white')); this.classList.add('bg-emerald-500','text-white'); renderLostFoundFiltered()"
+                  class="lf-chip flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition border border-white/20 ${val === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+            ${label}
+          </button>`).join('')}
+      </div>
+
       <div id="lostItemsList">
         <div class="flex justify-center py-12">
           <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
@@ -4336,18 +4453,51 @@ async function loadLostFoundPage(content) {
     </div>`;
 
   const items = await apiGet('/lostitems');
-  const listHTML = items.map(item => `
-    <div onclick="showLostItemDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+  window._allLostItems = items;
+  window._lfFilter = 'All';
+  window._lfPage = 0;
+  renderLostFoundFiltered();
+}
+
+window.renderLostFoundFiltered = function () {
+  const search   = (document.getElementById('lfSearch')?.value || '').toLowerCase();
+  const sort     = document.getElementById('lfSort')?.value || 'newest';
+  const filter   = window._lfFilter || 'All';
+  const PAGE_SIZE = 10;
+  const page      = window._lfPage || 0;
+
+  let items = (window._allLostItems || []).filter(item => {
+    if (filter === 'pet')   return item.isPet;
+    if (filter === 'lost')  return item.type === 'lost' && !item.isPet;
+    if (filter === 'found') return item.type === 'found';
+    return true;
+  }).filter(item => {
+    if (!search) return true;
+    return item.title.toLowerCase().includes(search) || (item.description || '').toLowerCase().includes(search);
+  });
+
+  if (sort === 'oldest') items.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  else                   items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const total     = items.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const paginated  = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const listHTML = paginated.map(item => `
+    <div onclick="showLostItemDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition border border-white/10">
       <div class="flex gap-4">
-        ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🔎</div>`}
-        <div class="flex-1">
-          <div class="flex items-center justify-between">
-            <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">${item.type.toUpperCase()}</span>
-            ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
+        ${item.images && item.images.length
+          ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">`
+          : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">${item.isPet ? '🐾' : '🔎'}</div>`}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500/80' : 'bg-emerald-500/80'}">${item.type.toUpperCase()}</span>
+            ${item.isPet ? `<span class="text-amber-400 text-xs">🐾 Pet</span>` : ''}
+            ${item.status === 'resolved' ? `<span class="text-xs bg-white/20 text-white/60 px-2 py-0.5 rounded-full">✅ Resolved</span>` : ''}
           </div>
-          <h3 class="font-semibold text-lg mt-2">${item.title}</h3>
-          <p class="text-white/70 line-clamp-2">${item.description}</p>
-          <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
+          <h3 class="font-semibold text-base leading-snug">${item.title}</h3>
+          <p class="text-white/60 text-sm line-clamp-2 mt-0.5">${item.description}</p>
+          <div class="text-xs text-white/40 mt-2 flex items-center gap-1.5 flex-wrap">
             <span>📍 ${item.location || 'Unknown'}</span>
             <span>·</span>
             ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
@@ -4358,18 +4508,65 @@ async function loadLostFoundPage(content) {
       </div>
     </div>`).join('');
 
-  document.getElementById('lostItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No items yet — be the first to post!</p>`;
-}
+  const paginationHTML = totalPages > 1 ? `
+    <div class="flex items-center justify-between mt-6">
+      <button onclick="window._lfPage=Math.max(0,window._lfPage-1); renderLostFoundFiltered()"
+              ${page === 0 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page === 0 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        ← Prev
+      </button>
+      <span class="text-sm text-white/40">Page ${page + 1} of ${totalPages} · ${total} items</span>
+      <button onclick="window._lfPage=Math.min(${totalPages - 1},window._lfPage+1); renderLostFoundFiltered()"
+              ${page >= totalPages - 1 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page >= totalPages - 1 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        Next →
+      </button>
+    </div>` : '';
+
+  const container = document.getElementById('lostItemsList');
+  if (container) {
+    container.innerHTML = (listHTML
+      ? `<div class="space-y-3">${listHTML}</div>${paginationHTML}`
+      : `<div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+           <p class="text-4xl mb-3">🔎</p>
+           <p class="text-white/50 text-sm">No items found</p>
+         </div>`);
+  }
+};
 
 async function loadMarketplacePage(content) {
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto">
-      <div class="flex justify-between items-center mb-6">
+    <div class="max-w-2xl mx-auto px-2 pb-10">
+      <div class="flex justify-between items-center mb-5">
         <h1 class="text-3xl font-bold">🛒 Marketplace</h1>
-        <button onclick="showPostMarketplaceModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
-          <span class="text-xl">📤</span> Sell Something
+        <button onclick="showPostMarketplaceModal()" class="bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 rounded-3xl font-semibold flex items-center gap-2 text-sm">
+          <span>📤</span> Sell Something
         </button>
       </div>
+
+      <!-- Search + Sort row -->
+      <div class="flex gap-2 mb-4">
+        <input id="mktSearch" type="text" placeholder="Search listings…"
+               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
+               oninput="renderMarketplaceFiltered()">
+        <select id="mktSort" onchange="renderMarketplaceFiltered()"
+                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
+                style="background:#1e293b;color-scheme:dark;">
+          <option value="newest">Newest</option>
+          <option value="price-asc">Price ↑</option>
+          <option value="price-desc">Price ↓</option>
+        </select>
+      </div>
+
+      <!-- Condition chips -->
+      <div class="flex gap-2 mb-5 overflow-x-auto pb-1 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
+        ${[['All','all'],['New','new'],['Like New','like-new'],['Used','used'],['Fair','fair']].map(([label, val]) => `
+          <button onclick="window._mktFilter='${val}'; document.querySelectorAll('.mkt-chip').forEach(b=>b.classList.remove('bg-emerald-500','text-white')); this.classList.add('bg-emerald-500','text-white'); renderMarketplaceFiltered()"
+                  class="mkt-chip flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition border border-white/20 ${val === 'all' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+            ${label}
+          </button>`).join('')}
+      </div>
+
       <div id="marketItemsList">
         <div class="flex justify-center py-12">
           <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
@@ -4378,36 +4575,86 @@ async function loadMarketplacePage(content) {
     </div>`;
 
   const items = await apiGet('/marketplace');
+  window._allMarketItems = items;
+  window._mktFilter = 'all';
+  window._mktPage = 0;
+  renderMarketplaceFiltered();
+}
 
-  const listHTML = items.map(item => {
-    const sellerId = item.seller?._id || item.seller;
-    return `
-      <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-        <div class="flex gap-4">
-          ${item.images && item.images.length ? 
-            `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : 
-            `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
-          <div class="flex-1">
-            <h3 class="font-semibold text-lg">${item.title}</h3>
-            <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
-            <p class="text-white/70 line-clamp-2">${item.description}</p>
-            <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
-              <span>${item.condition}</span>
-              <span>·</span>
-              ${renderClickableUser(item.seller, item.authorName)}
-              <span>·</span>
-              <span>${timeAgo(item.createdAt)}</span>
-            </div>
+window.renderMarketplaceFiltered = function () {
+  const search    = (document.getElementById('mktSearch')?.value || '').toLowerCase();
+  const sort      = document.getElementById('mktSort')?.value || 'newest';
+  const filter    = window._mktFilter || 'all';
+  const PAGE_SIZE = 10;
+  const page       = window._mktPage || 0;
+
+  let items = (window._allMarketItems || []).filter(item => {
+    if (filter !== 'all' && item.condition !== filter) return false;
+    if (search && !item.title.toLowerCase().includes(search) && !(item.description||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (sort === 'price-asc')  items.sort((a, b) => a.price - b.price);
+  else if (sort === 'price-desc') items.sort((a, b) => b.price - a.price);
+  else items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const total      = items.length;
+  const totalPages  = Math.ceil(total / PAGE_SIZE);
+  const paginated   = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const conditionBadge = {
+    'new': 'bg-emerald-500/20 text-emerald-300',
+    'like-new': 'bg-sky-500/20 text-sky-300',
+    'used': 'bg-white/10 text-white/60',
+    'fair': 'bg-amber-500/20 text-amber-300'
+  };
+
+  const listHTML = paginated.map(item => `
+    <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition border border-white/10">
+      <div class="flex gap-4">
+        ${item.images && item.images.length
+          ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">`
+          : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">🛒</div>`}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="font-semibold text-base leading-snug">${item.title}</h3>
+            <span class="text-emerald-400 text-xl font-black flex-shrink-0">$${item.price}</span>
+          </div>
+          <p class="text-white/60 text-sm line-clamp-2 mt-0.5">${item.description}</p>
+          <div class="flex items-center gap-2 mt-2 flex-wrap">
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold ${conditionBadge[item.condition] || conditionBadge['used']}">${item.condition}</span>
+            <span class="text-xs text-white/40">${renderClickableUser(item.seller, item.authorName)}</span>
+            <span class="text-xs text-white/30">· ${timeAgo(item.createdAt)}</span>
           </div>
         </div>
-      </div>`;
-  }).join('');
+      </div>
+    </div>`).join('');
+
+  const paginationHTML = totalPages > 1 ? `
+    <div class="flex items-center justify-between mt-6">
+      <button onclick="window._mktPage=Math.max(0,window._mktPage-1); renderMarketplaceFiltered()"
+              ${page === 0 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page === 0 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        ← Prev
+      </button>
+      <span class="text-sm text-white/40">Page ${page + 1} of ${totalPages} · ${total} listings</span>
+      <button onclick="window._mktPage=Math.min(${totalPages - 1},window._mktPage+1); renderMarketplaceFiltered()"
+              ${page >= totalPages - 1 ? 'disabled' : ''}
+              class="px-5 py-2 rounded-2xl text-sm font-semibold transition ${page >= totalPages - 1 ? 'opacity-30 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'}">
+        Next →
+      </button>
+    </div>` : '';
 
   const container = document.getElementById('marketItemsList');
   if (container) {
-    container.innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
+    container.innerHTML = listHTML
+      ? `<div class="space-y-3">${listHTML}</div>${paginationHTML}`
+      : `<div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
+           <p class="text-4xl mb-3">🛒</p>
+           <p class="text-white/50 text-sm">No listings found</p>
+         </div>`;
   }
-}
+};
 
 async function renderMarketComments(item) {
   const container = document.getElementById('marketCommentsContainer');

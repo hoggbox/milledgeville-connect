@@ -3,6 +3,8 @@
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const rep = user.reputation || 0;
+const repInfo = getRepTitle(rep);
 
 // Notification API is undefined in Android WebView (Capacitor uses native push).
 // Use this helper everywhere instead of accessing getNotificationPermission() directly.
@@ -242,7 +244,9 @@ function showProfileSheet() {
     <div class="flex justify-center -mt-20 mb-4 relative z-10">
       <div class="relative inline-block">
         <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white shadow-2xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white">
-          ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()}
+          ${currentUser.avatar ? `<img src="${currentUser.avatar}"  class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()} <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${repInfo.bg} ${repInfo.color}">
+  ${repInfo.icon} ${repInfo.label} · ${rep} rep
+</span>
         </div>
         ${isVerified ? `<div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1 border border-white">✓ Verified</div>` : ''}
       </div>
