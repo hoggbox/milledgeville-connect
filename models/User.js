@@ -28,11 +28,7 @@ const userSchema = new mongoose.Schema({
   notifyMessages:          { type: Boolean, default: true },
 
   pushEnabled: { type: Boolean, default: false },
-
-  // ─── Reputation ────────────────────────────────────────────────────────────
-  reputation: { type: Number, default: 0 },   // ← NEW
-
-  // Anti-spam
+    // Anti-spam
   lastPostAt: { type: Date, default: null },
 
   // ─── Token Storage ─────────────────────────────────────────────────
