@@ -20,6 +20,7 @@ const shoutoutSchema = new mongoose.Schema({
   author: String,
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  flags: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],  // ← NEW
   comments: [commentSchema],
   images: [{ type: String }],
 

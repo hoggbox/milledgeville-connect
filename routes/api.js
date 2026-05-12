@@ -559,8 +559,9 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       expiresAt
     });
 
-    // Update last post time
+    // Update last post time + award reputation
     user.lastPostAt = new Date();
+    user.reputation = (user.reputation || 0) + 2;
     await user.save();
 
     broadcastPush(
@@ -618,6 +619,8 @@ router.post('/lostitems', authenticate, async (req, res) => {
       owner: user._id,
       authorName: user.name
     });
+
+await User.findByIdAndUpdate(req.userId, { $inc: { reputation: 3 } });
 
     broadcastPush(
       isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
@@ -697,6 +700,8 @@ router.post('/marketplace', authenticate, async (req, res) => {
       category: category || '',
       condition: condition || 'used'
     });
+
+await User.findByIdAndUpdate(req.userId, { $inc: { reputation: 3 } });
 
     broadcastPush(
       '🛒 New Marketplace Listing',
@@ -795,6 +800,38 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
     else shoutout.likes.splice(idx, 1);
     await shoutout.save();
     res.json({ likes: shoutout.likes.length, liked: idx === -1 });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── Community flagging for traffic alerts ────────────────────────────────────
+// 10 unique user flags = post is auto-removed
+router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    // Author cannot flag their own post
+    if (shoutout.authorId?.toString() === req.userId) {
+      return res.status(400).json({ message: "You can't flag your own post" });
+    }
+
+    // Idempotent — ignore if already flagged by this user
+    if (shoutout.flags.map(f => f.toString()).includes(req.userId)) {
+      return res.json({ alreadyFlagged: true, flagCount: shoutout.flags.length });
+    }
+
+    shoutout.flags.push(req.userId);
+
+    const FLAG_THRESHOLD = 10;
+    if (shoutout.flags.length >= FLAG_THRESHOLD) {
+      await shoutout.deleteOne();
+      return res.json({ removed: true, message: 'Post removed by community vote' });
+    }
+
+    await shoutout.save();
+    res.json({ flagCount: shoutout.flags.length });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1385,6 +1422,8 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
+await User.findByIdAndUpdate(req.userId, { $inc: { reputation: 5 } });
+
     broadcastPush(
       '🔥 New Deal Available!',
       title,
@@ -1431,6 +1470,8 @@ router.post('/owner/events', authenticate, async (req, res) => {
       title, date, location, description,
       owner: req.userId, category: resolvedCategory || ''
     });
+
+await User.findByIdAndUpdate(req.userId, { $inc: { reputation: 5 } });
 
     broadcastPush(
       '📅 New Event Posted!',
