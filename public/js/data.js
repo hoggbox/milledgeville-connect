@@ -3545,7 +3545,7 @@ function renderModResults() {
       if (!matchesSearch(s.text) && !matchesSearch(s.author)) return;
       if (!matchesUser(s.author)) return;
       items.push({
-        kind: 'shoutout', id: s._id, title: s.text, author: s.author || 'Unknown',
+        kind: 'Traffic Alert', id: s._id, title: s.text, author: s.author || 'Unknown',
         authorId: s.authorId, date: s.createdAt,
         meta: `❤️ ${s.likes?.length || 0} likes · 💬 ${s.comments?.length || 0} comments`,
         deleteLabel: 'Delete Shoutout', deleteFn: `adminDeleteShoutout('${s._id}')`
