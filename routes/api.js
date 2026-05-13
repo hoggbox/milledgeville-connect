@@ -527,11 +527,29 @@ router.post('/events/:id/rsvp', authenticate, async (req, res) => {
 // ─── SHOUTOUTS ─────────────────────────────────────────────────────────────
 router.get('/shoutouts', optionalAuth, async (req, res) => {
   try {
-    const shoutouts = await Shoutout.find()
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .populate('authorId', 'name avatar');
-    res.json(shoutouts);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const [shoutouts, total] = await Promise.all([
+      Shoutout.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('authorId', 'name avatar'),
+      Shoutout.countDocuments()
+    ]);
+
+    res.json({
+      shoutouts,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        hasPrev: page > 1,
+        hasNext: page < Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -549,7 +567,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const { text, images } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours – auto-deletes via TTL index
 
     const shoutout = await Shoutout.create({
       text: text.trim(),
@@ -591,11 +609,32 @@ router.post('/business/:id/follow', authenticate, async (req, res) => {
   }
 });
 
-// ─── LOST & FOUND ROUTES (FULLY FUNCTIONAL + PUSH) ─────────────────────────────
+// ─── LOST & FOUND (Paginated) ─────────────────────────────────────────────
 router.get('/lostitems', optionalAuth, async (req, res) => {
   try {
-    const items = await LostItem.find().sort({ createdAt: -1 }).populate('owner', 'name');
-    res.json(items);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      LostItem.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('owner', 'name'),
+      LostItem.countDocuments()
+    ]);
+
+    res.json({
+      items,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        hasPrev: page > 1,
+        hasNext: page < Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -670,13 +709,32 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
   }
 });
 
-// ─── MARKETPLACE ROUTES (FULLY FUNCTIONAL + PUSH) ─────────────────────────────
+// ─── MARKETPLACE (Paginated) ─────────────────────────────────────────────
 router.get('/marketplace', optionalAuth, async (req, res) => {
   try {
-    const items = await MarketplaceItem.find({ status: 'available' })
-      .sort({ createdAt: -1 })
-      .populate('seller', 'name');
-    res.json(items);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      MarketplaceItem.find({ status: 'available' })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('seller', 'name'),
+      MarketplaceItem.countDocuments({ status: 'available' })
+    ]);
+
+    res.json({
+      items,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        hasPrev: page > 1,
+        hasNext: page < Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1151,19 +1209,64 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
   }
 });
 
+// ─── EVENTS (Paginated) ────────────────────────────────────────────────────
 router.get('/events', optionalAuth, async (req, res) => {
   try {
-    const events = await Event.find().sort({ date: 1 }).populate('owner', 'name email');
-    res.json(events);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      Event.find()
+        .sort({ date: 1 })                    // Upcoming first
+        .skip(skip)
+        .limit(limit)
+        .populate('owner', 'name'),
+      Event.countDocuments()
+    ]);
+
+    res.json({
+      events,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        hasPrev: page > 1,
+        hasNext: page < Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// ─── DEALS (Paginated) ─────────────────────────────────────────────────────
 router.get('/deals', optionalAuth, async (req, res) => {
   try {
-    const deals = await Deal.find().populate('business', 'name').populate('owner', 'name email');
-    res.json(deals);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const [deals, total] = await Promise.all([
+      Deal.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('business', 'name')
+        .populate('owner', 'name'),
+      Deal.countDocuments()
+    ]);
+
+    res.json({
+      deals,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        hasPrev: page > 1,
+        hasNext: page < Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -348,7 +348,7 @@ async function loadHomePage(content) {
           <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
           <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
           <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
-          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">💬 Shoutouts</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
         </div>
 
         <div id="hotFeed" class="space-y-3"></div>
@@ -363,7 +363,7 @@ async function loadHomePage(content) {
       <!-- Quick actions -->
       <div class="grid grid-cols-2 gap-3 mb-8">
       <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-      <span class="text-3xl">🚗</span>
+      <span class="text-3xl">🚦</span>
       <p class="font-semibold mt-3">Post Traffic Alert</p>
       </button>
         <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
@@ -488,12 +488,14 @@ if (allBusinesses.length === 0) {
   _renderSpotlight(allBusinesses);
 }
 
-const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
+const [eventsData, dealsData, newsData, shoutoutsRes] = await Promise.all([
   apiGet('/events').catch(() => []),
   apiGet('/deals').catch(() => []),
   apiGet('/news').catch(() => []),
-  apiGet('/shoutouts').catch(() => []),
+  apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
+
+const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   // Digest
   const digestHTML = `
@@ -605,17 +607,17 @@ const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
               <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
             </div>
           </div>`;
-      } else if (item.type === 'shoutout') {
-        const s = item.data;
-        html += `
-          <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-emerald-500 px-3 py-1 rounded-full">💬 SHOUTOUT</span>
-              <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
-              <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
-            </div>
-          </div>`;
-      }
+} else if (item.type === 'shoutout') {
+  const s = item.data;
+  html += `
+    <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+      <div class="flex-1">
+        <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
+        <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
+        <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
+      </div>
+    </div>`;
+}
     });
 
     container.innerHTML = html || `<p class="text-white/40 text-center py-12">No activity yet — be the first to post!</p>`;
@@ -677,9 +679,9 @@ const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
             <span class="text-xl font-black text-white group-hover:text-blue-300 transition">${upcomingEvCount}</span>
             <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Upcoming<br>Events</span>
           </div>
-          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition text-center">
-            <span class="text-2xl mb-1">💬</span>
-            <span class="text-xl font-black text-white group-hover:text-purple-300 transition">${shoutoutsTodayCount}</span>
+          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">🚦</span>
+            <span class="text-xl font-black text-white group-hover:text-red-300 transition">${shoutoutsTodayCount}</span>
             <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Shoutouts<br>Today</span>
           </div>
         </div>
@@ -1673,55 +1675,122 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// ─── SHOUTOUTS — UPDATED WITH PHOTO UPLOAD ───────────────────────────────────
+// ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
-  const shoutouts = await apiGet('/shoutouts');
+  let currentPage = 1;
+  const PAGE_SIZE = 8;
 
-  let html = `<div class="max-w-2xl mx-auto px-2">
-    <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
+  const renderPage = async (page = 1) => {
+    currentPage = page;
 
-  if (currentUser) {
-    html += `
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 mb-6">
-        <div class="flex items-start gap-3">
-          <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
-          <div class="flex-1">
-            <textarea id="shoutoutInput" rows="2" 
-              class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
-              placeholder="What's happening in Milledgeville?"></textarea>
-
-            <!-- Photo picker -->
-            <div class="mt-3 flex items-center gap-3">
-              <button onclick="document.getElementById('shoutoutImageInput').click()" 
-                      class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-2xl text-sm font-semibold text-white/80 transition">
-                📷 Add photos
-              </button>
-              <input id="shoutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
-                     onchange="handleShoutoutImages(this)">
-              <div id="shoutoutImagePreviews" class="flex gap-2 flex-wrap"></div>
-            </div>
-
-            <div class="flex justify-end mt-4">
-              <button onclick="postShoutoutWithPhoto()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">Post Shoutout</button>
-            </div>
+    // Show loading state
+    content.innerHTML = `
+      <div class="max-w-2xl mx-auto px-2 pb-10">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold">🚦 Community Shoutouts</h1>
+            <p class="text-emerald-300 text-sm mt-1">Live traffic alerts • Auto-delete after 8 hours</p>
           </div>
         </div>
+
+        <!-- Compose Box -->
+        ${currentUser ? `
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 mb-8">
+          <div class="flex items-start gap-3">
+            <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+            <div class="flex-1">
+              <textarea id="shoutoutInput" rows="2" 
+                class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
+                placeholder="What's happening in Milledgeville?"></textarea>
+
+              <!-- Photo picker -->
+              <div class="mt-3 flex items-center gap-3">
+                <button onclick="document.getElementById('shoutoutImageInput').click()" 
+                        class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-2xl text-sm font-semibold text-white/80 transition">
+                  📷 Add photos
+                </button>
+                <input id="shoutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                       onchange="handleShoutoutImages(this)">
+                <div id="shoutoutImagePreviews" class="flex gap-2 flex-wrap"></div>
+              </div>
+
+              <div class="flex justify-end mt-4">
+                <button onclick="postShoutoutWithPhoto()" 
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">
+                  Post Shoutout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>` : guestBanner('post shoutouts, comment, and like')}
+
+        <div id="shoutoutsFeed" class="space-y-4 min-h-[300px]"></div>
+
+        <!-- Pagination -->
+        <div id="shoutoutPagination" class="flex justify-center items-center gap-3 mt-8"></div>
       </div>`;
-  } else {
-    html += guestBanner('post shoutouts, comment, and like');
+
+    try {
+      const res = await apiGet(`/shoutouts?page=${page}&limit=${PAGE_SIZE}`);
+      const { shoutouts = [], pagination = {} } = res;
+
+      if (!res || !Array.isArray(shoutouts)) {
+        feed.innerHTML = `<p class="text-red-400 text-center py-12">Error loading shoutouts</p>`;
+        return;
+      }
+
+      const feed = document.getElementById('shoutoutsFeed');
+
+      if (!shoutouts.length) {
+        feed.innerHTML = `<p class="text-center text-white/50 py-16">No active shoutouts right now.<br>Be the first to post one! 🚦</p>`;
+      } else {
+        feed.innerHTML = shoutouts.map(s => renderShoutoutCard(s)).join('');
+      }
+
+      renderPaginationControls(pagination);
+    } catch (err) {
+      console.error(err);
+      document.getElementById('shoutoutsFeed').innerHTML = 
+        `<p class="text-red-400 text-center py-12">Failed to load shoutouts. Please try again.</p>`;
+    }
+  };
+
+  // Pagination UI
+  function renderPaginationControls(p) {
+    const container = document.getElementById('shoutoutPagination');
+    if (!p || p.totalPages <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+
+    let html = `
+      <button onclick="window._loadShoutoutPage(${Math.max(1, currentPage-1)})" 
+              class="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-3xl transition ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+        ← Previous
+      </button>
+
+      <div class="px-6 py-3 bg-white/5 rounded-3xl text-sm font-medium text-white/70">
+        Page <span class="text-white font-semibold">${p.currentPage}</span> of ${p.totalPages}
+      </div>
+
+      <button onclick="window._loadShoutoutPage(${Math.min(p.totalPages, currentPage+1)})" 
+              class="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-3xl transition ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+        Next →
+      </button>
+    `;
+
+    container.innerHTML = html;
   }
 
-  if (!shoutouts.length) {
-    html += `<p class="text-center text-white/50 py-12">No shoutouts yet — be the first!</p>`;
-  } else {
-    html += `<div class="space-y-4" id="shoutoutsFeed">`;
-    shoutouts.forEach(s => { html += renderShoutoutCard(s); });
-    html += `</div>`;
-  }
+  // Make pagination buttons work globally
+  window._loadShoutoutPage = (page) => renderPage(page);
 
-  html += `</div>`;
-  content.innerHTML = html;
+  // Initial render
+  await renderPage(1);
 }
+
+// Make sure router can call it
+window.loadShoutoutsPage = loadShoutoutsPage;
 
 // ─── SHOUTOUT IMAGE LIGHTBOX ──────────────────────────────────────────────────
 window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
@@ -2072,134 +2141,124 @@ function catIcon(name) {
   return dirMatch ? dirMatch.icon : '📁';
 }
 
-// ─── DEALS PAGE ───────────────────────────────────────────────────────────────
 async function loadDealsPage(content) {
-  const [allDeals] = await Promise.all([apiGet('/deals'), ensureDirCategories()]);
-  window._allDeals   = allDeals;
-  window._dealFilter = 'All';
-  window._dealSearch = '';
-  window._dealSort   = 'newest';
-
-  const now         = new Date();
-  const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
-
   content.innerHTML = `
-    <div class="max-w-3xl mx-auto px-2 pb-10">
-      <div class="flex items-center justify-between mb-5">
-        <h2 class="text-3xl md:text-4xl font-bold">🔥 Deals</h2>
-        <span class="text-sm text-white/40">${activeDeals.length} active</span>
+    <div class="max-w-2xl mx-auto px-2">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🔥 Hot Deals</h1>
+        ${currentUser && currentUser.verifiedBusiness ? `
+        <button onclick="navigate('owner-dashboard')" 
+                class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Post New Deal
+        </button>` : ''}
       </div>
 
-      ${!currentUser ? guestBanner('post deals and get notified about new offers') : ''}
+      <!-- Search + Filter -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input id="dealsSearchInput" type="text" placeholder="Search deals..." 
+               class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
 
-      <div class="flex gap-2 mb-4">
-        <input id="dealSearchInput" type="text" placeholder="Search deals…"
-               class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400"
-               oninput="window._dealSearch=this.value; renderDealsFiltered()">
-        <select id="dealSortSelect" onchange="window._dealSort=this.value; renderDealsFiltered()"
-                class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
-                style="background:#1e293b;color-scheme:dark;">
-          <option value="newest">Newest</option>
-          <option value="expiring">Expiring Soon</option>
-          <option value="az">A–Z</option>
+        <select id="dealsFilter" onchange="filterAndRenderDeals()"
+                class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+          <option value="all">All Deals</option>
+          <option value="active">Active Only</option>
         </select>
       </div>
 
-      <div id="dealChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
-      <div id="dealResults"></div>
+      <div id="dealsList" class="space-y-4"></div>
+      <div id="dealsPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
-  renderDealsFiltered();
+  window.currentDealsPage = 1;
+  window.currentDealsSearch = '';
+  window.currentDealsFilter = 'all';
+
+  // Live search
+  document.getElementById('dealsSearchInput').addEventListener('input', debounce(() => {
+    window.currentDealsSearch = document.getElementById('dealsSearchInput').value.trim().toLowerCase();
+    window.currentDealsPage = 1;
+    renderDealsPage();
+  }, 300));
+
+  await renderDealsPage();
 }
 
-window.renderDealsFiltered = function () {
-  const search    = (window._dealSearch || '').toLowerCase();
-  const filter    = window._dealFilter  || 'All';
-  const sort      = window._dealSort    || 'newest';
-  const now       = new Date();
-  const allDeals  = window._allDeals    || [];
+async function renderDealsPage() {
+  const res = await apiGet(`/deals?page=${window.currentDealsPage}&limit=8`);
+  const deals = res.deals || [];
+  const pagination = res.pagination || {};
 
-  const activeDeals = allDeals.filter(d => !d.expires || new Date(d.expires) >= now);
-  const activeCats  = [...new Set(activeDeals.map(d => d.category).filter(Boolean))].sort();
-
-  if (filter !== 'All' && !activeCats.includes(filter)) window._dealFilter = 'All';
-  const currentFilter = window._dealFilter || 'All';
-
-  const chips = document.getElementById('dealChips');
-  if (chips) {
-    chips.innerHTML = `
-      <button onclick="window._dealFilter='All'; renderDealsFiltered()"
-              class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
-        All
-      </button>
-      ${activeCats.map(name => {
-        const safe = name.replace(/'/g, "\\'");
-        return `
-        <button onclick="window._dealFilter='${safe}'; renderDealsFiltered()"
-                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === name ? 'bg-amber-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
-          <span>${catIcon(name)}</span><span>${name}</span>
-        </button>`;
-      }).join('')}`;
-  }
-
-  let deals = allDeals.filter(d => {
-    if (currentFilter !== 'All' && d.category !== currentFilter) return false;
-    if (search && !d.title.toLowerCase().includes(search) && !(d.description||'').toLowerCase().includes(search)) return false;
-    return true;
+  const container = document.getElementById('dealsList');
+  
+  let filtered = deals.filter(deal => {
+    const matchesSearch = !window.currentDealsSearch || 
+      deal.title.toLowerCase().includes(window.currentDealsSearch) ||
+      (deal.description || '').toLowerCase().includes(window.currentDealsSearch);
+    
+    const matchesFilter = window.currentDealsFilter === 'all' || 
+      !deal.expires || new Date(deal.expires) > new Date();
+    
+    return matchesSearch && matchesFilter;
   });
 
-  if (sort === 'expiring') {
-    const withExpiry    = deals.filter(d => d.expires).sort((a,b) => new Date(a.expires) - new Date(b.expires));
-    const withoutExpiry = deals.filter(d => !d.expires);
-    deals = [...withExpiry, ...withoutExpiry];
-  } else if (sort === 'az') {
-    deals.sort((a, b) => a.title.localeCompare(b.title));
+  let html = '';
+  if (filtered.length === 0) {
+    html = `<p class="text-white/40 text-center py-16">No ${window.currentDealsFilter === 'active' ? 'active ' : ''}deals found right now.</p>`;
   } else {
-    deals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    html = filtered.map(deal => `
+      <div onclick="showDealDetail('${deal._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="font-semibold text-lg">${deal.title}</h3>
+            <p class="text-white/70 line-clamp-2 mt-1">${deal.description || ''}</p>
+          </div>
+          ${deal.business?.name ? `<span class="text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full">${deal.business.name}</span>` : ''}
+        </div>
+        
+        <div class="flex items-center gap-3 mt-4 text-xs text-white/50">
+          ${deal.expires ? `<span>Expires ${formatDate(deal.expires)}</span>` : ''}
+          <span>·</span>
+          <span>Posted ${timeAgo(deal.createdAt)}</span>
+        </div>
+      </div>
+    `).join('');
   }
 
-  const container = document.getElementById('dealResults');
-  if (!container) return;
+  container.innerHTML = html;
+  renderDealsPagination(pagination);
+}
 
-  if (!deals.length) {
-    container.innerHTML = `
-      <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
-        <p class="text-4xl mb-3">🏷️</p>
-        <p class="text-white/50 text-sm">No deals found</p>
-        ${currentFilter !== 'All' ? `<button onclick="window._dealFilter='All';renderDealsFiltered()" class="mt-3 text-amber-400 text-sm font-semibold hover:text-amber-300 transition">Clear filter</button>` : ''}
-      </div>`;
+function renderDealsPagination(p) {
+  const container = document.getElementById('dealsPagination');
+  if (!p.totalPages || p.totalPages <= 1) {
+    container.innerHTML = '';
     return;
   }
 
-  container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">` +
-    deals.map(d => {
-      const expired   = d.expires && new Date(d.expires) < now;
-      const expiresIn = d.expires ? Math.ceil((new Date(d.expires) - now) / (1000*60*60*24)) : null;
-      const urgency   = expiresIn !== null && expiresIn <= 3 && !expired;
-      const icon      = catIcon(d.category);
-      const label     = d.category || 'General';
-      return `
-        <div class="bg-white/10 backdrop-blur-xl border ${urgency ? 'border-amber-500/50' : expired ? 'border-white/5 opacity-60' : 'border-white/10'} rounded-3xl overflow-hidden transition hover:bg-white/15">
-          <div class="h-1.5 ${expired ? 'bg-white/10' : urgency ? 'bg-gradient-to-r from-amber-500 to-orange-400' : 'bg-gradient-to-r from-amber-500/60 to-yellow-500/60'}"></div>
-          <div class="p-5">
-            <div class="flex items-start justify-between gap-3 mb-3">
-              <div class="flex items-center gap-2">
-                <div class="w-9 h-9 rounded-2xl flex items-center justify-center text-xl ${expired ? 'bg-white/5' : 'bg-amber-500/20'} flex-shrink-0">${icon}</div>
-                <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${expired ? 'bg-white/10 text-white/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">${label}</span>
-              </div>
-              ${expired ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/20 flex-shrink-0">Expired</span>`
-                : urgency ? `<span class="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0 animate-pulse">⚡ ${expiresIn}d left</span>`
-                : ''}
-            </div>
-            <h3 class="font-bold text-base leading-snug mb-2 ${expired ? 'text-white/40 line-through' : 'text-white'}">${d.title}</h3>
-            ${d.description ? `<p class="text-sm text-white/60 leading-relaxed mb-3 line-clamp-2">${d.description}</p>` : ''}
-            <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
-              <div class="text-xs text-white/40">${d.business?.name ? `🏪 ${d.business.name}` : d.owner?.name ? `👤 ${d.owner.name}` : ''}</div>
-              <div class="text-xs text-white/40">${d.expires ? (expired ? `Expired ${new Date(d.expires).toLocaleDateString()}` : `Expires ${new Date(d.expires).toLocaleDateString()}`) : 'No expiry'}</div>
-            </div>
-          </div>
-        </div>`;
-    }).join('') + `</div>`;
+  let html = `
+    <button onclick="changeDealsPage(${Math.max(1, window.currentDealsPage-1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeDealsPage(${Math.min(p.totalPages, window.currentDealsPage+1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+
+  container.innerHTML = html;
+}
+
+window.changeDealsPage = function(page) {
+  window.currentDealsPage = page;
+  renderDealsPage();
+};
+
+window.filterAndRenderDeals = function() {
+  window.currentDealsFilter = document.getElementById('dealsFilter').value;
+  window.currentDealsPage = 1;
+  renderDealsPage();
 };
 
 // ─── EVENTS PAGE — WITH RSVP BUTTONS ──────────────────────────────────────────
@@ -3483,7 +3542,7 @@ async function loadModerationPanel() {
             ${['all','shoutouts','comments','events','deals'].map(t => `
               <button onclick="setModType('${t}')" id="modtype-${t}"
                       class="px-4 py-2 rounded-2xl text-sm font-semibold transition ${t === 'all' ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}">
-                ${{ all:'All', shoutouts:'💬 Shoutouts', comments:'🗨️ Comments', events:'📅 Events', deals:'🔥 Deals' }[t]}
+                ${{ all:'All', shoutouts:'🚦 Traffic Alerts', comments:'🗨️ Comments', events:'📅 Events', deals:'🔥 Deals' }[t]}
               </button>`).join('')}
           </div>
         </div>
@@ -4318,110 +4377,271 @@ window.markMarketSold = async function() {
   }
 };
 
-// ====================== FULLY UPDATED LOST & FOUND PAGE ======================
 async function loadLostFoundPage(content) {
   content.innerHTML = `
-    <div class="max-w-2xl mx-auto">
+    <div class="max-w-2xl mx-auto px-2">
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">🔎 Lost & Found</h1>
-        <button onclick="showPostLostItemModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+        <button onclick="showPostLostItemModal()" 
+                class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
           <span class="text-xl">📤</span> Post Item
         </button>
       </div>
-      <div id="lostItemsList">
-        <div class="flex justify-center py-12">
-          <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-        </div>
+
+      <!-- Search + Filters -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input id="lostSearchInput" type="text" placeholder="Search lost & found items..." 
+               class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+
+        <select id="lostTypeFilter" onchange="filterAndRenderLostItems()"
+                class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+          <option value="all">All Items</option>
+          <option value="lost">Lost Only</option>
+          <option value="found">Found Only</option>
+        </select>
       </div>
+
+      <div id="lostItemsList" class="space-y-4"></div>
+      <div id="lostPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
-  const items = await apiGet('/lostitems');
-  const listHTML = items.map(item => `
-    <div onclick="showLostItemDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-      <div class="flex gap-4">
-        ${item.images && item.images.length ? `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🔎</div>`}
-        <div class="flex-1">
-          <div class="flex items-center justify-between">
-            <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">${item.type.toUpperCase()}</span>
-            ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
-          </div>
-          <h3 class="font-semibold text-lg mt-2">${item.title}</h3>
-          <p class="text-white/70 line-clamp-2">${item.description}</p>
-          <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
-            <span>📍 ${item.location || 'Unknown'}</span>
-            <span>·</span>
-            ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
-            <span>·</span>
-            <span>${timeAgo(item.createdAt)}</span>
-          </div>
-        </div>
-      </div>
-    </div>`).join('');
+  window.currentLostPage = 1;
+  window.currentLostSearch = '';
+  window.currentLostFilter = 'all';
 
-  document.getElementById('lostItemsList').innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No items yet — be the first to post!</p>`;
+  // Live search
+  document.getElementById('lostSearchInput').addEventListener('input', debounce(() => {
+    window.currentLostSearch = document.getElementById('lostSearchInput').value.trim().toLowerCase();
+    window.currentLostPage = 1;
+    renderLostItemsPage();
+  }, 300));
+
+  await renderLostItemsPage();
 }
 
-async function loadMarketplacePage(content) {
-  content.innerHTML = `
-    <div class="max-w-2xl mx-auto">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">🛒 Marketplace</h1>
-        <button onclick="showPostMarketplaceModal()" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
-          <span class="text-xl">📤</span> Sell Something
-        </button>
-      </div>
-      <div id="marketItemsList">
-        <div class="flex justify-center py-12">
-          <div class="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      </div>
-    </div>`;
+async function renderLostItemsPage() {
+  const res = await apiGet(`/lostitems?page=${window.currentLostPage}&limit=8`);
+  const items = res.items || [];
+  const pagination = res.pagination || {};
 
-  const items = await apiGet('/marketplace');
+  const container = document.getElementById('lostItemsList');
+  
+  let filtered = items.filter(item => {
+    const matchesSearch = !window.currentLostSearch || 
+      item.title.toLowerCase().includes(window.currentLostSearch) ||
+      item.description.toLowerCase().includes(window.currentLostSearch);
+    
+    const matchesFilter = window.currentLostFilter === 'all' || 
+      item.type === window.currentLostFilter;
+    
+    return matchesSearch && matchesFilter;
+  });
 
-  const listHTML = items.map(item => {
-    const sellerId = item.seller?._id || item.seller;
-    return `
-      <div onclick="showMarketplaceDetail('${item._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+  let html = '';
+  if (filtered.length === 0) {
+    html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
+  } else {
+    html = filtered.map(item => `
+      <div id="lost-${item._id}" onclick="showLostItemDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
-          ${item.images && item.images.length ? 
-            `<img src="${item.images[0]}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0" alt="">` : 
-            `<div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center text-4xl">🛒</div>`}
-          <div class="flex-1">
-            <h3 class="font-semibold text-lg">${item.title}</h3>
-            <p class="text-emerald-400 text-2xl font-bold">$${item.price}</p>
+          ${item.images?.[0] ? 
+            `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` : 
+            `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl">🔎</div>`}
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">
+                ${item.type.toUpperCase()}
+              </span>
+              ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
+            </div>
+            
+            <h3 class="font-semibold text-lg mt-2">${item.title}</h3>
             <p class="text-white/70 line-clamp-2">${item.description}</p>
-            <div class="text-xs text-white/50 mt-3 flex items-center gap-2">
-              <span>${item.condition}</span>
+            
+            <div class="flex items-center gap-2 mt-4 text-xs text-white/50">
+              <span>📍 ${item.location || 'Unknown'}</span>
               <span>·</span>
-              ${renderClickableUser(item.seller, item.authorName)}
+              ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
               <span>·</span>
               <span>${timeAgo(item.createdAt)}</span>
             </div>
           </div>
         </div>
-      </div>`;
-  }).join('');
-
-  const container = document.getElementById('marketItemsList');
-  if (container) {
-    container.innerHTML = listHTML || `<p class="text-white/40 text-center py-12">No listings yet — post the first one!</p>`;
+      </div>
+    `).join('');
   }
+
+  container.innerHTML = html;
+  renderLostPagination(pagination);
 }
 
-async function renderMarketComments(item) {
-  const container = document.getElementById('marketCommentsContainer');
-  if (!container) return;
+function renderLostPagination(p) {
+  const container = document.getElementById('lostPagination');
+  if (!p.totalPages || p.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
 
-  let html = '';
-  (item.comments || []).forEach(c => {
-    const authorId = c.authorId?._id || c.authorId;
-    html += `<div class="bg-slate-100 rounded-2xl p-4">
-      <p onclick="showUserProfileModal('${authorId}')" class="font-medium cursor-pointer hover:underline">${c.author}</p>
-      <p class="text-slate-700">${c.text}</p>
+  let html = `
+    <button onclick="changeLostPage(${Math.max(1, window.currentLostPage-1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeLostPage(${Math.min(p.totalPages, window.currentLostPage+1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+
+  container.innerHTML = html;
+}
+
+window.changeLostPage = function(page) {
+  window.currentLostPage = page;
+  renderLostItemsPage();
+};
+
+window.filterAndRenderLostItems = function() {
+  window.currentLostFilter = document.getElementById('lostTypeFilter').value;
+  window.currentLostPage = 1;
+  renderLostItemsPage();
+};
+
+// Reuse the same debounce function (add it once if not already present)
+function debounce(func, delay) {
+  let timeout;
+  return function() {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, arguments), delay);
+  };
+}
+
+async function loadMarketplacePage(content) {
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto px-2">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🛒 Marketplace</h1>
+        <button onclick="showPostMarketplaceModal()" 
+                class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Sell Something
+        </button>
+      </div>
+
+      <!-- Search + Filter -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input id="marketSearchInput" type="text" placeholder="Search items..." 
+               class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+        
+        <select id="marketConditionFilter" onchange="filterAndRenderMarketplace()"
+                class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+          <option value="all">All Conditions</option>
+          <option value="new">New</option>
+          <option value="like-new">Like New</option>
+          <option value="used" selected>Used</option>
+          <option value="fair">Fair</option>
+        </select>
+      </div>
+
+      <div id="marketItemsList" class="space-y-4"></div>
+      <div id="marketPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
-  });
-  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No messages yet</p>';
+
+  window.currentMarketPage = 1;
+  window.currentMarketSearch = '';
+  window.currentMarketFilter = 'all';
+
+  // Live search
+  document.getElementById('marketSearchInput').addEventListener('input', debounce(() => {
+    window.currentMarketSearch = document.getElementById('marketSearchInput').value.trim().toLowerCase();
+    window.currentMarketPage = 1;
+    renderMarketplacePage();
+  }, 300));
+
+  await renderMarketplacePage();
+}
+
+// Render current page
+async function renderMarketplacePage() {
+  const res = await apiGet(`/marketplace?page=${window.currentMarketPage}&limit=8`);
+  const items = res.items || [];
+  const pagination = res.pagination || {};
+
+  const container = document.getElementById('marketItemsList');
+  
+  let html = '';
+  if (items.length === 0) {
+    html = `<p class="text-white/40 text-center py-16">No listings found.</p>`;
+  } else {
+    html = items.map(item => `
+      <div id="market-${item._id}" onclick="showMarketplaceDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+        <div class="flex gap-4">
+          ${item.images?.[0] ? 
+            `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` : 
+            `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl">🛒</div>`}
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between">
+              <h3 class="font-semibold text-lg">${item.title}</h3>
+              <p class="text-2xl font-bold text-emerald-400">$${item.price}</p>
+            </div>
+            <p class="text-white/70 line-clamp-2 mt-1">${item.description}</p>
+            <div class="flex items-center gap-2 mt-4 text-xs">
+              <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
+              <span class="text-white/50">${timeAgo(item.createdAt)}</span>
+              <span class="text-white/50">•</span>
+              ${renderClickableUser(item.seller, item.authorName)}
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  container.innerHTML = html;
+  renderMarketPagination(pagination);
+}
+
+function renderMarketPagination(p) {
+  const container = document.getElementById('marketPagination');
+  if (!p.totalPages || p.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <button onclick="changeMarketPage(${Math.max(1, window.currentMarketPage-1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeMarketPage(${Math.min(p.totalPages, window.currentMarketPage+1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+
+  container.innerHTML = html;
+}
+
+window.changeMarketPage = function(page) {
+  window.currentMarketPage = page;
+  renderMarketplacePage();
+};
+
+window.filterAndRenderMarketplace = function() {
+  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
+  window.currentMarketPage = 1;
+  renderMarketplacePage();
+};
+
+// Simple debounce helper
+function debounce(func, delay) {
+  let timeout;
+  return function() {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, arguments), delay);
+  };
 }
 
 // ====================== MESSAGING SYSTEM ======================
@@ -4884,6 +5104,160 @@ window.sendReply = async function(otherId) {
   updateMessageBadge();
 };
 
+// ─── EVENTS PAGE (Paginated) ───────────────────────────────────────────────
+async function loadEventsPage(content) {
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto px-2">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">📅 Events</h1>
+        ${currentUser && currentUser.verifiedBusiness ? `
+        <button onclick="navigate('owner-dashboard')" 
+                class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Post New Event
+        </button>` : ''}
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input id="eventsSearchInput" type="text" placeholder="Search events..." 
+               class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+        <select id="eventsFilter" onchange="filterAndRenderEvents()" class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+          <option value="all">All Events</option>
+          <option value="upcoming" selected>Upcoming</option>
+          <option value="past">Past Events</option>
+        </select>
+      </div>
+
+      <div id="eventsList" class="space-y-4"></div>
+      <div id="eventsPagination" class="flex justify-center gap-3 mt-8"></div>
+    </div>`;
+
+  window.currentEventsPage = 1;
+  window.currentEventsSearch = '';
+  window.currentEventsFilter = 'upcoming';
+
+  document.getElementById('eventsSearchInput').addEventListener('input', debounce(() => {
+    window.currentEventsSearch = document.getElementById('eventsSearchInput').value.trim().toLowerCase();
+    window.currentEventsPage = 1;
+    renderEventsPage();
+  }, 300));
+
+  await renderEventsPage();
+}
+
+async function renderEventsPage() {
+  const res = await apiGet(`/events?page=${window.currentEventsPage}&limit=8`);
+  const events = res.events || [];
+  const pagination = res.pagination || {};
+
+  const container = document.getElementById('eventsList');
+  let filtered = events.filter(e => {
+    const matchesSearch = !window.currentEventsSearch || 
+      (e.title || '').toLowerCase().includes(window.currentEventsSearch) ||
+      (e.description || '').toLowerCase().includes(window.currentEventsSearch);
+    
+    const isUpcoming = new Date(e.date) >= new Date();
+    return matchesSearch && (window.currentEventsFilter === 'all' || 
+           (window.currentEventsFilter === 'upcoming' && isUpcoming) ||
+           (window.currentEventsFilter === 'past' && !isUpcoming));
+  });
+
+  container.innerHTML = filtered.map(e => `
+    <div onclick="showEventDetail('${e._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+      <h3 class="font-semibold text-lg">${e.title}</h3>
+      <p class="text-white/70 line-clamp-2 mt-1">${e.description || ''}</p>
+      <div class="text-xs text-white/50 mt-3">📅 ${formatDate(e.date)} ${e.location ? `· 📍 ${e.location}` : ''}</div>
+    </div>
+  `).join('') || `<p class="text-white/40 text-center py-16">No ${window.currentEventsFilter === 'upcoming' ? 'upcoming ' : window.currentEventsFilter === 'past' ? 'past ' : ''}events found.</p>`;
+
+  renderEventsPagination(pagination);
+}
+
+function renderEventsPagination(p) {
+  const container = document.getElementById('eventsPagination');
+  if (!p.totalPages || p.totalPages <= 1) return container.innerHTML = '';
+  container.innerHTML = `
+    <button onclick="changeEventsPage(${Math.max(1, window.currentEventsPage-1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">← Prev</button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeEventsPage(${Math.min(p.totalPages, window.currentEventsPage+1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">Next →</button>`;
+}
+
+window.changeEventsPage = (page) => { window.currentEventsPage = page; renderEventsPage(); };
+window.filterAndRenderEvents = () => { window.currentEventsFilter = document.getElementById('eventsFilter').value; window.currentEventsPage = 1; renderEventsPage(); };
+
+// ─── DEALS PAGE (Paginated) ───────────────────────────────────────────────
+async function loadDealsPage(content) {
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto px-2">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">🔥 Hot Deals</h1>
+        ${currentUser && currentUser.verifiedBusiness ? `
+        <button onclick="navigate('owner-dashboard')" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
+          <span class="text-xl">📤</span> Post New Deal
+        </button>` : ''}
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input id="dealsSearchInput" type="text" placeholder="Search deals..." class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+        <select id="dealsFilter" onchange="filterAndRenderDeals()" class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+          <option value="all">All Deals</option>
+          <option value="active" selected>Active Only</option>
+        </select>
+      </div>
+
+      <div id="dealsList" class="space-y-4"></div>
+      <div id="dealsPagination" class="flex justify-center gap-3 mt-8"></div>
+    </div>`;
+
+  window.currentDealsPage = 1;
+  window.currentDealsSearch = '';
+  window.currentDealsFilter = 'active';
+
+  document.getElementById('dealsSearchInput').addEventListener('input', debounce(() => {
+    window.currentDealsSearch = document.getElementById('dealsSearchInput').value.trim().toLowerCase();
+    window.currentDealsPage = 1;
+    renderDealsPage();
+  }, 300));
+
+  await renderDealsPage();
+}
+
+async function renderDealsPage() {
+  const res = await apiGet(`/deals?page=${window.currentDealsPage}&limit=8`);
+  const deals = res.deals || [];
+  const pagination = res.pagination || {};
+
+  const container = document.getElementById('dealsList');
+  let filtered = deals.filter(d => {
+    const matchesSearch = !window.currentDealsSearch || 
+      (d.title || '').toLowerCase().includes(window.currentDealsSearch) ||
+      (d.description || '').toLowerCase().includes(window.currentDealsSearch);
+    const isActive = !d.expires || new Date(d.expires) > new Date();
+    return matchesSearch && (window.currentDealsFilter === 'all' || isActive);
+  });
+
+  container.innerHTML = filtered.map(d => `
+    <div onclick="showDealDetail('${d._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+      <h3 class="font-semibold text-lg">${d.title}</h3>
+      <p class="text-white/70 line-clamp-2 mt-1">${d.description || ''}</p>
+      <div class="text-xs text-white/50 mt-3">${d.expires ? `Expires ${formatDate(d.expires)}` : 'No expiry'}</div>
+    </div>
+  `).join('') || `<p class="text-white/40 text-center py-16">No deals found.</p>`;
+
+  renderDealsPagination(pagination);
+}
+
+function renderDealsPagination(p) {
+  const container = document.getElementById('dealsPagination');
+  if (!p.totalPages || p.totalPages <= 1) return container.innerHTML = '';
+  container.innerHTML = `
+    <button onclick="changeDealsPage(${Math.max(1, window.currentDealsPage-1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">← Prev</button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeDealsPage(${Math.min(p.totalPages, window.currentDealsPage+1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">Next →</button>`;
+}
+
+window.changeDealsPage = (page) => { window.currentDealsPage = page; renderDealsPage(); };
+window.filterAndRenderDeals = () => { window.currentDealsFilter = document.getElementById('dealsFilter').value; window.currentDealsPage = 1; renderDealsPage(); };
+
 // Global exports
 window.showPostLostItemModal = window.showPostLostItemModal;
 window.showLostItemDetail = window.showLostItemDetail;
@@ -5008,6 +5382,49 @@ window.showEventDetail = async function(eventId) {
 
         <div class="p-6 border-t">
           <button onclick="document.getElementById('eventDetailModal').remove()" 
+                  class="w-full py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+};
+
+window.showDealDetail = async function(dealId) {
+  const deals = await apiGet('/deals');
+  const deal = deals.find(d => d._id === dealId);
+  if (!deal) return;
+
+  const modalHTML = `
+    <div onclick="if(event.target.id==='dealDetailModal') document.getElementById('dealDetailModal').remove()" 
+         id="dealDetailModal" class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[15000]">
+      <div onclick="event.stopImmediatePropagation()" 
+           class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
+        
+        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+          <h2 class="text-2xl font-bold">${deal.title}</h2>
+          <button onclick="document.getElementById('dealDetailModal').remove()" class="text-3xl text-gray-400 hover:text-gray-600">×</button>
+        </div>
+
+        <div class="p-6">
+          <p class="text-emerald-600 text-3xl font-bold mb-4">🔥 ${deal.title}</p>
+          <p class="text-gray-700 leading-relaxed">${deal.description || 'No description provided.'}</p>
+          
+          ${deal.expires ? `
+          <div class="mt-6 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <p class="text-amber-700 font-medium">Expires: ${formatDate(deal.expires)}</p>
+          </div>` : ''}
+
+          ${deal.business?.name ? `
+          <div class="mt-4 text-sm">
+            <span class="font-semibold">From:</span> ${deal.business.name}
+          </div>` : ''}
+        </div>
+
+        <div class="p-6 border-t">
+          <button onclick="document.getElementById('dealDetailModal').remove()" 
                   class="w-full py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
             Close
           </button>
