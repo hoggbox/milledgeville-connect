@@ -192,7 +192,31 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
   });
 
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-    console.log('📬 NOTIFICATION TAPPED:', action);
+    console.log('\U0001f4ec NOTIFICATION TAPPED:', action);
+
+    // FCM data fields land on action.notification.data
+    const data = action?.notification?.data || {};
+    const page = data.page;
+    const id   = data.id;
+
+    if (!page) return;
+
+    // Navigate to the right page, then scroll to/highlight the specific post
+    if (typeof loadPage === 'function') {
+      loadPage(page).then(() => {
+        if (id) {
+          // Give the page a moment to render, then scroll the post into view
+          setTimeout(() => {
+            const el = document.getElementById('shoutout-' + id);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              el.classList.add('ring-2', 'ring-emerald-400');
+              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-400'), 3000);
+            }
+          }, 600);
+        }
+      });
+    }
   });
 }
 
