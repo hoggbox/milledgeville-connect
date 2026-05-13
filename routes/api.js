@@ -214,10 +214,13 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
       if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
 
-      if (sub.nativeToken) {
+if (sub.nativeToken) {
         fcmMessages.push({
           token: sub.nativeToken,
           notification: { title, body },
+          data: Object.fromEntries(
+            Object.entries(data).map(([k, v]) => [k, String(v)])
+          ),
           android: { priority: 'high' }
         });
       }
@@ -586,7 +589,7 @@ broadcastPush(
   text.length > 80 ? text.substring(0, 77) + '...' : text,
   { 
     page: 'shoutouts',
-    shoutoutId: shoutout._id   // ← ADD THIS
+    shoutoutId: shoutout._id.toString()
   },
   { notifyShoutouts: true }
 );

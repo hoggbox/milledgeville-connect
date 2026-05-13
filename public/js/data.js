@@ -5113,7 +5113,7 @@ if ('serviceWorker' in navigator) {
             card.style.border = '3px solid #34d399';
             setTimeout(() => card.style.border = '', 3000);
           }
-        }, 1200);
+        }, 2500);
       } else if (payload.page) {
         navigate(payload.page);
       } else {

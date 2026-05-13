@@ -36,7 +36,16 @@ self.addEventListener('notificationclick', function(event) {
           data: data
         });
       } else {
-        clients.openWindow('/');
+        clients.openWindow('/').then((newClient) => {
+          if (newClient) {
+            setTimeout(() => {
+              newClient.postMessage({
+                type: 'NOTIFICATION_CLICK',
+                data: data
+              });
+            }, 1500);
+          }
+        });
       }
     })
   );
