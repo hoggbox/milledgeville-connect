@@ -3155,6 +3155,143 @@ async function loadAdminPage(content) {
   await switchAdminTab(0);
 }
 
+// ─── MODERATION PANEL ────────────────────────────────────────────────────────
+async function loadModerationPanel() {
+  const container = document.getElementById('adminMainContent');
+  container.innerHTML = `<div class="p-8 text-center text-white/60">Loading...</div>`;
+
+  try {
+    const [shoutouts, lostitems, marketplace] = await Promise.all([
+      apiGet('/shoutouts?limit=50'),
+      apiGet('/admin/lostitems'),
+      apiGet('/admin/marketplace')
+    ]);
+
+    container.innerHTML = `
+      <div class="p-6 space-y-8">
+        <h2 class="text-2xl font-bold text-white">🛡️ Moderation</h2>
+
+        <section>
+          <h3 class="text-lg font-semibold text-white mb-3">Traffic Alerts / Shoutouts</h3>
+          <div class="space-y-2">
+            ${(shoutouts.shoutouts || []).map(s => `
+              <div class="bg-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-white text-sm">${s.text}</p>
+                  <p class="text-white/50 text-xs mt-1">by ${s.author}</p>
+                </div>
+                <button onclick="adminDeleteShoutout('${s._id}')" class="text-red-400 hover:text-red-300 text-sm flex-shrink-0">Delete</button>
+              </div>`).join('') || '<p class="text-white/40">No active shoutouts</p>'}
+          </div>
+        </section>
+
+        <section>
+          <h3 class="text-lg font-semibold text-white mb-3">Lost & Found Items</h3>
+          <div class="space-y-2">
+            ${(lostitems || []).map(i => `
+              <div class="bg-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-white text-sm font-medium">${i.title}</p>
+                  <p class="text-white/50 text-xs">by ${i.authorName} · ${i.type}</p>
+                </div>
+                <button onclick="adminDeleteLostItem('${i._id}')" class="text-red-400 hover:text-red-300 text-sm flex-shrink-0">Delete</button>
+              </div>`).join('') || '<p class="text-white/40">No items</p>'}
+          </div>
+        </section>
+
+        <section>
+          <h3 class="text-lg font-semibold text-white mb-3">Marketplace Listings</h3>
+          <div class="space-y-2">
+            ${(marketplace || []).map(m => `
+              <div class="bg-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-white text-sm font-medium">${m.title}</p>
+                  <p class="text-white/50 text-xs">$${m.price} · by ${m.authorName}</p>
+                </div>
+                <button onclick="adminDeleteMarketItem('${m._id}')" class="text-red-400 hover:text-red-300 text-sm flex-shrink-0">Delete</button>
+              </div>`).join('') || '<p class="text-white/40">No listings</p>'}
+          </div>
+        </section>
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<div class="p-8 text-red-400">Failed to load moderation panel: ${err.message}</div>`;
+  }
+}
+
+window.adminDeleteShoutout = async function(id) {
+  if (!confirm('Delete this shoutout?')) return;
+  await apiDelete(`/shoutouts/${id}`);
+  await loadModerationPanel();
+};
+window.adminDeleteLostItem = async function(id) {
+  if (!confirm('Delete this lost & found item?')) return;
+  await apiDelete(`/admin/lostitems/${id}`);
+  await loadModerationPanel();
+};
+window.adminDeleteMarketItem = async function(id) {
+  if (!confirm('Delete this marketplace listing?')) return;
+  await apiDelete(`/admin/marketplace/${id}`);
+  await loadModerationPanel();
+};
+
+// ─── CLAIMS PANEL ─────────────────────────────────────────────────────────────
+async function loadAdminClaims() {
+  const container = document.getElementById('adminMainContent');
+  container.innerHTML = `<div class="p-8 text-center text-white/60">Loading Claims...</div>`;
+
+  try {
+    const claims = await apiGet('/admin/claims');
+
+    container.innerHTML = `
+      <div class="p-6 space-y-6">
+        <h2 class="text-2xl font-bold text-white">📬 Pending Business Claims</h2>
+        ${!claims.length ? '<p class="text-white/40">No pending claims.</p>' :
+          claims.map(c => `
+            <div class="bg-white/10 rounded-3xl p-5 space-y-3">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-white font-semibold text-lg">${c.business?.name || 'Unknown Business'}</p>
+                  <p class="text-white/60 text-sm">${c.business?.address || ''}</p>
+                </div>
+                <span class="bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-semibold">Pending</span>
+              </div>
+              <div class="bg-black/20 rounded-2xl p-4 text-sm space-y-1">
+                <p class="text-white/80"><span class="text-white/40">Claimant:</span> ${c.user?.name} (${c.user?.email})</p>
+                <p class="text-white/80"><span class="text-white/40">Owner Name:</span> ${c.verificationInfo?.ownerName || '—'}</p>
+                <p class="text-white/80"><span class="text-white/40">Phone:</span> ${c.verificationInfo?.phone || '—'}</p>
+                <p class="text-white/80"><span class="text-white/40">Address:</span> ${c.verificationInfo?.address || '—'}</p>
+                <p class="text-white/80"><span class="text-white/40">Message:</span> ${c.verificationInfo?.message || '—'}</p>
+                <p class="text-white/80"><span class="text-white/40">Restaurant:</span> ${c.verificationInfo?.isRestaurant ? 'Yes' : 'No'}</p>
+              </div>
+              <div class="flex gap-3">
+                <button onclick="adminClaimDecision('${c._id}', 'approved')"
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-2xl font-semibold text-sm">
+                  ✅ Approve
+                </button>
+                <button onclick="adminClaimDecision('${c._id}', 'rejected')"
+                  class="flex-1 bg-red-600/40 hover:bg-red-600/60 text-red-300 py-2.5 rounded-2xl font-semibold text-sm">
+                  ❌ Reject
+                </button>
+              </div>
+            </div>`).join('')}
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<div class="p-8 text-red-400">Failed to load claims: ${err.message}</div>`;
+  }
+}
+
+window.adminClaimDecision = async function(claimId, decision) {
+  const label = decision === 'approved' ? 'approve' : 'reject';
+  if (!confirm(`Are you sure you want to ${label} this claim?`)) return;
+  try {
+    await apiPost(`/admin/claims/${claimId}/decision`, { decision });
+    showToast(decision === 'approved' ? '✅ Claim approved! Business ownership granted.' : '❌ Claim rejected.', decision === 'approved' ? 'success' : 'error');
+    await loadAdminClaims(); // Refresh
+  } catch (err) {
+    showToast('Failed: ' + err.message, 'error');
+  }
+};
+
 window.switchAdminTab = async function(tab) {
   window.currentAdminTab = tab;
 
@@ -4728,7 +4865,6 @@ window.hideBusinessModal     = hideBusinessModal;
 window.saveBusiness          = saveBusiness;
 window.switchAdminTab        = switchAdminTab;
 window.renderDirectory       = renderDirectory;
-window.loadModerationPanel   = loadModerationPanel;
 window.renderDealsFiltered   = renderDealsFiltered;
 window.renderEventsFiltered  = renderEventsFiltered;
 window.getDirections = function(address) {
