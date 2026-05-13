@@ -488,13 +488,15 @@ if (allBusinesses.length === 0) {
   _renderSpotlight(allBusinesses);
 }
 
-const [eventsData, dealsData, newsData, shoutoutsRes] = await Promise.all([
-  apiGet('/events').catch(() => []),
-  apiGet('/deals').catch(() => []),
+const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
+  apiGet('/events').catch(() => ({ events: [] })),
+  apiGet('/deals').catch(() => ({ deals: [] })),
   apiGet('/news').catch(() => []),
   apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
 
+const eventsData = eventsRes.events || [];
+const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   // Digest
