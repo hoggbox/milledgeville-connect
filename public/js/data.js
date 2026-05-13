@@ -4062,22 +4062,26 @@ function debounce(func, delay) {
 // Safe Moderation Loader
 async function loadModerationPanelSafe() {
   const container = document.getElementById('adminMainContent');
+  container.innerHTML = `<div class="p-8 text-white/60">Loading Moderation Panel...</div>`;
+
   try {
-    // Try your original moderation function
-    if (typeof loadModerationPanel === 'function') {
-      await loadModerationPanel();
-    } else if (typeof window.loadModerationPanelOriginal === 'function') {
+    if (typeof window.loadModerationPanelOriginal === 'function') {
       await window.loadModerationPanelOriginal();
+    } else if (typeof loadModerationPanel === 'function') {
+      // Temporarily redirect output
+      const oldContent = document.getElementById('content');
+      if (oldContent) oldContent.style.display = 'none';
+      await loadModerationPanel();
     } else {
       container.innerHTML = `
-        <div class="p-8 text-white/70">
-          <h3 class="font-bold mb-4">🛡️ Content Moderation</h3>
-          <p>Your original moderation panel should appear here.</p>
-          <p class="text-xs text-white/40 mt-6">If it's still blank, the original <code>loadModerationPanel()</code> function may need updating to use #adminMainContent instead of #content.</p>
+        <div class="p-8 bg-white/5 rounded-3xl">
+          <h3 class="font-bold mb-3">🛡️ Content Moderation</h3>
+          <p class="text-white/70">Your original moderation panel should load here.</p>
+          <p class="text-xs text-white/40 mt-4">If nothing appears, the original function may still reference #content instead of #adminMainContent.</p>
         </div>`;
     }
   } catch (e) {
-    console.error('Moderation panel failed:', e);
+    console.error('Moderation failed:', e);
     container.innerHTML = `<div class="p-8 text-red-400">Moderation panel crashed. Check console.</div>`;
   }
 }
@@ -4085,32 +4089,25 @@ async function loadModerationPanelSafe() {
 // Safe Claims Loader
 async function loadAdminClaimsSafe() {
   const container = document.getElementById('adminMainContent');
+  container.innerHTML = `<div class="p-8 text-white/60">Loading Claims Panel...</div>`;
+
   try {
-    if (typeof loadAdminClaims === 'function') {
-      await loadAdminClaims();
-    } else if (typeof window.loadAdminClaimsOriginal === 'function') {
+    if (typeof window.loadAdminClaimsOriginal === 'function') {
       await window.loadAdminClaimsOriginal();
+    } else if (typeof loadAdminClaims === 'function') {
+      const oldContent = document.getElementById('content');
+      if (oldContent) oldContent.style.display = 'none';
+      await loadAdminClaims();
     } else {
       container.innerHTML = `
-        <div class="p-8 text-white/70">
-          <h3 class="font-bold mb-4">📬 Claims Management</h3>
-          <p>Your original claims panel should appear here.</p>
+        <div class="p-8 bg-white/5 rounded-3xl">
+          <h3 class="font-bold mb-3">📬 Claims Management</h3>
+          <p class="text-white/70">Your original claims panel should load here.</p>
         </div>`;
     }
   } catch (e) {
-    console.error('Claims panel failed:', e);
+    console.error('Claims failed:', e);
     container.innerHTML = `<div class="p-8 text-red-400">Claims panel crashed. Check console.</div>`;
-  }
-}
-
-async function loadAdminClaims() {
-  const container = document.getElementById('adminMainContent');
-  if (typeof window.loadAdminClaimsOriginal === 'function') {
-    await window.loadAdminClaimsOriginal();
-  } else if (typeof loadAdminClaims === 'function') {
-    await loadAdminClaims();
-  } else {
-    container.innerHTML = `<div class="p-8 text-white/60">Claims panel loaded (original function).</div>`;
   }
 }
 
@@ -4945,38 +4942,48 @@ async function renderAdminDashboard() {
 // ─── USERS MANAGEMENT (Tab 1) ────────────────────────────────────────────────
 async function renderAdminUsers() {
   const container = document.getElementById('adminMainContent');
-  window._adminUsersData = await apiGet('/admin/users');
+  
+  try {
+    window._adminUsersData = await apiGet('/admin/users');
+    
+    if (!Array.isArray(window._adminUsersData)) {
+      throw new Error('Invalid users data');
+    }
 
-  let html = `
-    <div class="mb-4">
-      <input type="text" id="userSearch" placeholder="Search users by name or email..." 
-             class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50">
-    </div>
-    <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
-      <table class="w-full">
-        <thead>
-          <tr class="border-b border-white/10">
-            <th class="text-left p-4">User</th>
-            <th class="text-left p-4">Reputation</th>
-            <th class="text-left p-4">Joined</th>
-            <th class="text-left p-4">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="usersTableBody" class="text-sm"></tbody>
-      </table>
-    </div>`;
+    let html = `
+      <div class="mb-4">
+        <input type="text" id="userSearch" placeholder="Search users..." 
+               class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50">
+      </div>
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-white/10">
+              <th class="text-left p-4">User</th>
+              <th class="text-left p-4">Reputation</th>
+              <th class="text-left p-4">Joined</th>
+              <th class="text-left p-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody" class="text-sm"></tbody>
+        </table>
+      </div>`;
 
-  container.innerHTML = html;
+    container.innerHTML = html;
+    renderUsersTable(window._adminUsersData);
 
-  renderUsersTable(window._adminUsersData);
-
-  document.getElementById('userSearch').addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-    const filtered = window._adminUsersData.filter(u => 
-      u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)
-    );
-    renderUsersTable(filtered);
-  });
+    document.getElementById('userSearch').addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase();
+      const filtered = window._adminUsersData.filter(u => 
+        (u.name || '').toLowerCase().includes(term) || 
+        (u.email || '').toLowerCase().includes(term)
+      );
+      renderUsersTable(filtered);
+    });
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div class="p-8 text-red-400">Failed to load users. Backend may be restarting.</div>`;
+  }
 }
 
 function renderUsersTable(users) {

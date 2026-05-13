@@ -1539,12 +1539,8 @@ router.delete('/owner/business/photos/:index', authenticate, async (req, res) =>
   }
 });
 
-// ─── ADMIN STATS ENDPOINT ───────────────────────────────────────────────────
-router.get('/admin/stats', authenticate, async (req, res) => {
-  if (req.user.email !== 'imhoggbox@gmail.com') {  // Only you for now
-    return res.status(403).json({ message: 'Admin only' });
-  }
-
+// ─── ADMIN STATS ENDPOINT (Fixed + More Robust) ─────────────────────────────
+router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
   try {
     const [
       totalUsers,
@@ -1558,25 +1554,24 @@ router.get('/admin/stats', authenticate, async (req, res) => {
       User.countDocuments(),
       
       Shoutout.countDocuments({ 
-        createdAt: { $gte: new Date(Date.now() - 8 * 60 * 60 * 1000) }  // last 8 hours
+        createdAt: { $gte: new Date(Date.now() - 8 * 60 * 60 * 1000) } 
       }),
       
-      MarketplaceItem.countDocuments(),
+      MarketplaceItem.countDocuments({ status: 'available' }),
       
       User.aggregate([{ $group: { _id: null, total: { $sum: "$reputation" } } }])
-        .then(r => r[0]?.total || 0),
+        .then(r => (r[0] && r[0].total) || 0),
       
-      // Today’s activity
       Shoutout.countDocuments({ 
-        createdAt: { $gte: new Date().setHours(0,0,0,0) } 
+        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } 
       }),
       
       MarketplaceItem.countDocuments({ 
-        createdAt: { $gte: new Date().setHours(0,0,0,0) } 
+        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } 
       }),
       
       LostItem.countDocuments({ 
-        createdAt: { $gte: new Date().setHours(0,0,0,0) } 
+        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } 
       })
     ]);
 
@@ -1587,12 +1582,11 @@ router.get('/admin/stats', authenticate, async (req, res) => {
       totalReputation,
       shoutoutsToday,
       marketplaceToday,
-      lostFoundToday,
-      // You can add more later
+      lostFoundToday
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Stats error' });
+    console.error('Stats error:', err);
+    res.status(500).json({ message: 'Stats error', error: err.message });
   }
 });
 
@@ -1781,10 +1775,15 @@ router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) =
 
 router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
   try {
-    const users = await User.find().populate('verifiedBusiness', 'name').sort({ joinedAt: -1 });
-    res.json(users.map(sanitizeUser));
+    const users = await User.find()
+      .select('name email reputation joinedAt verifiedBusiness')
+      .populate('verifiedBusiness', 'name')
+      .sort({ joinedAt: -1 });
+    
+    res.json(users);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Users error:', err);
+    res.status(500).json({ message: 'Failed to load users' });
   }
 });
 
