@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Milledgeville Connect - Local Community App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .hero-bg {
+      background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-white">
+
+  <!-- HERO -->
+  <div class="hero-bg min-h-screen flex items-center">
+    <div class="max-w-5xl mx-auto px-6 py-20 text-center">
+      <div class="inline-flex items-center gap-3 bg-white/20 backdrop-blur-md px-6 py-2 rounded-3xl mb-8">
+        <span class="text-3xl">🚦</span>
+        <span class="font-bold text-xl">Milledgeville Connect</span>
+      </div>
+      
+      <h1 class="text-6xl md:text-7xl font-black leading-tight mb-6">
+        Your Town.<br>Your People.<br>Your App.
+      </h1>
+      <p class="text-xl md:text-2xl text-emerald-100 max-w-2xl mx-auto mb-10">
+        Real-time traffic alerts • Marketplace • Lost & Found • Events • Deals • Directory
+      </p>
+
+      <!-- Download Button -->
+      <a href="/apk/MilledgevilleConnect.apk" 
+         class="inline-flex items-center gap-4 bg-white text-emerald-900 hover:bg-emerald-100 transition-all font-bold text-2xl px-10 py-6 rounded-3xl shadow-2xl shadow-emerald-950/50">
+        <i class="fa-solid fa-download text-3xl"></i>
+        <div>
+          <div class="text-base tracking-widest text-emerald-700">DOWNLOAD FOR ANDROID</div>
+          <div class="text-3xl -mt-1">Milledgeville Connect APK</div>
+        </div>
+      </a>
+
+      <p class="text-emerald-100/70 mt-6 text-sm">
+        Latest version uploaded • Works offline • Push notifications enabled
+      </p>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="max-w-5xl mx-auto px-6 py-20 grid md:grid-cols-3 gap-8">
+    <div class="bg-zinc-900/50 border border-white/10 rounded-3xl p-8">
+      <div class="text-5xl mb-4">🚦</div>
+      <h3 class="text-2xl font-bold mb-3">Live Traffic Alerts</h3>
+      <p class="text-zinc-400">Shoutouts auto-delete after 8 hours. Real community pulse.</p>
+    </div>
+    <div class="bg-zinc-900/50 border border-white/10 rounded-3xl p-8">
+      <div class="text-5xl mb-4">🛒</div>
+      <h3 class="text-2xl font-bold mb-3">Marketplace</h3>
+      <p class="text-zinc-400">Buy, sell, and trade locally with photos and messaging.</p>
+    </div>
+    <div class="bg-zinc-900/50 border border-white/10 rounded-3xl p-8">
+      <div class="text-5xl mb-4">🔎</div>
+      <h3 class="text-2xl font-bold mb-3">Lost & Found</h3>
+      <p class="text-zinc-400">Pets, wallets, keys — help your neighbors.</p>
+    </div>
+  </div>
+
+  <!-- Screenshots / Footer -->
+  <div class="bg-black py-16 border-t border-white/10">
+    <div class="max-w-5xl mx-auto px-6 text-center">
+      <p class="text-zinc-500 text-sm">Made with ❤️ for Milledgeville, Georgia</p>
+      <p class="text-xs text-zinc-600 mt-4">Version: Latest APK • Updated automatically on redeploy</p>
+    </div>
+  </div>
+
+</body>
+</html>
