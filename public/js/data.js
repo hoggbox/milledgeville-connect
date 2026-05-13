@@ -4395,12 +4395,12 @@ async function loadLostFoundPage(content) {
         <input id="lostSearchInput" type="text" placeholder="Search lost & found items..." 
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
 
-        <select id="lostTypeFilter" onchange="filterAndRenderLostItems()"
-                class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white placeholder:text-white/70 focus:outline-none focus:border-emerald-400 focus:bg-white/20">
-          <option value="all">All Items</option>
-          <option value="lost">Lost Only</option>
-          <option value="found">Found Only</option>
-        </select>
+<select id="lostTypeFilter" onchange="filterAndRenderLostItems()"
+        class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 focus:bg-white/20 appearance-none">
+  <option value="all" class="bg-slate-900 text-white">All Items</option>
+  <option value="lost" class="bg-slate-900 text-white">Lost Only</option>
+  <option value="found" class="bg-slate-900 text-white">Found Only</option>
+</select>
       </div>
 
       <div id="lostItemsList" class="space-y-4"></div>
@@ -4536,14 +4536,14 @@ async function loadMarketplacePage(content) {
         <input id="marketSearchInput" type="text" placeholder="Search items..." 
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
         
-        <select id="marketConditionFilter" onchange="filterAndRenderMarketplace()"
-                class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white placeholder:text-white/70 focus:outline-none focus:border-emerald-400 focus:bg-white/20">
-          <option value="all">All Conditions</option>
-          <option value="new">New</option>
-          <option value="like-new">Like New</option>
-          <option value="used" selected>Used</option>
-          <option value="fair">Fair</option>
-        </select>
+<select id="marketConditionFilter" onchange="filterAndRenderMarketplace()"
+        class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 focus:bg-white/20 appearance-none">
+  <option value="all" class="bg-slate-900 text-white">All Conditions</option>
+  <option value="new" class="bg-slate-900 text-white">New</option>
+  <option value="like-new" class="bg-slate-900 text-white">Like New</option>
+  <option value="used" class="bg-slate-900 text-white">Used</option>
+  <option value="fair" class="bg-slate-900 text-white">Fair</option>
+</select>
       </div>
 
       <div id="marketItemsList" class="space-y-4"></div>
