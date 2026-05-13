@@ -3115,49 +3115,42 @@ window.deleteOwnerEvent = async function (id) {
 // ─── CUTTING-EDGE ADMIN PANEL (2026 Style) ───────────────────────────────────
 async function loadAdminPage(content) {
   content.innerHTML = `
-    <div class="max-w-screen-2xl mx-auto px-4 py-6">
-      <div class="flex gap-6">
+    <div class="max-w-screen-2xl mx-auto px-3 md:px-6 py-6">
+      <!-- Mobile Top Tabs -->
+      <div class="md:hidden flex overflow-x-auto gap-2 pb-4 hide-scrollbar mb-6">
+        ${['📊 Dash', '👥 Users', '🛡️ Mod', '🏪 Biz', '📬 Claims', '📢 Broadcast', '📈 Analytics']
+          .map((label, i) => `
+            <button onclick="switchAdminTab(${i})" 
+                    id="mobileTab${i}"
+                    class="admin-tab whitespace-nowrap px-5 py-2.5 rounded-3xl text-sm font-semibold flex-shrink-0 ${i===0 ? 'bg-emerald-600 text-white' : 'bg-white/10'}">
+              ${label}
+            </button>`).join('')}
+      </div>
 
-        <!-- SIDEBAR -->
-        <div class="w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
+      <div class="flex gap-6">
+        <!-- Desktop Sidebar -->
+        <div class="hidden md:block w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
           <div class="flex items-center gap-3 mb-10 px-2">
-            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">🔧</div>
-            <h1 class="text-2xl font-bold tracking-tight">Admin Control</h1>
+            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl">🔧</div>
+            <h1 class="text-2xl font-bold">Admin</h1>
           </div>
 
           <nav class="space-y-1 text-sm">
-            <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">
-              📊 Dashboard
-            </button>
-            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              👥 Users & Reputation
-            </button>
-            <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              🛡️ Moderation
-            </button>
-            <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              🏪 Businesses
-            </button>
-            <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              📬 Claims
-            </button>
-            <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              📢 Broadcast
-            </button>
-            <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              📈 Analytics
-            </button>
+            <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">📊 Dashboard</button>
+            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">👥 Users & Rep</button>
+            <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🛡️ Moderation</button>
+            <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🏪 Businesses</button>
+            <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📬 Claims</button>
+            <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📢 Broadcast</button>
+            <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📈 Analytics</button>
           </nav>
         </div>
 
-        <!-- MAIN CONTENT -->
-        <div class="flex-1 min-w-0" id="adminMainContent">
-          <!-- Populated by tabs -->
-        </div>
+        <!-- Main Content -->
+        <div class="flex-1 min-w-0" id="adminMainContent"></div>
       </div>
     </div>`;
 
-  // Start on Dashboard
   window.currentAdminTab = 0;
   await switchAdminTab(0);
 }
@@ -4059,55 +4052,43 @@ function debounce(func, delay) {
   };
 }
 
-// Safe Moderation Loader
+// ─── SAFE LOADERS FOR ORIGINAL PANELS ─────────────────────────────────────
 async function loadModerationPanelSafe() {
   const container = document.getElementById('adminMainContent');
-  container.innerHTML = `<div class="p-8 text-white/60">Loading Moderation Panel...</div>`;
+  container.innerHTML = `<div class="p-8 text-center text-white/60">Loading Moderation...</div>`;
 
   try {
-    if (typeof window.loadModerationPanelOriginal === 'function') {
-      await window.loadModerationPanelOriginal();
-    } else if (typeof loadModerationPanel === 'function') {
-      // Temporarily redirect output
-      const oldContent = document.getElementById('content');
-      if (oldContent) oldContent.style.display = 'none';
-      await loadModerationPanel();
+    // Temporarily make #adminMainContent act like #content
+    const originalContent = document.getElementById('content');
+    if (originalContent) originalContent.style.display = 'none';
+
+    if (typeof loadModerationPanel === 'function') {
+      await loadModerationPanel();           // Your original function
     } else {
-      container.innerHTML = `
-        <div class="p-8 bg-white/5 rounded-3xl">
-          <h3 class="font-bold mb-3">🛡️ Content Moderation</h3>
-          <p class="text-white/70">Your original moderation panel should load here.</p>
-          <p class="text-xs text-white/40 mt-4">If nothing appears, the original function may still reference #content instead of #adminMainContent.</p>
-        </div>`;
+      container.innerHTML = `<div class="p-12 text-white/50">Moderation panel not found.</div>`;
     }
   } catch (e) {
-    console.error('Moderation failed:', e);
-    container.innerHTML = `<div class="p-8 text-red-400">Moderation panel crashed. Check console.</div>`;
+    console.error(e);
+    container.innerHTML = `<div class="p-8 text-red-400">Moderation panel crashed.</div>`;
   }
 }
 
-// Safe Claims Loader
 async function loadAdminClaimsSafe() {
   const container = document.getElementById('adminMainContent');
-  container.innerHTML = `<div class="p-8 text-white/60">Loading Claims Panel...</div>`;
+  container.innerHTML = `<div class="p-8 text-center text-white/60">Loading Claims...</div>`;
 
   try {
-    if (typeof window.loadAdminClaimsOriginal === 'function') {
-      await window.loadAdminClaimsOriginal();
-    } else if (typeof loadAdminClaims === 'function') {
-      const oldContent = document.getElementById('content');
-      if (oldContent) oldContent.style.display = 'none';
-      await loadAdminClaims();
+    const originalContent = document.getElementById('content');
+    if (originalContent) originalContent.style.display = 'none';
+
+    if (typeof loadAdminClaims === 'function') {
+      await loadAdminClaims();               // Your original function
     } else {
-      container.innerHTML = `
-        <div class="p-8 bg-white/5 rounded-3xl">
-          <h3 class="font-bold mb-3">📬 Claims Management</h3>
-          <p class="text-white/70">Your original claims panel should load here.</p>
-        </div>`;
+      container.innerHTML = `<div class="p-12 text-white/50">Claims panel not found.</div>`;
     }
   } catch (e) {
-    console.error('Claims failed:', e);
-    container.innerHTML = `<div class="p-8 text-red-400">Claims panel crashed. Check console.</div>`;
+    console.error(e);
+    container.innerHTML = `<div class="p-8 text-red-400">Claims panel crashed.</div>`;
   }
 }
 
