@@ -3165,12 +3165,14 @@ async function loadAdminPage(content) {
 window.switchAdminTab = async function(tab) {
   window.currentAdminTab = tab;
 
-  // Highlight active tab
-  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
-    if (parseInt(btn.dataset.tab) === tab) {
-      btn.classList.add('bg-white/20', 'border-emerald-400', 'text-white');
+  // Fix: Use correct class name that actually exists in your sidebar
+  document.querySelectorAll('.admin-tab').forEach(btn => {
+    if (parseInt(btn.id.replace('adminTab', '')) === tab) {
+      btn.classList.add('bg-emerald-600', 'text-white');
+      btn.classList.remove('hover:bg-white/10');
     } else {
-      btn.classList.remove('bg-white/20', 'border-emerald-400', 'text-white');
+      btn.classList.remove('bg-emerald-600', 'text-white');
+      btn.classList.add('hover:bg-white/10');
     }
   });
 
@@ -3183,27 +3185,21 @@ window.switchAdminTab = async function(tab) {
     </div>`;
 
   try {
-    if (tab === 0) {
-      await renderAdminDashboard();
-    } else if (tab === 1) {
-      await renderAdminUsers();
-    } else if (tab === 2) {                    // Moderation
-      await loadModerationPanel();             // Your original function
-    } else if (tab === 3) {
-      await renderAdminBusinesses();
-    } else if (tab === 4) {                    // Claims
-      await loadAdminClaims();                 // Your original function
-    } else if (tab === 5) {
-      await renderAdminBroadcast();
-    } else if (tab === 6) {
-      await renderAdminAnalytics();
-    }
+    if (tab === 0) await renderAdminDashboard();
+    else if (tab === 1) await renderAdminUsers();
+    else if (tab === 2) {                    // Moderation
+      await loadModerationPanelSafe();
+    } else if (tab === 3) await renderAdminBusinesses();
+    else if (tab === 4) {                    // Claims
+      await loadAdminClaimsSafe();
+    } else if (tab === 5) await renderAdminBroadcast();
+    else if (tab === 6) await renderAdminAnalytics();
   } catch (err) {
-    console.error(err);
+    console.error('Tab load error:', err);
     container.innerHTML = `
-      <div class="text-center py-20 text-red-400">
-        Failed to load this tab.<br>
-        <span class="text-white/50 text-sm">Check browser console for details</span>
+      <div class="bg-red-500/10 border border-red-500/30 rounded-3xl p-8 text-center">
+        <p class="text-red-400 font-medium">Failed to load this tab</p>
+        <p class="text-white/50 text-sm mt-2">Check console (F12) for details</p>
       </div>`;
   }
 };
@@ -4063,21 +4059,47 @@ function debounce(func, delay) {
   };
 }
 
-// Safety wrappers so old moderation/claims functions work inside the new layout
-async function loadModerationPanel() {
+// Safe Moderation Loader
+async function loadModerationPanelSafe() {
   const container = document.getElementById('adminMainContent');
-  // If your original loadModerationPanel expects document.getElementById('content')
-  // we override it temporarily
-  const originalContent = document.getElementById('content');
-  if (originalContent) originalContent.style.display = 'none';
+  try {
+    // Try your original moderation function
+    if (typeof loadModerationPanel === 'function') {
+      await loadModerationPanel();
+    } else if (typeof window.loadModerationPanelOriginal === 'function') {
+      await window.loadModerationPanelOriginal();
+    } else {
+      container.innerHTML = `
+        <div class="p-8 text-white/70">
+          <h3 class="font-bold mb-4">🛡️ Content Moderation</h3>
+          <p>Your original moderation panel should appear here.</p>
+          <p class="text-xs text-white/40 mt-6">If it's still blank, the original <code>loadModerationPanel()</code> function may need updating to use #adminMainContent instead of #content.</p>
+        </div>`;
+    }
+  } catch (e) {
+    console.error('Moderation panel failed:', e);
+    container.innerHTML = `<div class="p-8 text-red-400">Moderation panel crashed. Check console.</div>`;
+  }
+}
 
-  // Call your original function
-  if (typeof window.loadModerationPanelOriginal === 'function') {
-    await window.loadModerationPanelOriginal();
-  } else if (typeof loadModerationPanel === 'function') {
-    await loadModerationPanel();   // fallback
-  } else {
-    container.innerHTML = `<div class="p-8 text-white/60">Moderation panel loaded (original function).</div>`;
+// Safe Claims Loader
+async function loadAdminClaimsSafe() {
+  const container = document.getElementById('adminMainContent');
+  try {
+    if (typeof loadAdminClaims === 'function') {
+      await loadAdminClaims();
+    } else if (typeof window.loadAdminClaimsOriginal === 'function') {
+      await window.loadAdminClaimsOriginal();
+    } else {
+      container.innerHTML = `
+        <div class="p-8 text-white/70">
+          <h3 class="font-bold mb-4">📬 Claims Management</h3>
+          <p>Your original claims panel should appear here.</p>
+        </div>`;
+    }
+  } catch (e) {
+    console.error('Claims panel failed:', e);
+    container.innerHTML = `<div class="p-8 text-red-400">Claims panel crashed. Check console.</div>`;
   }
 }
 
@@ -5062,27 +5084,64 @@ window.sendBroadcast = async function (ownersOnly = false) {
   }
 };
 
-// ─── ANALYTICS (Tab 6) ───────────────────────────────────────────────────────
 async function renderAdminAnalytics() {
   const container = document.getElementById('adminMainContent');
-  const stats = await apiGet('/admin/stats').catch(() => ({}));
+  
+  let stats = {};
+  try {
+    stats = await apiGet('/admin/stats') || {};
+  } catch (e) {
+    console.log("Stats endpoint not ready yet");
+  }
 
   container.innerHTML = `
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold mb-4">Community Growth</h3>
-        <div class="text-5xl font-black">${stats.totalUsers || 0}</div>
-        <p class="text-white/50">Total Registered Users</p>
+    <div class="space-y-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
+          <div class="text-4xl mb-2">👥</div>
+          <div class="text-4xl font-bold">${stats.totalUsers || 0}</div>
+          <div class="text-white/60 text-sm mt-1">Total Users</div>
+        </div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
+          <div class="text-4xl mb-2">🚦</div>
+          <div class="text-4xl font-bold">${stats.activeShoutouts || 0}</div>
+          <div class="text-white/60 text-sm mt-1">Active Shoutouts</div>
+        </div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
+          <div class="text-4xl mb-2">🛒</div>
+          <div class="text-4xl font-bold">${stats.marketplaceItems || 0}</div>
+          <div class="text-white/60 text-sm mt-1">Marketplace</div>
+        </div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
+          <div class="text-4xl mb-2">⭐</div>
+          <div class="text-4xl font-bold">${stats.totalReputation || 0}</div>
+          <div class="text-white/60 text-sm mt-1">Reputation Points</div>
+        </div>
       </div>
 
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold mb-4">Activity Today</h3>
-        <div class="space-y-4">
-          <div class="flex justify-between"><span>Shoutouts</span><span class="font-mono">${stats.shoutoutsToday || 0}</span></div>
-          <div class="flex justify-between"><span>Marketplace Listings</span><span class="font-mono">${stats.marketplaceToday || 0}</span></div>
-          <div class="flex justify-between"><span>Lost & Found Posts</span><span class="font-mono">${stats.lostFoundToday || 0}</span></div>
+        <h3 class="font-bold mb-4">Today's Activity</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-emerald-400 text-xl">🚦 Shoutouts</div>
+            <div class="text-3xl font-bold mt-1">${stats.shoutoutsToday || 0}</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-amber-400 text-xl">🛒 Marketplace</div>
+            <div class="text-3xl font-bold mt-1">${stats.marketplaceToday || 0}</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-sky-400 text-xl">🔎 Lost & Found</div>
+            <div class="text-3xl font-bold mt-1">${stats.lostFoundToday || 0}</div>
+          </div>
         </div>
       </div>
+
+      ${Object.keys(stats).length === 0 ? `
+      <div class="text-center py-12 border border-dashed border-white/20 rounded-3xl">
+        <p class="text-white/50">Backend <code>/admin/stats</code> route not implemented yet.</p>
+        <p class="text-xs text-white/30 mt-2">Add it in your api.js to see real numbers.</p>
+      </div>` : ''}
     </div>`;
 }
 

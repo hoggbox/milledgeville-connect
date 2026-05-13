@@ -1539,6 +1539,63 @@ router.delete('/owner/business/photos/:index', authenticate, async (req, res) =>
   }
 });
 
+// ─── ADMIN STATS ENDPOINT ───────────────────────────────────────────────────
+router.get('/admin/stats', authenticate, async (req, res) => {
+  if (req.user.email !== 'imhoggbox@gmail.com') {  // Only you for now
+    return res.status(403).json({ message: 'Admin only' });
+  }
+
+  try {
+    const [
+      totalUsers,
+      activeShoutouts,
+      marketplaceItems,
+      totalReputation,
+      shoutoutsToday,
+      marketplaceToday,
+      lostFoundToday
+    ] = await Promise.all([
+      User.countDocuments(),
+      
+      Shoutout.countDocuments({ 
+        createdAt: { $gte: new Date(Date.now() - 8 * 60 * 60 * 1000) }  // last 8 hours
+      }),
+      
+      MarketplaceItem.countDocuments(),
+      
+      User.aggregate([{ $group: { _id: null, total: { $sum: "$reputation" } } }])
+        .then(r => r[0]?.total || 0),
+      
+      // Today’s activity
+      Shoutout.countDocuments({ 
+        createdAt: { $gte: new Date().setHours(0,0,0,0) } 
+      }),
+      
+      MarketplaceItem.countDocuments({ 
+        createdAt: { $gte: new Date().setHours(0,0,0,0) } 
+      }),
+      
+      LostItem.countDocuments({ 
+        createdAt: { $gte: new Date().setHours(0,0,0,0) } 
+      })
+    ]);
+
+    res.json({
+      totalUsers,
+      activeShoutouts,
+      marketplaceItems,
+      totalReputation,
+      shoutoutsToday,
+      marketplaceToday,
+      lostFoundToday,
+      // You can add more later
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Stats error' });
+  }
+});
+
 router.get('/owner/deals', authenticate, async (req, res) => {
   try {
     const deals = await Deal.find({ owner: req.userId }).sort({ createdAt: -1 });
