@@ -10,11 +10,12 @@ const messaging = firebase.messaging();
 
 // Background messages (app closed)
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || "Milledgeville Connect";
+  const d = payload.data || {};
+  const title = d.title || "Milledgeville Connect";
   const options = {
-    body: payload.notification?.body || "",
+    body: d.body || "",
     icon: "/icon-192.png",
-    data: payload.data || payload
+    data: d   // shoutoutId, page, etc. all flow through here
   };
   self.registration.showNotification(title, options);
 });
