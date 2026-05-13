@@ -4396,7 +4396,7 @@ async function loadLostFoundPage(content) {
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
 
         <select id="lostTypeFilter" onchange="filterAndRenderLostItems()"
-                class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+                class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white placeholder:text-white/70 focus:outline-none focus:border-emerald-400 focus:bg-white/20">
           <option value="all">All Items</option>
           <option value="lost">Lost Only</option>
           <option value="found">Found Only</option>
@@ -4537,7 +4537,7 @@ async function loadMarketplacePage(content) {
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
         
         <select id="marketConditionFilter" onchange="filterAndRenderMarketplace()"
-                class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+                class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white placeholder:text-white/70 focus:outline-none focus:border-emerald-400 focus:bg-white/20">
           <option value="all">All Conditions</option>
           <option value="new">New</option>
           <option value="like-new">Like New</option>
