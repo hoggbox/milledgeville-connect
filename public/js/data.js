@@ -100,17 +100,26 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
 
   let userId = null;
   let displayName = fallbackName;
+  let reputation = 0;
 
   if (typeof userData === 'object' && userData !== null) {
     userId = userData._id || userData.id;
     displayName = userData.name || userData.authorName || userData.author || fallbackName;
+    reputation = userData.reputation || 0;
   } else if (typeof userData === 'string' && userData.length > 10) {
     userId = userData; // already an ID
   }
 
   if (!userId) return displayName;
 
-  return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" class="cursor-pointer hover:underline text-emerald-400">${displayName}</span>`;
+  const repBadge = reputation > 0 
+    ? `<span class="inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1.5">⭐${reputation}</span>` 
+    : '';
+
+  return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
+                class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
+            ${displayName}${repBadge}
+          </span>`;
 }
 
 // In-memory unread count so we can zero it instantly without a round-trip
@@ -1907,7 +1916,7 @@ function renderShoutoutCard(s) {
         <div class="flex items-start gap-3 flex-1 min-w-0">
           <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
           <div class="flex-1 min-w-0">
-            <div class="font-semibold text-sm text-white">${s.author || 'Community Member'}</div>
+            <div class="font-semibold text-sm text-white">${s.author || 'Community Member'} ${renderClickableUser(s.authorId || s.author)}</div>
             <div class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</div>
           </div>
         </div>

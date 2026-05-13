@@ -22,19 +22,32 @@ const userSchema = new mongoose.Schema({
   notifyDeals:             { type: Boolean, default: true },
   notifyEvents:            { type: Boolean, default: true },
   notifyShoutouts:         { type: Boolean, default: false },
-  notifyShoutoutComments:  { type: Boolean, default: false },   // ← Important for comments
+  notifyShoutoutComments:  { type: Boolean, default: false },
   notifyLostFound:         { type: Boolean, default: true },
   notifyMarketplace:       { type: Boolean, default: true },
   notifyMessages:          { type: Boolean, default: true },
 
   pushEnabled: { type: Boolean, default: false },
-    // Anti-spam
+
+  // Anti-spam
   lastPostAt: { type: Date, default: null },
 
-  // ─── Token Storage ─────────────────────────────────────────────────
-  fcmTokens: [{ type: String }],                    // Native Android/iOS tokens
+  // ─── REPUTATION SYSTEM ─────────────────────────────────────────────
+  reputation: { 
+    type: Number, 
+    default: 0 
+  },
+  repHistory: [{
+    action: String,        // e.g. "Shoutout Like", "Good Review", "Item Resolved"
+    amount: Number,
+    sourceId: String,      // reference to shoutout, review, etc.
+    date: { type: Date, default: Date.now }
+  }],
 
-  webPushSubscriptions: [{                          // Browser push subscriptions
+  // ─── Token Storage ─────────────────────────────────────────────────
+  fcmTokens: [{ type: String }],
+
+  webPushSubscriptions: [{
     endpoint: String,
     expirationTime: Number,
     keys: {
@@ -43,7 +56,6 @@ const userSchema = new mongoose.Schema({
     }
   }],
 
-  // ─── Social / Other ────────────────────────────────────────────────
   following: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Business'

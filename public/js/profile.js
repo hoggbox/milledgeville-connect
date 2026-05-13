@@ -656,67 +656,90 @@ function escHtml(str) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── Other User Profile Modal ─────────────────────────────────────────────────
-window.showUserProfileModal = async function(userId) {
-  if (!currentUser) return showAuthModal({ message: 'Sign in to view profiles and message users.' });
-
-  const modal   = document.getElementById('userProfileModal');
-  const content = document.getElementById('userProfileContent');
+// ─── OTHER USER PROFILE MODAL (with Reputation) ───────────────────────────────
+window.showUserProfileModal = async function (userId) {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to view profiles.' });
+    return;
+  }
 
   try {
-    const user      = await apiGet(`/users/${userId}`);
-    const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(userId);
+    const user = await apiGet(`/users/${userId}`);
+    if (!user || user.message) throw new Error('User not found');
 
-    content.innerHTML = `
-      <div class="flex justify-center -mt-2 mb-6">
-        <div class="w-24 h-24 rounded-3xl overflow-hidden ring-4 ring-emerald-200 flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
-          ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover">` : user.name[0].toUpperCase()}
+    const rep = user.reputation || 0;
+    const isOwnProfile = currentUser._id === user._id;
+
+    const html = `
+      <div onclick="if(event.target.id==='userProfileModal')hideUserProfileModal()" 
+           id="userProfileModal"
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[13000] flex items-end md:items-center md:justify-center overflow-y-auto">
+        <div onclick="event.stopImmediatePropagation()" 
+             class="bg-white text-slate-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
+
+          <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100 z-10">
+            <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+          </div>
+
+          <div class="p-6">
+            <!-- Avatar -->
+            <div class="flex justify-center mb-4">
+              <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-emerald-200 shadow-xl flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
+                ${user.avatar 
+                  ? `<img src="${user.avatar}" class="w-full h-full object-cover">` 
+                  : (user.name || '?')[0].toUpperCase()}
+              </div>
+            </div>
+
+            <h2 class="text-3xl font-bold text-center mb-1">${user.name}</h2>
+            
+            <!-- Reputation -->
+            <div class="flex justify-center mb-6">
+              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
+                ⭐ ${rep}
+                <span class="text-base font-normal opacity-75">Reputation</span>
+              </div>
+            </div>
+
+            ${user.bio ? `<p class="text-center text-slate-600 italic mb-6">"${user.bio}"</p>` : ''}
+
+            ${user.neighborhood ? `
+            <div class="text-center text-slate-500 mb-6">
+              📍 ${user.neighborhood}
+            </div>` : ''}
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 mt-8">
+              <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
+                ✉️ Message
+              </button>
+              
+              ${!isOwnProfile ? `
+              <button onclick="toggleBlockUser('${user._id}'); hideUserProfileModal()" 
+                      class="flex-1 bg-slate-700 hover:bg-slate-800 text-white py-4 rounded-3xl font-semibold text-lg">
+                🚫 Block
+              </button>` : ''}
+            </div>
+
+            <button onclick="hideUserProfileModal()" 
+                    class="w-full mt-4 text-slate-400 py-3 text-sm">
+              Close
+            </button>
+          </div>
         </div>
-      </div>
-      <h2 class="text-3xl font-bold text-center">${user.name}</h2>
-      ${user.neighborhood ? `<p class="text-center text-slate-500 text-sm mt-1">📍 ${user.neighborhood}</p>` : ''}
-      ${user.bio ? `<p class="mt-6 text-slate-600 italic text-center">"${user.bio}"</p>` : ''}
-      
-      <div class="mt-8 flex gap-3">
-        <button onclick="startDirectMessage('${userId}'); hideUserProfileModal();" 
-                class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg flex items-center justify-center gap-2">
-          ✉️ Message
-        </button>
-        <button onclick="toggleBlockUser('${userId}')" 
-                class="flex-1 ${isBlocked ? 'bg-red-500' : 'bg-slate-700'} hover:bg-slate-800 text-white py-4 rounded-3xl font-semibold text-lg">
-          ${isBlocked ? '✅ Unblock' : '🚫 Block'}
-        </button>
-      </div>
-      
-      <button onclick="hideUserProfileModal()" class="w-full mt-4 text-slate-400">Close</button>
-    `;
-    modal.classList.remove('hidden');
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+
   } catch (e) {
-    content.innerHTML = `<p class="text-red-500 text-center">Could not load profile.</p>`;
+    showToast('Could not load profile', 'error');
   }
 };
 
-window.hideUserProfileModal = function() {
+window.hideUserProfileModal = function () {
   const modal = document.getElementById('userProfileModal');
-  if (modal) modal.classList.add('hidden');
-};
-
-window.startDirectMessage = function(receiverId) {
-  hideUserProfileModal();
-  hideComposeModal();
-  showComposeMessageModal(receiverId, 'Selected User');
-};
-
-window.toggleBlockUser = async function(userId) {
-  const res = await apiPost(`/users/${userId}/block`, {});
-  if (res.blocked !== undefined) {
-    currentUser.blockedUsers = currentUser.blockedUsers || [];
-    const idx = currentUser.blockedUsers.indexOf(userId);
-    if (idx === -1) currentUser.blockedUsers.push(userId);
-    else currentUser.blockedUsers.splice(idx, 1);
-    showUserProfileModal(userId);
-    showToast(res.blocked ? '✅ User blocked' : '✅ User unblocked');
-  }
+  if (modal) modal.remove();
 };
 
 // ─── Exports ──────────────────────────────────────────────────────────────────

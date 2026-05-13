@@ -699,10 +699,24 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
   try {
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
-    if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
+    if (lost.owner.toString() !== req.userId) 
+      return res.status(403).json({ message: 'Not authorized' });
 
     lost.status = 'resolved';
     await lost.save();
+
+    // Award reputation
+    const owner = await User.findById(req.userId);
+    if (owner) {
+      owner.reputation = (owner.reputation || 0) + 15;
+      owner.repHistory.push({
+        action: "Lost Item Resolved",
+        amount: 15,
+        sourceId: lost._id
+      });
+      await owner.save();
+    }
+
     res.json({ message: 'Marked as resolved', item: lost });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -797,10 +811,24 @@ router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
   try {
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
-    if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
+    if (item.seller.toString() !== req.userId) 
+      return res.status(403).json({ message: 'Not authorized' });
 
     item.status = 'sold';
     await item.save();
+
+    // Award reputation
+    const seller = await User.findById(req.userId);
+    if (seller) {
+      seller.reputation = (seller.reputation || 0) + 15;
+      seller.repHistory.push({
+        action: "Item Sold",
+        amount: 15,
+        sourceId: item._id
+      });
+      await seller.save();
+    }
+
     res.json({ message: 'Marked as sold', item });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -848,11 +876,37 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
     const idx = shoutout.likes.indexOf(req.userId);
-    if (idx === -1) shoutout.likes.push(req.userId);
-    else shoutout.likes.splice(idx, 1);
+    const wasNewLike = idx === -1;
+
+    if (wasNewLike) {
+      shoutout.likes.push(req.userId);
+    } else {
+      shoutout.likes.splice(idx, 1);
+    }
+
     await shoutout.save();
-    res.json({ likes: shoutout.likes.length, liked: idx === -1 });
+
+    // === AWARD REPUTATION FOR GOOD TRAFFIC ALERTS ===
+    if (wasNewLike && shoutout.authorId) {
+      const author = await User.findById(shoutout.authorId);
+      if (author) {
+        author.reputation = (author.reputation || 0) + 8;
+        author.repHistory.push({
+          action: "Shoutout Like",
+          amount: 8,
+          sourceId: shoutout._id
+        });
+        await author.save();
+      }
+    }
+
+    res.json({ 
+      likes: shoutout.likes.length, 
+      liked: wasNewLike,
+      reputationAwarded: wasNewLike ? 8 : 0
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1112,12 +1166,35 @@ router.post('/business/:id/reviews', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Rating 1-5 required' });
 
     const user = await User.findById(req.userId);
+    const business = await Business.findById(req.params.id);
 
     const review = await Review.findOneAndUpdate(
       { business: req.params.id, user: req.userId },
-      { business: req.params.id, user: req.userId, authorName: user.name, rating, title: title || '', body: body || '', createdAt: new Date() },
+      { 
+        business: req.params.id, 
+        user: req.userId, 
+        authorName: user.name, 
+        rating, 
+        title: title || '', 
+        body: body || '' 
+      },
       { upsert: true, new: true }
     );
+
+    // Award reputation for good review
+    if (business && business.owner) {
+      const owner = await User.findById(business.owner);
+      if (owner) {
+        owner.reputation = (owner.reputation || 0) + 10;
+        owner.repHistory.push({
+          action: "Positive Business Review",
+          amount: 10,
+          sourceId: business._id
+        });
+        await owner.save();
+      }
+    }
+
     res.json(review);
   } catch (err) {
     res.status(500).json({ message: err.message });
