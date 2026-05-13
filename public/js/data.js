@@ -488,12 +488,14 @@ if (allBusinesses.length === 0) {
   _renderSpotlight(allBusinesses);
 }
 
-const [eventsData, dealsData, newsData, shoutoutsData] = await Promise.all([
+const [eventsData, dealsData, newsData, shoutoutsRes] = await Promise.all([
   apiGet('/events').catch(() => []),
   apiGet('/deals').catch(() => []),
   apiGet('/news').catch(() => []),
-  apiGet('/shoutouts').catch(() => []),
+  apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
+
+const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   // Digest
   const digestHTML = `
@@ -1673,55 +1675,122 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// ─── SHOUTOUTS — UPDATED WITH PHOTO UPLOAD ───────────────────────────────────
+// ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
-  const shoutouts = await apiGet('/shoutouts');
+  let currentPage = 1;
+  const PAGE_SIZE = 8;
 
-  let html = `<div class="max-w-2xl mx-auto px-2">
-    <h2 class="text-3xl md:text-4xl font-bold mb-6">Community Shoutouts</h2>`;
+  const renderPage = async (page = 1) => {
+    currentPage = page;
 
-  if (currentUser) {
-    html += `
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 mb-6">
-        <div class="flex items-start gap-3">
-          <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
-          <div class="flex-1">
-            <textarea id="shoutoutInput" rows="2" 
-              class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
-              placeholder="What's happening in Milledgeville?"></textarea>
-
-            <!-- Photo picker -->
-            <div class="mt-3 flex items-center gap-3">
-              <button onclick="document.getElementById('shoutoutImageInput').click()" 
-                      class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-2xl text-sm font-semibold text-white/80 transition">
-                📷 Add photos
-              </button>
-              <input id="shoutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
-                     onchange="handleShoutoutImages(this)">
-              <div id="shoutoutImagePreviews" class="flex gap-2 flex-wrap"></div>
-            </div>
-
-            <div class="flex justify-end mt-4">
-              <button onclick="postShoutoutWithPhoto()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">Post Shoutout</button>
-            </div>
+    // Show loading state
+    content.innerHTML = `
+      <div class="max-w-2xl mx-auto px-2 pb-10">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold">🚦 Community Shoutouts</h1>
+            <p class="text-emerald-300 text-sm mt-1">Live traffic alerts • Auto-delete after 8 hours</p>
           </div>
         </div>
+
+        <!-- Compose Box -->
+        ${currentUser ? `
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 mb-8">
+          <div class="flex items-start gap-3">
+            <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+            <div class="flex-1">
+              <textarea id="shoutoutInput" rows="2" 
+                class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
+                placeholder="What's happening in Milledgeville?"></textarea>
+
+              <!-- Photo picker -->
+              <div class="mt-3 flex items-center gap-3">
+                <button onclick="document.getElementById('shoutoutImageInput').click()" 
+                        class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-2xl text-sm font-semibold text-white/80 transition">
+                  📷 Add photos
+                </button>
+                <input id="shoutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                       onchange="handleShoutoutImages(this)">
+                <div id="shoutoutImagePreviews" class="flex gap-2 flex-wrap"></div>
+              </div>
+
+              <div class="flex justify-end mt-4">
+                <button onclick="postShoutoutWithPhoto()" 
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">
+                  Post Shoutout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>` : guestBanner('post shoutouts, comment, and like')}
+
+        <div id="shoutoutsFeed" class="space-y-4 min-h-[300px]"></div>
+
+        <!-- Pagination -->
+        <div id="shoutoutPagination" class="flex justify-center items-center gap-3 mt-8"></div>
       </div>`;
-  } else {
-    html += guestBanner('post shoutouts, comment, and like');
+
+    try {
+      const res = await apiGet(`/shoutouts?page=${page}&limit=${PAGE_SIZE}`);
+      const { shoutouts = [], pagination = {} } = res;
+           
+      if (!res || !Array.isArray(shoutouts)) {
+        feed.innerHTML = `<p class="text-red-400 text-center py-12">Error loading shoutouts</p>`;
+        return;
+      }
+
+      const feed = document.getElementById('shoutoutsFeed');
+
+      if (!shoutouts.length) {
+        feed.innerHTML = `<p class="text-center text-white/50 py-16">No active shoutouts right now.<br>Be the first to post one! 🚦</p>`;
+      } else {
+        feed.innerHTML = shoutouts.map(s => renderShoutoutCard(s)).join('');
+      }
+
+      renderPaginationControls(pagination);
+    } catch (err) {
+      console.error(err);
+      document.getElementById('shoutoutsFeed').innerHTML = 
+        `<p class="text-red-400 text-center py-12">Failed to load shoutouts. Please try again.</p>`;
+    }
+  };
+
+  // Pagination UI
+  function renderPaginationControls(p) {
+    const container = document.getElementById('shoutoutPagination');
+    if (!p || p.totalPages <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+
+    let html = `
+      <button onclick="window._loadShoutoutPage(${Math.max(1, currentPage-1)})" 
+              class="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-3xl transition ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+        ← Previous
+      </button>
+
+      <div class="px-6 py-3 bg-white/5 rounded-3xl text-sm font-medium text-white/70">
+        Page <span class="text-white font-semibold">${p.currentPage}</span> of ${p.totalPages}
+      </div>
+
+      <button onclick="window._loadShoutoutPage(${Math.min(p.totalPages, currentPage+1)})" 
+              class="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-3xl transition ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+        Next →
+      </button>
+    `;
+
+    container.innerHTML = html;
   }
 
-  if (!shoutouts.length) {
-    html += `<p class="text-center text-white/50 py-12">No shoutouts yet — be the first!</p>`;
-  } else {
-    html += `<div class="space-y-4" id="shoutoutsFeed">`;
-    shoutouts.forEach(s => { html += renderShoutoutCard(s); });
-    html += `</div>`;
-  }
+  // Make pagination buttons work globally
+  window._loadShoutoutPage = (page) => renderPage(page);
 
-  html += `</div>`;
-  content.innerHTML = html;
+  // Initial render
+  await renderPage(1);
 }
+
+// Make sure router can call it
+window.loadShoutoutsPage = loadShoutoutsPage;
 
 // ─── SHOUTOUT IMAGE LIGHTBOX ──────────────────────────────────────────────────
 window.openShoutoutImageViewer = function (shoutoutId, startIndex) {

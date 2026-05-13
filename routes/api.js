@@ -527,11 +527,29 @@ router.post('/events/:id/rsvp', authenticate, async (req, res) => {
 // ─── SHOUTOUTS ─────────────────────────────────────────────────────────────
 router.get('/shoutouts', optionalAuth, async (req, res) => {
   try {
-    const shoutouts = await Shoutout.find()
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .populate('authorId', 'name avatar');
-    res.json(shoutouts);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const [shoutouts, total] = await Promise.all([
+      Shoutout.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('authorId', 'name avatar'),
+      Shoutout.countDocuments()
+    ]);
+
+    res.json({
+      shoutouts,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        hasPrev: page > 1,
+        hasNext: page < Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -549,7 +567,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const { text, images } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours – auto-deletes via TTL index
 
     const shoutout = await Shoutout.create({
       text: text.trim(),
