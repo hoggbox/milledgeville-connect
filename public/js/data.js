@@ -436,8 +436,6 @@ async function loadHomePage(content) {
 
       document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
 
-      document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
-
     } catch (err) {
       console.warn('Weather error:', err);
       const desc = document.getElementById('weatherDesc');
@@ -1686,6 +1684,12 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
+// Stub — polls for claim approval after submission (backend integration point)
+function startVerificationPoll(businessId) {
+  console.log('[Claim] Verification poll started for business:', businessId);
+  // Future: poll /claim/:businessId/status every 30s and notify user when approved
+}
+
 // ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
   let currentPage = 1;
@@ -1887,7 +1891,6 @@ window.postShoutoutWithPhoto = async function () {
     showToast('✅ Shoutout posted!');
     _pendingShoutoutImages = [];
     input.value = '';
-    showToast('✅ Shoutout posted!');
     loadPage('shoutouts');
   } else {
     showToast(res.message || 'Error posting shoutout', 'error');
@@ -3755,6 +3758,19 @@ async function renderLostComments(item) {
   container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No comments yet</p>';
 }
 
+window.markLostResolved = async function() {
+  if (!currentLostItemId) return;
+  if (!confirm('Mark this item as resolved?')) return;
+  try {
+    const res = await apiPost(`/lostitems/${currentLostItemId}/resolve`, {});
+    showToast('✅ Marked as resolved!');
+    hideLostDetailModal();
+    loadPage('lostfound');
+  } catch (e) {
+    showToast('Error marking resolved', 'error');
+  }
+};
+
 // ====================== MARKETPLACE ======================
 
 window.showPostMarketplaceModal = function() {
@@ -3838,7 +3854,6 @@ window.postMarketplaceItem = async function() {
     showToast('✅ Listing posted!');
     hideMarketModal();
     loadPage('marketplace');
-    showToast('✅ Listing posted!');
   }
 };
 
@@ -3912,7 +3927,26 @@ window.postMarketComment = async function() {
   input.value = '';
   const items = await apiGet('/marketplace');
   const item = items.find(i => i._id === currentMarketItemId);
+  if (item) renderMarketComments(item);
 };
+
+function renderMarketComments(item) {
+  const container = document.getElementById('marketCommentsContainer');
+  if (!container) return;
+  const comments = item.comments || [];
+  if (!comments.length) {
+    container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet</p>';
+    return;
+  }
+  container.innerHTML = comments.map(c => {
+    const authorId = c.authorId?._id || c.authorId;
+    return `<div class="bg-slate-100 rounded-2xl p-4">
+      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')"
+         class="font-medium cursor-pointer hover:underline">${c.author || 'Anonymous'}</p>
+      <p class="text-slate-700">${c.text}</p>
+    </div>`;
+  }).join('');
+}
 
 window.markMarketSold = async function() {
   if (confirm('Mark this item as sold?')) {
@@ -4054,15 +4088,6 @@ window.filterAndRenderLostItems = function() {
   renderLostItemsPage();
 };
 
-// Reuse the same debounce function (add it once if not already present)
-function debounce(func, delay) {
-  let timeout;
-  return function() {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, arguments), delay);
-  };
-}
-
 async function loadMarketplacePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2">
@@ -4191,41 +4216,22 @@ function debounce(func, delay) {
 
 // ─── SAFE LOADERS FOR ORIGINAL PANELS ─────────────────────────────────────
 async function loadModerationPanelSafe() {
-  const container = document.getElementById('adminMainContent');
-  container.innerHTML = `<div class="p-8 text-center text-white/60">Loading Moderation...</div>`;
-
   try {
-    // Temporarily make #adminMainContent act like #content
-    const originalContent = document.getElementById('content');
-    if (originalContent) originalContent.style.display = 'none';
-
-    if (typeof loadModerationPanel === 'function') {
-      await loadModerationPanel();           // Your original function
-    } else {
-      container.innerHTML = `<div class="p-12 text-white/50">Moderation panel not found.</div>`;
-    }
+    await loadModerationPanel();
   } catch (e) {
     console.error(e);
-    container.innerHTML = `<div class="p-8 text-red-400">Moderation panel crashed.</div>`;
+    const container = document.getElementById('adminMainContent');
+    if (container) container.innerHTML = `<div class="p-8 text-red-400">Moderation panel crashed.</div>`;
   }
 }
 
 async function loadAdminClaimsSafe() {
-  const container = document.getElementById('adminMainContent');
-  container.innerHTML = `<div class="p-8 text-center text-white/60">Loading Claims...</div>`;
-
   try {
-    const originalContent = document.getElementById('content');
-    if (originalContent) originalContent.style.display = 'none';
-
-    if (typeof loadAdminClaims === 'function') {
-      await loadAdminClaims();               // Your original function
-    } else {
-      container.innerHTML = `<div class="p-12 text-white/50">Claims panel not found.</div>`;
-    }
+    await loadAdminClaims();
   } catch (e) {
     console.error(e);
-    container.innerHTML = `<div class="p-8 text-red-400">Claims panel crashed.</div>`;
+    const container = document.getElementById('adminMainContent');
+    if (container) container.innerHTML = `<div class="p-8 text-red-400">Claims panel crashed.</div>`;
   }
 }
 
@@ -4689,160 +4695,6 @@ window.sendReply = async function(otherId) {
   updateMessageBadge();
 };
 
-// ─── EVENTS PAGE (Paginated) ───────────────────────────────────────────────
-async function loadEventsPage(content) {
-  content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-2">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">📅 Events</h1>
-        ${currentUser && currentUser.verifiedBusiness ? `
-        <button onclick="navigate('owner-dashboard')" 
-                class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
-          <span class="text-xl">📤</span> Post New Event
-        </button>` : ''}
-      </div>
-
-      <div class="flex flex-col sm:flex-row gap-3 mb-6">
-        <input id="eventsSearchInput" type="text" placeholder="Search events..." 
-               class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-        <select id="eventsFilter" onchange="filterAndRenderEvents()" class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
-          <option value="all">All Events</option>
-          <option value="upcoming" selected>Upcoming</option>
-          <option value="past">Past Events</option>
-        </select>
-      </div>
-
-      <div id="eventsList" class="space-y-4"></div>
-      <div id="eventsPagination" class="flex justify-center gap-3 mt-8"></div>
-    </div>`;
-
-  window.currentEventsPage = 1;
-  window.currentEventsSearch = '';
-  window.currentEventsFilter = 'upcoming';
-
-  document.getElementById('eventsSearchInput').addEventListener('input', debounce(() => {
-    window.currentEventsSearch = document.getElementById('eventsSearchInput').value.trim().toLowerCase();
-    window.currentEventsPage = 1;
-    renderEventsPage();
-  }, 300));
-
-  await renderEventsPage();
-}
-
-async function renderEventsPage() {
-  const res = await apiGet(`/events?page=${window.currentEventsPage}&limit=8`);
-  const events = res.events || [];
-  const pagination = res.pagination || {};
-
-  const container = document.getElementById('eventsList');
-  let filtered = events.filter(e => {
-    const matchesSearch = !window.currentEventsSearch || 
-      (e.title || '').toLowerCase().includes(window.currentEventsSearch) ||
-      (e.description || '').toLowerCase().includes(window.currentEventsSearch);
-    
-    const isUpcoming = new Date(e.date) >= new Date();
-    return matchesSearch && (window.currentEventsFilter === 'all' || 
-           (window.currentEventsFilter === 'upcoming' && isUpcoming) ||
-           (window.currentEventsFilter === 'past' && !isUpcoming));
-  });
-
-  container.innerHTML = filtered.map(e => `
-    <div onclick="showEventDetail('${e._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-      <h3 class="font-semibold text-lg">${e.title}</h3>
-      <p class="text-white/70 line-clamp-2 mt-1">${e.description || ''}</p>
-      <div class="text-xs text-white/50 mt-3">📅 ${formatDate(e.date)} ${e.location ? `· 📍 ${e.location}` : ''}</div>
-    </div>
-  `).join('') || `<p class="text-white/40 text-center py-16">No ${window.currentEventsFilter === 'upcoming' ? 'upcoming ' : window.currentEventsFilter === 'past' ? 'past ' : ''}events found.</p>`;
-
-  renderEventsPagination(pagination);
-}
-
-function renderEventsPagination(p) {
-  const container = document.getElementById('eventsPagination');
-  if (!p.totalPages || p.totalPages <= 1) return container.innerHTML = '';
-  container.innerHTML = `
-    <button onclick="changeEventsPage(${Math.max(1, window.currentEventsPage-1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">← Prev</button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeEventsPage(${Math.min(p.totalPages, window.currentEventsPage+1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">Next →</button>`;
-}
-
-window.changeEventsPage = (page) => { window.currentEventsPage = page; renderEventsPage(); };
-window.filterAndRenderEvents = () => { window.currentEventsFilter = document.getElementById('eventsFilter').value; window.currentEventsPage = 1; renderEventsPage(); };
-
-// ─── DEALS PAGE (Paginated) ───────────────────────────────────────────────
-async function loadDealsPage(content) {
-  content.innerHTML = `
-    <div class="max-w-2xl mx-auto px-2">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">🔥 Hot Deals</h1>
-        ${currentUser && currentUser.verifiedBusiness ? `
-        <button onclick="navigate('owner-dashboard')" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-3xl font-semibold flex items-center gap-2">
-          <span class="text-xl">📤</span> Post New Deal
-        </button>` : ''}
-      </div>
-
-      <div class="flex flex-col sm:flex-row gap-3 mb-6">
-        <input id="dealsSearchInput" type="text" placeholder="Search deals..." class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-        <select id="dealsFilter" onchange="filterAndRenderDeals()" class="bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
-          <option value="all">All Deals</option>
-          <option value="active" selected>Active Only</option>
-        </select>
-      </div>
-
-      <div id="dealsList" class="space-y-4"></div>
-      <div id="dealsPagination" class="flex justify-center gap-3 mt-8"></div>
-    </div>`;
-
-  window.currentDealsPage = 1;
-  window.currentDealsSearch = '';
-  window.currentDealsFilter = 'active';
-
-  document.getElementById('dealsSearchInput').addEventListener('input', debounce(() => {
-    window.currentDealsSearch = document.getElementById('dealsSearchInput').value.trim().toLowerCase();
-    window.currentDealsPage = 1;
-    renderDealsPage();
-  }, 300));
-
-  await renderDealsPage();
-}
-
-async function renderDealsPage() {
-  const res = await apiGet(`/deals?page=${window.currentDealsPage}&limit=8`);
-  const deals = res.deals || [];
-  const pagination = res.pagination || {};
-
-  const container = document.getElementById('dealsList');
-  let filtered = deals.filter(d => {
-    const matchesSearch = !window.currentDealsSearch || 
-      (d.title || '').toLowerCase().includes(window.currentDealsSearch) ||
-      (d.description || '').toLowerCase().includes(window.currentDealsSearch);
-    const isActive = !d.expires || new Date(d.expires) > new Date();
-    return matchesSearch && (window.currentDealsFilter === 'all' || isActive);
-  });
-
-  container.innerHTML = filtered.map(d => `
-    <div onclick="showDealDetail('${d._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-      <h3 class="font-semibold text-lg">${d.title}</h3>
-      <p class="text-white/70 line-clamp-2 mt-1">${d.description || ''}</p>
-      <div class="text-xs text-white/50 mt-3">${d.expires ? `Expires ${formatDate(d.expires)}` : 'No expiry'}</div>
-    </div>
-  `).join('') || `<p class="text-white/40 text-center py-16">No deals found.</p>`;
-
-  renderDealsPagination(pagination);
-}
-
-function renderDealsPagination(p) {
-  const container = document.getElementById('dealsPagination');
-  if (!p.totalPages || p.totalPages <= 1) return container.innerHTML = '';
-  container.innerHTML = `
-    <button onclick="changeDealsPage(${Math.max(1, window.currentDealsPage-1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">← Prev</button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeDealsPage(${Math.min(p.totalPages, window.currentDealsPage+1)})" class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">Next →</button>`;
-}
-
-window.changeDealsPage = (page) => { window.currentDealsPage = page; renderDealsPage(); };
-window.filterAndRenderDeals = () => { window.currentDealsFilter = document.getElementById('dealsFilter').value; window.currentDealsPage = 1; renderDealsPage(); };
-
 // Global exports
 window.showPostLostItemModal = window.showPostLostItemModal;
 window.showLostItemDetail = window.showLostItemDetail;
@@ -4862,11 +4714,8 @@ window.filterDirectory       = filterDirectory;
 window.filterByCategory      = filterByCategory;
 window.showBusinessDetail    = showBusinessDetail;
 window.hideBusinessModal     = hideBusinessModal;
-window.saveBusiness          = saveBusiness;
 window.switchAdminTab        = switchAdminTab;
 window.renderDirectory       = renderDirectory;
-window.renderDealsFiltered   = renderDealsFiltered;
-window.renderEventsFiltered  = renderEventsFiltered;
 window.getDirections = function(address) {
   if (!address) {
     showToast('No address available for this business', 'error');
