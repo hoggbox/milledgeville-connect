@@ -134,6 +134,12 @@ if (sub.nativeToken) {
       const message = {
         token: sub.nativeToken,
         notification: { title, body },
+        // Pass data fields so the Android app can deep-link to the specific post
+        data: {
+          page: data.page || '',
+          id:   data.id   || '',
+          url:  data.url  || ''
+        },
         android: { 
           priority: 'high',
           notification: {
@@ -218,6 +224,12 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
         fcmMessages.push({
           token: sub.nativeToken,
           notification: { title, body },
+          // Pass data so the Android app can deep-link to the specific post
+          data: {
+            page: data.page || '',
+            id:   data.id   || '',
+            url:  data.url  || ''
+          },
           android: { priority: 'high' }
         });
       }
@@ -584,7 +596,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { page: 'shoutouts' },
+      { page: 'shoutouts', id: shoutout._id.toString(), url: `/shoutouts/${shoutout._id}` },
       { notifyShoutouts: true }
     );
 
@@ -1229,7 +1241,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     broadcastPush(
       `💬 New comment on Traffic Alert`,
       `${user.name}: ${req.body.text.substring(0, 65)}${req.body.text.length > 65 ? '...' : ''}`,
-      { page: 'shoutouts' },                    // data object (kept for future use)
+      { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` },
       { notifyShoutoutComments: true }          // filter
     );
 
@@ -1256,7 +1268,7 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
         comment.authorId,
         '↩️ New Reply',
         `${user.name} replied to your comment`,
-        { page: 'shoutouts' }
+        { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` }
       );
     }
 

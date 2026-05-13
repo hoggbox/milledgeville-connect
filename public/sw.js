@@ -31,11 +31,20 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
+  // Use the deep-link URL if provided (e.g. /shoutouts/abc123),
+  // otherwise fall back to the root of the app.
   const url = (event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // If there's already an open tab, navigate it to the right URL instead of
+      // just focusing it on whatever page it happens to be on.
       for (const client of windowClients) {
+        if ('navigate' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
         if ('focus' in client) return client.focus();
       }
       if (clients.openWindow) return clients.openWindow(url);
