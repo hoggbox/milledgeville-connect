@@ -248,9 +248,17 @@ function showProfileSheet() {
       </div>
     </div>
 
-    <h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
-    <p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
-    ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+<h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
+<p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
+${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+
+<!-- Reputation Badge for Own Profile -->
+<div class="flex justify-center mt-3 mb-6">
+  <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
+    ⭐ ${currentUser.reputation || 0}
+    <span class="text-base opacity-75">Reputation</span>
+  </div>
+</div>
     ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${currentUser.bio}"</p>` : ''}
     ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
 

@@ -94,7 +94,7 @@ function formatDateTime(date) {
   });
 }
 
-// ─── SAFE Clickable User Helper ───────────────────────────────────────────────
+// ─── SAFE Clickable User Helper (Clean Rep Badge) ─────────────────────────────
 function renderClickableUser(userData, fallbackName = 'Anonymous') {
   if (!userData) return fallbackName;
 
@@ -107,18 +107,18 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
     displayName = userData.name || userData.authorName || userData.author || fallbackName;
     reputation = userData.reputation || 0;
   } else if (typeof userData === 'string' && userData.length > 10) {
-    userId = userData; // already an ID
+    userId = userData;
   }
 
   if (!userId) return displayName;
 
-  const repBadge = reputation > 0 
-    ? `<span class="inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1.5">⭐${reputation}</span>` 
+  const repHTML = reputation >= 10 
+    ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">⭐${reputation}</span>`
     : '';
 
   return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
                 class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
-            ${displayName}${repBadge}
+            ${displayName}${repHTML}
           </span>`;
 }
 
