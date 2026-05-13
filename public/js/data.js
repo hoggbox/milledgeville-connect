@@ -2277,7 +2277,8 @@ window.filterAndRenderDeals = function() {
 
 // ─── EVENTS PAGE — WITH RSVP BUTTONS ──────────────────────────────────────────
 async function loadEventsPage(content) {
-  const [allEvents] = await Promise.all([apiGet('/events'), ensureDirCategories()]);
+  const [eventsRes] = await Promise.all([apiGet('/events'), ensureDirCategories()]);
+  const allEvents = Array.isArray(eventsRes) ? eventsRes : (eventsRes?.events || []);
   window._allEvents   = allEvents;
   window._eventFilter = 'All';
   window._eventSearch = '';
