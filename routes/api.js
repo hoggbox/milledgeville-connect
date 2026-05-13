@@ -581,12 +581,15 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.lastPostAt = new Date();
     await user.save();
 
-    broadcastPush(
-      `🚗 New Traffic Alert from ${user.name}`,
-      text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { page: 'shoutouts' },
-      { notifyShoutouts: true }
-    );
+broadcastPush(
+  `🚦 New Traffic Alert from ${user.name}`,
+  text.length > 80 ? text.substring(0, 77) + '...' : text,
+  { 
+    page: 'shoutouts',
+    shoutoutId: shoutout._id   // ← ADD THIS
+  },
+  { notifyShoutouts: true }
+);
 
     res.json(shoutout);
   } catch (err) {

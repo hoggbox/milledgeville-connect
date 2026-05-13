@@ -4812,6 +4812,8 @@ window.sendComposedMessage = async function() {
   }
 };
 
+
+
 // ─── FULL INBOX / CONVERSATION SYSTEM ───────────────────────────────────────
 window.switchMessageTab = async function(tab) {
   window.currentMessageTab = tab;
@@ -5093,6 +5095,33 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
+
+// ─── HANDLE NOTIFICATION CLICKS FROM SERVICE WORKER ─────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
+      const payload = event.data.data || {};
+
+      if (payload.shoutoutId) {
+        navigate('shoutouts');
+        // Highlight the post after page loads
+        setTimeout(() => {
+          const card = document.getElementById(`shoutout-${payload.shoutoutId}`);
+          if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.style.transition = 'all 0.4s';
+            card.style.border = '3px solid #34d399';
+            setTimeout(() => card.style.border = '', 3000);
+          }
+        }, 1200);
+      } else if (payload.page) {
+        navigate(payload.page);
+      } else {
+        navigate('home');
+      }
+    }
+  });
+}
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
 // initPushAfterLogin is defined in profile.js (_initNativePush).
