@@ -131,17 +131,15 @@ async function sendPushToUser(userId, title, body, data = {}) {
   // ── Native FCM path ───────────────────────────────────────────────────────
 if (sub.nativeToken) {
     try {
-      const message = {
-        token: sub.nativeToken,
-        notification: { title, body },
-        android: { 
-          priority: 'high',
-          notification: {
-            sound: 'default',
-            channelId: 'default'
-          }
-        }
-      };
+const message = {
+  token: sub.nativeToken,
+  data: {
+    title,
+    body,
+    ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]))
+  },
+  android: { priority: 'high' }
+};
       const response = await admin.messaging().send(message);
       console.log(`✅ Native push sent to ${userId}:`, response);
       sent = true;
@@ -215,14 +213,15 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
 
 if (sub.nativeToken) {
-        fcmMessages.push({
-          token: sub.nativeToken,
-          notification: { title, body },
-          data: Object.fromEntries(
-            Object.entries(data).map(([k, v]) => [k, String(v)])
-          ),
-          android: { priority: 'high' }
-        });
+fcmMessages.push({
+  token: sub.nativeToken,
+  data: {
+    title,
+    body,
+    ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]))
+  },
+  android: { priority: 'high' }
+});
       }
 
       if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
@@ -1118,7 +1117,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     broadcastPush(
       `💬 New comment on Traffic Alert`,
       `${user.name}: ${req.body.text.substring(0, 65)}${req.body.text.length > 65 ? '...' : ''}`,
-      { page: 'shoutouts' },                    // data object (kept for future use)
+      { page: 'shoutouts', shoutoutId: req.params.id },                    // data object (kept for future use)
       { notifyShoutoutComments: true }          // filter
     );
 
@@ -1145,7 +1144,7 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
         comment.authorId,
         '↩️ New Reply',
         `${user.name} replied to your comment`,
-        { page: 'shoutouts' }
+        { page: 'shoutouts', shoutoutId: shoutout._id.toString() }
       );
     }
 
