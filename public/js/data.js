@@ -5465,18 +5465,53 @@ window.saveBusinessEdit = async function(businessId) {
   };
 
   try {
-    const res = await apiPut(`/admin/business/${businessId}`, payload);
-    if (res.business) {
-      showToast('✅ Business updated!', 'success');
+    showToast('Saving changes...', 'success');
+
+    // Use direct fetch for reliability with PUT
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/admin/business/${businessId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const res = await response.json();
+
+    if (response.ok && (res.business || res.message?.includes('updated'))) {
+      showToast('✅ Business updated successfully!', 'success');
       closeEditBusinessModal();
       
-      // Refresh admin list
+      // Refresh directory + admin list
       const data = await apiGet('/directory');
       allBusinesses = data.businesses || [];
       renderAdminBusinesses();
+    } else {
+      showToast(res.message || 'Failed to update business', 'error');
     }
   } catch (e) {
-    showToast('Failed to update business', 'error');
+    console.error(e);
+    showToast('Network error — failed to save', 'error');
+  }
+};
+
+// Helper for PUT requests (add near your other api functions if not present)
+window.apiPut = async function(url, data) {
+  try {
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      },
+      body: JSON.stringify(data)
+    });
+    return await res.json();
+  } catch (e) {
+    console.error(e);
+    return { message: 'Network error' };
   }
 };
 
