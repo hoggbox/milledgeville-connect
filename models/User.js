@@ -1,3 +1,4 @@
+// models/User.js  ── Updated with moderation fields
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -18,7 +19,7 @@ const userSchema = new mongoose.Schema({
   instagram: { type: String, default: '' },
   facebook:  { type: String, default: '' },
 
-  // ─── Notification Preferences ─────────────────────────────────────
+  // ─── Notification Preferences ─────────────────────────────────────────────
   notifyDeals:             { type: Boolean, default: true },
   notifyEvents:            { type: Boolean, default: true },
   notifyShoutouts:         { type: Boolean, default: false },
@@ -29,22 +30,38 @@ const userSchema = new mongoose.Schema({
 
   pushEnabled: { type: Boolean, default: false },
 
-  // Anti-spam
+  // Anti-spam (existing)
   lastPostAt: { type: Date, default: null },
 
-  // ─── REPUTATION SYSTEM ─────────────────────────────────────────────
-  reputation: { 
-    type: Number, 
-    default: 0 
-  },
+  // ─── MODERATION / FLAGGING ────────────────────────────────────────────────
+  // Set by the system when 8 unique users flag one of the user's posts.
+  // The user cannot post shoutouts/alerts until this timestamp has passed.
+  postTimeoutUntil: { type: Date, default: null },
+
+  // Set by the system's spam detector or manually by admin.
+  // When true, ALL outbound notifications (shoutouts, lost-found, marketplace)
+  // are silenced until an admin lifts the mute.
+  isMuted: { type: Boolean, default: false },
+
+  // Admin/moderator access flags (existing pattern from api.js)
+  isModerator: { type: Boolean, default: false },
+  canPostNews:  { type: Boolean, default: false },
+
+  // ─── Spam tracking ────────────────────────────────────────────────────────
+  // Rolling window of recent post timestamps used to detect burst posting.
+  // We keep up to 10; older entries are pruned automatically on each post.
+  recentPostTimes: [{ type: Date }],
+
+  // ─── REPUTATION SYSTEM ─────────────────────────────────────────────────────
+  reputation: { type: Number, default: 0 },
   repHistory: [{
-    action: String,        // e.g. "Shoutout Like", "Good Review", "Item Resolved"
+    action: String,
     amount: Number,
-    sourceId: String,      // reference to shoutout, review, etc.
+    sourceId: String,
     date: { type: Date, default: Date.now }
   }],
 
-  // ─── Token Storage ─────────────────────────────────────────────────
+  // ─── Token Storage ─────────────────────────────────────────────────────────
   fcmTokens: [{ type: String }],
 
   webPushSubscriptions: [{
@@ -75,6 +92,11 @@ userSchema.pre('save', async function (next) {
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// ─── Convenience: is the user currently in a post-timeout? ─────────────────
+userSchema.methods.isPostTimedOut = function () {
+  return this.postTimeoutUntil && this.postTimeoutUntil > new Date();
 };
 
 module.exports = mongoose.model('User', userSchema);

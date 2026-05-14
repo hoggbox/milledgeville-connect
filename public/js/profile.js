@@ -740,12 +740,19 @@ window.showUserProfileModal = async function (userId) {
               📍 ${user.neighborhood}
             </div>` : ''}
 
-            <!-- Action Buttons -->
-            <div class="flex gap-3 mt-8">
-              <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
-                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
-                ✉️ Message
-              </button>
+<!-- Action Buttons -->
+<div class="flex gap-3 mt-8">
+  <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
+          class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
+    ✉️ Message
+  </button>
+  
+  ${!isOwnProfile ? `
+  <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
+          class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg">
+    🚩 Report User
+  </button>` : ''}
+</div>
               
               ${!isOwnProfile ? `
               <button onclick="toggleBlockUser('${user._id}'); hideUserProfileModal()" 
@@ -772,6 +779,20 @@ window.showUserProfileModal = async function (userId) {
 window.hideUserProfileModal = function () {
   const modal = document.getElementById('userProfileModal');
   if (modal) modal.remove();
+};
+
+// ─── REPORT A USER ─────────────────────────────────────────────────────────
+window.reportUser = async function (userId, userName) {
+  const reason = prompt(`Why are you reporting ${userName}? (be specific)`);
+  if (!reason || reason.trim() === '') return;
+
+  const res = await apiPost(`/users/${userId}/report`, { reason: reason.trim() });
+  
+  if (res.message && res.message.includes('Report submitted')) {
+    showToast('🚩 Report sent to admin team. Thank you.', 'success');
+  } else {
+    showToast(res.message || 'Failed to send report', 'error');
+  }
 };
 
 // ─── Exports ──────────────────────────────────────────────────────────────────

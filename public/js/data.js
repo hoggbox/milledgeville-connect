@@ -1923,9 +1923,17 @@ function renderShoutoutCard(s) {
             <div class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</div>
           </div>
         </div>
+        
+        <!-- Flag button -->
+        ${!isAuthor && currentUser ? `
+          <button onclick="flagShoutout('${s._id}')" 
+                  class="text-white/30 hover:text-orange-400 transition text-sm flex-shrink-0" title="Flag this alert">
+            🚩
+          </button>` : ''}
+        
         ${isAuthor || isAdmin ? `
           <button onclick="deleteShoutout('${s._id}')" 
-                  class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete traffic alert">🗑️</button>` : ''}
+                  class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
       </div>
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
       ${(s.images && s.images.length > 0) ? `
@@ -1938,12 +1946,12 @@ function renderShoutoutCard(s) {
         </div>` : ''}
       ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
       <div class="flex items-center gap-1 border-t border-white/10 pt-2">
-        <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like traffic alerts.'})`}" id="like-btn-${s._id}"
+        <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like.'})`}" id="like-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
           <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
           <span id="like-label-${s._id}">Like</span>
         </button>
-        <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment on traffic alerts.'})`}" id="comment-btn-${s._id}"
+        <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment.'})`}" id="comment-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
           ${commentLabel}
         </button>
@@ -1955,18 +1963,10 @@ function renderShoutoutCard(s) {
             <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
             <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
               <input id="commentinput-${s._id}" type="text"
-                class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
-                placeholder="Write a comment… (Enter to post)"
-                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitComment('${s._id}');}">
-              <button onclick="submitComment('${s._id}')" class="text-emerald-400 hover:text-emerald-300 transition flex-shrink-0 text-sm font-semibold">Post</button>
+                class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none" placeholder="Write a comment...">
+              <button onclick="postComment('${s._id}')" class="text-emerald-400 font-semibold">Post</button>
             </div>
-          </div>` : `
-          <div class="mt-3 text-center">
-            <button onclick="showAuthModal({message:'Sign in to comment.'})"
-                    class="text-xs text-emerald-400 hover:text-emerald-300 transition font-semibold">
-              Sign in to comment →
-            </button>
-          </div>`}
+          </div>` : ''}
       </div>
     </div>`;
 }
@@ -5235,6 +5235,27 @@ async function renderAdminAnalytics() {
       </div>` : ''}
     </div>`;
 }
+
+// ─── FLAG A SHOUTOUT / TRAFFIC ALERT ───────────────────────────────────────
+window.flagShoutout = async function (shoutoutId) {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to flag posts.' });
+    return;
+  }
+
+  if (!confirm('Flag this traffic alert as inappropriate?')) return;
+
+  const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
+
+  if (res.removed) {
+    showToast('🚩 Post was removed by community flags', 'success');
+    // Remove from DOM immediately
+    const card = document.getElementById(`shoutout-${shoutoutId}`);
+    if (card) card.remove();
+  } else {
+    showToast('🚩 Thank you — your flag has been recorded.', 'success');
+  }
+};
 
 // Live badge updates every 8 seconds
 setInterval(() => {

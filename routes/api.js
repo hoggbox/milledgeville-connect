@@ -15,10 +15,334 @@ const News            = require('../models/News');
 const Review          = require('../models/Review');
 const PushSubscription = require('../models/PushSubscription');
 
+
 // ─── NEW MODELS ─────────────────────────────────────────────────────────────
 const LostItem        = require('../models/LostItem');
 const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
+const Report = require('../models/Report');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODERATION ROUTES  — paste this block into api.js
+//
+// Prerequisites:
+//   1. Add `const Report = require('../models/Report');` near the other model imports
+//   2. Replace your User.js with the updated version (adds postTimeoutUntil,
+//      isMuted, recentPostTimes fields)
+//   3. Drop this entire block above the `module.exports = router;` line
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── SPAM DETECTION CONSTANTS ─────────────────────────────────────────────────
+const SPAM_WINDOW_MS    = 5 * 60 * 1000; // 5-minute rolling window
+const SPAM_POST_LIMIT   = 5;             // 5 posts inside that window → muted
+const FLAG_THRESHOLD    = 8;             // 8 unique flaggers → post removed + timeout
+const TIMEOUT_DURATION  = 24 * 60 * 60 * 1000; // 24-hour posting ban
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.  FLAG A SHOUTOUT / TRAFFIC ALERT
+//     POST /api/shoutouts/:id/flag
+//
+//     • Each user can flag a given post exactly once (enforced by DB index on Report)
+//     • When the total unique flaggers reaches FLAG_THRESHOLD (8):
+//       - The shoutout is deleted
+//       - The author receives a 24-hour posting ban (postTimeoutUntil)
+//       - An admin Report record is created for audit trail
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Post not found' });
+
+    // Prevent self-flagging
+    if (shoutout.authorId && shoutout.authorId.toString() === req.userId) {
+      return res.status(400).json({ message: 'You cannot flag your own post' });
+    }
+
+    // Check for duplicate flag from this user
+    const existing = await Report.findOne({
+      reporter: req.userId,
+      reportedShoutout: shoutout._id
+    });
+    if (existing) {
+      return res.status(409).json({ message: 'You have already flagged this post' });
+    }
+
+    // Create the flag/report record
+    await Report.create({
+      type: 'shoutout',
+      reporter: req.userId,
+      reportedUser: shoutout.authorId || null,
+      reportedShoutout: shoutout._id,
+      snapshotText: shoutout.text,
+      reason: req.body.reason || 'Flagged by user',
+      status: 'pending'
+    });
+
+    // Count total unique flags on this shoutout
+    const flagCount = await Report.countDocuments({
+      type: 'shoutout',
+      reportedShoutout: shoutout._id
+    });
+
+    if (flagCount >= FLAG_THRESHOLD) {
+      // ── Auto-remove the post ───────────────────────────────────────────────
+      await Shoutout.findByIdAndDelete(shoutout._id);
+
+      // ── Apply 24-hour posting ban to the author ────────────────────────────
+      if (shoutout.authorId) {
+        await User.findByIdAndUpdate(shoutout.authorId, {
+          postTimeoutUntil: new Date(Date.now() + TIMEOUT_DURATION)
+        });
+      }
+
+      return res.json({
+        message: 'Post removed by community flags',
+        removed: true,
+        flagCount
+      });
+    }
+
+    res.json({ message: 'Post flagged', removed: false, flagCount });
+  } catch (err) {
+    // Duplicate key on the unique index means a race-condition double-flag
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'You have already flagged this post' });
+    }
+    console.error('Flag error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2.  REPORT A USER (from their profile page)
+//     POST /api/users/:id/report
+//
+//     Sends a Report record to the admin panel.  No auto-action is taken —
+//     the admin reviews and decides.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/users/:id/report', authenticate, async (req, res) => {
+  try {
+    const targetUser = await User.findById(req.params.id).select('name');
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
+
+    if (req.params.id === req.userId) {
+      return res.status(400).json({ message: 'You cannot report yourself' });
+    }
+
+    const reason = (req.body.reason || '').trim();
+    if (!reason) return res.status(400).json({ message: 'Please provide a reason' });
+
+    await Report.create({
+      type: 'user',
+      reporter: req.userId,
+      reportedUser: req.params.id,
+      reason,
+      status: 'pending'
+    });
+
+    res.json({ message: 'Report submitted. Our team will review it.' });
+  } catch (err) {
+    console.error('Report user error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3.  UPDATED  POST /api/shoutouts  (replace your existing handler)
+//
+//     Adds:
+//       • 24-hour post timeout check  (postTimeoutUntil)
+//       • Mute check                  (isMuted)
+//       • Spam burst detection        (recentPostTimes rolling window)
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTE: Remove / comment-out your existing `router.post('/shoutouts', ...)` handler
+// and paste this one in its place.
+
+router.post('/shoutouts', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    // ── Hard 45-second rate limit (existing) ──────────────────────────────────
+    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
+      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
+    }
+
+    // ── 24-hour timeout from community flags ───────────────────────────────────
+    if (user.isPostTimedOut()) {
+      const releaseTime = user.postTimeoutUntil.toLocaleString();
+      return res.status(403).json({
+        message: `Your posting privileges are suspended until ${releaseTime} due to community flags on a previous post.`,
+        timedOut: true,
+        until: user.postTimeoutUntil
+      });
+    }
+
+    // ── Admin/system mute check ────────────────────────────────────────────────
+    if (user.isMuted) {
+      return res.status(403).json({
+        message: 'Your account has been muted by an administrator for excessive posting. Contact support if you believe this is an error.',
+        muted: true
+      });
+    }
+
+    const { text, images } = req.body;
+    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+
+    // ── Spam burst detection ────────────────────────────────────────────────────
+    // Prune timestamps older than the rolling window, then count what's left
+    const now = Date.now();
+    const windowStart = now - SPAM_WINDOW_MS;
+    const recentPosts = (user.recentPostTimes || []).filter(t => new Date(t).getTime() > windowStart);
+
+    if (recentPosts.length >= SPAM_POST_LIMIT) {
+      // Auto-mute the user and file an admin report
+      user.isMuted = true;
+      await user.save();
+
+      await Report.create({
+        type: 'user',
+        reporter: user._id,      // self-report – makes it easy to find in admin
+        reportedUser: user._id,
+        reason: `Auto-muted for spam: ${recentPosts.length + 1} posts within ${SPAM_WINDOW_MS / 60000} minutes`,
+        snapshotText: text.trim().substring(0, 200),
+        status: 'pending'
+      });
+
+      return res.status(403).json({
+        message: 'You have been temporarily muted for posting too frequently. An admin will review your account.',
+        muted: true
+      });
+    }
+
+    // ── All checks passed — create the shoutout ────────────────────────────────
+    const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
+
+    const shoutout = await Shoutout.create({
+      text: text.trim(),
+      author: user.name,
+      authorId: user._id,
+      images: images || [],
+      expiresAt
+    });
+
+    // Update anti-spam timestamps
+    user.lastPostAt = new Date(now);
+    user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10); // keep last 10
+    await user.save();
+
+    broadcastPush(
+      `🚗 New Traffic Alert from ${user.name}`,
+      text.length > 80 ? text.substring(0, 77) + '...' : text,
+      { page: 'shoutouts', id: shoutout._id.toString(), url: `/shoutouts/${shoutout._id}` },
+      { notifyShoutouts: true }
+    );
+
+    res.json(shoutout);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4.  ADMIN — GET ALL PENDING REPORTS
+//     GET /api/admin/reports
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { status = 'pending', type } = req.query;
+    const filter = {};
+    if (status !== 'all') filter.status = status;
+    if (type)             filter.type   = type;
+
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('reporter',          'name email')
+      .populate('reportedUser',      'name email isMuted postTimeoutUntil')
+      .populate('reportedShoutout',  'text author authorId createdAt');
+
+    res.json(reports);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5.  ADMIN — UPDATE REPORT STATUS
+//     PATCH /api/admin/reports/:id
+//
+//     Body: { status: 'reviewed'|'dismissed', adminNote: '...' }
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch('/admin/reports/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { status, adminNote } = req.body;
+    const report = await Report.findByIdAndUpdate(
+      req.params.id,
+      { status, adminNote: adminNote || '' },
+      { new: true }
+    );
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6.  ADMIN — UNMUTE A USER
+//     POST /api/admin/users/:id/unmute
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      {
+        isMuted: false,
+        postTimeoutUntil: null,
+        recentPostTimes: []
+      },
+      { new: true }
+    ).select('name email isMuted postTimeoutUntil');
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: `${user.name} has been unmuted`, user });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7.  ADMIN — MANUALLY MUTE A USER
+//     POST /api/admin/users/:id/mute
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/admin/users/:id/mute', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { isMuted: true },
+      { new: true }
+    ).select('name email isMuted');
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: `${user.name} has been muted`, user });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8.  ADMIN — DELETE A FLAGGED SHOUTOUT MANUALLY
+//     DELETE /api/admin/shoutouts/:id
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/admin/shoutouts/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await Shoutout.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Shoutout deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // ─── Web Push setup ───────────────────────────────────────────────────────────
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
