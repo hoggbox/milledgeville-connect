@@ -688,7 +688,7 @@ function escHtml(str) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── OTHER USER PROFILE MODAL (with Reputation) ───────────────────────────────
+// ─── OTHER USER PROFILE MODAL ───────────────────────────────────────────────
 window.showUserProfileModal = async function (userId) {
   if (!currentUser) {
     showAuthModal({ message: 'Sign in to view profiles.' });
@@ -700,7 +700,7 @@ window.showUserProfileModal = async function (userId) {
     if (!user || user.message) throw new Error('User not found');
 
     const rep = user.reputation || 0;
-    const isOwnProfile = currentUser._id === user._id;
+    const isOwnProfile = String(currentUser._id) === String(user._id);
 
     const html = `
       <div onclick="if(event.target.id==='userProfileModal')hideUserProfileModal()" 
@@ -740,24 +740,17 @@ window.showUserProfileModal = async function (userId) {
               📍 ${user.neighborhood}
             </div>` : ''}
 
-<!-- Action Buttons -->
-<div class="flex gap-3 mt-8">
-  <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
-          class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
-    ✉️ Message
-  </button>
-  
-  ${!isOwnProfile ? `
-  <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
-          class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg">
-    🚩 Report User
-  </button>` : ''}
-</div>
+            <!-- Action Buttons -->
+            <div class="flex gap-3 mt-8">
+              <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
+                ✉️ Message
+              </button>
               
               ${!isOwnProfile ? `
-              <button onclick="toggleBlockUser('${user._id}'); hideUserProfileModal()" 
-                      class="flex-1 bg-slate-700 hover:bg-slate-800 text-white py-4 rounded-3xl font-semibold text-lg">
-                🚫 Block
+              <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
+                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg">
+                🚩 Report User
               </button>` : ''}
             </div>
 
@@ -772,6 +765,7 @@ window.showUserProfileModal = async function (userId) {
     document.body.insertAdjacentHTML('beforeend', html);
 
   } catch (e) {
+    console.error(e);
     showToast('Could not load profile', 'error');
   }
 };
