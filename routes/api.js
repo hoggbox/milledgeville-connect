@@ -1266,6 +1266,28 @@ router.delete('/admin/marketplace/:id', authenticate, requireAdminOrModerator, a
   }
 });
 
+// Admin — Edit Business
+router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, address, phone, email, description } = req.body;
+
+    const business = await Business.findByIdAndUpdate(
+      req.params.id,
+      { name, address, phone, email, description },
+      { new: true, runValidators: true }
+    );
+
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    res.json({ message: 'Business updated successfully', business });
+  } catch (e) {
+    console.error('Edit business error:', e);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
