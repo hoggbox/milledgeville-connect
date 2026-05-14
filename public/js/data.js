@@ -5464,11 +5464,17 @@ window.saveBusinessEdit = async function(businessId) {
     description: document.getElementById('editBizDescription').value.trim()
   };
 
+  // Basic validation
+  if (!payload.name) {
+    return showToast('Business name is required', 'error');
+  }
+
   try {
     showToast('Saving changes...', 'success');
 
-    // Use direct fetch for reliability with PUT
     const token = localStorage.getItem('token');
+    if (!token) throw new Error("No auth token");
+
     const response = await fetch(`/admin/business/${businessId}`, {
       method: 'PUT',
       headers: {
@@ -5478,22 +5484,30 @@ window.saveBusinessEdit = async function(businessId) {
       body: JSON.stringify(payload)
     });
 
-    const res = await response.json();
+    let res;
+    try {
+      res = await response.json();
+    } catch (jsonErr) {
+      const text = await response.text();
+      console.error("Server returned HTML/error instead of JSON:", text);
+      throw new Error(`Server error: ${response.status}`);
+    }
 
-    if (response.ok && (res.business || res.message?.includes('updated'))) {
+    if (response.ok) {
       showToast('✅ Business updated successfully!', 'success');
       closeEditBusinessModal();
       
-      // Refresh directory + admin list
+      // Refresh directory and admin list
       const data = await apiGet('/directory');
       allBusinesses = data.businesses || [];
       renderAdminBusinesses();
     } else {
-      showToast(res.message || 'Failed to update business', 'error');
+      showToast(res.message || `Error ${response.status}`, 'error');
+      console.error("Update failed:", res);
     }
   } catch (e) {
     console.error(e);
-    showToast('Network error — failed to save', 'error');
+    showToast(e.message || 'Failed to save changes', 'error');
   }
 };
 

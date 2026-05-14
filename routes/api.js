@@ -2092,17 +2092,25 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
 router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { name, address, phone, website, description, categoryId, email, hours, priceRange, tags, logo } = req.body;
+    
     const updates = { name, address, phone, website, description, category: categoryId };
     if (email     !== undefined) updates.email     = email;
     if (hours     !== undefined) updates.hours     = hours;
     if (priceRange !== undefined) updates.priceRange = priceRange;
     if (tags      !== undefined) updates.tags      = tags;
     if (logo      !== undefined) updates.logo      = logo;
+
     const business = await Business.findByIdAndUpdate(
-      req.params.id, updates, { new: true }
+      req.params.id, 
+      updates, 
+      { new: true }
     );
+
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+
     res.json({ message: 'Business updated successfully', business });
   } catch (err) {
+    console.error('Update business error:', err);
     res.status(500).json({ message: err.message });
   }
 });
