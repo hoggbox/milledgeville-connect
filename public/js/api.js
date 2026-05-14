@@ -57,3 +57,4 @@ window.apiPost   = apiPost;
 window.apiPatch  = apiPatch;
 window.apiDelete = apiDelete;
 window.setToken  = setToken;
+window.apiRequest = apiRequest;  // ← add this

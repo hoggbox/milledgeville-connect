@@ -5464,7 +5464,6 @@ window.saveBusinessEdit = async function(businessId) {
     description: document.getElementById('editBizDescription').value.trim()
   };
 
-  // Basic validation
   if (!payload.name) {
     return showToast('Business name is required', 'error');
   }
@@ -5472,37 +5471,16 @@ window.saveBusinessEdit = async function(businessId) {
   try {
     showToast('Saving changes...', 'success');
 
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error("No auth token");
+    const res = await apiRequest(`/admin/business/${businessId}`, payload, 'PUT');
 
-    const response = await fetch(`/admin/business/${businessId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    let res;
-    const rawText = await response.text();
-    try {
-      res = JSON.parse(rawText);
-    } catch (jsonErr) {
-      console.error("Server returned HTML/error instead of JSON:", rawText);
-      throw new Error(`Server error: ${response.status}`);
-    }
-
-    if (response.ok) {
+    if (res.business || res.message === 'Business updated successfully') {
       showToast('✅ Business updated successfully!', 'success');
       closeEditBusinessModal();
-      
-      // Refresh directory and admin list
       const data = await apiGet('/directory');
       allBusinesses = data.businesses || [];
       renderAdminBusinesses();
     } else {
-      showToast(res.message || `Error ${response.status}`, 'error');
+      showToast(res.message || 'Failed to save changes', 'error');
       console.error("Update failed:", res);
     }
   } catch (e) {
