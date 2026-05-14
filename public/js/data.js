@@ -5356,17 +5356,20 @@ async function renderAdminBroadcast() {
   const container = document.getElementById('adminMainContent');
 
   container.innerHTML = `
-    <div class="max-w-xl mx-auto bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
-      <h3 class="font-bold text-xl mb-6">📢 Broadcast Message to Everyone</h3>
+    <div class="max-w-2xl mx-auto bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
+      <h3 class="font-bold text-xl mb-6">📢 Send Broadcast Message</h3>
       
-      <textarea id="broadcastText" rows="6" 
-                class="w-full bg-white/10 border border-white/20 rounded-3xl p-5 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none"
-                placeholder="Write your announcement..."></textarea>
+      <div class="mb-4">
+        <label class="block text-xs text-white/60 mb-2">Message (HTML supported)</label>
+        <textarea id="broadcastText" rows="8" 
+                  class="w-full bg-white/10 border border-white/20 rounded-3xl p-5 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none font-mono text-sm"
+                  placeholder="You can use &lt;a href='...'&gt;clickable links&lt;/a&gt; here..."></textarea>
+      </div>
 
-      <div class="mt-6 flex gap-3">
+      <div class="flex gap-3">
         <button onclick="sendBroadcast()" 
                 class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold text-lg transition">
-          🚀 Send to All Users
+          📤 Send to All Users
         </button>
         <button onclick="sendBroadcast(true)" 
                 class="flex-1 bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold text-lg transition">
@@ -5374,7 +5377,9 @@ async function renderAdminBroadcast() {
         </button>
       </div>
 
-      <p class="text-center text-white/40 text-xs mt-6">This will be sent as a push notification + in-app message.</p>
+      <p class="text-center text-white/40 text-xs mt-6">
+        Tip: Use &lt;a href="https://milledgevilleconnect.com/app.html"&gt;Download Update&lt;/a&gt; for clickable links
+      </p>
     </div>`;
 }
 
@@ -5384,7 +5389,12 @@ window.sendBroadcast = async function (ownersOnly = false) {
 
   if (!confirm(`Send this broadcast to ${ownersOnly ? 'verified business owners' : 'ALL users'}?`)) return;
 
-  const res = await apiPost('/admin/broadcast', { message: text, ownersOnly });
+  const res = await apiPost('/admin/broadcast', { 
+    message: text, 
+    ownersOnly,
+    isHtml: true   // ← Tell backend it's HTML
+  });
+
   if (res.sent) {
     showToast(`✅ Broadcast sent to ${res.sent} users!`, 'success');
     document.getElementById('broadcastText').value = '';
