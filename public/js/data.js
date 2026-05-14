@@ -691,7 +691,7 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
           <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 rounded-2xl p-4 transition text-center">
             <span class="text-2xl mb-1">🚦</span>
             <span class="text-xl font-black text-white group-hover:text-red-300 transition">${shoutoutsTodayCount}</span>
-            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Shoutouts<br>Today</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Traffic Alerts<br>Today</span>
           </div>
         </div>
       </div>`;
@@ -1703,7 +1703,7 @@ async function loadShoutoutsPage(content) {
       <div class="max-w-2xl mx-auto px-2 pb-10">
         <div class="flex justify-between items-center mb-6">
           <div>
-            <h1 class="text-3xl md:text-4xl font-bold">🚦 Community Shoutouts</h1>
+            <h1 class="text-3xl md:text-4xl font-bold">🚦 Community Traffic Alerts</h1>
             <p class="text-emerald-300 text-sm mt-1">Live traffic alerts • Auto-delete after 8 hours</p>
           </div>
         </div>
@@ -1732,12 +1732,12 @@ async function loadShoutoutsPage(content) {
               <div class="flex justify-end mt-4">
                 <button onclick="postShoutoutWithPhoto()" 
                         class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">
-                  Post Shoutout
+                  Post Traffic Alert
                 </button>
               </div>
             </div>
           </div>
-        </div>` : guestBanner('post shoutouts, comment, and like')}
+        </div>` : guestBanner('post traffic alerts, comment, and like')}
 
         <div id="shoutoutsFeed" class="space-y-4 min-h-[300px]"></div>
 
@@ -1750,14 +1750,14 @@ async function loadShoutoutsPage(content) {
       const { shoutouts = [], pagination = {} } = res;
 
       if (!res || !Array.isArray(shoutouts)) {
-        feed.innerHTML = `<p class="text-red-400 text-center py-12">Error loading shoutouts</p>`;
+        feed.innerHTML = `<p class="text-red-400 text-center py-12">Error loading traffic alerts</p>`;
         return;
       }
 
       const feed = document.getElementById('shoutoutsFeed');
 
       if (!shoutouts.length) {
-        feed.innerHTML = `<p class="text-center text-white/50 py-16">No active shoutouts right now.<br>Be the first to post one! 🚦</p>`;
+        feed.innerHTML = `<p class="text-center text-white/50 py-16">No active traffic alerts right now.<br>Be the first to post one! 🚦</p>`;
       } else {
         feed.innerHTML = shoutouts.map(s => renderShoutoutCard(s)).join('');
       }
@@ -1766,7 +1766,7 @@ async function loadShoutoutsPage(content) {
     } catch (err) {
       console.error(err);
       document.getElementById('shoutoutsFeed').innerHTML = 
-        `<p class="text-red-400 text-center py-12">Failed to load shoutouts. Please try again.</p>`;
+        `<p class="text-red-400 text-center py-12">Failed to load traffic alerts. Please try again.</p>`;
     }
   };
 
@@ -1878,7 +1878,7 @@ window.removeShoutoutImage = function (index) {
 };
 
 window.postShoutoutWithPhoto = async function () {
-  if (!requireAuth('Sign in to post shoutouts.')) return;
+  if (!requireAuth('Sign in to post traffic alerts.')) return;
   const input = document.getElementById('shoutoutInput');
   if (!input || !input.value.trim()) return;
 
@@ -1888,12 +1888,12 @@ window.postShoutoutWithPhoto = async function () {
   });
 
   if (res._id) {
-    showToast('✅ Shoutout posted!');
+    showToast('✅ Traffic Alert posted!');
     _pendingShoutoutImages = [];
     input.value = '';
     loadPage('shoutouts');
   } else {
-    showToast(res.message || 'Error posting shoutout', 'error');
+    showToast(res.message || 'Error posting traffic alert', 'error');
   }
 }
 
@@ -1925,7 +1925,7 @@ function renderShoutoutCard(s) {
         </div>
         ${isAuthor || isAdmin ? `
           <button onclick="deleteShoutout('${s._id}')" 
-                  class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
+                  class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete traffic alert">🗑️</button>` : ''}
       </div>
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
       ${(s.images && s.images.length > 0) ? `
@@ -1938,12 +1938,12 @@ function renderShoutoutCard(s) {
         </div>` : ''}
       ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
       <div class="flex items-center gap-1 border-t border-white/10 pt-2">
-        <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like shoutouts.'})`}" id="like-btn-${s._id}"
+        <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like traffic alerts.'})`}" id="like-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
           <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
           <span id="like-label-${s._id}">Like</span>
         </button>
-        <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment on shoutouts.'})`}" id="comment-btn-${s._id}"
+        <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment on traffic alerts.'})`}" id="comment-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
           ${commentLabel}
         </button>
@@ -2041,7 +2041,7 @@ function renderCommentRow(c, shoutoutId) {
 
 // ─── Shoutout interactions ────────────────────────────────────────────────────
 window.toggleLike = async function (shoutoutId) {
-  if (!requireAuth('Sign in to like shoutouts.')) return;
+  if (!requireAuth('Sign in to like traffic alerts.')) return;
   const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
   if (res.likes !== undefined) {
     const icon = document.getElementById(`like-icon-${shoutoutId}`);
@@ -2112,10 +2112,10 @@ window.deleteComment = async function (shoutoutId, commentId) {
 };
 
 window.deleteShoutout = async function (shoutoutId) {
-  if (!confirm('Delete this shoutout?')) return;
+  if (!confirm('Delete this traffic alert?')) return;
   const res = await apiDelete(`/shoutouts/${shoutoutId}`);
   if (res.message) {
-    showToast('Shoutout deleted');
+    showToast('Traffic alert deleted');
     await loadShoutoutsPage(document.getElementById('content'));
   } else {
     showToast(res.message || 'Error', 'error');
@@ -3176,7 +3176,7 @@ async function loadModerationPanel() {
         <h2 class="text-2xl font-bold text-white">🛡️ Moderation</h2>
 
         <section>
-          <h3 class="text-lg font-semibold text-white mb-3">Traffic Alerts / Shoutouts</h3>
+          <h3 class="text-lg font-semibold text-white mb-3">Traffic Alerts</h3>
           <div class="space-y-2">
             ${(shoutouts.shoutouts || []).map(s => `
               <div class="bg-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
@@ -3185,7 +3185,7 @@ async function loadModerationPanel() {
                   <p class="text-white/50 text-xs mt-1">by ${s.author}</p>
                 </div>
                 <button onclick="adminDeleteShoutout('${s._id}')" class="text-red-400 hover:text-red-300 text-sm flex-shrink-0">Delete</button>
-              </div>`).join('') || '<p class="text-white/40">No active shoutouts</p>'}
+              </div>`).join('') || '<p class="text-white/40">No active traffic alerts</p>'}
           </div>
         </section>
 
@@ -3223,7 +3223,7 @@ async function loadModerationPanel() {
 }
 
 window.adminDeleteShoutout = async function(id) {
-  if (!confirm('Delete this shoutout?')) return;
+  if (!confirm('Delete this traffic alert?')) return;
   await apiDelete(`/shoutouts/${id}`);
   await loadModerationPanel();
 };
@@ -4884,7 +4884,7 @@ async function renderAdminDashboard() {
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
         <div class="text-amber-400 text-3xl mb-2">🚦</div>
         <div class="text-4xl font-bold">${stats.activeShoutouts || 0}</div>
-        <div class="text-white/50 text-sm">Active Shoutouts</div>
+        <div class="text-white/50 text-sm">Active Traffic Alerts</div>
       </div>
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
         <div class="text-rose-400 text-3xl mb-2">🛒</div>
@@ -5196,7 +5196,7 @@ async function renderAdminAnalytics() {
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
           <div class="text-4xl mb-2">🚦</div>
           <div class="text-4xl font-bold">${stats.activeShoutouts || 0}</div>
-          <div class="text-white/60 text-sm mt-1">Active Shoutouts</div>
+          <div class="text-white/60 text-sm mt-1">Active traffic alerts</div>
         </div>
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
           <div class="text-4xl mb-2">🛒</div>
@@ -5214,7 +5214,7 @@ async function renderAdminAnalytics() {
         <h3 class="font-bold mb-4">Today's Activity</h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="bg-white/5 rounded-2xl p-4">
-            <div class="text-emerald-400 text-xl">🚦 Shoutouts</div>
+            <div class="text-emerald-400 text-xl">🚦 Traffic Alerts</div>
             <div class="text-3xl font-bold mt-1">${stats.shoutoutsToday || 0}</div>
           </div>
           <div class="bg-white/5 rounded-2xl p-4">

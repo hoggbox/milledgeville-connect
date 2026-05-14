@@ -918,7 +918,7 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
       if (author) {
         author.reputation = (author.reputation || 0) + 8;
         author.repHistory.push({
-          action: "Shoutout Like",
+          action: "Traffic Alert Like",
           amount: 8,
           sourceId: shoutout._id
         });
