@@ -4200,86 +4200,80 @@ async function loadMarketplacePage(content) {
         </select>
       </div>
 
-      <div id="marketItemsList" class="space-y-4"></div>
-      <div id="marketPagination" class="flex justify-center gap-3 mt-8"></div>
+      <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
     </div>`;
 
-  window.currentMarketPage = 1;
+  // Load data once and cache it
+  if (allMarketplaceItems.length === 0) {
+    try {
+      const res = await apiGet('/marketplace');
+      allMarketplaceItems = res.items || res || [];
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
 
-  // Live search
   const searchInput = document.getElementById('marketSearchInput');
   searchInput.addEventListener('input', debounce(() => {
     window.currentMarketSearch = searchInput.value.trim().toLowerCase();
-    window.currentMarketPage = 1;
     renderMarketplacePage();
-  }, 300));
+  }, 250));
 
-  // Initial load with cache
-  await renderMarketplacePage();
+  renderMarketplacePage();
 }
 
 async function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
-  container.innerHTML = `<div class="py-12 text-center text-white/40">Loading listings...</div>`;
+  if (!container) return;
 
-  try {
-    // Only fetch if we don't have cached data
-    if (!allMarketplaceItems.length) {
-      const res = await apiGet('/marketplace');
-      allMarketplaceItems = res.items || res || [];
-    }
+  container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
 
-    let filtered = allMarketplaceItems;
+  let filtered = allMarketplaceItems;
 
-    if (window.currentMarketSearch) {
-      filtered = filtered.filter(item => 
-        item.title.toLowerCase().includes(window.currentMarketSearch) ||
-        (item.description && item.description.toLowerCase().includes(window.currentMarketSearch))
-      );
-    }
+  if (window.currentMarketSearch) {
+    filtered = filtered.filter(item => 
+      (item.title || '').toLowerCase().includes(window.currentMarketSearch) ||
+      (item.description || '').toLowerCase().includes(window.currentMarketSearch)
+    );
+  }
 
-    if (window.currentMarketFilter !== 'all') {
-      filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
-    }
+  if (window.currentMarketFilter !== 'all') {
+    filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
+  }
 
-    let html = '';
-    if (filtered.length === 0) {
-      html = `<p class="text-white/40 text-center py-16">No listings found.</p>`;
-    } else {
-      html = filtered.map(item => `
-        <div onclick="showMarketplaceDetail('${item._id}')" 
-             class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
-          <div class="flex gap-4">
-            ${item.images?.[0] ? 
-              `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` : 
-              `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl">🛒</div>`}
-            <div class="flex-1 min-w-0">
-              <div class="flex justify-between items-start">
-                <h3 class="font-semibold text-lg leading-tight">${item.title}</h3>
-                <p class="text-2xl font-bold text-emerald-400">$${item.price}</p>
-              </div>
-              <p class="text-white/70 line-clamp-2 mt-1">${item.description || ''}</p>
-              <div class="flex items-center gap-2 mt-4 text-xs">
-                <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
-                <span class="text-white/50">${timeAgo(item.createdAt)}</span>
-                <span class="text-white/50">•</span>
-                ${renderClickableUser(item.seller, item.authorName)}
-              </div>
-            </div>
+  if (filtered.length === 0) {
+    container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+    return;
+  }
+
+  let html = filtered.map(item => `
+    <div onclick="showMarketplaceDetail('${item._id}')" 
+         class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
+      <div class="flex gap-4">
+        ${item.images?.[0] ? 
+          `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` : 
+          `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0">🛒</div>`}
+        <div class="flex-1 min-w-0">
+          <div class="flex justify-between items-start">
+            <h3 class="font-semibold text-lg leading-tight pr-2">${item.title}</h3>
+            <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
+          </div>
+          <p class="text-white/70 line-clamp-2 mt-1">${item.description || ''}</p>
+          <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
+            <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
+            <span>${timeAgo(item.createdAt)}</span>
+            <span class="text-white/40">•</span>
+            ${renderClickableUser(item.seller)}
           </div>
         </div>
-      `).join('');
-    }
+      </div>
+    </div>
+  `).join('');
 
-    container.innerHTML = html;
-    renderMarketPagination({ totalPages: 1 }); // simplify pagination for now
-
-  } catch (e) {
-    console.error(e);
-    container.innerHTML = `<p class="text-red-400 text-center py-12">Failed to load marketplace.</p>`;
-  }
+  container.innerHTML = html;
 }
 
 function renderMarketPagination(p) {
