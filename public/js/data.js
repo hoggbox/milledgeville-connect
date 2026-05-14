@@ -2365,7 +2365,7 @@ let events = allEvents.filter(e => {
 });
 
   time === 'past' ? events.sort((a,b) => new Date(b.date) - new Date(a.date))
-                  : events.sort((a,b) => new Date(a.date) - new Date(a.date));
+                  : events.sort((a,b) => new Date(a.date) - new Date(b.date));
 
   const container = document.getElementById('eventResults');
   if (!container) return;
@@ -3798,7 +3798,7 @@ async function renderLostComments(item) {
 
   let html = '';
   comments.forEach(c => {
-    const authorId = c.authorId?._id || c.authorId || c.authorId; // extra safety
+    const authorId = c.authorId?._id || c.authorId;
     const authorName = c.author || 'Anonymous';
 
     html += `<div class="bg-slate-100 rounded-2xl p-4">
@@ -4798,17 +4798,9 @@ window.sendReply = async function(otherId) {
   updateMessageBadge();
 };
 
-// Global exports
-window.showPostLostItemModal = window.showPostLostItemModal;
-window.showLostItemDetail = window.showLostItemDetail;
-window.showPostMarketplaceModal = window.showPostMarketplaceModal;
-window.showMarketplaceDetail = window.showMarketplaceDetail;
-
-// Call these from the router
-window.loadLostFoundPage = loadLostFoundPage;
-window.loadMarketplacePage = loadMarketplacePage;
-
 // ─── Global exports ───────────────────────────────────────────────────────────
+window.loadLostFoundPage     = loadLostFoundPage;
+window.loadMarketplacePage   = loadMarketplacePage;
 window.loadResourcesPage     = loadResourcesPage;
 window.loadPage              = loadPage;
 window.postShoutout          = postShoutoutWithPhoto;
@@ -5235,68 +5227,7 @@ window.submitAddBusiness = async function() {
   }
 };
 
-// ─── REPORTS MANAGEMENT (New Tab) ───────────────────────────────────────────
-// ─── ADMIN REPORTS TAB (Improved with Details) ─────────────────────────────
-async function renderAdminReports() {
-  const container = document.getElementById('adminMainContent');
-  
-  try {
-    const reports = await apiGet('/admin/reports?status=pending');
-    
-    let html = `
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-xl mb-6">🚩 Pending Reports (${reports.length})</h3>`;
-
-    if (reports.length === 0) {
-      html += `<p class="text-white/50 py-16 text-center text-lg">No pending reports — all good!</p>`;
-    } else {
-      html += reports.map(r => {
-        const isShoutout = r.type === 'shoutout';
-        const reportedName = r.reportedUser?.name || 'Unknown User';
-        const reporterName = r.reporter?.name || 'Anonymous';
-        
-        return `
-          <div class="bg-white/5 rounded-2xl p-5 mb-4 border border-white/10">
-            <div class="flex items-start justify-between gap-4">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="px-3 py-1 text-xs font-bold rounded-full ${isShoutout ? 'bg-orange-500' : 'bg-red-500'}">
-                    ${isShoutout ? '🚩 SHOUTOUT' : '👤 USER'}
-                  </span>
-                  <span class="text-xs text-white/50">by ${reporterName}</span>
-                </div>
-                
-                <p class="font-semibold text-white">${reportedName}</p>
-                
-                ${r.snapshotText ? `
-                <p class="text-white/70 mt-2 text-sm line-clamp-3">"${r.snapshotText}"</p>` : ''}
-                
-                ${r.reason ? `
-                <div class="mt-3 bg-white/10 rounded-xl p-3 text-sm">
-                  <span class="text-white/50 text-xs block mb-1">REASON:</span>
-                  <span class="text-white">${r.reason}</span>
-                </div>` : ''}
-              </div>
-              
-              <button onclick="reviewReport('${r._id}')" 
-                      class="flex-shrink-0 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-2xl transition">
-                Review
-              </button>
-            </div>
-          </div>`;
-      }).join('');
-    }
-
-    html += `</div>`;
-    container.innerHTML = html;
-
-  } catch (e) {
-    console.error(e);
-    container.innerHTML = `<div class="p-8 text-red-400">Failed to load reports. Check console.</div>`;
-  }
-}
-
-// Keep your existing reviewReport function
+// ─── REPORTS MANAGEMENT ──────────────────────────────────────────────────────
 window.reviewReport = async function(reportId) {
   const action = prompt("Mark report as:\n\n1 = reviewed\n2 = dismissed");
   if (!action) return;
@@ -5310,7 +5241,6 @@ window.reviewReport = async function(reportId) {
   }
 };
 
-// ─── ADMIN REPORTS TAB (Better Details) ─────────────────────────────────────
 async function renderAdminReports() {
   const container = document.getElementById('adminMainContent');
   
@@ -5494,7 +5424,7 @@ window.flagShoutout = async function (shoutoutId) {
   }
 };
 
-// Live badge updates every 8 seconds
+// Live badge updates every 30 seconds
 setInterval(() => {
   if (typeof currentUser !== 'undefined' && currentUser) {
     updateMessageBadge();
