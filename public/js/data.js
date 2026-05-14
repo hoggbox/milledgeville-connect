@@ -5144,43 +5144,76 @@ window.submitAddBusiness = async function() {
 };
 
 // ─── REPORTS MANAGEMENT (New Tab) ───────────────────────────────────────────
+// ─── ADMIN REPORTS TAB (Improved with Details) ─────────────────────────────
 async function renderAdminReports() {
   const container = document.getElementById('adminMainContent');
   
   try {
     const reports = await apiGet('/admin/reports?status=pending');
     
-    container.innerHTML = `
+    let html = `
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-lg mb-4">Pending Reports (${reports.length})</h3>
-        <div class="space-y-4" id="reportsList">
-          ${reports.length === 0 ? 
-            `<p class="text-white/50 py-12 text-center">No pending reports</p>` : 
-            reports.map(r => `
-            <div class="bg-white/5 rounded-2xl p-5">
-              <div class="flex justify-between items-start">
-                <div>
-                  <span class="px-3 py-1 text-xs rounded-full ${r.type === 'shoutout' ? 'bg-orange-500' : 'bg-red-500'}">${r.type.toUpperCase()}</span>
-                  <p class="font-medium mt-2">${r.snapshotText ? r.snapshotText.substring(0, 120) + '...' : 'User Report'}</p>
+        <h3 class="font-bold text-xl mb-6">🚩 Pending Reports (${reports.length})</h3>`;
+
+    if (reports.length === 0) {
+      html += `<p class="text-white/50 py-16 text-center text-lg">No pending reports — all good!</p>`;
+    } else {
+      html += reports.map(r => {
+        const isShoutout = r.type === 'shoutout';
+        const reportedName = r.reportedUser?.name || 'Unknown User';
+        const reporterName = r.reporter?.name || 'Anonymous';
+        
+        return `
+          <div class="bg-white/5 rounded-2xl p-5 mb-4 border border-white/10">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="px-3 py-1 text-xs font-bold rounded-full ${isShoutout ? 'bg-orange-500' : 'bg-red-500'}">
+                    ${isShoutout ? '🚩 SHOUTOUT' : '👤 USER'}
+                  </span>
+                  <span class="text-xs text-white/50">by ${reporterName}</span>
                 </div>
-                <button onclick="reviewReport('${r._id}')" 
-                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl">Review</button>
+                
+                <p class="font-semibold text-white">${reportedName}</p>
+                
+                ${r.snapshotText ? `
+                <p class="text-white/70 mt-2 text-sm line-clamp-3">"${r.snapshotText}"</p>` : ''}
+                
+                ${r.reason ? `
+                <div class="mt-3 bg-white/10 rounded-xl p-3 text-sm">
+                  <span class="text-white/50 text-xs block mb-1">REASON:</span>
+                  <span class="text-white">${r.reason}</span>
+                </div>` : ''}
               </div>
-            </div>`).join('')}
-        </div>
-      </div>`;
+              
+              <button onclick="reviewReport('${r._id}')" 
+                      class="flex-shrink-0 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-2xl transition">
+                Review
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    html += `</div>`;
+    container.innerHTML = html;
+
   } catch (e) {
-    container.innerHTML = `<div class="p-8 text-red-400">Failed to load reports.</div>`;
+    console.error(e);
+    container.innerHTML = `<div class="p-8 text-red-400">Failed to load reports. Check console.</div>`;
   }
 }
 
+// Keep your existing reviewReport function
 window.reviewReport = async function(reportId) {
-  const action = prompt("Action: reviewed / dismissed ?");
+  const action = prompt("Mark report as:\n\n1 = reviewed\n2 = dismissed");
   if (!action) return;
   
-  const res = await apiPatch(`/admin/reports/${reportId}`, { status: action });
+  const status = action === '1' ? 'reviewed' : 'dismissed';
+  
+  const res = await apiPatch(`/admin/reports/${reportId}`, { status });
   if (res) {
-    showToast('Report updated');
+    showToast(`Report marked as ${status}`);
     renderAdminReports();
   }
 };
