@@ -192,9 +192,8 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
   });
 
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-    console.log('\U0001f4ec NOTIFICATION TAPPED:', action);
+    console.log('🔔 Notification tapped:', action);
 
-    // FCM data fields land on action.notification.data
     const data = action?.notification?.data || {};
     const page = data.page;
     const id   = data.id;
@@ -204,16 +203,22 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
     // Navigate to the right page, then scroll to/highlight the specific post
     if (typeof loadPage === 'function') {
       loadPage(page).then(() => {
-        if (id) {
-          // Give the page a moment to render, then scroll the post into view
+        if (id && page === 'shoutouts') {
+          // Increased delay for better reliability after page load
           setTimeout(() => {
             const el = document.getElementById('shoutout-' + id);
             if (el) {
               el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el.classList.add('ring-2', 'ring-emerald-400');
-              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-400'), 3000);
+              el.classList.add('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
+              
+              // Remove highlight after 4 seconds
+              setTimeout(() => {
+                el.classList.remove('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
+              }, 4000);
+            } else {
+              console.warn(`Could not find shoutout-${id} element`);
             }
-          }, 600);
+          }, 800);
         }
       });
     }
