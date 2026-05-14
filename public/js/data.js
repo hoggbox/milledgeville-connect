@@ -5485,11 +5485,11 @@ window.saveBusinessEdit = async function(businessId) {
     });
 
     let res;
+    const rawText = await response.text();
     try {
-      res = await response.json();
+      res = JSON.parse(rawText);
     } catch (jsonErr) {
-      const text = await response.text();
-      console.error("Server returned HTML/error instead of JSON:", text);
+      console.error("Server returned HTML/error instead of JSON:", rawText);
       throw new Error(`Server error: ${response.status}`);
     }
 
