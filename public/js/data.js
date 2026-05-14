@@ -3874,59 +3874,77 @@ window.postMarketplaceItem = async function() {
 
 window.showMarketplaceDetail = async function(id) {
   currentMarketItemId = id;
-  const items = await apiGet('/marketplace');
-  const item = items.find(i => i._id === id);
-  if (!item) return;
+  
+  try {
+    const res = await apiGet('/marketplace');
+    // Handle both possible response formats
+    const items = res.items || res; 
+    
+    const item = Array.isArray(items) 
+      ? items.find(i => String(i._id) === String(id)) 
+      : null;
 
-  const isSeller = item.seller && ((item.seller._id || item.seller).toString() === (currentUser?._id || '').toString());
+    if (!item) {
+      showToast('Item not found', 'error');
+      return;
+    }
 
-  let html = `
-    <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
-      <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
-        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between">
-          <div>
-            <h2 class="text-xl font-bold">${item.title}</h2>
-            <p class="text-3xl font-bold text-emerald-600">$${item.price}</p>
+    const isSeller = item.seller && 
+      String(item.seller._id || item.seller) === String(currentUser?._id || '');
+
+    let html = `
+      <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
+        <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
+          <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between">
+            <div>
+              <h2 class="text-xl font-bold">${item.title}</h2>
+              <p class="text-3xl font-bold text-emerald-600">$${item.price}</p>
+            </div>
+            <button onclick="hideMarketDetailModal()" class="text-3xl">×</button>
           </div>
-          <button onclick="hideMarketDetailModal()" class="text-3xl">×</button>
-        </div>
-        
-        <div class="p-6">
-          ${item.images && item.images.length ? `<div class="grid grid-cols-3 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl aspect-square object-cover">`).join('')}</div>` : ''}
-          <p class="text-slate-700">${item.description}</p>
           
-          <div class="mt-8">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="font-semibold">💬 Comments</h3>
-              ${!isSeller && item.seller ? `
-                <button onclick="showComposeMessageModal('${item.seller?._id || item.seller}', '${item.seller?.name || 'Seller'}')" 
-                        class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
-                  ✉️ Message Seller
-                </button>` : ''}
-            </div>
-            <div id="marketCommentsContainer" class="space-y-4"></div>
+          <div class="p-6">
+            ${item.images && item.images.length ? 
+              `<div class="grid grid-cols-3 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl aspect-square object-cover">`).join('')}</div>` : ''}
             
-            <div class="mt-6">
-              <textarea id="marketCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
-              <button onclick="postMarketComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
+            <p class="text-slate-700">${item.description}</p>
+            
+            <div class="mt-8">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">💬 Comments</h3>
+                ${!isSeller && item.seller ? `
+                  <button onclick="showComposeMessageModal('${item.seller?._id || item.seller}', '${item.seller?.name || 'Seller'}')" 
+                          class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
+                    ✉️ Message Seller
+                  </button>` : ''}
+              </div>
+              <div id="marketCommentsContainer" class="space-y-4"></div>
+              
+              <div class="mt-6">
+                <textarea id="marketCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
+                <button onclick="postMarketComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
+              </div>
             </div>
           </div>
+
+          ${isSeller ? `
+          <div class="p-6 border-t bg-amber-50 flex justify-end">
+            <button onclick="markMarketSold()" class="bg-amber-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Sold ✅</button>
+          </div>` : ''}
         </div>
+      </div>`;
 
-        ${isSeller ? `
-        <div class="p-6 border-t bg-amber-50 flex justify-end">
-          <button onclick="markMarketSold()" class="bg-amber-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Sold ✅</button>
-        </div>` : ''}
-      </div>
-    </div>`;
+    const div = document.createElement('div');
+    div.id = 'marketDetailModal';
+    div.innerHTML = html;
+    document.body.appendChild(div);
 
-  const div = document.createElement('div');
-  div.id = 'marketDetailModal';
-  div.innerHTML = html;
-  document.body.appendChild(div);
+    renderMarketComments(item);
 
-  // This line was missing — now names appear and are clickable
-  renderMarketComments(item);
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to load item', 'error');
+  }
 };
 
 window.hideMarketDetailModal = function() {
