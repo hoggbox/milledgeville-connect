@@ -5409,6 +5409,94 @@ window.sendBroadcast = async function (ownersOnly = false) {
   }
 };
 
+// ─── ADMIN — EDIT BUSINESS ─────────────────────────────────────────────────
+window.editBusiness = async function(businessId) {
+  const business = allBusinesses.find(b => b._id === businessId);
+  if (!business) return showToast('Business not found', 'error');
+
+  const html = `
+    <div id="editBusinessModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[20000] p-4">
+      <div class="bg-white text-slate-900 w-full max-w-lg rounded-3xl max-h-[90vh] overflow-auto">
+        <div class="sticky top-0 bg-white p-6 border-b flex justify-between items-center">
+          <h2 class="text-2xl font-bold">Edit Business</h2>
+          <button onclick="closeEditBusinessModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
+        </div>
+        
+        <div class="p-6 space-y-4">
+          <input id="editBizName" value="${business.name || ''}" placeholder="Business Name" 
+                 class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">
+          
+          <input id="editBizAddress" value="${business.address || ''}" placeholder="Address" 
+                 class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">
+          
+          <div class="grid grid-cols-2 gap-3">
+            <input id="editBizPhone" value="${business.phone || ''}" placeholder="Phone" 
+                   class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">
+            <input id="editBizEmail" value="${business.email || ''}" placeholder="Email" 
+                   class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">
+          </div>
+
+          <textarea id="editBizDescription" rows="3" placeholder="Description"
+                    class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">${business.description || ''}</textarea>
+
+          <button onclick="saveBusinessEdit('${businessId}')" 
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.closeEditBusinessModal = function() {
+  const modal = document.getElementById('editBusinessModal');
+  if (modal) modal.remove();
+};
+
+window.saveBusinessEdit = async function(businessId) {
+  const payload = {
+    name: document.getElementById('editBizName').value.trim(),
+    address: document.getElementById('editBizAddress').value.trim(),
+    phone: document.getElementById('editBizPhone').value.trim(),
+    email: document.getElementById('editBizEmail').value.trim(),
+    description: document.getElementById('editBizDescription').value.trim()
+  };
+
+  try {
+    const res = await apiPut(`/admin/business/${businessId}`, payload);
+    if (res.business) {
+      showToast('✅ Business updated!', 'success');
+      closeEditBusinessModal();
+      
+      // Refresh admin list
+      const data = await apiGet('/directory');
+      allBusinesses = data.businesses || [];
+      renderAdminBusinesses();
+    }
+  } catch (e) {
+    showToast('Failed to update business', 'error');
+  }
+};
+
+// ─── ADMIN — DELETE BUSINESS ───────────────────────────────────────────────
+window.deleteBusiness = async function(businessId) {
+  if (!confirm('Delete this business permanently? This cannot be undone.')) return;
+
+  try {
+    await apiDelete(`/admin/business/${businessId}`);
+    showToast('✅ Business deleted', 'success');
+    
+    // Refresh list
+    const data = await apiGet('/directory');
+    allBusinesses = data.businesses || [];
+    renderAdminBusinesses();
+  } catch (e) {
+    showToast('Failed to delete business', 'error');
+  }
+};
+
 async function renderAdminAnalytics() {
   const container = document.getElementById('adminMainContent');
   
