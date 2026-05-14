@@ -3124,14 +3124,14 @@ async function loadAdminPage(content) {
       <!-- Mobile Top Tabs (Horizontal Scroll) -->
       <div class="md:hidden flex overflow-x-auto gap-2 pb-4 hide-scrollbar mb-6 border-b border-white/10">
         ${[
-          {id:0, label:'📊 Dash', icon:'📊'},
-          {id:1, label:'👥 Users', icon:'👥'},
-          {id:2, label:'🛡️ Mod', icon:'🛡️'},
-          {id:3, label:'🏪 Biz', icon:'🏪'},
-          {id:4, label:'📬 Claims', icon:'📬'},
-          {id:5, label:'📢 Broadcast', icon:'📢'},
-          {id:6, label:'📈 Analytics', icon:'📈'},
-          {id:7, label:'🚩 Reports', icon:'🚩'}
+          {id:0, label:'Dashboard', icon:'📊'},
+          {id:1, label:'Users',     icon:'👥'},
+          {id:2, label:'Mod',       icon:'🛡️'},
+          {id:3, label:'Businesses',icon:'🏪'},
+          {id:4, label:'Claims',    icon:'📬'},
+          {id:5, label:'Broadcast', icon:'📢'},
+          {id:6, label:'Analytics', icon:'📈'},
+          {id:7, label:'Reports',   icon:'🚩'}
         ].map(tab => `
           <button onclick="switchAdminTab(${tab.id})" id="mobileTab${tab.id}"
                   class="admin-tab whitespace-nowrap flex items-center gap-2 px-5 py-3 rounded-3xl text-sm font-semibold flex-shrink-0 transition-all
@@ -3148,12 +3148,12 @@ async function loadAdminPage(content) {
         <div class="hidden md:block w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
           <div class="flex items-center gap-3 mb-10 px-2">
             <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl">🔧</div>
-            <h1 class="text-2xl font-bold">Admin</h1>
+            <h1 class="text-2xl font-bold">Admin Control</h1>
           </div>
 
           <nav class="space-y-1 text-sm">
             <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">📊 Dashboard</button>
-            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">👥 Users & Rep</button>
+            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">👥 Users & Reputation</button>
             <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🛡️ Moderation</button>
             <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🏪 Businesses</button>
             <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📬 Claims</button>
@@ -3163,7 +3163,7 @@ async function loadAdminPage(content) {
           </nav>
         </div>
 
-        <!-- Main Content Area -->
+        <!-- Main Content -->
         <div class="flex-1 min-w-0" id="adminMainContent"></div>
       </div>
     </div>`;
