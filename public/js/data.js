@@ -4,10 +4,6 @@ let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];   // ← Add this
 
-// ─── App Update System ─────────────────────────────────────────────────────
-const CURRENT_APP_VERSION = "1.2.4";                    // ← Bump this on every new APK
-const LATEST_APK_URL = "https://www.milledgevilleconnect.com/app.html"; // ← Your real download link
-
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
   const full = Math.round(avg);
@@ -334,7 +330,6 @@ window.handleSearchResultClick = function (type, id) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
-  checkForAppUpdate();        // ← Add this line
 });
 
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
