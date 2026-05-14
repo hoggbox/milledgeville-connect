@@ -312,12 +312,11 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
-// ─── ADMIN BROADCAST (Supports HTML) ─────────────────────────────────────
+// ─── ADMIN BROADCAST (Safe - sends exactly once per user) ─────────────────────
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { message, ownersOnly = false, isHtml = false } = req.body;
-
-    if (!message) return res.status(400).json({ message: 'Message is required' });
+    const { message, ownersOnly = false } = req.body;
+    if (!message?.trim()) return res.status(400).json({ message: 'Message is required' });
 
     let query = {};
     if (ownersOnly) {
@@ -327,20 +326,20 @@ router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => 
     const users = await User.find(query).select('_id pushEnabled');
 
     let sentCount = 0;
+    const processedUsers = new Set(); // Prevent duplicates
 
     for (const user of users) {
+      if (processedUsers.has(user._id.toString())) continue;
+      processedUsers.add(user._id.toString());
+
       if (!user.pushEnabled) continue;
 
-      // Save as in-app notification (so they see it even if push fails)
-      // You can expand this later with a Notification model if you want
-
       await broadcastPush(
-        ownersOnly ? "📢 Owner Update" : "📢 Community Update",
-        message.length > 120 ? message.substring(0, 117) + '...' : message,
+        ownersOnly ? "📢 Owner Announcement" : "📢 Community Update",
+        message.length > 140 ? message.substring(0, 137) + '...' : message,
         { 
           page: 'home', 
-          url: 'https://milledgevilleconnect.com/app.html',
-          isHtml: isHtml 
+          url: 'https://milledgevilleconnect.com/app.html' 
         }
       );
 
@@ -349,13 +348,13 @@ router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => 
 
     res.json({ 
       success: true, 
-      sent: sentCount, 
-      message: `Broadcast sent to ${sentCount} users` 
+      sent: sentCount,
+      message: `Broadcast sent successfully to ${sentCount} users` 
     });
 
   } catch (err) {
     console.error('Broadcast error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Broadcast failed', error: err.message });
   }
 });
 

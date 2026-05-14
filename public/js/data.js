@@ -3,6 +3,7 @@ let allBusinesses = [];
 let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];   // ← Add this
+let lastBroadcastTime = 0;
 
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
@@ -5384,29 +5385,27 @@ async function renderAdminBroadcast() {
 }
 
 window.sendBroadcast = async function (ownersOnly = false) {
-  const text = document.getElementById('broadcastText').value.trim();
-  if (!text) {
-    showToast('Message cannot be empty', 'error');
-    return;
+  const now = Date.now();
+  if (now - lastBroadcastTime < 10000) { // 10 second cooldown
+    return showToast('Please wait 10 seconds between broadcasts', 'error');
   }
 
-  if (!confirm(`Send this broadcast to ${ownersOnly ? 'verified business owners' : 'ALL users'}? This cannot be undone.`)) return;
+  const text = document.getElementById('broadcastText').value.trim();
+  if (!text) return showToast('Message cannot be empty', 'error');
+
+  if (!confirm(`Send to ${ownersOnly ? 'verified owners only' : 'ALL users'}?`)) return;
+
+  lastBroadcastTime = now;
 
   try {
-    const res = await apiPost('/admin/broadcast', { 
-      message: text, 
-      ownersOnly 
-    });
-
-    if (res.sent || res.success || res.message?.includes('sent')) {
-      showToast(`✅ Broadcast sent successfully!`, 'success');
-      document.getElementById('broadcastText').value = '';
-    } else {
-      showToast(res.message || 'Failed to send broadcast', 'error');
-    }
+    showToast('Sending...', 'success');
+    const res = await apiPost('/admin/broadcast', { message: text, ownersOnly });
+    
+    showToast(`✅ Sent to ${res.sent || 'users'}!`, 'success');
+    document.getElementById('broadcastText').value = '';
   } catch (e) {
     console.error(e);
-    showToast('Network error — broadcast failed', 'error');
+    showToast('Failed to send broadcast', 'error');
   }
 };
 
