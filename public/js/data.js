@@ -4,6 +4,10 @@ let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];   // ← Add this
 
+// ─── App Update System ─────────────────────────────────────────────────────
+const CURRENT_APP_VERSION = "1.2.4";                    // ← Bump this on every new APK
+const LATEST_APK_URL = "https://www.milledgevilleconnect.com/app.html"; // ← Your real download link
+
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
   const full = Math.round(avg);
@@ -121,6 +125,57 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
                 class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
             ${displayName}${repHTML}
           </span>`;
+}
+
+// ─── In-App Update Banner ───────────────────────────────────────────────────
+function showUpdateBanner(newVersion) {
+  if (document.getElementById('updateBanner')) return;
+
+  const bannerHTML = `
+    <div id="updateBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-3xl shadow-2xl p-5 flex items-center gap-4 z-[9999] max-w-md border border-white/20">
+      <div class="flex-1">
+        <p class="font-semibold text-lg">🚀 New Update Available</p>
+        <p class="text-sm opacity-90">Version ${newVersion} is ready</p>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="dismissUpdateBanner()" 
+                class="px-6 py-3 text-sm font-medium rounded-2xl bg-white/20 hover:bg-white/30 transition">
+          Later
+        </button>
+        <button onclick="downloadUpdate()" 
+                class="px-7 py-3 text-sm font-semibold rounded-2xl bg-white text-emerald-700 hover:bg-white/90 transition shadow">
+          Update Now
+        </button>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', bannerHTML);
+}
+
+window.dismissUpdateBanner = function() {
+  const banner = document.getElementById('updateBanner');
+  if (banner) banner.remove();
+};
+
+window.downloadUpdate = function() {
+  apiPost('/analytics/update-clicked', { version: CURRENT_APP_VERSION }).catch(() => {});
+  window.open(LATEST_APK_URL, '_blank');
+  dismissUpdateBanner();
+  showToast("✅ Opening download page...", "success");
+};
+
+async function checkForAppUpdate() {
+  try {
+    const latestVersion = "1.2.5";   // ← Change this when you release a new version
+
+    if (latestVersion !== CURRENT_APP_VERSION) {
+      setTimeout(() => {
+        showUpdateBanner(latestVersion);
+      }, 1500);
+    }
+  } catch (e) {
+    console.log("Update check failed");
+  }
 }
 
 // In-memory unread count so we can zero it instantly without a round-trip
@@ -279,6 +334,7 @@ window.handleSearchResultClick = function (type, id) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
+  checkForAppUpdate();        // ← Add this line
 });
 
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
