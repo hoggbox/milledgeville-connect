@@ -3683,63 +3683,79 @@ window.postLostItem = async function() {
 
 window.showLostItemDetail = async function(id) {
   currentLostItemId = id;
-  const items = await apiGet('/lostitems');
-  const item = items.find(i => i._id === id);
-  if (!item) return;
+  
+  try {
+    const res = await apiGet('/lostitems');
+    const items = res.items || res;                    // handle both formats
+    
+    const item = Array.isArray(items) 
+      ? items.find(i => String(i._id) === String(id)) 
+      : null;
 
-  const isOwner = item.owner && ((item.owner._id || item.owner).toString() === (currentUser?._id || '').toString());
+    if (!item) {
+      showToast('Item not found', 'error');
+      return;
+    }
 
-  let html = `
-    <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
-      <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
-        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
-          <h2 class="text-xl font-bold">${item.title}</h2>
-          <button onclick="hideLostDetailModal()" class="text-3xl leading-none">×</button>
-        </div>
-        
-        <div class="p-6">
-          ${item.images && item.images.length ? 
-            `<div class="grid grid-cols-2 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl w-full aspect-square object-cover">`).join('')}</div>` : ''}
-          
-          <p class="text-slate-700 leading-relaxed">${item.description}</p>
-          
-          <div class="flex gap-6 text-sm mt-6">
-            <div><span class="font-semibold">Type:</span> ${item.type.toUpperCase()}</div>
-            ${item.isPet ? `<div class="text-amber-600">🐾 Lost Pet</div>` : ''}
-            ${item.location ? `<div><span class="font-semibold">📍</span> ${item.location}</div>` : ''}
+    const isOwner = item.owner && 
+      String(item.owner._id || item.owner) === String(currentUser?._id || '');
+
+    let html = `
+      <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
+        <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
+          <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+            <h2 class="text-xl font-bold">${item.title}</h2>
+            <button onclick="hideLostDetailModal()" class="text-3xl leading-none">×</button>
           </div>
-
-          <div class="mt-8">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="font-semibold">💬 Comments</h3>
-              ${!isOwner && item.owner ? `
-                <button onclick="showComposeMessageModal('${item.owner?._id || item.owner}', '${item.owner?.name || 'Owner'}')" 
-                        class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
-                  ✉️ Message Owner
-                </button>` : ''}
-            </div>
-            <div id="lostCommentsContainer" class="space-y-4"></div>
+          
+          <div class="p-6">
+            ${item.images && item.images.length ? 
+              `<div class="grid grid-cols-2 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl w-full aspect-square object-cover">`).join('')}</div>` : ''}
             
-            <div class="mt-6">
-              <textarea id="lostCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
-              <button onclick="postLostComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
+            <p class="text-slate-700 leading-relaxed">${item.description}</p>
+            
+            <div class="flex gap-6 text-sm mt-6">
+              <div><span class="font-semibold">Type:</span> ${item.type.toUpperCase()}</div>
+              ${item.isPet ? `<div class="text-amber-600">🐾 Lost Pet</div>` : ''}
+              ${item.location ? `<div><span class="font-semibold">📍</span> ${item.location}</div>` : ''}
+            </div>
+
+            <div class="mt-8">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">💬 Comments</h3>
+                ${!isOwner && item.owner ? `
+                  <button onclick="showComposeMessageModal('${item.owner?._id || item.owner}', '${item.owner?.name || 'Owner'}')" 
+                          class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
+                    ✉️ Message Owner
+                  </button>` : ''}
+              </div>
+              <div id="lostCommentsContainer" class="space-y-4"></div>
+              
+              <div class="mt-6">
+                <textarea id="lostCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
+                <button onclick="postLostComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
+              </div>
             </div>
           </div>
+
+          ${isOwner ? `
+          <div class="p-6 border-t bg-emerald-50 flex justify-end">
+            <button onclick="markLostResolved()" class="bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Resolved ✅</button>
+          </div>` : ''}
         </div>
+      </div>`;
 
-        ${isOwner ? `
-        <div class="p-6 border-t bg-emerald-50 flex justify-end">
-          <button onclick="markLostResolved()" class="bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Resolved ✅</button>
-        </div>` : ''}
-      </div>
-    </div>`;
+    const detailDiv = document.createElement('div');
+    detailDiv.id = 'lostDetailModal';
+    detailDiv.innerHTML = html;
+    document.body.appendChild(detailDiv);
 
-  const detailDiv = document.createElement('div');
-  detailDiv.id = 'lostDetailModal';
-  detailDiv.innerHTML = html;
-  document.body.appendChild(detailDiv);
+    renderLostComments(item);
 
-  renderLostComments(item);
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to load item', 'error');
+  }
 };
 
 window.hideLostDetailModal = function() {
@@ -3749,28 +3765,49 @@ window.hideLostDetailModal = function() {
 
 window.postLostComment = async function() {
   const input = document.getElementById('lostCommentInput');
-  if (!input.value.trim()) return;
+  if (!input || !input.value.trim()) return;
   
-  await apiPost(`/lostitems/${currentLostItemId}/comments`, { text: input.value });
+  await apiPost(`/lostitems/${currentLostItemId}/comments`, { text: input.value.trim() });
   input.value = '';
-  const items = await apiGet('/lostitems');
-  const item = items.find(i => i._id === currentLostItemId);
-  if (item) renderLostComments(item);
+
+  // Safe reload
+  try {
+    const res = await apiGet('/lostitems');
+    const items = res.items || res;
+    const item = Array.isArray(items) ? items.find(i => String(i._id) === String(currentLostItemId)) : null;
+    if (item) renderLostComments(item);
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 async function renderLostComments(item) {
   const container = document.getElementById('lostCommentsContainer');
-  if (!container) return;
-  
+  if (!container || !item) {
+    if (container) container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet</p>';
+    return;
+  }
+
+  const comments = item.comments || [];
+
+  if (!comments.length) {
+    container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet — be the first!</p>';
+    return;
+  }
+
   let html = '';
-  (item.comments || []).forEach(c => {
-    const authorId = c.authorId?._id || c.authorId;
+  comments.forEach(c => {
+    const authorId = c.authorId?._id || c.authorId || c.authorId; // extra safety
+    const authorName = c.author || 'Anonymous';
+
     html += `<div class="bg-slate-100 rounded-2xl p-4">
-      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" class="font-medium cursor-pointer hover:underline">${c.author || 'Anonymous'}</p>
-      <p class="text-slate-700">${c.text}</p>
+      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
+         class="font-medium cursor-pointer hover:underline">${authorName}</p>
+      <p class="text-slate-700">${c.text || ''}</p>
     </div>`;
   });
-  container.innerHTML = html || '<p class="text-slate-400 text-center py-4">No comments yet</p>';
+
+  container.innerHTML = html;
 }
 
 window.markLostResolved = async function() {
@@ -3954,27 +3991,41 @@ window.hideMarketDetailModal = function() {
 
 window.postMarketComment = async function() {
   const input = document.getElementById('marketCommentInput');
-  if (!input.value.trim()) return;
+  if (!input || !input.value.trim()) return;
+
+  await apiPost(`/marketplace/${currentMarketItemId}/comments`, { text: input.value.trim() });
   
-  await apiPost(`/marketplace/${currentMarketItemId}/comments`, { text: input.value });
   input.value = '';
-  const items = await apiGet('/marketplace');
-  const item = items.find(i => i._id === currentMarketItemId);
-  if (item) renderMarketComments(item);
+
+  // Reload the item safely
+  try {
+    const res = await apiGet('/marketplace');
+    const items = res.items || res;                    // handle both {items: []} and [] formats
+    const item = Array.isArray(items) 
+      ? items.find(i => String(i._id) === String(currentMarketItemId)) 
+      : null;
+
+    if (item) renderMarketComments(item);
+  } catch (e) {
+    console.error('Failed to refresh comments', e);
+  }
 };
 
 function renderMarketComments(item) {
   const container = document.getElementById('marketCommentsContainer');
-  if (!container) return;
+  if (!container || !item) return;
+
   const comments = item.comments || [];
+  
   if (!comments.length) {
-    container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet</p>';
+    container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet — be the first!</p>';
     return;
   }
+
   container.innerHTML = comments.map(c => {
     const authorId = c.authorId?._id || c.authorId;
     return `<div class="bg-slate-100 rounded-2xl p-4">
-      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')"
+      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
          class="font-medium cursor-pointer hover:underline">${c.author || 'Anonymous'}</p>
       <p class="text-slate-700">${c.text}</p>
     </div>`;
