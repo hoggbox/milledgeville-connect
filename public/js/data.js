@@ -3119,39 +3119,48 @@ window.deleteOwnerEvent = async function (id) {
 // ─── CUTTING-EDGE ADMIN PANEL (2026 Style) ───────────────────────────────────
 async function loadAdminPage(content) {
   content.innerHTML = `
-    <div class="max-w-screen-2xl mx-auto px-3 md:px-6 py-6">
-      <!-- Mobile Top Tabs -->
-      <div class="md:hidden flex overflow-x-auto gap-2 pb-4 hide-scrollbar mb-6">
-        ${['📊 Dash', '👥 Users', '🛡️ Mod', '🏪 Biz', '📬 Claims', '📢 Broadcast', '📈 Analytics']
-          .map((label, i) => `
-            <button onclick="switchAdminTab(${i})" 
-                    id="mobileTab${i}"
-                    class="admin-tab whitespace-nowrap px-5 py-2.5 rounded-3xl text-sm font-semibold flex-shrink-0 ${i===0 ? 'bg-emerald-600 text-white' : 'bg-white/10'}">
-              ${label}
-            </button>`).join('')}
-      </div>
-
+    <div class="max-w-screen-2xl mx-auto px-4 py-6">
       <div class="flex gap-6">
-        <!-- Desktop Sidebar -->
-        <div class="hidden md:block w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
+
+        <!-- SIDEBAR -->
+        <div class="w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
           <div class="flex items-center gap-3 mb-10 px-2">
-            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl">🔧</div>
-            <h1 class="text-2xl font-bold">Admin</h1>
+            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">🔧</div>
+            <h1 class="text-2xl font-bold tracking-tight">Admin Control</h1>
           </div>
 
           <nav class="space-y-1 text-sm">
-            <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">📊 Dashboard</button>
-            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">👥 Users & Rep</button>
-            <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🛡️ Moderation</button>
-            <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🏪 Businesses</button>
-            <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📬 Claims</button>
-            <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📢 Broadcast</button>
-            <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📈 Analytics</button>
+            <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">
+              📊 Dashboard
+            </button>
+            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              👥 Users & Reputation
+            </button>
+            <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              🛡️ Moderation
+            </button>
+            <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              🏪 Businesses
+            </button>
+            <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              📬 Claims
+            </button>
+            <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              📢 Broadcast
+            </button>
+            <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              📈 Analytics
+            </button>
+            <button onclick="switchAdminTab(7)" id="adminTab7" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
+              🚩 Reports
+            </button>
           </nav>
         </div>
 
-        <!-- Main Content -->
-        <div class="flex-1 min-w-0" id="adminMainContent"></div>
+        <!-- MAIN CONTENT -->
+        <div class="flex-1 min-w-0" id="adminMainContent">
+          <!-- Populated by tabs -->
+        </div>
       </div>
     </div>`;
 
@@ -3318,7 +3327,7 @@ window.switchAdminTab = async function(tab) {
       <div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
     </div>`;
 
-  try {
+try {
     if (tab === 0) await renderAdminDashboard();
     else if (tab === 1) await renderAdminUsers();
     else if (tab === 2) {                    // Moderation
@@ -3328,12 +3337,13 @@ window.switchAdminTab = async function(tab) {
       await loadAdminClaimsSafe();
     } else if (tab === 5) await renderAdminBroadcast();
     else if (tab === 6) await renderAdminAnalytics();
+    else if (tab === 7) await renderAdminReports();   // ← NEW REPORTS TAB
   } catch (err) {
-    console.error('Tab load error:', err);
+    console.error(err);
     container.innerHTML = `
-      <div class="bg-red-500/10 border border-red-500/30 rounded-3xl p-8 text-center">
-        <p class="text-red-400 font-medium">Failed to load this tab</p>
-        <p class="text-white/50 text-sm mt-2">Check console (F12) for details</p>
+      <div class="text-center py-20 text-red-400">
+        Failed to load this tab.<br>
+        <span class="text-white/50 text-sm">Check browser console for details</span>
       </div>`;
   }
 };
@@ -5130,6 +5140,90 @@ window.submitAddBusiness = async function() {
     renderAdminBusinesses();
   } else {
     showToast(res.message || 'Failed to add business', 'error');
+  }
+};
+
+// ─── REPORTS MANAGEMENT (New Tab) ───────────────────────────────────────────
+async function renderAdminReports() {
+  const container = document.getElementById('adminMainContent');
+  
+  try {
+    const reports = await apiGet('/admin/reports?status=pending');
+    
+    container.innerHTML = `
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold text-lg mb-4">Pending Reports (${reports.length})</h3>
+        <div class="space-y-4" id="reportsList">
+          ${reports.length === 0 ? 
+            `<p class="text-white/50 py-12 text-center">No pending reports</p>` : 
+            reports.map(r => `
+            <div class="bg-white/5 rounded-2xl p-5">
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="px-3 py-1 text-xs rounded-full ${r.type === 'shoutout' ? 'bg-orange-500' : 'bg-red-500'}">${r.type.toUpperCase()}</span>
+                  <p class="font-medium mt-2">${r.snapshotText ? r.snapshotText.substring(0, 120) + '...' : 'User Report'}</p>
+                </div>
+                <button onclick="reviewReport('${r._id}')" 
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl">Review</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `<div class="p-8 text-red-400">Failed to load reports.</div>`;
+  }
+}
+
+window.reviewReport = async function(reportId) {
+  const action = prompt("Action: reviewed / dismissed ?");
+  if (!action) return;
+  
+  const res = await apiPatch(`/admin/reports/${reportId}`, { status: action });
+  if (res) {
+    showToast('Report updated');
+    renderAdminReports();
+  }
+};
+
+// ─── ADMIN REPORTS TAB ─────────────────────────────────────────────────────
+async function renderAdminReports() {
+  const container = document.getElementById('adminMainContent');
+  
+  try {
+    const reports = await apiGet('/admin/reports?status=pending');
+    
+    let html = `<div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">`;
+    html += `<h3 class="font-bold mb-4">Pending Reports (${reports.length})</h3>`;
+
+    if (reports.length === 0) {
+      html += `<p class="text-white/50 py-12 text-center">No pending reports 🎉</p>`;
+    } else {
+      html += reports.map(r => `
+        <div class="bg-white/5 rounded-2xl p-5 mb-4">
+          <div class="flex justify-between">
+            <div>
+              <span class="px-3 py-1 text-xs rounded-full ${r.type === 'shoutout' ? 'bg-orange-500' : 'bg-red-500'}">${r.type.toUpperCase()}</span>
+              <p class="mt-2 font-medium">${r.snapshotText ? r.snapshotText.substring(0, 100) + '...' : 'User Report'}</p>
+            </div>
+            <button onclick="reviewReport('${r._id}')" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm">Review</button>
+          </div>
+        </div>`).join('');
+    }
+    html += `</div>`;
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="p-8 text-red-400">Failed to load reports.</div>`;
+  }
+}
+
+window.reviewReport = async function(reportId) {
+  const action = prompt("Mark as: reviewed / dismissed ?");
+  if (!action) return;
+  
+  const res = await apiPatch(`/admin/reports/${reportId}`, { status: action });
+  if (res) {
+    showToast('Report updated');
+    renderAdminReports();
   }
 };
 
