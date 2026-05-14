@@ -54,3 +54,38 @@
 .star-btn:hover ~ .star-btn {
   color: #d1d5db !important;
 }
+
+/* ====================== ADMIN PANEL MOBILE IMPROVEMENTS ====================== */
+
+.admin-tab {
+  transition: all 0.2s ease;
+}
+
+/* Mobile Top Tabs */
+#mobile-nav-scroll, 
+.hide-scrollbar {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+#mobile-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Make admin content breathe better on small screens */
+#adminMainContent {
+  min-height: 70vh;
+}
+
+/* Better spacing for cards on mobile */
+@media (max-width: 768px) {
+  .bg-white\/10, 
+  .bg-white\/5 {
+    margin-bottom: 12px;
+  }
+  
+  #adminMainContent .grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+}

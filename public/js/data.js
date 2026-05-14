@@ -3119,48 +3119,52 @@ window.deleteOwnerEvent = async function (id) {
 // ─── CUTTING-EDGE ADMIN PANEL (2026 Style) ───────────────────────────────────
 async function loadAdminPage(content) {
   content.innerHTML = `
-    <div class="max-w-screen-2xl mx-auto px-4 py-6">
+    <div class="max-w-screen-2xl mx-auto px-3 md:px-6 py-6">
+
+      <!-- Mobile Top Tabs (Horizontal Scroll) -->
+      <div class="md:hidden flex overflow-x-auto gap-2 pb-4 hide-scrollbar mb-6 border-b border-white/10">
+        ${[
+          {id:0, label:'📊 Dash', icon:'📊'},
+          {id:1, label:'👥 Users', icon:'👥'},
+          {id:2, label:'🛡️ Mod', icon:'🛡️'},
+          {id:3, label:'🏪 Biz', icon:'🏪'},
+          {id:4, label:'📬 Claims', icon:'📬'},
+          {id:5, label:'📢 Broadcast', icon:'📢'},
+          {id:6, label:'📈 Analytics', icon:'📈'},
+          {id:7, label:'🚩 Reports', icon:'🚩'}
+        ].map(tab => `
+          <button onclick="switchAdminTab(${tab.id})" id="mobileTab${tab.id}"
+                  class="admin-tab whitespace-nowrap flex items-center gap-2 px-5 py-3 rounded-3xl text-sm font-semibold flex-shrink-0 transition-all
+                         ${window.currentAdminTab === tab.id ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+            <span class="text-lg">${tab.icon}</span>
+            <span>${tab.label}</span>
+          </button>
+        `).join('')}
+      </div>
+
       <div class="flex gap-6">
 
-        <!-- SIDEBAR -->
-        <div class="w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
+        <!-- Desktop Sidebar -->
+        <div class="hidden md:block w-72 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 h-fit sticky top-6 flex-shrink-0">
           <div class="flex items-center gap-3 mb-10 px-2">
-            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">🔧</div>
-            <h1 class="text-2xl font-bold tracking-tight">Admin Control</h1>
+            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-2xl">🔧</div>
+            <h1 class="text-2xl font-bold">Admin</h1>
           </div>
 
           <nav class="space-y-1 text-sm">
-            <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">
-              📊 Dashboard
-            </button>
-            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              👥 Users & Reputation
-            </button>
-            <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              🛡️ Moderation
-            </button>
-            <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              🏪 Businesses
-            </button>
-            <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              📬 Claims
-            </button>
-            <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              📢 Broadcast
-            </button>
-            <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              📈 Analytics
-            </button>
-            <button onclick="switchAdminTab(7)" id="adminTab7" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">
-              🚩 Reports
-            </button>
+            <button onclick="switchAdminTab(0)" id="adminTab0" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold bg-emerald-600 text-white">📊 Dashboard</button>
+            <button onclick="switchAdminTab(1)" id="adminTab1" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">👥 Users & Rep</button>
+            <button onclick="switchAdminTab(2)" id="adminTab2" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🛡️ Moderation</button>
+            <button onclick="switchAdminTab(3)" id="adminTab3" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🏪 Businesses</button>
+            <button onclick="switchAdminTab(4)" id="adminTab4" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📬 Claims</button>
+            <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📢 Broadcast</button>
+            <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📈 Analytics</button>
+            <button onclick="switchAdminTab(7)" id="adminTab7" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🚩 Reports</button>
           </nav>
         </div>
 
-        <!-- MAIN CONTENT -->
-        <div class="flex-1 min-w-0" id="adminMainContent">
-          <!-- Populated by tabs -->
-        </div>
+        <!-- Main Content Area -->
+        <div class="flex-1 min-w-0" id="adminMainContent"></div>
       </div>
     </div>`;
 
