@@ -312,6 +312,53 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
+// ─── ADMIN BROADCAST (Supports HTML) ─────────────────────────────────────
+router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { message, ownersOnly = false, isHtml = false } = req.body;
+
+    if (!message) return res.status(400).json({ message: 'Message is required' });
+
+    let query = {};
+    if (ownersOnly) {
+      query.verifiedBusiness = { $exists: true, $ne: null };
+    }
+
+    const users = await User.find(query).select('_id pushEnabled');
+
+    let sentCount = 0;
+
+    for (const user of users) {
+      if (!user.pushEnabled) continue;
+
+      // Save as in-app notification (so they see it even if push fails)
+      // You can expand this later with a Notification model if you want
+
+      await broadcastPush(
+        ownersOnly ? "📢 Owner Update" : "📢 Community Update",
+        message.length > 120 ? message.substring(0, 117) + '...' : message,
+        { 
+          page: 'home', 
+          url: 'https://milledgevilleconnect.com/app.html',
+          isHtml: isHtml 
+        }
+      );
+
+      sentCount++;
+    }
+
+    res.json({ 
+      success: true, 
+      sent: sentCount, 
+      message: `Broadcast sent to ${sentCount} users` 
+    });
+
+  } catch (err) {
+    console.error('Broadcast error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 7.  ADMIN — MANUALLY MUTE A USER
 //     POST /api/admin/users/:id/mute

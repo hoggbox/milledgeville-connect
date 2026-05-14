@@ -5385,21 +5385,28 @@ async function renderAdminBroadcast() {
 
 window.sendBroadcast = async function (ownersOnly = false) {
   const text = document.getElementById('broadcastText').value.trim();
-  if (!text) return showToast('Message cannot be empty', 'error');
+  if (!text) {
+    showToast('Message cannot be empty', 'error');
+    return;
+  }
 
-  if (!confirm(`Send this broadcast to ${ownersOnly ? 'verified business owners' : 'ALL users'}?`)) return;
+  if (!confirm(`Send this broadcast to ${ownersOnly ? 'verified business owners' : 'ALL users'}? This cannot be undone.`)) return;
 
-  const res = await apiPost('/admin/broadcast', { 
-    message: text, 
-    ownersOnly,
-    isHtml: true   // ← Tell backend it's HTML
-  });
+  try {
+    const res = await apiPost('/admin/broadcast', { 
+      message: text, 
+      ownersOnly 
+    });
 
-  if (res.sent) {
-    showToast(`✅ Broadcast sent to ${res.sent} users!`, 'success');
-    document.getElementById('broadcastText').value = '';
-  } else {
-    showToast(res.message || 'Failed to send', 'error');
+    if (res.sent || res.success || res.message?.includes('sent')) {
+      showToast(`✅ Broadcast sent successfully!`, 'success');
+      document.getElementById('broadcastText').value = '';
+    } else {
+      showToast(res.message || 'Failed to send broadcast', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — broadcast failed', 'error');
   }
 };
 
