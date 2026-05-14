@@ -83,6 +83,18 @@ function requireAdmin(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
+// Moderators can access content-removal routes; admins can always pass through
+function requireAdminOrModerator(req, res, next) {
+  User.findById(req.userId).then(user => {
+    if (!user) return res.status(403).json({ message: 'Not authorized' });
+    if (user.email === 'imhoggbox@gmail.com' || user.isModerator) {
+      req.user = user;
+      return next();
+    }
+    return res.status(403).json({ message: 'Moderator or admin access required' });
+  }).catch(() => res.status(500).json({ message: 'Server error' }));
+}
+
 // ULTRA LOUD PUBLIC TEST ROUTE - UPDATED
 router.get('/test-push-public', async (req, res) => {
   console.log("🔥🔥🔥 TEST-PUSH-PUBLIC ROUTE WAS HIT 🔥🔥🔥");
@@ -848,7 +860,7 @@ router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
 });
 
 // ─── ADMIN MODERATION FOR NEW FEATURES (Lost & Found + Marketplace) ─────────────
-router.get('/admin/lostitems', authenticate, requireAdmin, async (req, res) => {
+router.get('/admin/lostitems', authenticate, requireAdminOrModerator, async (req, res) => {
   try {
     const items = await LostItem.find().sort({ createdAt: -1 }).populate('owner', 'name');
     res.json(items);
@@ -857,7 +869,7 @@ router.get('/admin/lostitems', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.delete('/admin/lostitems/:id', authenticate, requireAdmin, async (req, res) => {
+router.delete('/admin/lostitems/:id', authenticate, requireAdminOrModerator, async (req, res) => {
   try {
     await LostItem.findByIdAndDelete(req.params.id);
     res.json({ message: 'Lost & Found item deleted by admin' });
@@ -866,7 +878,7 @@ router.delete('/admin/lostitems/:id', authenticate, requireAdmin, async (req, re
   }
 });
 
-router.get('/admin/marketplace', authenticate, requireAdmin, async (req, res) => {
+router.get('/admin/marketplace', authenticate, requireAdminOrModerator, async (req, res) => {
   try {
     const items = await MarketplaceItem.find().sort({ createdAt: -1 }).populate('seller', 'name');
     res.json(items);
@@ -875,7 +887,7 @@ router.get('/admin/marketplace', authenticate, requireAdmin, async (req, res) =>
   }
 });
 
-router.delete('/admin/marketplace/:id', authenticate, requireAdmin, async (req, res) => {
+router.delete('/admin/marketplace/:id', authenticate, requireAdminOrModerator, async (req, res) => {
   try {
     await MarketplaceItem.findByIdAndDelete(req.params.id);
     res.json({ message: 'Marketplace item deleted by admin' });
@@ -1806,6 +1818,36 @@ router.patch('/admin/users/:id/news-access', authenticate, requireAdmin, async (
       .populate('verifiedBusiness', 'name');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'Updated', user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.patch('/admin/users/:id/moderator', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { isModerator } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.email === 'imhoggbox@gmail.com')
+      return res.status(400).json({ message: 'Admin account cannot be modified' });
+    user.isModerator = !!isModerator;
+    await user.save();
+    res.json({ success: true, isModerator: user.isModerator });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/users/:id/reputation', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { reputation } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { reputation: Math.max(0, parseInt(reputation) || 0) },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ success: true, reputation: user.reputation });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

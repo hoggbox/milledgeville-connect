@@ -4917,26 +4917,13 @@ async function renderAdminUsers() {
       throw new Error('Invalid users data');
     }
 
-    let html = `
+    container.innerHTML = `
       <div class="mb-4">
-        <input type="text" id="userSearch" placeholder="Search users..." 
-               class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50">
+        <input type="text" id="userSearch" placeholder="🔍 Search by name or email…" 
+               class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 text-base">
       </div>
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-white/10">
-              <th class="text-left p-4">User</th>
-              <th class="text-left p-4">Reputation</th>
-              <th class="text-left p-4">Joined</th>
-              <th class="text-left p-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="usersTableBody" class="text-sm"></tbody>
-        </table>
-      </div>`;
+      <div id="usersCardList" class="space-y-3"></div>`;
 
-    container.innerHTML = html;
     renderUsersTable(window._adminUsersData);
 
     document.getElementById('userSearch').addEventListener('input', (e) => {
@@ -4954,37 +4941,64 @@ async function renderAdminUsers() {
 }
 
 function renderUsersTable(users) {
-  const tbody = document.getElementById('usersTableBody');
-  tbody.innerHTML = users.map(u => `
-    <tr class="border-b border-white/10 hover:bg-white/5">
-      <td class="p-4">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold">
+  const list = document.getElementById('usersCardList');
+  if (!list) return;
+  list.innerHTML = users.map(u => `
+    <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
             ${u.name[0].toUpperCase()}
           </div>
-          <div>
-            <div>${u.name}</div>
-            <div class="text-white/50 text-xs">${u.email}</div>
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${u.name}</div>
+            <div class="text-white/50 text-xs truncate">${u.email}</div>
+            <div class="text-white/40 text-xs mt-0.5">Joined ${new Date(u.joinedAt).toLocaleDateString()}</div>
           </div>
         </div>
-      </td>
-      <td class="p-4 font-mono">${u.reputation || 0}</td>
-      <td class="p-4 text-white/60">${new Date(u.joinedAt).toLocaleDateString()}</td>
-      <td class="p-4">
-        <button onclick="adminEditReputation('${u._id}')" class="text-amber-400 hover:text-amber-300 mr-4">⭐ Edit Rep</button>
-        <button onclick="adminDeleteUser('${u._id}', '${u.name}')" class="text-red-400 hover:text-red-300">Delete</button>
-      </td>
-    </tr>
+        <div class="flex-shrink-0 text-right">
+          <span class="inline-flex items-center gap-1 bg-amber-500/20 text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full">⭐ ${u.reputation || 0}</span>
+          ${u.isModerator ? `<div class="mt-1"><span class="inline-flex items-center gap-1 bg-purple-500/20 text-purple-400 text-xs font-semibold px-2.5 py-1 rounded-full">👮 Mod</span></div>` : ''}
+        </div>
+      </div>
+      <div class="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-2">
+        <button onclick="adminEditReputation('${u._id}')" 
+                class="flex-1 min-w-[80px] px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition">
+          ⭐ Edit Rep
+        </button>
+        <button onclick="adminToggleModerator('${u._id}', ${!!u.isModerator})" 
+                class="flex-1 min-w-[80px] px-3 py-2 ${u.isModerator ? 'bg-purple-500/30 text-purple-300' : 'bg-white/10 hover:bg-white/20 text-white/70'} text-xs font-semibold rounded-xl transition">
+          👮 ${u.isModerator ? 'Remove Mod' : 'Make Mod'}
+        </button>
+        <button onclick="adminDeleteUser('${u._id}', '${u.name.replace(/'/g,"\\'")}') " 
+                class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold rounded-xl transition">
+          🗑️ Delete
+        </button>
+      </div>
+    </div>
   `).join('');
 }
 
-window.adminEditReputation = async function(userId) {
-  const newRep = prompt("Enter new reputation value:");
-  if (newRep === null) return;
-  const res = await apiPost(`/admin/users/${userId}/reputation`, { reputation: parseInt(newRep) });
-  if (res.success) {
-    showToast('Reputation updated');
-    renderAdminUsers(); // refresh
+window.adminToggleModerator = async function(userId, currentlyMod) {
+  const action = currentlyMod ? 'remove moderator from' : 'make moderator';
+  if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+  const res = await apiPost(`/admin/users/${userId}/moderator`, { isModerator: !currentlyMod });
+  if (res.success !== undefined) {
+    showToast(res.isModerator ? '👮 Moderator granted' : 'Moderator removed', 'success');
+    renderAdminUsers();
+  } else {
+    showToast(res.message || 'Failed to update', 'error');
+  }
+};
+
+window.adminDeleteUser = async function(userId, userName) {
+  if (!confirm(`Permanently delete "${userName}"? This cannot be undone.`)) return;
+  const res = await apiDelete(`/admin/users/${userId}`);
+  if (res.message) {
+    showToast(`🗑️ ${userName} deleted`, 'success');
+    renderAdminUsers();
+  } else {
+    showToast('Failed to delete user', 'error');
   }
 };
 
@@ -4994,27 +5008,130 @@ async function renderAdminBusinesses() {
   const data = await apiGet('/directory');
 
   container.innerHTML = `
-    <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-      <h3 class="font-bold text-lg mb-4">All Businesses (${data.businesses.length})</h3>
-      <div class="space-y-3 max-h-[70vh] overflow-auto" id="businessList">
-        ${data.businesses.map(b => `
-          <div class="flex items-center justify-between bg-white/5 rounded-2xl p-4">
-            <div class="flex items-center gap-3">
-              ${b.logo ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover">` : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl">${b.category?.icon || '🏪'}</div>`}
-              <div>
-                <div class="font-semibold">${b.name}</div>
-                <div class="text-xs text-white/50">${b.address || 'No address'}</div>
+    <div class="space-y-4">
+      <!-- Add Business Button -->
+      <button onclick="showAddBusinessModal()"
+              class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-2xl transition text-sm">
+        ➕ Add New Business
+      </button>
+
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
+        <h3 class="font-bold text-base mb-4">All Businesses (${data.businesses.length})</h3>
+        <div class="space-y-3 max-h-[65vh] overflow-auto pr-1" id="businessList">
+          ${data.businesses.map(b => `
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl p-3 gap-3">
+              <div class="flex items-center gap-3 min-w-0">
+                ${b.logo
+                  ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0">`
+                  : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+                <div class="min-w-0">
+                  <div class="font-semibold text-sm truncate">${b.name}</div>
+                  <div class="text-xs text-white/50 truncate">${b.address || 'No address'}</div>
+                </div>
+              </div>
+              <div class="flex gap-2 flex-shrink-0">
+                <button onclick="editBusiness('${b._id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-xl">Edit</button>
+                <button onclick="deleteBusiness('${b._id}')" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded-xl">Del</button>
               </div>
             </div>
-            <div class="flex gap-2">
-              <button onclick="editBusiness('${b._id}')" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-2xl">Edit</button>
-              <button onclick="deleteBusiness('${b._id}')" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-2xl">Delete</button>
-            </div>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
       </div>
     </div>`;
 }
+
+window.showAddBusinessModal = function() {
+  const existing = document.getElementById('addBusinessModal');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="addBusinessModal" onclick="if(event.target.id==='addBusinessModal') document.getElementById('addBusinessModal').remove()"
+         class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[20000] p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#1a2332] border border-white/10 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-auto shadow-2xl">
+
+        <div class="sticky top-0 bg-[#1a2332] px-6 py-4 border-b border-white/10 flex items-center justify-between">
+          <h2 class="text-lg font-bold">➕ Add New Business</h2>
+          <button onclick="document.getElementById('addBusinessModal').remove()" class="text-2xl text-white/50 hover:text-white leading-none">×</button>
+        </div>
+
+        <div class="p-5 space-y-3">
+          <div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Business Name *</label>
+            <input id="abName" type="text" placeholder="e.g. Joe's Diner"
+                   class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+          </div>
+          <div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Address</label>
+            <input id="abAddress" type="text" placeholder="123 Main St, Milledgeville"
+                   class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-white/50 uppercase tracking-wide">Phone</label>
+              <input id="abPhone" type="tel" placeholder="(478) 555-0100"
+                     class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+            </div>
+            <div>
+              <label class="text-xs text-white/50 uppercase tracking-wide">Email</label>
+              <input id="abEmail" type="email" placeholder="hello@biz.com"
+                     class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Website</label>
+            <input id="abWebsite" type="url" placeholder="https://..."
+                   class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+          </div>
+          <div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Description</label>
+            <textarea id="abDescription" rows="3" placeholder="Brief description of the business…"
+                      class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
+          </div>
+          <div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Logo URL (optional)</label>
+            <input id="abLogo" type="url" placeholder="https://..."
+                   class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+          </div>
+        </div>
+
+        <div class="px-5 pb-5 flex gap-3">
+          <button onclick="document.getElementById('addBusinessModal').remove()"
+                  class="flex-1 py-3.5 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold text-sm transition">
+            Cancel
+          </button>
+          <button onclick="submitAddBusiness()"
+                  class="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-semibold text-sm transition">
+            ✅ Add Business
+          </button>
+        </div>
+      </div>
+    </div>`);
+};
+
+window.submitAddBusiness = async function() {
+  const name = document.getElementById('abName').value.trim();
+  if (!name) return showToast('Business name is required', 'error');
+
+  const payload = {
+    name,
+    address:     document.getElementById('abAddress').value.trim(),
+    phone:       document.getElementById('abPhone').value.trim(),
+    email:       document.getElementById('abEmail').value.trim(),
+    website:     document.getElementById('abWebsite').value.trim(),
+    description: document.getElementById('abDescription').value.trim(),
+    logo:        document.getElementById('abLogo').value.trim() || null,
+  };
+
+  const res = await apiPost('/admin/business', payload);
+  if (res.business) {
+    showToast(`🏪 "${name}" added!`, 'success');
+    document.getElementById('addBusinessModal').remove();
+    renderAdminBusinesses();
+  } else {
+    showToast(res.message || 'Failed to add business', 'error');
+  }
+};
 
 // ─── BROADCAST MESSAGE (Tab 5) ───────────────────────────────────────────────
 async function renderAdminBroadcast() {
