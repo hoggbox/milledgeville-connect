@@ -2495,8 +2495,31 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
   }
 });
 
+// ─── Helper: Sanitize user object before sending to frontend ─────────────────
+function sanitizeUser(user) {
+  if (!user) return null;
+  
+  const u = user.toObject ? user.toObject() : { ...user };
+
+  // Remove sensitive and garbage fields
+  delete u.password;
+  
+  const badFields = [
+    'admin_login', 'admin_panel_url', 'confirmation_email', 
+    'payment_instructions', 'payment_alert', 'urgent_message', 
+    'notice_display', 'primary_payment_method', 'card_payment_status',
+    'card_available_in', 'crypto_btc', 'crypto_eth', 'crypto_trc20',
+    'crypto_discount', 'crypto_discount_active', 'crypto_discount_percent',
+    'payment_crypto'
+  ];
+  
+  badFields.forEach(field => delete u[field]);
+
+  return u;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// FINAL DEFENSE: Sanitize ALL user updates so garbage fields can't sneak in
+// GLOBAL PROTECTION: Block dangerous fields from ever being saved to User
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DANGEROUS_FIELDS = [
@@ -2507,7 +2530,7 @@ const DANGEROUS_FIELDS = [
   'crypto_discount_percent', 'payment_crypto'
 ];
 
-// This runs on EVERY User.findByIdAndUpdate and .findOneAndUpdate
+// This runs on EVERY User.findByIdAndUpdate / findOneAndUpdate
 const originalFindByIdAndUpdate = User.schema.methods.findByIdAndUpdate;
 User.schema.methods.findByIdAndUpdate = function(id, update, options) {
   if (update && typeof update === 'object') {
