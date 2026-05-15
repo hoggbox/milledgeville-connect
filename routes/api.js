@@ -1456,14 +1456,26 @@ router.get('/auth/me', authenticate, async (req, res) => {
 
 router.patch('/auth/profile', authenticate, async (req, res) => {
   try {
-    const allowed = ['name', 'bio', 'phone', 'neighborhood', 'website',
-                     'instagram', 'facebook', 'notifyDeals', 'notifyEvents',
-                     'notifyShoutouts', 'notifyShoutoutComments', 'avatar', 'pushEnabled'];
-    const updates = {};
-    allowed.forEach(k => { if (k in req.body) updates[k] = req.body[k]; });
+    const allowedFields = [
+      'name', 'bio', 'phone', 'neighborhood', 'website', 'instagram', 
+      'facebook', 'avatar', 'notifyDeals', 'notifyEvents', 'notifyShoutouts',
+      'notifyShoutoutComments', 'notifyLostFound', 'notifyMarketplace', 
+      'notifyMessages', 'pushEnabled'
+    ];
 
-    const user = await User.findByIdAndUpdate(req.userId, updates, { new: true })
-                           .populate('verifiedBusiness');
+    const updateData = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    const user = await User.findByIdAndUpdate(
+      req.userId, 
+      updateData, 
+      { new: true }
+    );
+
     res.json({ user: sanitizeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2344,7 +2356,10 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    // Safer update - only change pushEnabled
+    await User.findByIdAndUpdate(req.userId, { 
+      pushEnabled: true 
+    });
 
     console.log('✅ Native token SAVED for user', req.userId);
     res.json({ message: 'Native token saved' });
@@ -2479,6 +2494,27 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINAL DEFENSE: Sanitize ALL user updates so garbage fields can't sneak in
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DANGEROUS_FIELDS = [
+  'admin_login', 'admin_panel_url', 'confirmation_email', 'payment_instructions',
+  'payment_alert', 'urgent_message', 'notice_display', 'primary_payment_method',
+  'card_payment_status', 'card_available_in', 'crypto_btc', 'crypto_eth',
+  'crypto_trc20', 'crypto_discount', 'crypto_discount_active', 
+  'crypto_discount_percent', 'payment_crypto'
+];
+
+// This runs on EVERY User.findByIdAndUpdate and .findOneAndUpdate
+const originalFindByIdAndUpdate = User.schema.methods.findByIdAndUpdate;
+User.schema.methods.findByIdAndUpdate = function(id, update, options) {
+  if (update && typeof update === 'object') {
+    DANGEROUS_FIELDS.forEach(field => delete update[field]);
+  }
+  return originalFindByIdAndUpdate.call(this, id, update, options);
+};
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
