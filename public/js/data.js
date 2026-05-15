@@ -781,9 +781,9 @@ window.openNewsArticle = async function (articleId) {
   const article = await apiGet(`/news/${articleId}`);
   if (!article || article.message) { showToast('Could not load article', 'error'); return; }
 
-  const isAdmin    = isAdmin();
+  const userIsAdmin = isAdmin();
   const isAuthor   = currentUser && article.author && (article.author === currentUser._id || article.author === currentUser.id);
-  const canDelete  = isAdmin || isAuthor;
+  const canDelete  = userIsAdmin || isAuthor;
 
   const imagesHTML = (article.images || []).length > 0
     ? `<div class="mt-6 grid grid-cols-2 gap-3">
@@ -883,8 +883,8 @@ window.openImageViewer = function (articleId, startIndex) {
 
 // ─── POST NEWS PAGE ───────────────────────────────────────────────────────────
 async function loadPostNewsPage(content) {
-  const isAdmin   = isAdmin();
-  const canPost   = currentUser && (currentUser.canPostNews || isAdmin);
+  const userIsAdmin   = isAdmin();
+  const canPost   = currentUser && (currentUser.canPostNews || userIsAdmin);
   if (!canPost) {
     content.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-12 text-center">
       <p class="text-4xl mb-4">🚫</p>
@@ -1495,7 +1495,7 @@ function renderReviewSummary(reviews) {
 
 function renderReviewCard(r, bizId) {
   const stars = [1,2,3,4,5].map(s => `<span style="color:${s<=r.rating?'#f59e0b':'#d1d5db'};font-size:13px;">★</span>`).join('');
-  const isAdmin  = isAdmin();
+  const userIsAdmin  = isAdmin();
   const isAuthor = currentUser && (r.user === currentUser._id || r.user === currentUser.id);
   return `
     <div class="bg-gray-50 border border-gray-100 rounded-2xl p-4" id="review-card-${r._id}">
@@ -1509,7 +1509,7 @@ function renderReviewCard(r, bizId) {
             <div class="flex items-center gap-1">${stars}<span class="text-xs text-gray-400 ml-1">${timeAgo(r.createdAt)}</span></div>
           </div>
         </div>
-        ${isAuthor || isAdmin ? `
+        ${isAuthor || userIsAdmin ? `
           <button onclick="deleteReview('${bizId}','${r._id}')"
                   class="text-xs text-red-400 hover:text-red-600 transition font-semibold flex-shrink-0">Delete</button>` : ''}
       </div>
@@ -1980,7 +1980,7 @@ function renderShoutoutCard(s) {
   const comments = s.comments || [];
   const commentCount = comments.length;
 
-  const isAdmin = isAdmin();
+  const userIsAdmin = isAdmin();
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
 
   // Still There state
@@ -2042,7 +2042,7 @@ function renderShoutoutCard(s) {
             🚩
           </button>` : ''}
         
-        ${isAuthor || isAdmin ? `
+        ${isAuthor || userIsAdmin ? `
           <button onclick="deleteShoutout('${s._id}')" 
                   class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
       </div>
@@ -2124,7 +2124,7 @@ function renderCommentRow(c, shoutoutId) {
   const cLetter = c.author ? c.author[0].toUpperCase() : '?';
   const replies = c.replies || [];
   const replyCount = replies.length;
-  const isAdmin = isAdmin();
+  const userIsAdmin = isAdmin();
   const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
 
   let repliesHtml = '';
@@ -2156,7 +2156,7 @@ function renderCommentRow(c, shoutoutId) {
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-white/80">${c.author}</span>
               <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
-              ${isCommentAuthor || isAdmin ? `
+              ${isCommentAuthor || userIsAdmin ? `
                 <button onclick="deleteComment('${shoutoutId}','${c._id}')" 
                         class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
             </div>

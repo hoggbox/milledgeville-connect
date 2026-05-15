@@ -929,49 +929,6 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-
-router.post('/shoutouts', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-
-    // === ANTI-SPAM: Max 1 post every 45 seconds ===
-    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
-      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
-    }
-
-    const { text, images, location } = req.body;
-    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
-
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours – auto-deletes via TTL index
-
-    const shoutout = await Shoutout.create({
-      text: text.trim(),
-      author: user.name,
-      authorId: user._id,
-      images: images || [],
-      location: location || null,
-      lastBumpedAt: new Date(),
-      expiresAt
-    });
-
-    // Update last post time
-    user.lastPostAt = new Date();
-    await user.save();
-
-    broadcastPush(
-      `🚗 New Traffic Alert from ${user.name}`,
-      text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { page: 'shoutouts', id: shoutout._id.toString(), url: `/shoutouts/${shoutout._id}` },
-      { notifyShoutouts: true }
-    );
-
-    res.json(shoutout);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
 // Follow business
 router.post('/business/:id/follow', authenticate, async (req, res) => {
   try {
