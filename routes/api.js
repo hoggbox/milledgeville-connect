@@ -185,7 +185,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
-    const { text, images } = req.body;
+    const { text, images, location } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
     // ── Spam burst detection ────────────────────────────────────────────────────
@@ -222,6 +222,8 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       author: user.name,
       authorId: user._id,
       images: images || [],
+      location: location || null,
+      lastBumpedAt: new Date(),
       expiresAt
     });
 
@@ -927,7 +929,7 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
 
     const [shoutouts, total] = await Promise.all([
       Shoutout.find()
-        .sort({ createdAt: -1 })
+        .sort({ cleared: 1, lastBumpedAt: -1, createdAt: -1 })  // active+bumped first, cleared at bottom
         .skip(skip)
         .limit(limit)
         .populate('authorId', 'name avatar'),
@@ -958,7 +960,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
     }
 
-    const { text, images } = req.body;
+    const { text, images, location } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
     const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours – auto-deletes via TTL index
@@ -968,6 +970,8 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       author: user.name,
       authorId: user._id,
       images: images || [],
+      location: location || null,
+      lastBumpedAt: new Date(),
       expiresAt
     });
 
@@ -2397,6 +2401,82 @@ router.get('/fix-notify-fields', async (req, res) => {
     res.json({ success: true, modified: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── STILL THERE — bump a shoutout to the top ─────────────────────────────────
+//   POST /api/shoutouts/:id/still-there
+//   • Each user can only vote once per shoutout
+//   • Updates lastBumpedAt so it rises in the feed sort
+const CLEAR_THRESHOLD = 8; // number of "cleared" votes needed to mark alert cleared
+
+router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+    if (shoutout.cleared) return res.status(400).json({ message: 'Alert is already marked cleared' });
+
+    const voters = (shoutout.stillThereVoters || []).map(id => id.toString());
+    if (voters.includes(req.userId)) {
+      return res.status(409).json({ message: 'You already confirmed this alert', alreadyVoted: true });
+    }
+
+    shoutout.stillThereVoters = shoutout.stillThereVoters || [];
+    shoutout.stillThereVoters.push(req.userId);
+    shoutout.lastBumpedAt = new Date(); // bump it to the top of the feed
+    await shoutout.save();
+
+    res.json({
+      stillThereCount: shoutout.stillThereVoters.length,
+      bumped: true
+    });
+  } catch (err) {
+    console.error('Still-there error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── CLEAR — mark a shoutout as resolved ──────────────────────────────────────
+//   POST /api/shoutouts/:id/clear
+//   • Each user can only vote once
+//   • Once CLEAR_THRESHOLD (8) unique users mark it cleared, cleared = true
+//   • The shoutout stays in the DB — TTL index deletes it after 8 hrs as normal
+router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+
+    // Already cleared — just return current state
+    if (shoutout.cleared) {
+      return res.json({ cleared: true, clearCount: (shoutout.clearedBy || []).length });
+    }
+
+    const clearers = (shoutout.clearedBy || []).map(id => id.toString());
+    if (clearers.includes(req.userId)) {
+      return res.status(409).json({
+        message: 'You already marked this cleared',
+        alreadyVoted: true,
+        clearCount: clearers.length
+      });
+    }
+
+    shoutout.clearedBy = shoutout.clearedBy || [];
+    shoutout.clearedBy.push(req.userId);
+
+    if (shoutout.clearedBy.length >= CLEAR_THRESHOLD) {
+      shoutout.cleared = true;
+    }
+
+    await shoutout.save();
+
+    res.json({
+      cleared: shoutout.cleared,
+      clearCount: shoutout.clearedBy.length,
+      threshold: CLEAR_THRESHOLD
+    });
+  } catch (err) {
+    console.error('Clear error:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 

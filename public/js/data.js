@@ -1959,6 +1959,27 @@ function renderShoutoutCard(s) {
   const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
 
+  // Still There state
+  const stillThereVoters = s.stillThereVoters || [];
+  const stillThereCount = stillThereVoters.length;
+  const myId = currentUser?._id || currentUser?.id || '';
+  const hasVotedStillThere = stillThereVoters.some(v => (v?._id || v)?.toString() === myId?.toString());
+
+  // Cleared state
+  const clearedBy = s.clearedBy || [];
+  const clearCount = clearedBy.length;
+  const CLEAR_THRESHOLD = 8;
+  const isCleared = s.cleared === true;
+  const hasVotedCleared = clearedBy.some(v => (v?._id || v)?.toString() === myId?.toString());
+  const clearProgress = Math.min(clearCount, CLEAR_THRESHOLD);
+
+  // Location tag
+  const locationTag = s.location?.label
+    ? `<span class="inline-flex items-center gap-1 text-[11px] text-sky-300/80 bg-sky-500/10 border border-sky-500/20 rounded-full px-2.5 py-0.5 mt-1">
+         📍 ${s.location.label}
+       </span>`
+    : '';
+
   let allCommentsHtml = '';
   comments.forEach(c => { allCommentsHtml += renderCommentRow(c, s._id); });
 
@@ -1966,14 +1987,27 @@ function renderShoutoutCard(s) {
     ? `💬 ${commentCount} Comment${commentCount !== 1 ? 's' : ''}`
     : '💬 Comment';
 
+  // Card opacity/style when cleared
+  const clearedStyle = isCleared
+    ? 'opacity-50 border-white/5'
+    : 'border-white/10';
+  const clearedBanner = isCleared
+    ? `<div class="flex items-center gap-1.5 bg-white/5 rounded-2xl px-3 py-1.5 mb-3 text-xs text-white/50 font-medium">
+         ✅ <span>Community marked this alert as cleared</span>
+       </div>`
+    : '';
+
   return `
-    <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5" id="shoutout-${s._id}">
+    <div class="bg-white/10 backdrop-blur-xl border ${clearedStyle} rounded-3xl p-5 transition-all" id="shoutout-${s._id}">
       <div class="flex items-start justify-between gap-3 mb-3">
         <div class="flex items-start gap-3 flex-1 min-w-0">
           <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
           <div class="flex-1 min-w-0">
             <div class="font-semibold text-sm text-white">${s.author || 'Community Member'} ${renderClickableUser(s.authorId || s.author)}</div>
-            <div class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</div>
+            <div class="flex flex-wrap items-center gap-2 mt-0.5">
+              <span class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</span>
+              ${locationTag}
+            </div>
           </div>
         </div>
         
@@ -1988,6 +2022,9 @@ function renderShoutoutCard(s) {
           <button onclick="deleteShoutout('${s._id}')" 
                   class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
       </div>
+
+      ${clearedBanner}
+
       <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
       ${(s.images && s.images.length > 0) ? `
         <div class="flex gap-2 overflow-x-auto pb-1 mb-3 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
@@ -1998,12 +2035,47 @@ function renderShoutoutCard(s) {
             </div>`).join('')}
         </div>` : ''}
       ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
+
+      <!-- Cleared progress bar (only shown if votes are accumulating but not yet cleared) -->
+      ${!isCleared && clearCount > 0 ? `
+        <div class="mb-2">
+          <div class="flex justify-between text-[10px] text-white/30 mb-1">
+            <span>Cleared by community</span>
+            <span>${clearCount}/${CLEAR_THRESHOLD}</span>
+          </div>
+          <div class="h-1 bg-white/10 rounded-full overflow-hidden">
+            <div class="h-full bg-amber-400/60 rounded-full transition-all" style="width:${(clearProgress/CLEAR_THRESHOLD)*100}%"></div>
+          </div>
+        </div>` : ''}
+
       <div class="flex items-center gap-1 border-t border-white/10 pt-2">
+        <!-- Like -->
         <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like.'})`}" id="like-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
           <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
           <span id="like-label-${s._id}">Like</span>
         </button>
+
+        <!-- Still There -->
+        ${!isCleared ? `
+        <button onclick="${currentUser ? `markStillThere('${s._id}')` : `showAuthModal({message:'Sign in to confirm alerts.'})`}"
+                id="still-there-btn-${s._id}"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition font-medium text-sm
+                  ${hasVotedStillThere ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/50 hover:text-emerald-400 hover:bg-white/5'}"
+                title="${hasVotedStillThere ? 'You confirmed this is still active' : 'Confirm this alert is still active'}">
+          👀 <span id="still-there-label-${s._id}">${hasVotedStillThere ? `Still There (${stillThereCount})` : stillThereCount > 0 ? `Still There (${stillThereCount})` : 'Still There'}</span>
+        </button>` : ''}
+
+        <!-- Cleared -->
+        <button onclick="${currentUser ? `markCleared('${s._id}')` : `showAuthModal({message:'Sign in to mark alerts cleared.'})`}"
+                id="clear-btn-${s._id}"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition font-medium text-sm
+                  ${isCleared ? 'text-green-400 bg-green-500/10' : hasVotedCleared ? 'text-green-400/70 bg-white/5' : 'text-white/50 hover:text-green-400 hover:bg-white/5'}"
+                title="${isCleared ? 'Alert cleared by community' : hasVotedCleared ? 'You marked this cleared' : 'Mark as cleared / resolved'}">
+          ✅ <span id="clear-label-${s._id}">${isCleared ? 'Cleared' : hasVotedCleared ? `Cleared (${clearCount}/8)` : clearCount > 0 ? `Cleared (${clearCount}/8)` : 'Cleared'}</span>
+        </button>
+
+        <!-- Comment -->
         <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment.'})`}" id="comment-btn-${s._id}"
                 class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
           ${commentLabel}
