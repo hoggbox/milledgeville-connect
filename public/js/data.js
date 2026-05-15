@@ -2246,6 +2246,90 @@ window.deleteShoutout = async function (shoutoutId) {
     showToast(res.message || 'Error', 'error');
   }
 };
+
+// ─── postComment: alias so the "Post" button in renderShoutoutCard works ───────
+window.postComment = async function (shoutoutId) {
+  return window.submitComment(shoutoutId);
+};
+
+// ─── STILL THERE — confirm a traffic alert is still active ────────────────────
+window.markStillThere = async function (shoutoutId) {
+  if (!requireAuth('Sign in to confirm alerts.')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/still-there`, {});
+
+  if (res.alreadyVoted) {
+    showToast('You already confirmed this alert is still active.', 'info');
+    return;
+  }
+
+  if (res.stillThereCount !== undefined) {
+    // Update button label in-place without a full page reload
+    const btn = document.getElementById(`still-there-btn-${shoutoutId}`);
+    const label = document.getElementById(`still-there-label-${shoutoutId}`);
+    if (label) label.textContent = `Still There (${res.stillThereCount})`;
+    if (btn) {
+      btn.classList.remove('text-white/50', 'hover:text-emerald-400', 'hover:bg-white/5');
+      btn.classList.add('text-emerald-400', 'bg-emerald-500/10');
+    }
+    showToast('👀 Thanks for confirming this alert is still active!', 'success');
+  } else {
+    showToast(res.message || 'Error confirming alert', 'error');
+  }
+};
+
+// ─── CLEARED — mark a traffic alert as resolved ───────────────────────────────
+window.markCleared = async function (shoutoutId) {
+  if (!requireAuth('Sign in to mark alerts cleared.')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/clear`, {});
+
+  if (res.alreadyVoted) {
+    showToast(`You already marked this cleared (${res.clearCount}/8 votes).`, 'info');
+    return;
+  }
+
+  if (res.clearCount !== undefined) {
+    const btn = document.getElementById(`clear-btn-${shoutoutId}`);
+    const label = document.getElementById(`clear-label-${shoutoutId}`);
+
+    if (res.cleared) {
+      // Threshold reached — mark the whole card as cleared
+      if (label) label.textContent = 'Cleared';
+      if (btn) {
+        btn.classList.remove('text-white/50', 'hover:text-green-400', 'hover:bg-white/5', 'text-green-400/70', 'bg-white/5');
+        btn.classList.add('text-green-400', 'bg-green-500/10');
+      }
+      // Dim the card and show the cleared banner
+      const card = document.getElementById(`shoutout-${shoutoutId}`);
+      if (card) {
+        card.classList.add('opacity-50');
+        card.classList.remove('border-white/10');
+        card.classList.add('border-white/5');
+        const existingBanner = card.querySelector('.cleared-banner');
+        if (!existingBanner) {
+          card.insertAdjacentHTML('afterbegin',
+            `<div class="cleared-banner flex items-center gap-1.5 bg-white/5 rounded-2xl px-3 py-1.5 mb-3 text-xs text-white/50 font-medium">
+               ✅ <span>Community marked this alert as cleared</span>
+             </div>`
+          );
+        }
+        // Hide the "Still There" button
+        const stillThereBtn = document.getElementById(`still-there-btn-${shoutoutId}`);
+        if (stillThereBtn) stillThereBtn.remove();
+      }
+      showToast('✅ Alert marked as cleared by the community!', 'success');
+    } else {
+      // Vote recorded, threshold not yet reached
+      if (label) label.textContent = `Cleared (${res.clearCount}/8)`;
+      if (btn) {
+        btn.classList.remove('text-white/50', 'hover:text-green-400', 'hover:bg-white/5');
+        btn.classList.add('text-green-400/70', 'bg-white/5');
+      }
+      showToast(`✅ Cleared vote recorded (${res.clearCount}/${res.threshold} needed).`, 'success');
+    }
+  } else {
+    showToast(res.message || 'Error marking alert cleared', 'error');
+  }
+};
 // ─── EVENTS & DEALS ──────────────────────────────────────────────────────────
 window._dirCategories = window._dirCategories || [];
 
