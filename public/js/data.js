@@ -6,11 +6,30 @@ let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
 
 // ─── App-wide constants ───────────────────────────────────────────────────────
-const ADMIN_EMAIL = 'imhoggbox@gmail.com';
+
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeBroadcast(raw) {
+  if (!raw) return '';
+  let safe = esc(raw);
+  safe = safe.replace(
+    /&lt;a\s+href=&quot;(https?:\/\/[^&"<>]+)&quot;&gt;([^&<>]+)&lt;\/a&gt;/gi,
+    (_, url, label) => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#34d399;text-decoration:underline">${esc(label)}</a>`
+  );
+  return safe;
+}
 
 /** Returns true if the currently logged-in user is a site admin. */
 function isAdmin() {
-  return !!(currentUser && currentUser.email === ADMIN_EMAIL);
+  return !!(currentUser && currentUser.isAdmin === true);
 }
 
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
@@ -4704,7 +4723,7 @@ async function renderMessagesList(tab) {
               <p class="font-semibold text-[15px] ${conv.unread ? 'text-white' : 'text-white/80'} truncate">${conv.otherName}</p>
               <span class="flex-shrink-0 text-[11px] text-white/35">${timeAgo(conv.timestamp)}</span>
             </div>
-            <p class="text-sm ${conv.unread ? 'text-white/70 font-medium' : 'text-white/40'} truncate">${conv.lastMessage}</p>
+            <p class="text-sm ${conv.unread ? 'text-white/70 font-medium' : 'text-white/40'} truncate">${esc(conv.lastMessage)}</p>
           </div>
 
           <!-- Delete button -->
@@ -4980,7 +4999,7 @@ async function loadConversationThread(otherId) {
                         ${isMine
                           ? 'bg-emerald-600 text-white rounded-br-md'
                           : 'bg-white/10 text-white/90 rounded-bl-md border border-white/[0.08]'}">
-              ${m.text}
+              ${esc(m.text)}
             </div>
             <p class="text-[10px] text-white/30 mt-1 ${isMine ? 'text-right pr-1' : 'pl-1'}">${timeAgo(m.createdAt)}</p>
           </div>
@@ -5514,54 +5533,57 @@ async function renderAdminReports() {
 // ─── BROADCAST MESSAGE (Tab 5) ───────────────────────────────────────────────
 async function renderAdminBroadcast() {
   const container = document.getElementById('adminMainContent');
-
   container.innerHTML = `
     <div class="max-w-2xl mx-auto bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
-      <h3 class="font-bold text-xl mb-6">📢 Send Broadcast Message</h3>
-      
+      <h3 class="font-bold text-xl mb-2">📢 Send Broadcast Message</h3>
+      <p class="text-white/50 text-sm mb-6">Plain text only. To add a link use: &lt;a href="https://..."&gt;link text&lt;/a&gt;</p>
       <div class="mb-4">
-        <label class="block text-xs text-white/60 mb-2">Message (HTML supported)</label>
-        <textarea id="broadcastText" rows="8" 
+        <label class="block text-xs text-white/60 mb-2">Message</label>
+        <textarea id="broadcastText" rows="8"
                   class="w-full bg-white/10 border border-white/20 rounded-3xl p-5 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none font-mono text-sm"
-                  placeholder="You can use &lt;a href='...'&gt;clickable links&lt;/a&gt; here..."></textarea>
+                  placeholder="Write your message here. Plain text only."></textarea>
       </div>
-
+      <div class="mb-6">
+        <p class="text-xs text-white/40 mb-2 uppercase tracking-wide">Preview — what users will see</p>
+        <div id="broadcastPreview" class="min-h-[48px] bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white/80 text-sm leading-relaxed">
+          <span class="text-white/30 italic">Start typing to preview…</span>
+        </div>
+      </div>
       <div class="flex gap-3">
-        <button onclick="sendBroadcast()" 
+        <button onclick="sendBroadcast()"
                 class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold text-lg transition">
           📤 Send to All Users
         </button>
-        <button onclick="sendBroadcast(true)" 
+        <button onclick="sendBroadcast(true)"
                 class="flex-1 bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold text-lg transition">
           📍 Send to Verified Owners Only
         </button>
       </div>
-
-      <p class="text-center text-white/40 text-xs mt-6">
-        Tip: Use &lt;a href="https://milledgevilleconnect.com/app.html"&gt;Download Update&lt;/a&gt; for clickable links
-      </p>
     </div>`;
+
+  document.getElementById('broadcastText').addEventListener('input', function () {
+    const preview = document.getElementById('broadcastPreview');
+    const sanitized = sanitizeBroadcast(this.value.trim());
+    preview.innerHTML = sanitized || '<span class="text-white/30 italic">Start typing to preview…</span>';
+  });
 }
 
 window.sendBroadcast = async function (ownersOnly = false) {
   const now = Date.now();
-  if (now - lastBroadcastTime < 10000) { // 10 second cooldown
+  if (now - lastBroadcastTime < 10000) {
     return showToast('Please wait 10 seconds between broadcasts', 'error');
   }
-
-  const text = document.getElementById('broadcastText').value.trim();
-  if (!text) return showToast('Message cannot be empty', 'error');
-
+  const raw = document.getElementById('broadcastText').value.trim();
+  if (!raw) return showToast('Message cannot be empty', 'error');
+  const message = sanitizeBroadcast(raw);
   if (!confirm(`Send to ${ownersOnly ? 'verified owners only' : 'ALL users'}?`)) return;
-
   lastBroadcastTime = now;
-
   try {
     showToast('Sending...', 'success');
-    const res = await apiPost('/admin/broadcast', { message: text, ownersOnly });
-    
+    const res = await apiPost('/admin/broadcast', { message, ownersOnly });
     showToast(`✅ Sent to ${res.sent || 'users'}!`, 'success');
     document.getElementById('broadcastText').value = '';
+    document.getElementById('broadcastPreview').innerHTML = '<span class="text-white/30 italic">Start typing to preview…</span>';
   } catch (e) {
     console.error(e);
     showToast('Failed to send broadcast', 'error');

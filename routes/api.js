@@ -320,6 +320,18 @@ router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => 
     const { message, ownersOnly = false } = req.body;
     if (!message?.trim()) return res.status(400).json({ message: 'Message is required' });
 
+    // Strip all HTML except safe <a href> links — belt-and-suspenders server-side sanitization
+    const safeMessage = message.trim()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(
+        /&lt;a\s+href=&quot;(https?:\/\/[^&"<>]+)&quot;&gt;([^&<>]+)&lt;\/a&gt;/gi,
+        (_, url, label) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`
+      );
+
     let query = {};
     if (ownersOnly) {
       query.verifiedBusiness = { $exists: true, $ne: null };
@@ -338,7 +350,7 @@ router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => 
 
       await broadcastPush(
         ownersOnly ? "📢 Owner Announcement" : "📢 Community Update",
-        message.length > 140 ? message.substring(0, 137) + '...' : message,
+        safeMessage.length > 140 ? safeMessage.substring(0, 137) + '...' : safeMessage,
         { 
           page: 'home', 
           url: 'https://milledgevilleconnect.com/app.html' 
@@ -446,9 +458,11 @@ function optionalAuth(req, res, next) {
   next();
 }
 
+const ADMIN_EMAILS = new Set(['imhoggbox@gmail.com']);
+
 function requireAdmin(req, res, next) {
   User.findById(req.userId).then(user => {
-    if (!user || user.email !== 'imhoggbox@gmail.com')
+    if (!user || !ADMIN_EMAILS.has(user.email))
       return res.status(403).json({ message: 'Admin only' });
     req.user = user;
     next();
@@ -459,48 +473,13 @@ function requireAdmin(req, res, next) {
 function requireAdminOrModerator(req, res, next) {
   User.findById(req.userId).then(user => {
     if (!user) return res.status(403).json({ message: 'Not authorized' });
-    if (user.email === 'imhoggbox@gmail.com' || user.isModerator) {
+    if (ADMIN_EMAILS.has(user.email) || user.isModerator) {
       req.user = user;
       return next();
     }
     return res.status(403).json({ message: 'Moderator or admin access required' });
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
-
-// ULTRA LOUD PUBLIC TEST ROUTE - UPDATED
-router.get('/test-push-public', async (req, res) => {
-  console.log("🔥🔥🔥 TEST-PUSH-PUBLIC ROUTE WAS HIT 🔥🔥🔥");
-
-  try {
-    // Get the MOST RECENT token in the DB
-    const latestSub = await PushSubscription.findOne({ 
-      nativeToken: { $exists: true, $ne: null } 
-    }).sort({ updatedAt: -1 });
-
-    if (!latestSub?.nativeToken) {
-      return res.json({ error: "No tokens in DB at all" });
-    }
-
-    console.log("✅ Using latest token for user:", latestSub.user);
-
-    const message = {
-      token: latestSub.nativeToken,
-      notification: { 
-        title: "🧪 TEST PUSH", 
-        body: "This should appear on your phone RIGHT NOW" 
-      },
-      android: { priority: 'high' }
-    };
-
-    const response = await admin.messaging().send(message);
-    console.log("✅ Firebase send SUCCESS:", response);
-
-    res.json({ success: true, message: "Test push sent to latest token!" });
-  } catch (e) {
-    console.error("💥 TEST ROUTE FAILED:", e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}) {
@@ -1337,7 +1316,7 @@ router.delete('/shoutouts/:id', authenticate, async (req, res) => {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     const user = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     const isAuthor = shoutout.authorId && shoutout.authorId.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
     await shoutout.deleteOne();
@@ -1352,7 +1331,7 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     const user = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     const comment = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
     const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
@@ -1416,10 +1395,11 @@ router.post('/auth/register', async (req, res) => {
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) return res.status(400).json({ message: 'Email already in use' });
-
     const user  = await User.create({ name, email, password });
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: sanitizeUser(user) });
+    const u = sanitizeUser(user);
+    u.isAdmin = ADMIN_EMAILS.has(user.email);
+    res.json({ token, user: u });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1438,7 +1418,9 @@ router.post('/auth/login', async (req, res) => {
     await user.save();
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: sanitizeUser(user) });
+    const u = sanitizeUser(user);
+    u.isAdmin = ADMIN_EMAILS.has(user.email);
+    res.json({ token, user: u });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1448,7 +1430,9 @@ router.get('/auth/me', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate('verifiedBusiness');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({ user: sanitizeUser(user) });
+    const u = sanitizeUser(user);
+    u.isAdmin = ADMIN_EMAILS.has(user.email);
+    res.json({ user: u });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1638,7 +1622,7 @@ router.delete('/business/:id/reviews/:reviewId', authenticate, async (req, res) 
     const review = await Review.findById(req.params.reviewId);
     if (!review) return res.status(404).json({ message: 'Not found' });
     const user = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     if (!isAdmin && review.user.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     await review.deleteOne();
     res.json({ message: 'Deleted' });
@@ -1703,7 +1687,7 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     const user    = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     const comment = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
     const reply   = comment.replies.id(req.params.replyId);
@@ -1803,7 +1787,7 @@ router.get('/news/:id', optionalAuth, async (req, res) => {
 router.post('/news', authenticate, async (req, res) => {
   try {
     const user    = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
@@ -1836,7 +1820,7 @@ router.post('/news', authenticate, async (req, res) => {
 router.put('/news/:id', authenticate, async (req, res) => {
   try {
     const user    = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
@@ -1856,7 +1840,7 @@ router.put('/news/:id', authenticate, async (req, res) => {
 router.delete('/news/:id', authenticate, async (req, res) => {
   try {
     const user    = await User.findById(req.userId);
-    const isAdmin = user.email === 'imhoggbox@gmail.com';
+    const isAdmin = ADMIN_EMAILS.has(user.email);
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
@@ -2396,26 +2380,6 @@ router.post('/debug-push', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Debug push error:', err);
     res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ====================== ONE-TIME FIX ======================
-router.get('/fix-notify-fields', async (req, res) => {
-  try {
-    const result = await User.updateMany(
-      { },
-      { 
-        $set: { 
-          notifyShoutoutComments: false,
-          notifyLostFound: true,
-          notifyMarketplace: true,
-          notifyMessages: true
-        } 
-      }
-    );
-    res.json({ success: true, modified: result.modifiedCount });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 
