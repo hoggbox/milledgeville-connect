@@ -37,6 +37,8 @@ const userSchema = new mongoose.Schema({
   // Set by the system when 8 unique users flag one of the user's posts.
   // The user cannot post shoutouts/alerts until this timestamp has passed.
   postTimeoutUntil: { type: Date, default: null },
+  // Beta tester gifts
+  isBetaTester: { type: Boolean, default: false },
 
   // Set by the system's spam detector or manually by admin.
   // When true, ALL outbound notifications (shoutouts, lost-found, marketplace)

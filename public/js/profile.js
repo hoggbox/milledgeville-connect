@@ -288,6 +288,14 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
     <span class="text-base opacity-75">Reputation</span>
   </div>
 </div>
+    <!-- Beta Tester Badge -->
+    ${currentUser.isBetaTester ? `
+    <div class="flex justify-center mt-2 mb-2">
+      <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow">
+        🚀 MVP Beta Tester
+      </div>
+    </div>` : ''}
+
     ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${currentUser.bio}"</p>` : ''}
     ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
 
@@ -729,6 +737,14 @@ window.showUserProfileModal = async function (userId) {
             </div>
 
             <h2 class="text-3xl font-bold text-center mb-1">${user.name}</h2>
+
+            <!-- Beta Tester Badge -->
+            ${user.isBetaTester ? `
+            <div class="flex justify-center mb-2">
+              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow">
+                🚀 MVP Beta Tester
+              </div>
+            </div>` : ''}
             
             <!-- Reputation -->
             <div class="flex justify-center mb-6">
