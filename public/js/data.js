@@ -2,8 +2,16 @@ let currentPage = 'home';
 let allBusinesses = [];
 let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
-let allMarketplaceItems = [];   // ← Add this
+let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
+
+// ─── App-wide constants ───────────────────────────────────────────────────────
+const ADMIN_EMAIL = 'imhoggbox@gmail.com';
+
+/** Returns true if the currently logged-in user is a site admin. */
+function isAdmin() {
+  return !!(currentUser && currentUser.email === ADMIN_EMAIL);
+}
 
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
@@ -171,7 +179,7 @@ async function checkForAppUpdate() {
       }, 1500);
     }
   } catch (e) {
-    console.log("Update check failed");
+    // Update check failed silently — not critical
   }
 }
 
@@ -214,9 +222,7 @@ async function markConversationAsRead(otherId) {
   _setBadge(0); // safest: zero it instantly; server confirms shortly after
 
   try {
-    console.log(`📨 [Read] Marking conversation with ${otherId} as read...`);
     await apiPost('/messages/mark-as-read', { otherId });
-    console.log('✅ Messages marked as read on server');
   } catch (e) {
     console.warn('⚠️ Backend mark-as-read failed (endpoint missing?) — using optimistic update');
   }
@@ -333,6 +339,19 @@ document.addEventListener('DOMContentLoaded', () => {
   initGlobalSearch();
 });
 
+// ─── WMO weather code → icon/label ───────────────────────────────────────────
+function wmoCond(code) {
+  if (code === 0) return { icon: '☀️', label: 'Sunny' };
+  if ([1, 2].includes(code)) return { icon: '⛅', label: 'Partly cloudy' };
+  if (code === 3) return { icon: '☁️', label: 'Overcast' };
+  if ([45, 48].includes(code)) return { icon: '🌫️', label: 'Foggy' };
+  if ([51, 53, 55, 61, 63].includes(code)) return { icon: '🌧️', label: 'Rainy' };
+  if ([65, 80, 81, 82].includes(code)) return { icon: '⛈️', label: 'Showers' };
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return { icon: '❄️', label: 'Snow' };
+  if ([95, 96, 99].includes(code)) return { icon: '⛈️', label: 'Thunderstorm' };
+  return { icon: '🌤️', label: 'Mixed' };
+}
+
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
 async function loadHomePage(content) {
   content.innerHTML = `
@@ -445,18 +464,6 @@ async function loadHomePage(content) {
       const wData = await wRes.json();
       const curr = wData.current;
       const daily = wData.daily || {};
-
-      function wmoCond(code) {
-        if (code === 0) return { icon: '☀️', label: 'Sunny' };
-        if ([1,2].includes(code)) return { icon: '⛅', label: 'Partly cloudy' };
-        if (code === 3) return { icon: '☁️', label: 'Overcast' };
-        if ([45,48].includes(code)) return { icon: '🌫️', label: 'Foggy' };
-        if ([51,53,55,61,63].includes(code)) return { icon: '🌧️', label: 'Rainy' };
-        if ([65,80,81,82].includes(code)) return { icon: '⛈️', label: 'Showers' };
-        if ([71,73,75,77,85,86].includes(code)) return { icon: '❄️', label: 'Snow' };
-        if ([95,96,99].includes(code)) return { icon: '⛈️', label: 'Thunderstorm' };
-        return { icon: '🌤️', label: 'Mixed' };
-      }
 
       // Current weather
       const cond = wmoCond(curr.weathercode);
@@ -755,7 +762,7 @@ window.openNewsArticle = async function (articleId) {
   const article = await apiGet(`/news/${articleId}`);
   if (!article || article.message) { showToast('Could not load article', 'error'); return; }
 
-  const isAdmin    = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAdmin    = isAdmin();
   const isAuthor   = currentUser && article.author && (article.author === currentUser._id || article.author === currentUser.id);
   const canDelete  = isAdmin || isAuthor;
 
@@ -857,7 +864,7 @@ window.openImageViewer = function (articleId, startIndex) {
 
 // ─── POST NEWS PAGE ───────────────────────────────────────────────────────────
 async function loadPostNewsPage(content) {
-  const isAdmin   = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAdmin   = isAdmin();
   const canPost   = currentUser && (currentUser.canPostNews || isAdmin);
   if (!canPost) {
     content.innerHTML = `<div class="max-w-2xl mx-auto px-4 py-12 text-center">
@@ -1469,7 +1476,7 @@ function renderReviewSummary(reviews) {
 
 function renderReviewCard(r, bizId) {
   const stars = [1,2,3,4,5].map(s => `<span style="color:${s<=r.rating?'#f59e0b':'#d1d5db'};font-size:13px;">★</span>`).join('');
-  const isAdmin  = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAdmin  = isAdmin();
   const isAuthor = currentUser && (r.user === currentUser._id || r.user === currentUser.id);
   return `
     <div class="bg-gray-50 border border-gray-100 rounded-2xl p-4" id="review-card-${r._id}">
@@ -1739,17 +1746,16 @@ window.closeClaimModal = function () {
 
 // Stub — polls for claim approval after submission (backend integration point)
 function startVerificationPoll(businessId) {
-  console.log('[Claim] Verification poll started for business:', businessId);
   // Future: poll /claim/:businessId/status every 30s and notify user when approved
 }
 
 // ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
-  let currentPage = 1;
+  let shoutoutsPage = 1;
   const PAGE_SIZE = 8;
 
   const renderPage = async (page = 1) => {
-    currentPage = page;
+    shoutoutsPage = page;
 
     // Show loading state
     content.innerHTML = `
@@ -1801,13 +1807,12 @@ async function loadShoutoutsPage(content) {
     try {
       const res = await apiGet(`/shoutouts?page=${page}&limit=${PAGE_SIZE}`);
       const { shoutouts = [], pagination = {} } = res;
+      const feed = document.getElementById('shoutoutsFeed');
 
       if (!res || !Array.isArray(shoutouts)) {
-        feed.innerHTML = `<p class="text-red-400 text-center py-12">Error loading traffic alerts</p>`;
+        if (feed) feed.innerHTML = `<p class="text-red-400 text-center py-12">Error loading traffic alerts</p>`;
         return;
       }
-
-      const feed = document.getElementById('shoutoutsFeed');
 
       if (!shoutouts.length) {
         feed.innerHTML = `<p class="text-center text-white/50 py-16">No active traffic alerts right now.<br>Be the first to post one! 🚦</p>`;
@@ -1832,7 +1837,7 @@ async function loadShoutoutsPage(content) {
     }
 
     let html = `
-      <button onclick="window._loadShoutoutPage(${Math.max(1, currentPage-1)})" 
+      <button onclick="window._loadShoutoutPage(${Math.max(1, shoutoutsPage-1)})" 
               class="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-3xl transition ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
         ← Previous
       </button>
@@ -1841,7 +1846,7 @@ async function loadShoutoutsPage(content) {
         Page <span class="text-white font-semibold">${p.currentPage}</span> of ${p.totalPages}
       </div>
 
-      <button onclick="window._loadShoutoutPage(${Math.min(p.totalPages, currentPage+1)})" 
+      <button onclick="window._loadShoutoutPage(${Math.min(p.totalPages, shoutoutsPage+1)})" 
               class="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-3xl transition ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
         Next →
       </button>
@@ -1956,7 +1961,7 @@ function renderShoutoutCard(s) {
   const comments = s.comments || [];
   const commentCount = comments.length;
 
-  const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAdmin = isAdmin();
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
 
   // Still There state
@@ -2100,7 +2105,7 @@ function renderCommentRow(c, shoutoutId) {
   const cLetter = c.author ? c.author[0].toUpperCase() : '?';
   const replies = c.replies || [];
   const replyCount = replies.length;
-  const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
+  const isAdmin = isAdmin();
   const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
 
   let repliesHtml = '';
@@ -5034,8 +5039,6 @@ window.toggleRSVP = async function(eventId) {
   try {
     const res = await apiPost(`/events/${eventId}/rsvp`, {});
 
-    console.log('RSVP response:', res);
-
     // Success if we get rsvpCount or going back from server
     if (res.rsvpCount !== undefined || res.going !== undefined || res.message) {
       if (res.message) {
@@ -5687,7 +5690,7 @@ async function renderAdminAnalytics() {
   try {
     stats = await apiGet('/admin/stats') || {};
   } catch (e) {
-    console.log("Stats endpoint not ready yet");
+    // Stats endpoint may not be implemented yet — show zeros
   }
 
   container.innerHTML = `
