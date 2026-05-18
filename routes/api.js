@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
-const { sanitizeBody, securityHeaders } = require('./sanitize'); // adjust path if needed
+const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
 router.use(securityHeaders);   // CSP + security headers
 router.use(sanitizeBody);      // Deep sanitization on every req.body
