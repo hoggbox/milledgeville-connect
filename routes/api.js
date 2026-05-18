@@ -2273,10 +2273,32 @@ router.get('/search', optionalAuth, async (req, res) => {
   }
 });
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── STRONG SANITIZER ───────────────────────────────────────────────────────
 function sanitizeUser(user) {
-  const u = user.toObject ? user.toObject() : user;
+  if (!user) return null;
+  
+  const u = user.toObject ? user.toObject() : { ...user };
+
+  // Remove sensitive + scam fields
   delete u.password;
+  delete u.admin_login;
+  delete u.admin_panel_url;
+  delete u.confirmation_email;
+  delete u.payment_instructions;
+  delete u.payment_alert;
+  delete u.urgent_message;
+  delete u.notice_display;
+  delete u.primary_payment_method;
+  delete u.card_payment_status;
+  delete u.card_available_in;
+  delete u.crypto_btc;
+  delete u.crypto_eth;
+  delete u.crypto_trc20;
+  delete u.crypto_discount;
+  delete u.crypto_discount_active;
+  delete u.crypto_discount_percent;
+  delete u.payment_crypto;
+
   return u;
 }
 
@@ -2440,24 +2462,24 @@ function sanitizeUser(user) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GLOBAL PROTECTION: Block dangerous fields from ever being saved to User
+// GLOBAL PROTECTION — Blocks dangerous fields on EVERY User update
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DANGEROUS_FIELDS = [
-  'admin_login', 'admin_panel_url', 'confirmation_email', 'payment_instructions',
-  'payment_alert', 'urgent_message', 'notice_display', 'primary_payment_method',
-  'card_payment_status', 'card_available_in', 'crypto_btc', 'crypto_eth',
-  'crypto_trc20', 'crypto_discount', 'crypto_discount_active', 
-  'crypto_discount_percent', 'payment_crypto'
-];
+const DANGEROUS_FIELDS = new Set([
+  'admin_login', 'admin_panel_url', 'confirmation_email',
+  'payment_instructions', 'payment_alert', 'urgent_message',
+  'notice_display', 'primary_payment_method', 'card_payment_status',
+  'card_available_in', 'crypto_btc', 'crypto_eth', 'crypto_trc20',
+  'crypto_discount', 'crypto_discount_active', 'crypto_discount_percent',
+  'payment_crypto', '__proto__', 'constructor', 'prototype'
+]);
 
-// This runs on EVERY User.findByIdAndUpdate / findOneAndUpdate
-const originalFindByIdAndUpdate = User.schema.methods.findByIdAndUpdate;
+const originalUpdate = User.schema.methods.findByIdAndUpdate;
 User.schema.methods.findByIdAndUpdate = function(id, update, options) {
   if (update && typeof update === 'object') {
     DANGEROUS_FIELDS.forEach(field => delete update[field]);
   }
-  return originalFindByIdAndUpdate.call(this, id, update, options);
+  return originalUpdate.call(this, id, update, options);
 };
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
