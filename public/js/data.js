@@ -5563,7 +5563,6 @@ async function renderAdminBusinesses() {
 }
 
 window.showAddBusinessModal = async function() {
-  // Fetch categories if not cached
   if (!window._dirCategories || window._dirCategories.length === 0) {
     try {
       const data = await apiGet('/directory');
@@ -5576,7 +5575,7 @@ window.showAddBusinessModal = async function() {
   const existing = document.getElementById('addBusinessModal');
   if (existing) existing.remove();
 
-  let categoryOptions = `<option value="">Select Category</option>`;
+  let categoryOptions = `<option value="">— Select Category —</option>`;
   if (window._dirCategories.length) {
     categoryOptions += window._dirCategories.map(cat => `
       <option value="${cat._id}">${cat.icon} ${cat.name}</option>
@@ -5591,7 +5590,7 @@ window.showAddBusinessModal = async function() {
 
         <div class="sticky top-0 bg-[#1a2332] px-6 py-4 border-b border-white/10 flex items-center justify-between">
           <h2 class="text-lg font-bold">➕ Add New Business</h2>
-          <button onclick="document.getElementById('addBusinessModal').remove()" class="text-2xl text-white/50 hover:text-white leading-none">×</button>
+          <button onclick="document.getElementById('addBusinessModal').remove()" class="text-2xl text-white/50 hover:text-white">×</button>
         </div>
 
         <div class="p-5 space-y-4">
@@ -5604,7 +5603,7 @@ window.showAddBusinessModal = async function() {
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Category *</label>
             <select id="abCategory" 
-                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-400">
+                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-400 appearance-none">
               ${categoryOptions}
             </select>
           </div>
@@ -5636,7 +5635,7 @@ window.showAddBusinessModal = async function() {
 
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Description</label>
-            <textarea id="abDescription" rows="3" placeholder="Brief description of the business…"
+            <textarea id="abDescription" rows="3" placeholder="Brief description..."
                       class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
           </div>
 
@@ -5679,13 +5678,32 @@ window.submitAddBusiness = async function() {
     logo:        document.getElementById('abLogo').value.trim() || null,
   };
 
-  const res = await apiPost('/admin/business', payload);
-  if (res.business) {
-    showToast(`🏪 "${name}" added!`, 'success');
-    document.getElementById('addBusinessModal').remove();
-    renderAdminBusinesses();
-  } else {
-    showToast(res.message || 'Failed to add business', 'error');
+  try {
+    const res = await apiPost('/admin/business', payload);
+
+    if (res.business || res._id) {
+      showToast(`✅ "${name}" added successfully!`, 'success');
+      document.getElementById('addBusinessModal').remove();
+
+      // Force fresh directory fetch so category + icon appear immediately
+      const freshData = await apiGet('/directory');
+      if (freshData?.businesses) {
+        allBusinesses = freshData.businesses;
+        window._dirCategories = freshData.categories || [];
+      }
+
+      // Refresh whichever page we're on
+      if (currentPage === 'admin') {
+        renderAdminBusinesses();
+      } else if (currentPage === 'directory') {
+        renderDirectory(allBusinesses);
+      }
+    } else {
+      showToast(res.message || 'Failed to add business', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — check server logs', 'error');
   }
 };
 

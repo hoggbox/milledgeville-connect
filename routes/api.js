@@ -2166,34 +2166,85 @@ router.delete('/owner/events/:id', authenticate, async (req, res) => {
 
 router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, address, phone, website, description, categoryId, email, hours, priceRange, tags, logo } = req.body;
-    const business = await Business.create({ name, address, phone, website, description, category: categoryId, email: email || null, hours: hours || null, priceRange: priceRange || null, tags: tags || [], logo: logo || null });
-    res.json({ message: 'Business added successfully', business });
+    const { 
+      name, 
+      address, 
+      phone, 
+      email, 
+      website, 
+      description, 
+      category,     // ← This should be the category _id
+      logo 
+    } = req.body;
+
+    if (!name || !category) {
+      return res.status(400).json({ message: 'Name and category are required' });
+    }
+
+    // Verify the category actually exists
+    const catExists = await Category.findById(category);
+    if (!catExists) {
+      return res.status(400).json({ message: 'Invalid category selected' });
+    }
+
+    const business = await Business.create({
+      name,
+      address: address || '',
+      phone: phone || '',
+      email: email || '',
+      website: website || '',
+      description: description || '',
+      category: category,           // ← Save the ObjectId reference
+      logo: logo || null,
+      // owner remains null for admin-added businesses
+    });
+
+    // Return the newly created business with populated category
+    const populated = await Business.findById(business._id)
+      .populate('category', 'name icon _id');
+
+    res.json({ 
+      message: 'Business added successfully', 
+      business: populated 
+    });
+
   } catch (err) {
+    console.error('Add business error:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
 router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, address, phone, website, description, categoryId, email, hours, priceRange, tags, logo } = req.body;
-    
-    const updates = { name, address, phone, website, description, category: categoryId };
-    if (email     !== undefined) updates.email     = email;
-    if (hours     !== undefined) updates.hours     = hours;
-    if (priceRange !== undefined) updates.priceRange = priceRange;
-    if (tags      !== undefined) updates.tags      = tags;
-    if (logo      !== undefined) updates.logo      = logo;
+    const { name, address, phone, email, website, description, category, logo } = req.body;
+
+    const updates = {
+      name,
+      address: address || '',
+      phone: phone || '',
+      email: email || '',
+      website: website || '',
+      description: description || '',
+      logo: logo || null
+    };
+
+    if (category) {
+      const catExists = await Category.findById(category);
+      if (catExists) updates.category = category;
+    }
 
     const business = await Business.findByIdAndUpdate(
-      req.params.id, 
-      updates, 
+      req.params.id,
+      updates,
       { new: true }
-    );
+    ).populate('category', 'name icon _id');
 
     if (!business) return res.status(404).json({ message: 'Business not found' });
 
-    res.json({ message: 'Business updated successfully', business });
+    res.json({ 
+      message: 'Business updated successfully', 
+      business 
+    });
   } catch (err) {
     console.error('Update business error:', err);
     res.status(500).json({ message: err.message });
