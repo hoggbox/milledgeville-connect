@@ -153,21 +153,13 @@ router.post('/users/:id/report', authenticate, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GENERAL REPORT CONTENT (shoutout, lostitem, marketplace, etc.)
-// POST /api/reports
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── REPORT CONTENT (Improved) ─────────────────────────────────────────────
 router.post('/reports', authenticate, async (req, res) => {
   try {
     const { type, contentId, reason, extraInfo } = req.body;
 
     if (!type || !contentId || !reason?.trim()) {
       return res.status(400).json({ message: 'Type, contentId, and reason are required' });
-    }
-
-    // Prevent self-reporting (basic check)
-    if (type === 'user' && contentId === req.userId) {
-      return res.status(400).json({ message: 'You cannot report yourself' });
     }
 
     const report = await Report.create({
@@ -182,7 +174,10 @@ router.post('/reports', authenticate, async (req, res) => {
       status: 'pending'
     });
 
-    res.json({ message: 'Report submitted. Our team will review it.' });
+    res.json({ 
+      message: 'Report submitted. Our team will review it.',
+      reportId: report._id 
+    });
   } catch (err) {
     console.error('Report creation error:', err);
     res.status(500).json({ message: 'Failed to submit report' });

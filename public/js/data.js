@@ -5962,7 +5962,7 @@ function finishOnboarding() {
   showToast("🎉 Welcome to Milledgeville Connect!", "success");
 }
 
-// ─── REPORT CONTENT ─────────────────────────────────────────────────────────
+// ─── REPORT CONTENT (Fixed + Better Feedback) ───────────────────────────────
 window.reportContent = async function (type, id, extraInfo = '') {
   if (!currentUser) {
     showAuthModal({ message: 'Sign in to report content.' });
@@ -5970,23 +5970,31 @@ window.reportContent = async function (type, id, extraInfo = '') {
   }
 
   const reason = prompt(`Why are you reporting this ${type}? (be specific)`);
-  if (!reason || reason.trim() === '') return;
+  if (!reason || reason.trim() === '') {
+    showToast('Report cancelled', 'error');
+    return;
+  }
 
   try {
+    console.log(`[Report] Sending:`, { type, contentId: id, reason: reason.trim() });
+
     const res = await apiPost('/reports', {
       type: type,
       contentId: id,
       reason: reason.trim(),
-      extraInfo: extraInfo
+      extraInfo: extraInfo || ''
     });
 
-    if (res.message && res.message.includes('Report submitted')) {
+    console.log('[Report] Server response:', res);
+
+    if (res && (res.message?.includes('Report submitted') || res._id)) {
       showToast('🚩 Report sent to admin team. Thank you.', 'success');
     } else {
-      showToast('Failed to send report', 'error');
+      showToast(res?.message || 'Failed to send report', 'error');
     }
   } catch (e) {
-    showToast('Could not send report', 'error');
+    console.error('Report error:', e);
+    showToast('Could not send report — check console', 'error');
   }
 };
 
