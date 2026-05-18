@@ -5540,54 +5540,61 @@ async function renderAdminReports() {
     
     let html = `
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-xl mb-6">🚩 Pending Reports (${reports.length})</h3>`;
+        <h3 class="font-bold text-xl mb-6 flex items-center gap-3">
+          🚩 Pending Reports (${reports.length})
+        </h3>`;
 
     if (reports.length === 0) {
       html += `<p class="text-white/50 py-16 text-center text-lg">No pending reports — all good!</p>`;
     } else {
       html += reports.map(r => {
-        let title = '';
-        let subtitle = '';
-        
+        let title = r.type.toUpperCase();
+        let viewAction = '';
+
         if (r.type === 'shoutout') {
           title = '🚦 Shoutout';
-          subtitle = r.snapshotText ? `"${r.snapshotText.substring(0, 100)}${r.snapshotText.length > 100 ? '...' : ''}"` : '';
+          viewAction = `<button onclick="viewReportedContent('shoutout', '${r.reportedShoutout}')" 
+                               class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">View Post →</button>`;
         } else if (r.type === 'lost') {
           title = '🔎 Lost & Found';
-          subtitle = r.snapshotText || '';
+          viewAction = `<button onclick="viewReportedContent('lost', '${r.reportedLostItem}')" 
+                               class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">View Item →</button>`;
         } else if (r.type === 'market') {
           title = '🛒 Marketplace';
-          subtitle = r.snapshotText || '';
+          viewAction = `<button onclick="viewReportedContent('market', '${r.reportedMarketItem}')" 
+                               class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">View Listing →</button>`;
         } else if (r.type === 'user') {
           title = '👤 User Report';
-          subtitle = `Reported user: ${r.reportedUser?.name || 'Unknown'}`;
-        } else {
-          title = r.type.toUpperCase();
+          viewAction = `<button onclick="showUserProfileModal('${r.reportedUser?._id || r.reportedUser}')" 
+                               class="text-emerald-400 hover:text-emerald-300 text-sm font-medium">View Profile →</button>`;
+        } else if (r.type === 'comment') {
+          title = '💬 Comment';
         }
 
-        const reporterName = r.reporter?.name || 'Unknown';
-        
         return `
           <div class="bg-white/5 rounded-2xl p-5 mb-4 border border-white/10">
-            <div class="flex items-start justify-between gap-4">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-3">
-                  <span class="px-3 py-1 text-xs font-bold rounded-full bg-red-500">${title}</span>
-                  <span class="text-xs text-white/60">Reported by ${reporterName}</span>
-                </div>
-                
-                <p class="font-semibold text-white mb-1">${subtitle}</p>
-                
-                ${r.reason ? `
-                <div class="mt-3 bg-white/10 rounded-xl p-3 text-sm">
-                  <span class="text-white/50 text-xs block mb-1">REASON:</span>
-                  <span class="text-white">${esc(r.reason)}</span>
-                </div>` : ''}
-              </div>
-              
+            <div class="flex justify-between items-start mb-3">
+              <span class="px-3 py-1 text-xs font-bold rounded-full bg-red-500">${title}</span>
+              <span class="text-xs text-white/60">by ${r.reporter?.name || 'Unknown'}</span>
+            </div>
+            
+            ${r.snapshotText ? `
+            <div class="bg-white/10 rounded-xl p-4 text-sm mb-3">
+              <span class="text-white/50 text-xs block mb-1">CONTENT:</span>
+              <span class="text-white">${esc(r.snapshotText)}</span>
+            </div>` : ''}
+
+            ${r.reason ? `
+            <div class="bg-white/10 rounded-xl p-4 text-sm">
+              <span class="text-white/50 text-xs block mb-1">REASON:</span>
+              <span class="text-white">${esc(r.reason)}</span>
+            </div>` : ''}
+
+            <div class="mt-4 flex gap-3">
+              ${viewAction}
               <button onclick="reviewReport('${r._id}')" 
-                      class="flex-shrink-0 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-2xl transition">
-                Review
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-2xl font-semibold transition">
+                Review / Resolve
               </button>
             </div>
           </div>`;
@@ -5995,6 +6002,31 @@ window.reportContent = async function (type, id, extraInfo = '') {
   } catch (e) {
     console.error('Report error:', e);
     showToast('Could not send report — check console', 'error');
+  }
+};
+
+// ─── VIEW REPORTED CONTENT ─────────────────────────────────────────────────
+window.viewReportedContent = async function (type, id) {
+  if (!id) {
+    showToast('Content no longer exists', 'error');
+    return;
+  }
+
+  if (type === 'shoutout') {
+    navigate('shoutouts');
+    setTimeout(() => {
+      const el = document.getElementById(`shoutout-${id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      else showToast('Shoutout may have been deleted', 'error');
+    }, 800);
+  } 
+  else if (type === 'lost') {
+    navigate('lostfound');
+    setTimeout(() => showLostItemDetail(id), 800);
+  } 
+  else if (type === 'market') {
+    navigate('marketplace');
+    setTimeout(() => showMarketplaceDetail(id), 800);
   }
 };
 
