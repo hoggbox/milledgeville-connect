@@ -179,6 +179,38 @@ function formatDateTime(date) {
   });
 }
 
+// ─── Share Content Helper ─────────────────────────────────────────────────────
+window.shareContent = async function(type, title, extra = '') {
+  const appName = 'Milledgeville Connect';
+  const labels = {
+    shoutout:    '🚦 Traffic Alert',
+    market:      '🛒 Marketplace',
+    lost:        '🔎 Lost & Found',
+    event:       '📅 Event',
+    deal:        '🔥 Deal',
+    news:        '📰 News',
+  };
+  const label = labels[type] || appName;
+  const shareText = `${label}: ${title}${extra ? '\n' + extra : ''}\n\nPosted on ${appName}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: `${label} — ${appName}`, text: shareText });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user cancelled — do nothing
+    }
+  }
+
+  // Fallback: copy to clipboard
+  try {
+    await navigator.clipboard.writeText(shareText);
+    showToast('📋 Copied to clipboard!', 'success');
+  } catch (e) {
+    showToast('Could not share — try copying manually', 'error');
+  }
+};
+
 // ─── SAFE Clickable User Helper (Clean Rep Badge) ─────────────────────────────
 function renderClickableUser(userData, fallbackName = 'Anonymous') {
   if (!userData) return fallbackName;
@@ -256,6 +288,37 @@ async function checkForAppUpdate() {
   } catch (e) {
     // Update check failed silently — not critical
   }
+}
+
+// ─── IMAGE COMPRESSION HELPER ─────────────────────────────────────────────
+async function compressImage(file, maxWidth = 1200, quality = 0.75) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // In-memory unread count so we can zero it instantly without a round-trip
@@ -1985,19 +2048,29 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
 // ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
 let _pendingShoutoutImages = [];
 
-window.handleShoutoutImages = function (input) {
+window.handleShoutoutImages = async function (input) {
   const files = Array.from(input.files);
   if (!_pendingShoutoutImages) _pendingShoutoutImages = [];
 
-  files.forEach(file => {
-    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} is too large (max 5MB)`, 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = e => {
-      _pendingShoutoutImages.push(e.target.result);
-      renderShoutoutImagePreviews();
-    };
-    reader.readAsDataURL(file);
-  });
+  for (let file of files) {
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 8MB)`, 'error');
+      continue;
+    }
+
+    try {
+      showToast('Compressing image...', 'success');
+      const compressed = await compressImage(file, 1100, 0.72);
+      const reader = new FileReader();
+      reader.onload = e => {
+        _pendingShoutoutImages.push(e.target.result);
+        renderShoutoutImagePreviews();
+      };
+      reader.readAsDataURL(compressed);
+    } catch (e) {
+      console.error(e);
+    }
+  }
   input.value = '';
 };
 
@@ -2102,6 +2175,10 @@ function renderShoutoutCard(s) {
               </button>
               <button onclick="commentOnShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
                 💬 ${commentCount}
+              </button>
+              <button onclick="event.stopImmediatePropagation(); shareContent('shoutout', ${JSON.stringify(esc(s.text || '').substring(0,120))})"
+                      class="flex items-center gap-1 hover:text-white transition">
+                🔗 Share
               </button>
             </div>
 
@@ -3875,18 +3952,32 @@ window.hideLostItemModal = function() {
 window.postLostItem = async function() {
   const title = document.getElementById('lostTitle').value.trim();
   const description = document.getElementById('lostDesc').value.trim();
-  if (!title || !description) return alert("Title and description required");
+  if (!title || !description) {
+    showToast("Title and description required", 'error');
+    return;
+  }
 
   const files = document.getElementById('lostImages').files;
   let images = [];
+
   if (files.length) {
+    showToast('Compressing images...', 'success');
     for (let file of files) {
-      const base64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsDataURL(file);
-      });
-      images.push(base64);
+      if (file.size > 8 * 1024 * 1024) {
+        showToast(`${file.name} is too large`, 'error');
+        continue;
+      }
+      try {
+        const compressed = await compressImage(file, 1100, 0.72);
+        const base64 = await new Promise(resolve => {
+          const r = new FileReader();
+          r.onload = e => resolve(e.target.result);
+          r.readAsDataURL(compressed);
+        });
+        images.push(base64);
+      } catch (e) {
+        console.error(e);
+      }
     }
   }
 
@@ -3906,7 +3997,7 @@ window.postLostItem = async function() {
     hideLostItemModal();
     loadPage('lostfound');
   } else {
-    alert(res.message || 'Error posting item');
+    showToast(res.message || 'Error posting item', 'error');
   }
 };
 
@@ -3978,6 +4069,10 @@ window.showLostItemDetail = async function(id) {
                       class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
                 ✅ Mark as Resolved
               </button>` : ''}
+            <button onclick="shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
+                    class="flex-1 bg-sky-50 hover:bg-sky-100 text-sky-700 py-4 rounded-3xl font-semibold transition">
+              🔗 Share
+            </button>
             <button onclick="hideLostDetailModal()" 
                     class="flex-1 bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold">
               Close
@@ -4097,28 +4192,50 @@ window.postMarketplaceItem = async function() {
   const description = document.getElementById('marketDesc').value.trim();
   const price = parseFloat(document.getElementById('marketPrice').value);
 
-  if (!title || !description || !price) return alert("Title, description and price required");
+  if (!title || !description || !price) {
+    showToast("Title, description and price required", 'error');
+    return;
+  }
 
   const files = document.getElementById('marketImages').files;
   let images = [];
+
   if (files.length) {
+    showToast('Compressing images...', 'success');
     for (let file of files) {
-      const base64 = await new Promise(r => {
-        const reader = new FileReader();
-        reader.onload = e => r(e.target.result);
-        reader.readAsDataURL(file);
-      });
-      images.push(base64);
+      if (file.size > 8 * 1024 * 1024) {
+        showToast(`${file.name} is too large`, 'error');
+        continue;
+      }
+      try {
+        const compressed = await compressImage(file, 1100, 0.72);
+        const base64 = await new Promise(resolve => {
+          const r = new FileReader();
+          r.onload = e => resolve(e.target.result);
+          r.readAsDataURL(compressed);
+        });
+        images.push(base64);
+      } catch (e) {
+        console.error(e);
+      }
     }
   }
 
-  const payload = { title, description, price, images, condition: document.getElementById('marketCondition').value };
-  const res = await apiPost('/marketplace', payload);
+  const payload = { 
+    title, 
+    description, 
+    price, 
+    images, 
+    condition: document.getElementById('marketCondition').value 
+  };
 
+  const res = await apiPost('/marketplace', payload);
   if (res._id) {
     showToast('✅ Listing posted!');
     hideMarketModal();
     loadPage('marketplace');
+  } else {
+    showToast(res.message || 'Error posting listing', 'error');
   }
 };
 
@@ -4195,6 +4312,10 @@ window.showMarketplaceDetail = async function(id) {
           </div>` : ''}
 
           <div class="p-6 border-t flex gap-3">
+            <button onclick="shareContent('market', '${esc(item.title)}', '$${item.price}')" 
+                    class="flex-1 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-3xl font-semibold transition">
+              🔗 Share
+            </button>
             <button onclick="hideMarketDetailModal()" 
                     class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-3xl font-semibold">
               Close
@@ -4358,7 +4479,11 @@ function renderLostItemsPage() {
             </div>
 
             <!-- Report Button -->
-            <div class="mt-3 flex justify-end">
+            <div class="mt-3 flex justify-end gap-3">
+              <button onclick="event.stopImmediatePropagation(); shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
+                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+                🔗 Share
+              </button>
               <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
                       class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
                 🚩 Report
@@ -4501,7 +4626,11 @@ async function renderMarketplacePage() {
           </div>
 
           <!-- Report Button -->
-          <div class="mt-3 flex justify-end">
+          <div class="mt-3 flex justify-end gap-3">
+            <button onclick="event.stopImmediatePropagation(); shareContent('market', '${esc(item.title)}', '$${item.price}')" 
+                    class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+              🔗 Share
+            </button>
             <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')" 
                     class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
               🚩 Report
@@ -5145,9 +5274,13 @@ window.showEventDetail = async function(eventId) {
           </div>
         </div>
 
-        <div class="p-6 border-t">
+        <div class="p-6 border-t flex gap-3">
+          <button onclick="shareContent('event', '${esc(event.title)}', '${esc(event.location || '')}')" 
+                  class="flex-1 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-3xl font-semibold transition">
+            🔗 Share
+          </button>
           <button onclick="document.getElementById('eventDetailModal').remove()" 
-                  class="w-full py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
+                  class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
             Close
           </button>
         </div>
@@ -5188,9 +5321,13 @@ window.showDealDetail = async function(dealId) {
           </div>` : ''}
         </div>
 
-        <div class="p-6 border-t">
+        <div class="p-6 border-t flex gap-3">
+          <button onclick="shareContent('deal', '${esc(deal.title)}', '${deal.business?.name ? 'From: ' + esc(deal.business.name) : ''}')" 
+                  class="flex-1 py-4 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-3xl font-semibold transition">
+            🔗 Share
+          </button>
           <button onclick="document.getElementById('dealDetailModal').remove()" 
-                  class="w-full py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
+                  class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
             Close
           </button>
         </div>
