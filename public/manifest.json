@@ -1,12 +1,17 @@
 {
   "name": "Milledgeville Connect",
-  "short_name": "MSConnect",
-  "description": "Connect with your Milledgeville community",
+  "short_name": "Mville Connect",
+  "description": "Real-time traffic alerts, marketplace, lost & found, events, deals & more for Milledgeville, GA",
+  "id": "/?source=pwa",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0f172a",
   "theme_color": "#10b981",
   "orientation": "portrait-primary",
+  "lang": "en-US",
+  "categories": ["social", "news", "shopping", "lifestyle"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -17,6 +22,30 @@
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Traffic Alerts",
+      "url": "/?page=shoutouts",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Marketplace",
+      "url": "/?page=marketplace",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
