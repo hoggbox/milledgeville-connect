@@ -1,5 +1,11 @@
 const express = require('express');
 const router  = express.Router();
+
+// ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
+const { sanitizeBody, securityHeaders } = require('./sanitize'); // adjust path if needed
+
+router.use(securityHeaders);   // CSP + security headers
+router.use(sanitizeBody);      // Deep sanitization on every req.body
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
@@ -162,6 +168,13 @@ router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
+    // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
+    const clean = sanitizeContent(req.body);
+    const { text, images, location } = clean;
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+
     // ── Hard 45-second rate limit (existing) ──────────────────────────────────
     if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
       return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
@@ -185,23 +198,18 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
-    const { text, images, location } = req.body;
-    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
-
     // ── Spam burst detection ────────────────────────────────────────────────────
-    // Prune timestamps older than the rolling window, then count what's left
     const now = Date.now();
     const windowStart = now - SPAM_WINDOW_MS;
     const recentPosts = (user.recentPostTimes || []).filter(t => new Date(t).getTime() > windowStart);
 
     if (recentPosts.length >= SPAM_POST_LIMIT) {
-      // Auto-mute the user and file an admin report
       user.isMuted = true;
       await user.save();
 
       await Report.create({
         type: 'user',
-        reporter: user._id,      // self-report – makes it easy to find in admin
+        reporter: user._id,
         reportedUser: user._id,
         reason: `Auto-muted for spam: ${recentPosts.length + 1} posts within ${SPAM_WINDOW_MS / 60000} minutes`,
         snapshotText: text.trim().substring(0, 200),
@@ -227,9 +235,8 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       expiresAt
     });
 
-    // Update anti-spam timestamps
     user.lastPostAt = new Date(now);
-    user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10); // keep last 10
+    user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
     broadcastPush(
@@ -692,7 +699,8 @@ router.get('/messages/conversation/:otherUserId', authenticate, async (req, res)
 
 router.post('/messages', authenticate, async (req, res) => {
   try {
-    const { receiverId, text } = req.body;
+    const clean = sanitizeContent(req.body);
+    const { receiverId, text } = clean;
     if (!receiverId || !text?.trim()) 
       return res.status(400).json({ message: 'Receiver and message text required' });
 
@@ -977,16 +985,18 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
 router.post('/lostitems', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    const { title, description, type, itemType, isPet, location, date, images } = req.body;
+
+    const clean = sanitizeContent(req.body);
+    const { title, description, images, location, type, itemType, isPet, date } = clean;
 
     const item = await LostItem.create({
       type: type || 'lost',
-      title,
-      description,
+      title: title || '',
+      description: description || '',
       itemType: itemType || '',
       isPet: !!isPet,
-      location,
-      date: date || new Date(),
+      location: location || null,
+      date: date ? new Date(date) : new Date(),
       images: images || [],
       owner: user._id,
       authorName: user.name
@@ -1011,15 +1021,20 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
 
-    const comment = { text: req.body.text, author: user.name, authorId: user._id };
+    const comment = { 
+  text: (req.body.text || '').trim(), 
+  author: user.name, 
+  authorId: user._id 
+};
     lost.comments.push(comment);
     await lost.save();
 
     if (lost.owner && lost.owner.toString() !== req.userId) {
+      const commentText = (req.body.text || '').trim();
       sendPushToUser(
         lost.owner,
         '💬 New comment on your lost item',
-        `${user.name}: ${req.body.text.substring(0, 60)}`,
+        `${user.name}: ${commentText.substring(0, 60)}`,
         { page: 'lostfound' }
       );
     }
@@ -1091,7 +1106,9 @@ router.get('/marketplace', optionalAuth, async (req, res) => {
 router.post('/marketplace', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    const { title, description, price, images, category, condition } = req.body;
+
+    const clean = sanitizeContent(req.body);
+    const { title, description, price, images, category, condition } = clean;
 
     const item = await MarketplaceItem.create({
       title,
@@ -1123,15 +1140,20 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
 
-    const comment = { text: req.body.text, author: user.name, authorId: user._id };
+    const comment = { 
+    text: (req.body.text || '').trim(), 
+    author: user.name, 
+    authorId: user._id 
+  };
     item.comments.push(comment);
     await item.save();
 
     if (item.seller && item.seller.toString() !== req.userId) {
+      const commentText = (req.body.text || '').trim();
       sendPushToUser(
         item.seller,
         '💬 New message on your listing',
-        `${user.name}: ${req.body.text.substring(0, 60)}`,
+        `${user.name}: ${commentText.substring(0, 60)}`,
         { page: 'marketplace' }
       );
     }
@@ -1534,7 +1556,8 @@ router.get('/business/:id/reviews', optionalAuth, async (req, res) => {
 
 router.post('/business/:id/reviews', authenticate, async (req, res) => {
   try {
-    const { rating, title, body } = req.body;
+    const clean = sanitizeContent(req.body);
+    const { rating, title, body } = clean;
     if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ message: 'Rating 1-5 required' });
 
@@ -1594,14 +1617,20 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
-    const comment = { text: req.body.text, author: user.name, authorId: user._id };
+    const clean = sanitizeContent(req.body);
+    const comment = { 
+      text: (clean.text || '').trim(), 
+      author: user.name, 
+      authorId: user._id 
+    };
     shoutout.comments.push(comment);
     await shoutout.save();
 
     // Broadcast to everyone who enabled "Comments on Traffic Alerts"
+    const commentText = (req.body.text || '').trim();
     broadcastPush(
-      `💬 New comment on Traffic Alert`,
-      `${user.name}: ${req.body.text.substring(0, 65)}${req.body.text.length > 65 ? '...' : ''}`,
+    `💬 New comment on Traffic Alert`,
+    `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
       { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` },
       { notifyShoutoutComments: true }          // filter
     );
@@ -1620,7 +1649,12 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
     const comment  = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
 
-    const reply = { text: req.body.text, author: user.name, authorId: user._id };
+    const clean = sanitizeContent(req.body);
+    const reply = { 
+      text: (clean.text || '').trim(), 
+      author: user.name, 
+      authorId: user._id 
+    };
     comment.replies.push(reply);
     await shoutout.save();
 
@@ -1743,12 +1777,14 @@ router.get('/news/:id', optionalAuth, async (req, res) => {
 
 router.post('/news', authenticate, async (req, res) => {
   try {
-    const user    = await User.findById(req.userId);
+    const user = await User.findById(req.userId);
     const isAdmin = ADMIN_EMAILS.has(user.email);
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const { title, summary, content, images } = req.body;
+    const clean = sanitizeContent(req.body);
+    const { title, summary, content, images } = clean;
+
     if (!title || !summary || !content)
       return res.status(400).json({ message: 'Title, summary, and content are required' });
 
@@ -2438,29 +2474,6 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
   }
 });
 
-// ─── Helper: Sanitize user object before sending to frontend ─────────────────
-function sanitizeUser(user) {
-  if (!user) return null;
-  
-  const u = user.toObject ? user.toObject() : { ...user };
-
-  // Remove sensitive and garbage fields
-  delete u.password;
-  
-  const badFields = [
-    'admin_login', 'admin_panel_url', 'confirmation_email', 
-    'payment_instructions', 'payment_alert', 'urgent_message', 
-    'notice_display', 'primary_payment_method', 'card_payment_status',
-    'card_available_in', 'crypto_btc', 'crypto_eth', 'crypto_trc20',
-    'crypto_discount', 'crypto_discount_active', 'crypto_discount_percent',
-    'payment_crypto'
-  ];
-  
-  badFields.forEach(field => delete u[field]);
-
-  return u;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // GLOBAL PROTECTION — Blocks dangerous fields on EVERY User update
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2481,6 +2494,24 @@ User.schema.methods.findByIdAndUpdate = function(id, update, options) {
   }
   return originalUpdate.call(this, id, update, options);
 };
+
+// ─── Helper: Sanitize content fields before saving ───────────────────────────
+function sanitizeContent(fields = {}) {
+  const out = {};
+  for (const [key, val] of Object.entries(fields)) {
+    if (typeof val === 'string') {
+      out[key] = val
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\0/g, '')
+        .trim()
+        .substring(0, 10000);
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;

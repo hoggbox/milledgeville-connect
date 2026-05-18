@@ -661,52 +661,52 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
     const visibleItems = filtered.slice(0, visibleCount);
 
     let html = '';
-    visibleItems.forEach(item => {
-      if (item.type === 'news') {
-        const n = item.data;
-        html += `
-          <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
-              <h4 class="font-semibold text-lg mt-2">${n.title}</h4>
-              <p class="text-white/70 line-clamp-2">${n.summary || ''}</p>
-              <div class="text-xs text-white/50 mt-3">${timeAgo(n.createdAt)}</div>
-            </div>
-          </div>`;
-      } else if (item.type === 'event') {
-        const e = item.data;
-        html += `
-          <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-amber-500 px-3 py-1 rounded-full">📅 EVENT</span>
-              <h4 class="font-semibold text-lg mt-2">${e.title}</h4>
-              <p class="text-white/70">${e.description || ''}</p>
-              <div class="text-xs text-white/50 mt-3">${formatDate(e.date)}</div>
-            </div>
-          </div>`;
-      } else if (item.type === 'deal') {
-        const d = item.data;
-        html += `
-          <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-red-500 px-3 py-1 rounded-full">🔥 DEAL</span>
-              <h4 class="font-semibold text-lg mt-2">${d.title}</h4>
-              <p class="text-white/70">${d.description || ''}</p>
-              <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
-            </div>
-          </div>`;
-} else if (item.type === 'shoutout') {
-  const s = item.data;
-  html += `
-    <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-      <div class="flex-1">
-        <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
-        <h4 class="font-semibold text-lg mt-2 line-clamp-2">${s.text}</h4>
-        <div class="text-xs text-white/50 mt-3">by ${s.author || s.authorName || 'Community'} · ${timeAgo(s.createdAt)}</div>
-      </div>
-    </div>`;
-}
-    });
+visibleItems.forEach(item => {
+  if (item.type === 'news') {
+    const n = item.data;
+    html += `
+      <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
+          <h4 class="font-semibold text-lg mt-2">${esc(n.title)}</h4>
+          <p class="text-white/70 line-clamp-2">${esc(n.summary || '')}</p>
+          <div class="text-xs text-white/50 mt-3">${timeAgo(n.createdAt)}</div>
+        </div>
+      </div>`;
+  } else if (item.type === 'event') {
+    const e = item.data;
+    html += `
+      <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-amber-500 px-3 py-1 rounded-full">📅 EVENT</span>
+          <h4 class="font-semibold text-lg mt-2">${esc(e.title)}</h4>
+          <p class="text-white/70">${esc(e.description || '')}</p>
+          <div class="text-xs text-white/50 mt-3">${formatDate(e.date)}</div>
+        </div>
+      </div>`;
+  } else if (item.type === 'deal') {
+    const d = item.data;
+    html += `
+      <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-red-500 px-3 py-1 rounded-full">🔥 DEAL</span>
+          <h4 class="font-semibold text-lg mt-2">${esc(d.title)}</h4>
+          <p class="text-white/70">${esc(d.description || '')}</p>
+          <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
+        </div>
+      </div>`;
+  } else if (item.type === 'shoutout') {
+    const s = item.data;
+    html += `
+      <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
+          <h4 class="font-semibold text-lg mt-2 line-clamp-2">${esc(s.text)}</h4>
+          <div class="text-xs text-white/50 mt-3">by ${esc(s.author || s.authorName || 'Community')} · ${timeAgo(s.createdAt)}</div>
+        </div>
+      </div>`;
+  }
+});
 
     container.innerHTML = html || `<p class="text-white/40 text-center py-12">No activity yet — be the first to post!</p>`;
 
@@ -809,8 +809,8 @@ window.openNewsArticle = async function (articleId) {
             <span class="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">📰 News</span>
             <span class="text-xs text-gray-400 mt-0.5">${formatDateTime(article.createdAt)}</span>
           </div>
-          <h1 class="text-2xl md:text-3xl font-bold leading-tight text-slate-900 mb-3">${article.title}</h1>
-          <p class="text-emerald-600 font-medium text-sm mb-6 leading-relaxed">${article.summary}</p>
+          <h1 class="text-2xl md:text-3xl font-bold leading-tight text-slate-900 mb-3">${esc(article.title)}</h1>
+          <p class="text-emerald-600 font-medium text-sm mb-6 leading-relaxed">${esc(article.summary)}</p>
           <div class="flex items-center gap-3 mb-6 pb-6 border-b border-gray-100">
             <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
               ${(article.authorName || 'S')[0].toUpperCase()}
@@ -820,7 +820,7 @@ window.openNewsArticle = async function (articleId) {
               <p class="text-xs text-gray-400">${formatDate(article.createdAt)}</p>
             </div>
           </div>
-          <div class="prose prose-slate max-w-none text-slate-700 leading-relaxed text-[15px]" style="white-space:pre-wrap;">${article.content}</div>
+          <div class="prose prose-slate max-w-none text-slate-700 leading-relaxed text-[15px]" style="white-space:pre-wrap;">${esc(article.content)}</div>
           ${imagesHTML}
           <div class="mt-8 space-y-3">
             ${canDelete ? `<button onclick="deleteNewsArticle('${article._id}')" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-3 rounded-3xl font-semibold transition">🗑️ Delete Article</button>` : ''}
@@ -1173,8 +1173,8 @@ function renderDirectory(businesses) {
           ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
           : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         <div class="flex-1 min-w-0">
-          <h3 class="font-bold text-lg leading-tight">${b.name}</h3>
-          <p class="text-white/70 text-sm">${b.address || 'Milledgeville, GA'}</p>
+          <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
+          <p class="text-white/70 text-sm">${esc(b.address || 'Milledgeville, GA')}</p>
           ${b.phone ? `<p class="text-emerald-400 text-xs mt-0.5">📞 ${b.phone}</p>` : ''}
           ${b.hours ? `<p class="text-white/50 text-xs">${b.hours}</p>` : ''}
         </div>
@@ -1284,7 +1284,7 @@ async function showBusinessDetail(id) {
         <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
         <div class="p-6">
           <div class="flex items-start justify-between mb-1">
-            <h1 class="text-3xl font-bold leading-tight">${business.name}</h1>
+            <h1 class="text-3xl font-bold leading-tight">${esc(business.name)}</h1>
             ${isOwned ? `<span class="text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full mt-1">✓ Verified Owner</span>` : ''}
           </div>
           <p class="text-emerald-600 text-sm mb-1">${business.category?.name || ''}</p>
@@ -1327,7 +1327,7 @@ async function showBusinessDetail(id) {
     </button>` : ''}
 </div>
 
-          ${business.description ? `<p class="text-gray-600 leading-relaxed mb-5">${business.description}</p>` : ''}
+          ${business.description ? `<p class="text-gray-600 leading-relaxed mb-5">${esc(business.description)}</p>` : ''}
 
           <!-- ─── Photo Gallery ─────────────────────────────────────────── -->
           ${(() => {
@@ -1505,7 +1505,7 @@ function renderReviewCard(r, bizId) {
             ${(r.authorName||'?')[0].toUpperCase()}
           </div>
           <div>
-            <p class="font-semibold text-sm text-slate-800">${r.authorName || 'Anonymous'}</p>
+            <p class="font-semibold text-sm text-slate-800">${esc(r.authorName || 'Anonymous')}</p>
             <div class="flex items-center gap-1">${stars}<span class="text-xs text-gray-400 ml-1">${timeAgo(r.createdAt)}</span></div>
           </div>
         </div>
@@ -1513,8 +1513,8 @@ function renderReviewCard(r, bizId) {
           <button onclick="deleteReview('${bizId}','${r._id}')"
                   class="text-xs text-red-400 hover:text-red-600 transition font-semibold flex-shrink-0">Delete</button>` : ''}
       </div>
-      ${r.title ? `<p class="font-semibold text-slate-800 text-sm mb-1">${r.title}</p>` : ''}
-      ${r.body  ? `<p class="text-sm text-gray-600 leading-relaxed">${r.body}</p>` : ''}
+      ${r.title ? `<p class="font-semibold text-slate-800 text-sm mb-1">${esc(r.title)}</p>` : ''}
+      ${r.body  ? `<p class="text-sm text-gray-600 leading-relaxed">${esc(r.body)}</p>` : ''}
     </div>`;
 }
 
@@ -3937,7 +3937,7 @@ window.showLostItemDetail = async function(id) {
       <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
         <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
           <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
-            <h2 class="text-xl font-bold">${item.title}</h2>
+            <h2 class="text-xl font-bold">${esc(item.title)}</h2>
             <button onclick="hideLostDetailModal()" class="text-3xl leading-none">×</button>
           </div>
           
@@ -3945,7 +3945,7 @@ window.showLostItemDetail = async function(id) {
             ${item.images && item.images.length ? 
               `<div class="grid grid-cols-2 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl w-full aspect-square object-cover">`).join('')}</div>` : ''}
             
-            <p class="text-slate-700 leading-relaxed">${item.description}</p>
+            <p class="text-slate-700 leading-relaxed">${esc(item.description)}</p>
             
             <div class="flex gap-6 text-sm mt-6">
               <div><span class="font-semibold">Type:</span> ${item.type.toUpperCase()}</div>
@@ -4033,10 +4033,9 @@ async function renderLostComments(item) {
     const authorId = c.authorId?._id || c.authorId;
     const authorName = c.author || 'Anonymous';
 
-    html += `<div class="bg-slate-100 rounded-2xl p-4">
-      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
-         class="font-medium cursor-pointer hover:underline">${authorName}</p>
-      <p class="text-slate-700">${c.text || ''}</p>
+  html += `<div class="bg-slate-100 rounded-2xl p-4">
+  <p onclick="..." class="font-medium cursor-pointer hover:underline">${esc(authorName)}</p>
+  <p class="text-slate-700">${esc(c.text || '')}</p>
     </div>`;
   });
 
@@ -4169,7 +4168,7 @@ window.showMarketplaceDetail = async function(id) {
         <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
           <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between">
             <div>
-              <h2 class="text-xl font-bold">${item.title}</h2>
+              <h2 class="text-xl font-bold">${esc(item.title)}</h2>
               <p class="text-3xl font-bold text-emerald-600">$${item.price}</p>
             </div>
             <button onclick="hideMarketDetailModal()" class="text-3xl">×</button>
@@ -4179,7 +4178,7 @@ window.showMarketplaceDetail = async function(id) {
             ${item.images && item.images.length ? 
               `<div class="grid grid-cols-3 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl aspect-square object-cover">`).join('')}</div>` : ''}
             
-            <p class="text-slate-700">${item.description || ''}</p>
+            <p class="text-slate-700">${esc(item.description || '')}</p>
             
             <div class="mt-8">
               <div class="flex items-center justify-between mb-3">
@@ -4260,9 +4259,8 @@ function renderMarketComments(item) {
   container.innerHTML = comments.map(c => {
     const authorId = c.authorId?._id || c.authorId;
     return `<div class="bg-slate-100 rounded-2xl p-4">
-      <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
-         class="font-medium cursor-pointer hover:underline">${c.author || 'Anonymous'}</p>
-      <p class="text-slate-700">${c.text}</p>
+    <p onclick="..." class="font-medium cursor-pointer hover:underline">${esc(c.author || 'Anonymous')}</p>
+    <p class="text-slate-700">${esc(c.text)}</p>
     </div>`;
   }).join('');
 }
@@ -4355,8 +4353,8 @@ async function renderLostItemsPage() {
               ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
             </div>
             
-            <h3 class="font-semibold text-lg mt-2">${item.title}</h3>
-            <p class="text-white/70 line-clamp-2">${item.description}</p>
+            <h3 class="font-semibold text-lg mt-2">${esc(item.title)}</h3>
+            <p class="text-white/70 line-clamp-2">${esc(item.description)}</p>
             
             <div class="flex items-center gap-2 mt-4 text-xs text-white/50">
               <span>📍 ${item.location || 'Unknown'}</span>
@@ -4490,10 +4488,10 @@ async function renderMarketplacePage() {
           `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0">🛒</div>`}
         <div class="flex-1 min-w-0">
           <div class="flex justify-between items-start">
-            <h3 class="font-semibold text-lg leading-tight pr-2">${item.title}</h3>
+            <h3 class="font-semibold text-lg leading-tight pr-2">${esc(item.title)}</h3>
             <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
           </div>
-          <p class="text-white/70 line-clamp-2 mt-1">${item.description || ''}</p>
+          <p class="text-white/70 line-clamp-2 mt-1">${esc(item.description || '')}</p>
           <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
             <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
             <span>${timeAgo(item.createdAt)}</span>
