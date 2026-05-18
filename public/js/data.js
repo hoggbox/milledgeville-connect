@@ -712,17 +712,22 @@ const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   // Digest
+  // Digest — now clickable
   const digestHTML = `
     <div class="grid grid-cols-2 gap-3">
-      <div class="bg-white/15 rounded-2xl p-3">
+      <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
+           class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
         <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
         <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
       </div>
-      <div class="bg-white/15 rounded-2xl p-3">
+
+      <div onclick="${dealsData[0] ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')` : `navigate('deals')`}" 
+           class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
         <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
         <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
       </div>
     </div>`;
+
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
   // Spotlight — rendered by _renderSpotlight() called above after directory data loads
