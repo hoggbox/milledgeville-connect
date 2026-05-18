@@ -312,23 +312,23 @@ window.initGlobalSearch = function () {
     searchTimeout = setTimeout(async () => {
       const res = await apiGet(`/search?q=${encodeURIComponent(q)}`);
       if (!res.results || res.results.length === 0) {
-        resultsContainer.innerHTML = `<div class="p-4 text-white/60 text-sm">No results found for "${q}"</div>`;
+        resultsContainer.innerHTML = `<div class="p-4 text-white/60 text-sm">No results found for "${esc(q)}"</div>`;
         resultsContainer.classList.remove('hidden');
         return;
       }
 
-      let html = '';
-      res.results.forEach(item => {
-        html += `
-          <div onclick="handleSearchResultClick('${item.type}', '${item.id}')" 
-               class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-none">
-            <span class="text-2xl">${item.icon}</span>
-            <div class="flex-1 min-w-0">
-              <p class="font-medium text-white text-sm leading-tight">${item.title}</p>
-              <p class="text-white/60 text-xs line-clamp-1">${item.subtitle}</p>
-            </div>
-          </div>`;
-      });
+let html = '';
+res.results.forEach(item => {
+  html += `
+    <div onclick="handleSearchResultClick('${item.type}', '${item.id}')" 
+         class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-none">
+      <span class="text-2xl">${esc(item.icon || '')}</span>
+      <div class="flex-1 min-w-0">
+        <p class="font-medium text-white text-sm leading-tight">${esc(item.title || '')}</p>
+        <p class="text-white/60 text-xs line-clamp-1">${esc(item.subtitle || '')}</p>
+      </div>
+    </div>`;
+});
 
       resultsContainer.innerHTML = html;
       resultsContainer.classList.remove('hidden');
