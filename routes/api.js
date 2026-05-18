@@ -165,10 +165,14 @@ router.post('/reports', authenticate, async (req, res) => {
     const report = await Report.create({
       type,
       reporter: req.userId,
-      reportedUser: type === 'user' ? contentId : null,
-      reportedShoutout: type === 'shoutout' ? contentId : null,
-      reportedLostItem: type === 'lost' ? contentId : null,
-      reportedMarketItem: type === 'market' ? contentId : null,
+      reportedUser:       type === 'user'     ? contentId : null,
+      reportedShoutout:   type === 'shoutout' ? contentId : null,
+      reportedLostItem:   type === 'lost'     ? contentId : null,
+      reportedMarketItem: type === 'market'   ? contentId : null,
+      reportedEvent:      type === 'event'    ? contentId : null,
+      reportedDeal:       type === 'deal'     ? contentId : null,
+      reportedNews:       type === 'news'     ? contentId : null,
+      reportedComment:    type === 'comment'  ? contentId : null,
       snapshotText: extraInfo || '',
       reason: reason.trim(),
       status: 'pending'
@@ -176,7 +180,7 @@ router.post('/reports', authenticate, async (req, res) => {
 
     res.json({ 
       message: 'Report submitted. Our team will review it.',
-      reportId: report._id 
+      _id: report._id  // frontend checks for _id OR message substring
     });
   } catch (err) {
     console.error('Report creation error:', err);
@@ -2504,36 +2508,6 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
   }
 });
 
-// TEMP TEST - DELETE LATER
-router.post('/debug-push', authenticate, async (req, res) => {
-  try {
-    const sub = await PushSubscription.findOne({ user: req.userId });
-    
-    if (!sub || !sub.nativeToken) {
-      return res.json({ 
-        success: false, 
-        message: 'No native token found for this user',
-        hasToken: !!sub?.nativeToken 
-      });
-    }
-
-    console.log('Sending test push to token:', sub.nativeToken.substring(0, 20) + '...');
-
-    await admin.messaging().send({
-      token: sub.nativeToken,
-      notification: {
-        title: '🔥 Test Push',
-        body: 'This is a direct test from the server'
-      }
-    });
-
-    res.json({ success: true, message: 'Test push sent!' });
-  } catch (err) {
-    console.error('Debug push error:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // ─── STILL THERE — bump a shoutout to the top ─────────────────────────────────
 //   POST /api/shoutouts/:id/still-there
 //   • Each user can only vote once per shoutout
@@ -2648,6 +2622,16 @@ function sanitizeContent(fields = {}) {
   }
   return out;
 }
+
+
+// ─── APP VERSION ──────────────────────────────────────────────────────────────
+// Bump CURRENT_VERSION here on each release. The client's checkForAppUpdate()
+// compares against this — no client-side code deploy needed to show the banner.
+const CURRENT_VERSION = '1.2.5';
+
+router.get('/app/version', (req, res) => {
+  res.json({ latest: CURRENT_VERSION });
+});
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;

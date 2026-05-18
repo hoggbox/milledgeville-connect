@@ -34,13 +34,14 @@ function isAdmin() {
 
 // ─── Star Rating Helper ────────────────────────────────────────────────────────
 function renderStars(avg, count, interactive = false, businessId = '') {
-  const full = Math.round(avg);
+  const full = Math.floor(avg);
   if (interactive) {
     let html = `<div class="flex items-center gap-1" id="stars-${businessId}">`;
     for (let i = 1; i <= 5; i++) {
       html += `<button onclick="submitRating('${businessId}', ${i})" 
                        class="text-2xl transition hover:scale-125 star-btn" 
                        data-val="${i}"
+                       aria-label="${i} star${i !== 1 ? 's' : ''}"
                        style="color: ${i <= full ? '#f59e0b' : '#d1d5db'}">★</button>`;
     }
     html += `</div><p class="text-xs text-gray-400 mt-1">${count} rating${count !== 1 ? 's' : ''} · avg ${avg || '—'}</p>`;
@@ -54,22 +55,30 @@ function renderStars(avg, count, interactive = false, businessId = '') {
   }
 }
 
+const _ratingInFlight = new Set();
+
 window.submitRating = async function (businessId, score) {
   if (!requireAuth('sign in to rate businesses.')) return;
-  const res = await apiPost(`/business/${businessId}/rate`, { score });
-  if (res.avg !== undefined) {
-    const starsEl = document.getElementById(`stars-${businessId}`);
-    if (starsEl) {
-      starsEl.querySelectorAll('.star-btn').forEach(btn => {
-        btn.style.color = parseInt(btn.dataset.val) <= score ? '#f59e0b' : '#d1d5db';
-      });
-      const countEl = starsEl.nextElementSibling;
-      if (countEl) countEl.textContent = `${res.count} rating${res.count !== 1 ? 's' : ''} · avg ${res.avg}`;
+  if (_ratingInFlight.has(businessId)) return;
+  _ratingInFlight.add(businessId);
+  try {
+    const res = await apiPost(`/business/${businessId}/rate`, { score });
+    if (res.avg !== undefined) {
+      const starsEl = document.getElementById(`stars-${businessId}`);
+      if (starsEl) {
+        starsEl.querySelectorAll('.star-btn').forEach(btn => {
+          btn.style.color = parseInt(btn.dataset.val) <= score ? '#f59e0b' : '#d1d5db';
+        });
+        const countEl = starsEl.nextElementSibling;
+        if (countEl) countEl.textContent = `${res.count} rating${res.count !== 1 ? 's' : ''} · avg ${res.avg}`;
+      }
+      const cardStars = document.getElementById(`card-stars-${businessId}`);
+      if (cardStars) {
+        cardStars.innerHTML = renderStars(res.avg, res.count);
+      }
     }
-    const cardStars = document.getElementById(`card-stars-${businessId}`);
-    if (cardStars) {
-      cardStars.innerHTML = renderStars(res.avg, res.count);
-    }
+  } finally {
+    _ratingInFlight.delete(businessId);
   }
 };
 
@@ -156,6 +165,7 @@ function guestBanner(action) {
 // ─── Time helper ──────────────────────────────────────────────────────────────
 function timeAgo(date) {
   const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
+  if (seconds <= 0) return 'just now';
   if (seconds < 60) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -278,15 +288,12 @@ window.downloadUpdate = function() {
 
 async function checkForAppUpdate() {
   try {
-    const latestVersion = "1.2.5";   // ← Change this when you release a new version
-
-    if (latestVersion !== CURRENT_APP_VERSION) {
-      setTimeout(() => {
-        showUpdateBanner(latestVersion);
-      }, 1500);
+    const data = await apiGet('/app/version');
+    if (data && data.latest && data.latest !== CURRENT_APP_VERSION) {
+      setTimeout(() => showUpdateBanner(data.latest), 1500);
     }
   } catch (e) {
-    // Update check failed silently — not critical
+    // Update check is non-critical — fail silently
   }
 }
 
@@ -312,8 +319,10 @@ async function compressImage(file, maxWidth = 1200, quality = 0.75) {
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-        }, 'image/jpeg', quality);
+          const isPng = file.type === 'image/png';
+          const outputType = isPng ? 'image/png' : 'image/jpeg';
+          resolve(new File([blob], file.name, { type: outputType }));
+        }, file.type === 'image/png' ? 'image/png' : 'image/jpeg', file.type === 'image/png' ? undefined : quality);
       };
       img.src = e.target.result;
     };
@@ -353,19 +362,14 @@ async function updateMessageBadge() {
 async function markConversationAsRead(otherId) {
   if (!currentUser || !currentUser._id || !otherId) return;
 
-  // ── Instant optimistic update ──────────────────────────────────────────────
-  // Decrement the in-memory counter for this conversation immediately so the
-  // badge disappears without waiting for a server round-trip.
-  // We'll correct the count with a real fetch after the server call.
-  _setBadge(0); // safest: zero it instantly; server confirms shortly after
-
   try {
     await apiPost('/messages/mark-as-read', { otherId });
   } catch (e) {
-    console.warn('⚠️ Backend mark-as-read failed (endpoint missing?) — using optimistic update');
+    console.warn('⚠️ Backend mark-as-read failed (endpoint missing?) — badge may be stale');
   }
 
-  // Badge already zeroed — messages are now marked read on the server
+  // Re-fetch the true unread count so other unread threads stay reflected in the badge
+  updateMessageBadge();
 }
 
 // markMessagesAsRead is defined below (near the messages system) to avoid duplication
@@ -405,6 +409,7 @@ async function loadPage(page) {
   if (page === 'marketplace')     { await loadMarketplacePage(content);   return; }   // ← NEW
   if (page === 'events')          { await loadEventsPage(content);           return; }
   if (page === 'deals')           { await loadDealsPage(content);            return; }
+  if (page === 'news')            { await loadNewsPage(content);          return; }
   if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
   if (page === 'resources')       { await loadResourcesPage(content);     return; }
 }
@@ -463,14 +468,33 @@ res.results.forEach(item => {
 
 window.handleSearchResultClick = function (type, id) {
   const resultsContainer = document.getElementById('globalSearchResults');
-  resultsContainer.classList.add('hidden');
-  document.getElementById('globalSearchInput').value = '';
+  if (resultsContainer) resultsContainer.classList.add('hidden');
+  const input = document.getElementById('globalSearchInput');
+  if (input) input.value = '';
 
-  if (type === 'business') loadDirectoryAndOpen(id);
-  else if (type === 'event') navigate('events');
-  else if (type === 'deal') navigate('deals');
-  else if (type === 'news') openNewsArticle(id);
-  else if (type === 'shoutout') navigate('shoutouts');
+  if (type === 'business') {
+    loadDirectoryAndOpen(id);
+  } else if (type === 'event') {
+    navigate('events');
+    setTimeout(() => showEventDetail(id), 600);
+  } else if (type === 'deal') {
+    navigate('deals');
+    setTimeout(() => showDealDetail(id), 600);
+  } else if (type === 'news') {
+    openNewsArticle(id);
+  } else if (type === 'shoutout') {
+    navigate('shoutouts');
+    setTimeout(() => {
+      const el = document.getElementById(`shoutout-${id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 600);
+  } else if (type === 'market') {
+    navigate('marketplace');
+    setTimeout(() => showMarketplaceDetail(id), 600);
+  } else if (type === 'lost') {
+    navigate('lostfound');
+    setTimeout(() => showLostDetail(id), 600);
+  }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1011,6 +1035,54 @@ window.openImageViewer = function (articleId, startIndex) {
 
   render();
 };
+
+
+// ─── NEWS PAGE ────────────────────────────────────────────────────────────────
+async function loadNewsPage(content) {
+  content.innerHTML = `
+    <div class="max-w-2xl mx-auto px-2 pb-8">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-3xl md:text-4xl font-bold">📰 News</h2>
+        ${isAdmin() || (currentUser && currentUser.canPostNews)
+          ? `<button onclick="navigate('post-news')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl text-sm font-semibold transition">+ Post Article</button>`
+          : ''}
+      </div>
+      <div id="newsFeedList" class="space-y-4">
+        ${[1,2,3].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
+      </div>
+    </div>`;
+
+  try {
+    const articles = await apiGet('/news');
+    const container = document.getElementById('newsFeedList');
+    if (!container) return;
+
+    if (!articles || articles.length === 0) {
+      container.innerHTML = `<p class="text-white/40 text-center py-16">No news articles yet.</p>`;
+      return;
+    }
+
+    container.innerHTML = articles.map(n => `
+      <div onclick="openNewsArticle('${n._id}')"
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        ${n.images?.[0]
+          ? `<img src="${n.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">`
+          : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">📰</div>`}
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold leading-tight line-clamp-2">${esc(n.title)}</p>
+          <p class="text-white/60 text-sm mt-1 line-clamp-2">${esc(n.summary || '')}</p>
+          <div class="flex items-center gap-2 mt-3 text-xs text-white/40">
+            <span>${n.authorName || 'Staff'}</span>
+            <span>·</span>
+            <span>${timeAgo(n.createdAt)}</span>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    const container = document.getElementById('newsFeedList');
+    if (container) container.innerHTML = `<p class="text-white/40 text-center py-12">Failed to load news.</p>`;
+  }
+}
 
 // ─── POST NEWS PAGE ───────────────────────────────────────────────────────────
 async function loadPostNewsPage(content) {
@@ -6132,23 +6204,31 @@ window.showOnboardingTour = function() {
 };
 
 window.nextOnboardingSlide = function() {
-  const slide1 = document.getElementById('slide1');
-  const slide2 = document.getElementById('slide2');
-  const slide3 = document.getElementById('slide3');
+  const slide1  = document.getElementById('slide1');
+  const slide2  = document.getElementById('slide2');
+  const slide3  = document.getElementById('slide3');
   const nextBtn = document.getElementById('tourNextBtn');
+  const dots    = document.querySelectorAll('#onboardingTour .w-2.h-2');
+
+  function setDot(activeIndex) {
+    dots.forEach((d, i) => {
+      d.classList.toggle('bg-emerald-500', i === activeIndex);
+      d.classList.toggle('bg-white/30',   i !== activeIndex);
+    });
+  }
 
   if (window.currentTourSlide === 1) {
     slide1.classList.add('hidden');
     slide2.classList.remove('hidden');
+    setDot(1);
     window.currentTourSlide = 2;
-  } 
-  else if (window.currentTourSlide === 2) {
+  } else if (window.currentTourSlide === 2) {
     slide2.classList.add('hidden');
     slide3.classList.remove('hidden');
+    setDot(2);
     nextBtn.textContent = "Get Started";
     window.currentTourSlide = 3;
-  } 
-  else if (window.currentTourSlide === 3) {
+  } else if (window.currentTourSlide === 3) {
     finishOnboarding();
   }
 };
@@ -6178,8 +6258,6 @@ window.reportContent = async function (type, id, extraInfo = '') {
   }
 
   try {
-    console.log(`[Report] Sending:`, { type, contentId: id, reason: reason.trim() });
-
     const res = await apiPost('/reports', {
       type: type,
       contentId: id,
@@ -6187,16 +6265,13 @@ window.reportContent = async function (type, id, extraInfo = '') {
       extraInfo: extraInfo || ''
     });
 
-    console.log('[Report] Server response:', res);
-
     if (res && (res.message?.includes('Report submitted') || res._id)) {
       showToast('🚩 Report sent to admin team. Thank you.', 'success');
     } else {
       showToast(res?.message || 'Failed to send report', 'error');
     }
   } catch (e) {
-    console.error('Report error:', e);
-    showToast('Could not send report — check console', 'error');
+    showToast('Could not send report — try again later', 'error');
   }
 };
 
@@ -6214,14 +6289,22 @@ window.viewReportedContent = async function (type, id) {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       else showToast('Shoutout may have been deleted', 'error');
     }, 800);
-  } 
-  else if (type === 'lost') {
+  } else if (type === 'lost') {
     navigate('lostfound');
-    setTimeout(() => showLostItemDetail(id), 800);
-  } 
-  else if (type === 'market') {
+    setTimeout(() => showLostDetail(id), 800);
+  } else if (type === 'market') {
     navigate('marketplace');
     setTimeout(() => showMarketplaceDetail(id), 800);
+  } else if (type === 'event') {
+    navigate('events');
+    setTimeout(() => showEventDetail(id), 800);
+  } else if (type === 'deal') {
+    navigate('deals');
+    setTimeout(() => showDealDetail(id), 800);
+  } else if (type === 'news') {
+    openNewsArticle(id);
+  } else if (type === 'comment') {
+    showToast('Navigate to the content section to find this comment', 'success');
   }
 };
 
