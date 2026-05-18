@@ -1386,7 +1386,14 @@ router.post('/auth/register', async (req, res) => {
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) return res.status(400).json({ message: 'Email already in use' });
-    const user  = await User.create({ name, email, password });
+
+    const registrationIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
+
+    // Check if this IP is banned
+    const ipBanned = await User.findOne({ isIpBanned: true, registrationIp });
+    if (ipBanned) return res.status(403).json({ message: 'Registration not allowed.' });
+
+    const user  = await User.create({ name, email, password, registrationIp });
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     const u = sanitizeUser(user);
     u.isAdmin = ADMIN_EMAILS.has(user.email);
@@ -1404,6 +1411,18 @@ router.post('/auth/login', async (req, res) => {
 
     const match = await user.comparePassword(password);
     if (!match) return res.status(400).json({ message: 'Invalid email or password' });
+
+    // IP ban check
+    if (user.isIpBanned) return res.status(403).json({ message: 'Account suspended.' });
+
+    const loginIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
+
+    // Record login IP (keep last 20 unique entries, newest first)
+    const existingIps = user.loginIps || [];
+    const alreadyLogged = existingIps.some(e => e.ip === loginIp);
+    if (!alreadyLogged) {
+      user.loginIps = [{ ip: loginIp, at: new Date() }, ...existingIps].slice(0, 20);
+    }
 
     user.lastLogin = new Date();
     await user.save();
@@ -2213,7 +2232,7 @@ router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) =
 router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
   try {
     const users = await User.find()
-      .select('name email reputation joinedAt isModerator verifiedBusiness')
+      .select('name email reputation joinedAt isModerator verifiedBusiness registrationIp loginIps isIpBanned')
       .populate('verifiedBusiness', 'name')
       .sort({ joinedAt: -1 });
     
@@ -2274,6 +2293,21 @@ router.delete('/admin/users/:id', authenticate, requireAdmin, async (req, res) =
       return res.status(403).json({ message: 'Cannot delete admin account' });
     await user.deleteOne();
     res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/users/:id/ip-ban', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { isIpBanned } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.email === 'imhoggbox@gmail.com')
+      return res.status(400).json({ message: 'Admin account cannot be IP banned' });
+    user.isIpBanned = !!isIpBanned;
+    await user.save();
+    res.json({ success: true, isIpBanned: user.isIpBanned });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

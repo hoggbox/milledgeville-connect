@@ -5388,6 +5388,15 @@ function renderUsersTable(users) {
           ${u.isModerator ? `<div class="mt-1"><span class="inline-flex items-center gap-1 bg-purple-500/20 text-purple-400 text-xs font-semibold px-2.5 py-1 rounded-full">👮 Mod</span></div>` : ''}
         </div>
       </div>
+      ${(u.registrationIp || (u.loginIps && u.loginIps.length)) ? `
+      <div class="mt-2 px-1 space-y-1">
+        ${u.registrationIp ? `<div class="text-white/40 text-xs">🌐 Registered from: <span class="text-white/60 font-mono">${u.registrationIp}</span></div>` : ''}
+        ${u.loginIps && u.loginIps.length ? `
+          <div class="text-white/40 text-xs">🔑 Login IPs:
+            <span class="text-white/60 font-mono">${[...new Set(u.loginIps.map(e => e.ip))].slice(-5).join(', ')}</span>
+          </div>` : ''}
+        ${u.isIpBanned ? `<div class="text-red-400 text-xs font-semibold">🚫 IP Banned</div>` : ''}
+      </div>` : ``}
       <div class="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-2">
         <button onclick="adminEditReputation('${u._id}')" 
                 class="flex-1 min-w-[80px] px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition">
@@ -5397,7 +5406,11 @@ function renderUsersTable(users) {
                 class="flex-1 min-w-[80px] px-3 py-2 ${u.isModerator ? 'bg-purple-500/30 text-purple-300' : 'bg-white/10 hover:bg-white/20 text-white/70'} text-xs font-semibold rounded-xl transition">
           👮 ${u.isModerator ? 'Remove Mod' : 'Make Mod'}
         </button>
-        <button onclick="adminDeleteUser('${u._id}', '${u.name.replace(/'/g,"\\'")}') " 
+        <button onclick="adminIpBanUser('${u._id}', ${!!u.isIpBanned})"
+                class="flex-1 min-w-[80px] px-3 py-2 ${u.isIpBanned ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-400'} text-xs font-semibold rounded-xl transition">
+          🚫 ${u.isIpBanned ? 'Unban IP' : 'IP Ban'}
+        </button>
+        <button onclick="adminDeleteUser('${u._id}', '${(u.name || '').replace(/'/g,"\\\\'")}')"
                 class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold rounded-xl transition">
           🗑️ Delete
         </button>
@@ -5426,6 +5439,18 @@ window.adminDeleteUser = async function(userId, userName) {
     renderAdminUsers();
   } else {
     showToast('Failed to delete user', 'error');
+  }
+};
+
+window.adminIpBanUser = async function(userId, currentlyBanned) {
+  const action = currentlyBanned ? 'lift the IP ban on' : 'IP ban';
+  if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+  const res = await apiPost(`/admin/users/${userId}/ip-ban`, { isIpBanned: !currentlyBanned });
+  if (res.success !== undefined) {
+    showToast(res.isIpBanned ? '🚫 IP ban applied' : 'IP ban lifted', 'success');
+    renderAdminUsers();
+  } else {
+    showToast(res.message || 'Failed to update IP ban', 'error');
   }
 };
 
