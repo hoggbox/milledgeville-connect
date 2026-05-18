@@ -1358,22 +1358,41 @@ function getOpenStatus(hoursStr) {
   }
 }
 
+const DIR_PAGE_SIZE = 8;
+window._dirFiltered = [];
+window._dirPage = 1;
+
 function renderDirectory(businesses) {
+  // Store the full filtered set and reset to page 1 on every new render call
+  window._dirFiltered = businesses || [];
+  window._dirPage = 1;
+  _renderDirectoryPage();
+}
+
+function _renderDirectoryPage() {
   const container = document.getElementById('directoryResults');
   if (!container) return;
 
-  if (!businesses || businesses.length === 0) {
-    container.innerHTML = `<p class="text-center text-white/50 py-12">No businesses found</p>`;
+  const all       = window._dirFiltered;
+  const page      = window._dirPage;
+  const total     = all.length;
+  const totalPages = Math.ceil(total / DIR_PAGE_SIZE) || 1;
+  const slice     = all.slice((page - 1) * DIR_PAGE_SIZE, page * DIR_PAGE_SIZE);
+
+  if (!slice.length) {
+    container.innerHTML = `
+      <p class="text-center text-white/50 py-12">No businesses found</p>
+      <div id="dirPagination"></div>`;
     return;
   }
 
-    let html = '<div class="space-y-4">';
-  businesses.forEach(b => {
+  let html = '<div class="space-y-4">';
+  slice.forEach(b => {
     html += `
-      <div onclick="showBusinessDetail('${b._id}')" 
+      <div onclick="showBusinessDetail('${b._id}')"
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
-        ${b.logo 
-          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
+        ${b.logo
+          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">`
           : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
@@ -1384,8 +1403,32 @@ function renderDirectory(businesses) {
       </div>`;
   });
   html += '</div>';
+
+  // Pagination bar
+  html += `<div id="dirPagination" class="flex justify-center gap-3 mt-8">`;
+  if (totalPages > 1) {
+    html += `
+      <button onclick="changeDirPage(${Math.max(1, page - 1)})"
+              class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${page <= 1 ? 'opacity-40 pointer-events-none' : ''}">
+        ← Prev
+      </button>
+      <span class="px-6 py-3 text-white/70">Page ${page} of ${totalPages}</span>
+      <button onclick="changeDirPage(${Math.min(totalPages, page + 1)})"
+              class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${page >= totalPages ? 'opacity-40 pointer-events-none' : ''}">
+        Next →
+      </button>`;
+  }
+  html += `</div>`;
+
   container.innerHTML = html;
 }
+
+window.changeDirPage = function(page) {
+  window._dirPage = page;
+  _renderDirectoryPage();
+  // Scroll back to top of results
+  document.getElementById('directoryResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 function filterDirectory() {
   const searchTerm = (document.getElementById('directorySearch')?.value || '').toLowerCase();
@@ -2696,8 +2739,11 @@ async function loadEventsPage(content) {
       <div id="eventResults"></div>
     </div>`;
 
+  window._eventPage = 1;
   renderEventsFiltered();
 }
+
+const EVENTS_PAGE_SIZE = 8;
 
 window.renderEventsFiltered = function () {
   const search    = (window._eventSearch || '').toLowerCase();
@@ -2716,14 +2762,14 @@ window.renderEventsFiltered = function () {
   const chips = document.getElementById('eventChips');
   if (chips) {
     chips.innerHTML = `
-      <button onclick="window._eventFilter='All'; renderEventsFiltered()"
+      <button onclick="window._eventFilter='All'; window._eventPage=1; renderEventsFiltered()"
               class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
         All
       </button>
       ${activeCats.map(cat => {
         const safe = cat.name.replace(/'/g, "\\'");
         return `
-        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered()"
+        <button onclick="window._eventFilter='${safe}'; window._eventPage=1; renderEventsFiltered()"
                 class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === cat.name ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
           <span>${cat.icon}</span><span>${cat.name}</span>
         </button>`;
@@ -2758,19 +2804,26 @@ let events = allEvents.filter(e => {
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">📅</p>
         <p class="text-white/50 text-sm">${msg}</p>
-        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All'; window._eventPage=1; renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
       </div>`;
     return;
   }
 
+  // Pagination
+  const page       = window._eventPage || 1;
+  const total      = events.length;
+  const totalPages = Math.ceil(total / EVENTS_PAGE_SIZE) || 1;
+  const pageEvents = events.slice((page - 1) * EVENTS_PAGE_SIZE, page * EVENTS_PAGE_SIZE);
+
+  let html = '';
   if (time !== 'past') {
     const grouped = {};
-    events.forEach(e => {
+    pageEvents.forEach(e => {
       const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(e);
     });
-    container.innerHTML = Object.entries(grouped).map(([month, mes]) => `
+    html = Object.entries(grouped).map(([month, mes]) => `
       <div class="mb-6">
         <div class="flex items-center gap-3 mb-3">
           <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">${month}</span>
@@ -2779,9 +2832,33 @@ let events = allEvents.filter(e => {
         <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
       </div>`).join('');
   } else {
-    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
+    html = `<div class="space-y-3">${pageEvents.map(e => renderEventCard(e, now)).join('')}</div>`;
   }
+
+  // Pagination bar
+  if (totalPages > 1) {
+    html += `
+      <div class="flex justify-center gap-3 mt-8">
+        <button onclick="changeEventPage(${Math.max(1, page - 1)})"
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${page <= 1 ? 'opacity-40 pointer-events-none' : ''}">
+          ← Prev
+        </button>
+        <span class="px-6 py-3 text-white/70">Page ${page} of ${totalPages}</span>
+        <button onclick="changeEventPage(${Math.min(totalPages, page + 1)})"
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${page >= totalPages ? 'opacity-40 pointer-events-none' : ''}">
+          Next →
+        </button>
+      </div>`;
+  }
+
+  container.innerHTML = html;
 }
+
+window.changeEventPage = function(page) {
+  window._eventPage = page;
+  renderEventsFiltered();
+  document.getElementById('eventResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 function renderEventCard(e, now) {
   const eDate   = new Date(e.date);
