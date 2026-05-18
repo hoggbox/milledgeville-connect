@@ -5375,12 +5375,12 @@ function renderUsersTable(users) {
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
           <div class="w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-            ${u.name[0].toUpperCase()}
+            ${(u.name || '?')[0].toUpperCase()}
           </div>
           <div class="min-w-0">
-            <div class="font-semibold truncate">${u.name}</div>
-            <div class="text-white/50 text-xs truncate">${u.email}</div>
-            <div class="text-white/40 text-xs mt-0.5">Joined ${new Date(u.joinedAt).toLocaleDateString()}</div>
+            <div class="font-semibold truncate">${u.name || '(no name)'}</div>
+            <div class="text-white/50 text-xs truncate">${u.email || '(no email)'}</div>
+            <div class="text-white/40 text-xs mt-0.5">Joined ${u.joinedAt ? new Date(u.joinedAt).toLocaleDateString() : 'Unknown'}</div>
           </div>
         </div>
         <div class="flex-shrink-0 text-right">

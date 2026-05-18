@@ -2213,7 +2213,7 @@ router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) =
 router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
   try {
     const users = await User.find()
-      .select('name email reputation joinedAt verifiedBusiness')
+      .select('name email reputation joinedAt isModerator verifiedBusiness')
       .populate('verifiedBusiness', 'name')
       .sort({ joinedAt: -1 });
     
@@ -2236,7 +2236,7 @@ router.patch('/admin/users/:id/news-access', authenticate, requireAdmin, async (
   }
 });
 
-router.patch('/admin/users/:id/moderator', authenticate, requireAdmin, async (req, res) => {
+router.post('/admin/users/:id/moderator', authenticate, requireAdmin, async (req, res) => {
   try {
     const { isModerator } = req.body;
     const user = await User.findById(req.params.id);
