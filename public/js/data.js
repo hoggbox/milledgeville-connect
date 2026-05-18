@@ -5575,10 +5575,10 @@ window.showAddBusinessModal = async function() {
   const existing = document.getElementById('addBusinessModal');
   if (existing) existing.remove();
 
-  let categoryOptions = `<option value="">— Select Category —</option>`;
+  let categoryOptions = `<option value="" class="bg-[#1a2332] text-white">— Select Category —</option>`;
   if (window._dirCategories.length) {
     categoryOptions += window._dirCategories.map(cat => `
-      <option value="${cat._id}">${cat.icon} ${cat.name}</option>
+      <option value="${cat._id}" class="bg-[#1a2332] text-white">${cat.icon} ${cat.name}</option>
     `).join('');
   }
 
@@ -5603,11 +5603,12 @@ window.showAddBusinessModal = async function() {
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Category *</label>
             <select id="abCategory" 
-                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-400 appearance-none">
+                    class="mt-1 w-full bg-[#1a2332] border border-white/20 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-400 appearance-none">
               ${categoryOptions}
             </select>
           </div>
 
+          <!-- Rest of your form fields stay exactly the same -->
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Address</label>
             <input id="abAddress" type="text" placeholder="123 Main St, Milledgeville"
