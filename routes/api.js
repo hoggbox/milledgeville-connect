@@ -722,7 +722,7 @@ router.post('/messages', authenticate, async (req, res) => {
       receiverId,
       `💬 New message from ${sender.name}`,
       text.substring(0, 80) + (text.length > 80 ? '...' : ''),
-      { page: 'messages' }
+      { page: 'messages', id: req.userId, url: `/messages/${req.userId}` }
     );
 
     res.json(message);
@@ -1002,12 +1002,16 @@ router.post('/lostitems', authenticate, async (req, res) => {
       authorName: user.name
     });
 
-    broadcastPush(
-      isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
-      `${user.name} posted: ${title}`,
-      { page: 'lostfound' },
-      { notifyShoutouts: true }
-    );
+broadcastPush(
+  isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
+  `${user.name} posted: ${title}`,
+  { 
+    page: 'lostfound', 
+    id: item._id.toString(),
+    url: `/lostfound/${item._id}`
+  },
+  { notifyLostFound: true }
+);
 
     res.json(item);
   } catch (err) {
@@ -1031,12 +1035,16 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
 
     if (lost.owner && lost.owner.toString() !== req.userId) {
       const commentText = (req.body.text || '').trim();
-      sendPushToUser(
-        lost.owner,
-        '💬 New comment on your lost item',
-        `${user.name}: ${commentText.substring(0, 60)}`,
-        { page: 'lostfound' }
-      );
+sendPushToUser(
+  lost.owner,
+  '💬 New comment on your lost item',
+  `${user.name}: ${commentText.substring(0, 60)}`,
+  { 
+    page: 'lostfound', 
+    id: lost._id.toString(),
+    url: `/lostfound/${lost._id}`
+  }
+);
     }
     res.json(lost.comments[lost.comments.length - 1]);
   } catch (err) {
@@ -1124,8 +1132,8 @@ router.post('/marketplace', authenticate, async (req, res) => {
     broadcastPush(
       '🛒 New Marketplace Listing',
       `${user.name} listed: ${title} - $${price}`,
-      { page: 'marketplace' },
-      { notifyShoutouts: true }
+      { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
+      { notifyMarketplace: true }
     );
 
     res.json(item);
@@ -1150,12 +1158,16 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
 
     if (item.seller && item.seller.toString() !== req.userId) {
       const commentText = (req.body.text || '').trim();
-      sendPushToUser(
-        item.seller,
-        '💬 New message on your listing',
-        `${user.name}: ${commentText.substring(0, 60)}`,
-        { page: 'marketplace' }
-      );
+sendPushToUser(
+  item.seller,
+  '💬 New message on your listing',
+  `${user.name}: ${commentText.substring(0, 60)}`,
+  { 
+    page: 'marketplace', 
+    id: item._id.toString(),
+    url: `/marketplace/${item._id}`
+  }
+);
     }
     res.json(item.comments[item.comments.length - 1]);
   } catch (err) {
@@ -1801,7 +1813,7 @@ router.post('/news', authenticate, async (req, res) => {
     broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
-      { page: 'news' }
+      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` }
     );
 
     res.json(article);
@@ -2025,12 +2037,16 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-    broadcastPush(
-      '🔥 New Deal Available!',
-      title,
-      { page: 'deals' },
-      { notifyDeals: true }
-    );
+broadcastPush(
+  '🔥 New Deal Available!',
+  title,
+  { 
+    page: 'deals', 
+    id: deal._id.toString(),
+    url: `/deals/${deal._id}`
+  },
+  { notifyDeals: true }
+);
 
     res.json(deal);
   } catch (err) {
@@ -2073,11 +2089,15 @@ router.post('/owner/events', authenticate, async (req, res) => {
     });
 
     broadcastPush(
-      '📅 New Event Posted!',
-      title + (location ? ` · ${location}` : ''),
-      { page: 'events' },
-      { notifyEvents: true }
-    );
+    '📅 New Event Posted!',
+    title + (location ? ` · ${location}` : ''),
+    { 
+    page: 'events', 
+    id: event._id.toString(),
+    url: `/events/${event._id}`
+    },
+    { notifyEvents: true }
+);
 
     res.json(event);
   } catch (err) {

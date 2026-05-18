@@ -12,17 +12,25 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let data = {};
-  try { data = event.data.json(); } catch (e) { data = { title: 'Milledgeville Connect', body: event.data.text() }; }
+  let payload = {};
+  try { payload = event.data.json(); } catch (e) { payload = { title: 'Milledgeville Connect', body: event.data.text() }; }
 
-  const title   = data.title || 'Milledgeville Connect';
+  const title = payload.title || 'Milledgeville Connect';
+  const body  = payload.body  || 'You have a new notification';
+
+  // Support both shapes:
+  //   Web push:  { title, body, data: { page, id, url } }
+  //   FCM data:  { title, body, page, id, url }           (rare on web, but safe to handle)
+  const meta = payload.data || payload;
+  const deepUrl = meta.url || (meta.page ? `/${meta.page}${meta.id ? '/' + meta.id : ''}` : '/');
+
   const options = {
-    body:   data.body  || 'You have a new notification',
+    body,
     icon:   '/icon-192.png',
     badge:  '/icon-192.png',
-    data:   { url: data.url || '/' },
+    data:   { url: deepUrl, page: meta.page || '', id: meta.id || '' },
     vibrate: [100, 50, 100],
-    tag:    data.tag || 'mc-notification',
+    tag:    payload.tag || meta.tag || 'mc-notification',
     renotify: true
   };
 
@@ -32,21 +40,23 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  // Use the deep-link URL if provided (e.g. /shoutouts/abc123),
-  // otherwise fall back to the root of the app.
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  const notifData = event.notification.data || {};
+  // Prefer explicit url; fall back to constructing from page/id
+  const url = notifData.url
+    || (notifData.page ? `/${notifData.page}${notifData.id ? '/' + notifData.id : ''}` : '/');
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // If there's already an open tab, navigate it to the right URL instead of
-      // just focusing it on whatever page it happens to be on.
       for (const client of windowClients) {
-        if ('navigate' in client) {
-          client.navigate(url);
+        // If the app is already open, post a message so it can deep-link in-place
+        // without a full page reload (avoids losing app state).
+        if ('postMessage' in client) {
+          client.postMessage({ type: 'PUSH_NOTIFICATION_CLICK', data: notifData });
           return client.focus();
         }
         if ('focus' in client) return client.focus();
       }
+      // No open tab — open the app at the deep-link URL
       if (clients.openWindow) return clients.openWindow(url);
     })
   );

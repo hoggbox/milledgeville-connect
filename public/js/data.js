@@ -73,6 +73,62 @@ window.submitRating = async function (businessId, score) {
   }
 };
 
+// ─── HANDLE PUSH NOTIFICATION DEEP LINK ─────────────────────────────────────
+window.handlePushNotificationClick = function(data) {
+  if (!data?.page) {
+    navigate('home');
+    return;
+  }
+
+  const { page, id } = data;
+
+  if (page === 'shoutouts') {
+    navigate('shoutouts');
+    if (id) setTimeout(() => {
+      const el = document.getElementById(`shoutout-${id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 600);
+  } 
+  else if (page === 'events' && id) {
+    navigate('events');
+    setTimeout(() => showEventDetail(id), 600);
+  } 
+  else if (page === 'deals' && id) {
+    navigate('deals');
+    setTimeout(() => showDealDetail(id), 600);
+  } 
+  else if (page === 'marketplace' && id) {
+    navigate('marketplace');
+    setTimeout(() => showMarketplaceDetail(id), 600);
+  } 
+  else if (page === 'lostfound' && id) {
+    navigate('lostfound');
+    setTimeout(() => showLostDetail(id), 600);
+  }
+  else if (page === 'messages' && id) {
+    navigate('messages');
+    setTimeout(() => openConversation(id), 600);
+  }
+  else if (page === 'news' && id) {
+    navigate('news');
+    setTimeout(() => showNewsDetail(id), 600);
+  }
+  else {
+    navigate(page);
+  }
+};
+
+// ─── Service Worker → App message bridge ────────────────────────────────────
+// When the SW receives a notification click and the app is already open,
+// it posts a message instead of doing a hard navigate so we can deep-link in-place.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'PUSH_NOTIFICATION_CLICK') {
+      window.handlePushNotificationClick(event.data.data);
+    }
+  });
+}
+
 // ─── Guest auth nudge banner ──────────────────────────────────────────────────
 function guestBanner(action) {
   return `
@@ -5189,6 +5245,35 @@ window.showDealDetail = async function(dealId) {
     </div>`;
 
   document.body.insertAdjacentHTML('beforeend', modalHTML);
+};
+
+// ─── LOST & FOUND DETAIL ─────────────────────────────────────────────────────
+window.showLostDetail = async function(id) {
+  try {
+    const res = await apiGet('/lostitems');
+    const items = res.items || res;
+    const item = Array.isArray(items) 
+      ? items.find(i => String(i._id) === String(id))
+      : null;
+
+    if (!item) {
+      showToast('Lost item not found', 'error');
+      return;
+    }
+
+    // TODO: Replace this with your real Lost & Found detail modal
+    // For now it navigates + shows a toast (you can improve later)
+    navigate('lostfound');
+    
+    setTimeout(() => {
+      showToast(`📍 Opened: ${item.title}`, 'success');
+      // Example: If you create showLostItemModal(item) later, call it here
+    }, 700);
+
+  } catch (e) {
+    console.error(e);
+    showToast('Could not open lost item', 'error');
+  }
 };
 
 // ─── ADMIN DASHBOARD (Tab 0) ─────────────────────────────────────────────────
