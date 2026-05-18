@@ -296,7 +296,7 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
       </div>
     </div>` : ''}
 
-    ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${currentUser.bio}"</p>` : ''}
+    ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
     ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
 
     <div class="mt-6 grid grid-cols-3 gap-3">
@@ -754,7 +754,7 @@ window.showUserProfileModal = async function (userId) {
               </div>
             </div>
 
-            ${user.bio ? `<p class="text-center text-slate-600 italic mb-6">"${user.bio}"</p>` : ''}
+            ${user.bio ? `<p class="text-center text-slate-600 italic mb-6">"${escHtml(user.bio)}"</p>` : ''}
 
             ${user.neighborhood ? `
             <div class="text-center text-slate-500 mb-6">
