@@ -1,56 +1,43 @@
 // models/Report.js
-// Handles both "report a user" (from profile) and "flag a post" (from shoutout/alert)
-
 const mongoose = require('mongoose');
 
 const reportSchema = new mongoose.Schema({
-  // ─── What kind of report is this? ─────────────────────────────────────────
   type: {
     type: String,
-    enum: ['user', 'shoutout'],
+    enum: ['user', 'shoutout', 'lost', 'market', 'comment'],   // ← Added new types
     required: true
   },
 
-  // ─── Who filed the report ──────────────────────────────────────────────────
   reporter: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
 
-  // ─── The user being reported (for type === 'user') ─────────────────────────
-  reportedUser: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
-  },
+  // References
+  reportedUser:      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reportedShoutout:  { type: mongoose.Schema.Types.ObjectId, ref: 'Shoutout' },
+  reportedLostItem:  { type: mongoose.Schema.Types.ObjectId, ref: 'LostItem' },
+  reportedMarketItem:{ type: mongoose.Schema.Types.ObjectId, ref: 'MarketplaceItem' },
+  reportedComment:   { type: mongoose.Schema.Types.ObjectId },
 
-  // ─── The shoutout being flagged (for type === 'shoutout') ──────────────────
-  reportedShoutout: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Shoutout',
-    default: null
-  },
-
-  // ─── Snapshot of content at time of report ────────────────────────────────
   snapshotText: { type: String, default: '' },
-
-  reason: { type: String, default: '' },
-
-  // ─── Admin workflow ────────────────────────────────────────────────────────
+  reason:       { type: String, required: true },
+  
   status: {
     type: String,
     enum: ['pending', 'reviewed', 'dismissed'],
     default: 'pending'
   },
-
   adminNote: { type: String, default: '' },
 
   createdAt: { type: Date, default: Date.now }
 });
 
-// Compound index so we can quickly enforce one-flag-per-user-per-shoutout
+// Indexes for performance + duplicate prevention
 reportSchema.index({ reporter: 1, reportedShoutout: 1 }, { sparse: true });
-reportSchema.index({ reporter: 1, reportedUser: 1 },    { sparse: true });
+reportSchema.index({ reporter: 1, reportedLostItem: 1 }, { sparse: true });
+reportSchema.index({ reporter: 1, reportedMarketItem: 1 }, { sparse: true });
+reportSchema.index({ reporter: 1, reportedUser: 1 }, { sparse: true });
 
 module.exports = mongoose.model('Report', reportSchema);
