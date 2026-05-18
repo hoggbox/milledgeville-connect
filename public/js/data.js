@@ -4329,6 +4329,9 @@ window.markMarketSold = async function() {
   }
 };
 
+// In-memory cache for lost & found items (avoids re-fetching on every search/filter)
+let _allLostItems = [];
+
 async function loadLostFoundPage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2">
@@ -4353,7 +4356,9 @@ async function loadLostFoundPage(content) {
 </select>
       </div>
 
-      <div id="lostItemsList" class="space-y-4"></div>
+      <div id="lostItemsList" class="space-y-4">
+        ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
+      </div>
       <div id="lostPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
@@ -4361,27 +4366,35 @@ async function loadLostFoundPage(content) {
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
 
-  // Live search
+  // Fetch all items once and cache them — search/filter then runs instantly in-memory
+  _allLostItems = [];
+  try {
+    // Fetch up to 100 items in one shot so search/filter work client-side without extra requests
+    const res = await apiGet('/lostitems?page=1&limit=100');
+    _allLostItems = res.items || [];
+  } catch (e) {
+    console.error('Lost & Found fetch failed', e);
+  }
+
+  // Live search — no network call, just re-filter the cache
   document.getElementById('lostSearchInput').addEventListener('input', debounce(() => {
     window.currentLostSearch = document.getElementById('lostSearchInput').value.trim().toLowerCase();
     window.currentLostPage = 1;
     renderLostItemsPage();
-  }, 300));
+  }, 200));
 
-  await renderLostItemsPage();
+  renderLostItemsPage();
 }
 
-async function renderLostItemsPage() {
-  const res = await apiGet(`/lostitems?page=${window.currentLostPage}&limit=8`);
-  const items = res.items || [];
-  const pagination = res.pagination || {};
-
+function renderLostItemsPage() {
   const container = document.getElementById('lostItemsList');
-  
-  let filtered = items.filter(item => {
+  if (!container) return;
+
+  // Filter entirely in memory — no network request
+  let filtered = _allLostItems.filter(item => {
     const matchesSearch = !window.currentLostSearch || 
-      item.title.toLowerCase().includes(window.currentLostSearch) ||
-      item.description.toLowerCase().includes(window.currentLostSearch);
+      (item.title || '').toLowerCase().includes(window.currentLostSearch) ||
+      (item.description || '').toLowerCase().includes(window.currentLostSearch);
     
     const matchesFilter = window.currentLostFilter === 'all' || 
       item.type === window.currentLostFilter;
@@ -4389,11 +4402,18 @@ async function renderLostItemsPage() {
     return matchesSearch && matchesFilter;
   });
 
+  // Client-side pagination
+  const PAGE_SIZE = 8;
+  const page = window.currentLostPage || 1;
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   let html = '';
-  if (filtered.length === 0) {
+  if (paginated.length === 0) {
     html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
   } else {
-    html = filtered.map(item => `
+    html = paginated.map(item => `
       <div id="lost-${item._id}" onclick="showLostItemDetail('${item._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
@@ -4426,7 +4446,7 @@ async function renderLostItemsPage() {
   }
 
   container.innerHTML = html;
-  renderLostPagination(pagination);
+  renderLostPagination({ currentPage: page, totalPages, totalItems, hasPrev: page > 1, hasNext: page < totalPages });
 }
 
 function renderLostPagination(p) {
