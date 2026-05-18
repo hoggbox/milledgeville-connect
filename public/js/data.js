@@ -427,6 +427,13 @@ function wmoCond(code) {
   return { icon: '🌤️', label: 'Mixed' };
 }
 
+  // === ONBOARDING TOUR FOR FIRST-TIME USERS ===
+  if (!localStorage.getItem('onboardingCompleted')) {
+    setTimeout(() => {
+      showOnboardingTour();
+    }, 1200);   // Slight delay so the page feels loaded first
+  }
+
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
 async function loadHomePage(content) {
   content.innerHTML = `
@@ -3970,75 +3977,83 @@ window.postLostItem = async function() {
   }
 };
 
+// ─── IMPROVED LOST & FOUND DETAIL MODAL ─────────────────────────────────────
 window.showLostItemDetail = async function(id) {
   currentLostItemId = id;
   
   try {
     const res = await apiGet('/lostitems');
-    const items = res.items || res;                    // handle both formats
-    
-    const item = Array.isArray(items) 
-      ? items.find(i => String(i._id) === String(id)) 
-      : null;
+    const items = res.items || res;
+    const item = Array.isArray(items) ? items.find(i => String(i._id) === String(id)) : null;
 
     if (!item) {
       showToast('Item not found', 'error');
       return;
     }
 
-    const isOwner = item.owner && 
-      String(item.owner._id || item.owner) === String(currentUser?._id || '');
+    const isOwner = currentUser && item.owner && 
+      String(item.owner._id || item.owner) === String(currentUser._id);
 
-    let html = `
-      <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
-        <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
-          <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
-            <h2 class="text-xl font-bold">${esc(item.title)}</h2>
-            <button onclick="hideLostDetailModal()" class="text-3xl leading-none">×</button>
+    const html = `
+      <div id="lostDetailModal" onclick="if(event.target.id==='lostDetailModal') hideLostDetailModal()" 
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
+        <div onclick="event.stopImmediatePropagation()" 
+             class="bg-white text-slate-900 w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
+
+          <div class="sticky top-0 bg-white px-6 py-4 border-b flex items-center justify-between">
+            <div>
+              <span class="inline-block px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+                ${item.type.toUpperCase()}
+              </span>
+              ${item.isPet ? `<span class="ml-2 text-amber-600">🐾 Lost Pet</span>` : ''}
+            </div>
+            <button onclick="hideLostDetailModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
           </div>
-          
+
           <div class="p-6">
-            ${item.images && item.images.length ? 
-              `<div class="grid grid-cols-2 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl w-full aspect-square object-cover">`).join('')}</div>` : ''}
-            
-            <p class="text-slate-700 leading-relaxed">${esc(item.description)}</p>
-            
-            <div class="flex gap-6 text-sm mt-6">
-              <div><span class="font-semibold">Type:</span> ${item.type.toUpperCase()}</div>
-              ${item.isPet ? `<div class="text-amber-600">🐾 Lost Pet</div>` : ''}
-              ${item.location ? `<div><span class="font-semibold">📍</span> ${item.location}</div>` : ''}
+            <h1 class="text-2xl font-bold mb-1">${esc(item.title)}</h1>
+            <p class="text-slate-500 text-sm">${item.location ? '📍 ' + esc(item.location) : ''} • ${timeAgo(item.createdAt)}</p>
+
+            ${item.images && item.images.length ? `
+              <div class="grid grid-cols-2 gap-3 my-6">
+                ${item.images.map(src => `
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer" 
+                       onclick="openImageViewerForLost('${src}')">
+                `).join('')}
+              </div>` : ''}
+
+            <div class="prose prose-slate text-slate-700 leading-relaxed">
+              ${esc(item.description || 'No description provided.')}
             </div>
 
-            <div class="mt-8">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="font-semibold">💬 Comments</h3>
+            <div class="mt-10">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">💬 Comments</h3>
                 ${!isOwner && item.owner ? `
-                  <button onclick="showComposeMessageModal('${item.owner?._id || item.owner}', '${item.owner?.name || 'Owner'}')" 
-                          class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
+                  <button onclick="showComposeMessageModal('${item.owner._id || item.owner}', '${esc(item.owner.name || 'Owner')}')" 
+                          class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-2xl font-medium">
                     ✉️ Message Owner
                   </button>` : ''}
               </div>
               <div id="lostCommentsContainer" class="space-y-4"></div>
-              
-              <div class="mt-6">
-                <textarea id="lostCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
-                <button onclick="postLostComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
-              </div>
             </div>
           </div>
 
-          ${isOwner ? `
-          <div class="p-6 border-t bg-emerald-50 flex justify-end">
-            <button onclick="markLostResolved()" class="bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Resolved ✅</button>
-          </div>` : ''}
+          <div class="p-6 border-t bg-slate-50 flex gap-3">
+            ${isOwner ? `
+              <button onclick="markLostResolved()" 
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
+                ✅ Mark as Resolved
+              </button>` : ''}
+            <button onclick="hideLostDetailModal()" 
+                    class="flex-1 bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold">
+              Close
+            </button>
+          </div>
         </div>
       </div>`;
 
-    const detailDiv = document.createElement('div');
-    detailDiv.id = 'lostDetailModal';
-    detailDiv.innerHTML = html;
-    document.body.appendChild(detailDiv);
-
+    document.body.insertAdjacentHTML('beforeend', html);
     renderLostComments(item);
 
   } catch (e) {
@@ -4052,49 +4067,26 @@ window.hideLostDetailModal = function() {
   if (modal) modal.remove();
 };
 
-window.postLostComment = async function() {
-  const input = document.getElementById('lostCommentInput');
-  if (!input || !input.value.trim()) return;
-  
-  await apiPost(`/lostitems/${currentLostItemId}/comments`, { text: input.value.trim() });
-  input.value = '';
-
-  // Safe reload
-  try {
-    const res = await apiGet('/lostitems');
-    const items = res.items || res;
-    const item = Array.isArray(items) ? items.find(i => String(i._id) === String(currentLostItemId)) : null;
-    if (item) renderLostComments(item);
-  } catch (e) {
-    console.error(e);
-  }
-};
-
 async function renderLostComments(item) {
   const container = document.getElementById('lostCommentsContainer');
-  if (!container || !item) {
-    if (container) container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet</p>';
-    return;
-  }
+  if (!container) return;
 
   const comments = item.comments || [];
-
   if (!comments.length) {
-    container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet — be the first!</p>';
+    container.innerHTML = `<p class="text-slate-400 text-center py-8">No comments yet — be the first!</p>`;
     return;
   }
 
   let html = '';
   comments.forEach(c => {
     const authorId = c.authorId?._id || c.authorId;
-    const authorName = c.author || 'Anonymous';
-
-  html += `<div class="bg-slate-100 rounded-2xl p-4">
-  <p onclick="..." class="font-medium cursor-pointer hover:underline">${esc(authorName)}</p>
-  <p class="text-slate-700">${esc(c.text || '')}</p>
-    </div>`;
+    html += `
+      <div class="bg-slate-100 rounded-2xl p-4">
+        <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
+           class="font-medium cursor-pointer hover:underline">${esc(c.author || 'Anonymous')}</p>
+        <p class="text-slate-700 mt-1">${esc(c.text || '')}</p>
+      </div>`;
   });
-
   container.innerHTML = html;
 }
 
@@ -4102,7 +4094,7 @@ window.markLostResolved = async function() {
   if (!currentLostItemId) return;
   if (!confirm('Mark this item as resolved?')) return;
   try {
-    const res = await apiPost(`/lostitems/${currentLostItemId}/resolve`, {});
+    await apiPost(`/lostitems/${currentLostItemId}/resolve`, {});
     showToast('✅ Marked as resolved!');
     hideLostDetailModal();
     loadPage('lostfound');
@@ -4197,14 +4189,13 @@ window.postMarketplaceItem = async function() {
   }
 };
 
+// ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
   currentMarketItemId = id;
-  
+
   try {
-    // First try cached data (instant)
     let item = allMarketplaceItems.find(i => String(i._id) === String(id));
 
-    // If not in cache, fetch once and cache it
     if (!item) {
       const res = await apiGet('/marketplace');
       allMarketplaceItems = res.items || res || [];
@@ -4216,61 +4207,75 @@ window.showMarketplaceDetail = async function(id) {
       return;
     }
 
-    const isSeller = item.seller && 
-      String(item.seller._id || item.seller) === String(currentUser?._id || '');
+    const isSeller = currentUser && item.seller && 
+      String(item.seller._id || item.seller) === String(currentUser._id);
 
-    let html = `
-      <div class="fixed inset-0 bg-black/70 z-[14000] flex items-center justify-center p-4">
-        <div class="bg-white text-slate-900 w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-auto">
-          <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between">
+    const html = `
+      <div id="marketDetailModal" onclick="if(event.target.id==='marketDetailModal') hideMarketDetailModal()" 
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
+        <div onclick="event.stopImmediatePropagation()" 
+             class="bg-white text-slate-900 w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
+
+          <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
             <div>
-              <h2 class="text-xl font-bold">${esc(item.title)}</h2>
+              <h2 class="text-2xl font-bold">${esc(item.title)}</h2>
               <p class="text-3xl font-bold text-emerald-600">$${item.price}</p>
             </div>
-            <button onclick="hideMarketDetailModal()" class="text-3xl">×</button>
+            <button onclick="hideMarketDetailModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
           </div>
-          
+
           <div class="p-6">
-            ${item.images && item.images.length ? 
-              `<div class="grid grid-cols-3 gap-3 mb-6">${item.images.map(src => `<img src="${src}" class="rounded-2xl aspect-square object-cover">`).join('')}</div>` : ''}
-            
-            <p class="text-slate-700">${esc(item.description || '')}</p>
-            
-            <div class="mt-8">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="font-semibold">💬 Comments</h3>
+            ${item.images && item.images.length ? `
+              <div class="grid grid-cols-2 gap-3 mb-6">
+                ${item.images.map(src => `
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer" 
+                       onclick="openImageViewerForLost('${src}')">
+                `).join('')}
+              </div>` : ''}
+
+            <p class="text-slate-700 leading-relaxed">${esc(item.description || '')}</p>
+
+            <div class="mt-6 flex items-center gap-2 text-sm text-slate-500">
+              <span class="px-3 py-1 bg-slate-100 rounded-full">${item.condition || 'Used'}</span>
+              <span>${timeAgo(item.createdAt)}</span>
+            </div>
+
+            <div class="mt-10">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">💬 Comments</h3>
                 ${!isSeller && item.seller ? `
-                  <button onclick="showComposeMessageModal('${item.seller?._id || item.seller}', '${item.seller?.name || 'Seller'}')" 
-                          class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-2xl font-semibold transition">
+                  <button onclick="showComposeMessageModal('${item.seller._id || item.seller}', '${esc(item.seller.name || 'Seller')}')" 
+                          class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-2xl font-medium">
                     ✉️ Message Seller
                   </button>` : ''}
               </div>
               <div id="marketCommentsContainer" class="space-y-4"></div>
-              
-              <div class="mt-6">
-                <textarea id="marketCommentInput" rows="2" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none" placeholder="Write a comment..."></textarea>
-                <button onclick="postMarketComment()" class="mt-3 bg-emerald-600 text-white px-8 py-3 rounded-3xl font-semibold">Post Comment</button>
-              </div>
             </div>
           </div>
 
           ${isSeller ? `
           <div class="p-6 border-t bg-amber-50 flex justify-end">
-            <button onclick="markMarketSold()" class="bg-amber-600 text-white px-8 py-3 rounded-3xl font-semibold">Mark as Sold ✅</button>
+            <button onclick="markMarketSold()" 
+                    class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+              Mark as Sold ✅
+            </button>
           </div>` : ''}
+
+          <div class="p-6 border-t flex gap-3">
+            <button onclick="hideMarketDetailModal()" 
+                    class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-3xl font-semibold">
+              Close
+            </button>
+          </div>
         </div>
       </div>`;
 
-    const div = document.createElement('div');
-    div.id = 'marketDetailModal';
-    div.innerHTML = html;
-    document.body.appendChild(div);
-
+    document.body.insertAdjacentHTML('beforeend', html);
     renderMarketComments(item);
 
   } catch (e) {
     console.error(e);
-    showToast('Failed to load item', 'error');
+    showToast('Failed to load listing', 'error');
   }
 };
 
@@ -4279,45 +4284,24 @@ window.hideMarketDetailModal = function() {
   if (modal) modal.remove();
 };
 
-window.postMarketComment = async function() {
-  const input = document.getElementById('marketCommentInput');
-  if (!input || !input.value.trim()) return;
-
-  await apiPost(`/marketplace/${currentMarketItemId}/comments`, { text: input.value.trim() });
-  
-  input.value = '';
-
-  // Reload the item safely
-  try {
-    const res = await apiGet('/marketplace');
-    const items = res.items || res;                    // handle both {items: []} and [] formats
-    const item = Array.isArray(items) 
-      ? items.find(i => String(i._id) === String(currentMarketItemId)) 
-      : null;
-
-    if (item) renderMarketComments(item);
-  } catch (e) {
-    console.error('Failed to refresh comments', e);
-  }
-};
-
 function renderMarketComments(item) {
   const container = document.getElementById('marketCommentsContainer');
-  if (!container || !item) return;
+  if (!container) return;
 
   const comments = item.comments || [];
-  
   if (!comments.length) {
-    container.innerHTML = '<p class="text-slate-400 text-center py-4">No comments yet — be the first!</p>';
+    container.innerHTML = `<p class="text-slate-400 text-center py-8">No comments yet — be the first!</p>`;
     return;
   }
 
   container.innerHTML = comments.map(c => {
     const authorId = c.authorId?._id || c.authorId;
-    return `<div class="bg-slate-100 rounded-2xl p-4">
-    <p onclick="..." class="font-medium cursor-pointer hover:underline">${esc(c.author || 'Anonymous')}</p>
-    <p class="text-slate-700">${esc(c.text)}</p>
-    </div>`;
+    return `
+      <div class="bg-slate-100 rounded-2xl p-4">
+        <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
+           class="font-medium cursor-pointer hover:underline">${esc(c.author || 'Anonymous')}</p>
+        <p class="text-slate-700 mt-1">${esc(c.text || '')}</p>
+      </div>`;
   }).join('');
 }
 
@@ -5892,6 +5876,95 @@ async function renderAdminAnalytics() {
         <p class="text-xs text-white/30 mt-2">Add it in your api.js to see real numbers.</p>
       </div>` : ''}
     </div>`;
+}
+
+// ─── ONBOARDING / WELCOME TOUR (First-time users) ───────────────────────────
+window.showOnboardingTour = function() {
+  // Don't show again if already completed
+  if (localStorage.getItem('onboardingCompleted') === 'true') return;
+
+  const tourHTML = `
+    <div id="onboardingTour" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+      <div class="bg-zinc-900 border border-white/10 rounded-3xl max-w-md w-full overflow-hidden">
+        
+        <!-- Progress dots -->
+        <div class="flex justify-center gap-2 pt-6">
+          <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
+          <div class="w-2 h-2 bg-white/30 rounded-full"></div>
+          <div class="w-2 h-2 bg-white/30 rounded-full"></div>
+        </div>
+
+        <div id="tourSlide" class="p-8 text-center min-h-[380px] flex flex-col">
+          <!-- Slide 1 -->
+          <div id="slide1">
+            <div class="text-6xl mb-6">🚦</div>
+            <h2 class="text-3xl font-bold mb-3">Welcome to Milledgeville Connect</h2>
+            <p class="text-zinc-400 text-lg leading-relaxed">Your local community app for real-time traffic alerts, buying & selling, lost pets, events, and more.</p>
+          </div>
+
+          <!-- Slide 2 (hidden by default) -->
+          <div id="slide2" class="hidden">
+            <div class="text-6xl mb-6">🛒</div>
+            <h2 class="text-3xl font-bold mb-3">Marketplace & Lost & Found</h2>
+            <p class="text-zinc-400 text-lg leading-relaxed">Buy, sell, trade locally and help neighbors find lost items and pets.</p>
+          </div>
+
+          <!-- Slide 3 -->
+          <div id="slide3" class="hidden">
+            <div class="text-6xl mb-6">📅</div>
+            <h2 class="text-3xl font-bold mb-3">Stay Connected</h2>
+            <p class="text-zinc-400 text-lg leading-relaxed">Events, deals, news, and live community shoutouts — all in one place.</p>
+          </div>
+        </div>
+
+        <div class="p-6 border-t border-white/10 flex items-center gap-4">
+          <button onclick="skipOnboarding()" 
+                  class="flex-1 py-4 text-white/70 hover:text-white font-medium transition">
+            Skip
+          </button>
+          <button onclick="nextOnboardingSlide()" id="tourNextBtn"
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-2xl font-semibold transition">
+            Next
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', tourHTML);
+  window.currentTourSlide = 1;
+};
+
+window.nextOnboardingSlide = function() {
+  const slide1 = document.getElementById('slide1');
+  const slide2 = document.getElementById('slide2');
+  const slide3 = document.getElementById('slide3');
+  const nextBtn = document.getElementById('tourNextBtn');
+
+  if (window.currentTourSlide === 1) {
+    slide1.classList.add('hidden');
+    slide2.classList.remove('hidden');
+    window.currentTourSlide = 2;
+  } 
+  else if (window.currentTourSlide === 2) {
+    slide2.classList.add('hidden');
+    slide3.classList.remove('hidden');
+    nextBtn.textContent = "Get Started";
+    window.currentTourSlide = 3;
+  } 
+  else if (window.currentTourSlide === 3) {
+    finishOnboarding();
+  }
+};
+
+window.skipOnboarding = function() {
+  finishOnboarding();
+};
+
+function finishOnboarding() {
+  localStorage.setItem('onboardingCompleted', 'true');
+  const tour = document.getElementById('onboardingTour');
+  if (tour) tour.remove();
+  showToast("🎉 Welcome to Milledgeville Connect!", "success");
 }
 
 // ─── FLAG A SHOUTOUT / TRAFFIC ALERT ───────────────────────────────────────
