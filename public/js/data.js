@@ -2067,118 +2067,51 @@ function renderShoutoutCard(s) {
        </span>`
     : '';
 
-  let allCommentsHtml = '';
-  comments.forEach(c => { allCommentsHtml += renderCommentRow(c, s._id); });
-
-  const commentLabel = commentCount > 0
-    ? `💬 ${commentCount} Comment${commentCount !== 1 ? 's' : ''}`
-    : '💬 Comment';
-
-  // Card opacity/style when cleared
-  const clearedStyle = isCleared
-    ? 'opacity-50 border-white/5'
-    : 'border-white/10';
-  const clearedBanner = isCleared
-    ? `<div class="flex items-center gap-1.5 bg-white/5 rounded-2xl px-3 py-1.5 mb-3 text-xs text-white/50 font-medium">
-         ✅ <span>Community marked this alert as cleared</span>
-       </div>`
-    : '';
-
   return `
-    <div class="bg-white/10 backdrop-blur-xl border ${clearedStyle} rounded-3xl p-5 transition-all" id="shoutout-${s._id}">
-      <div class="flex items-start justify-between gap-3 mb-3">
-        <div class="flex items-start gap-3 flex-1 min-w-0">
-          <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-base font-bold flex-shrink-0">${authorLetter}</div>
-          <div class="flex-1 min-w-0">
-            <div class="font-semibold text-sm text-white">${s.author || 'Community Member'} ${renderClickableUser(s.authorId || s.author)}</div>
-            <div class="flex flex-wrap items-center gap-2 mt-0.5">
-              <span class="text-[11px] text-white/40">${timeAgo(s.createdAt)}</span>
-              ${locationTag}
+    <div id="shoutout-${s._id}" class="bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-5 transition">
+      <div class="flex items-start gap-3">
+        <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">
+          ${authorLetter}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex justify-between items-start">
+            <div>
+              ${renderClickableUser(s.authorId || s.author)}
+              <span class="text-xs text-white/50 ml-2">${timeAgo(s.createdAt)}</span>
             </div>
+            ${isAuthor ? `<span class="text-[10px] bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">Yours</span>` : ''}
+          </div>
+
+          ${locationTag}
+
+          <p class="mt-2 text-white leading-relaxed">${esc(s.text)}</p>
+
+          ${s.images && s.images.length ? `
+            <div class="flex gap-2 mt-4 overflow-x-auto hide-scrollbar">
+              ${s.images.map((src, i) => `
+                <img src="${src}" onclick="openShoutoutImageViewer('${s._id}', ${i})"
+                     class="h-24 rounded-2xl object-cover cursor-pointer flex-shrink-0 border border-white/10">
+              `).join('')}
+            </div>` : ''}
+
+          <!-- Actions Bar -->
+          <div class="flex items-center justify-between mt-4 pt-3 border-t border-white/10 text-xs">
+            <div class="flex gap-5 text-white/70">
+              <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+                ❤️ <span id="like-count-${s._id}">${likeCount}</span>
+              </button>
+              <button onclick="commentOnShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+                💬 ${commentCount}
+              </button>
+            </div>
+
+            <!-- Report Button -->
+            <button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,100)}...')" 
+                    class="text-red-400 hover:text-red-500 flex items-center gap-1 transition font-medium">
+              🚩 Report
+            </button>
           </div>
         </div>
-        
-        <!-- Flag button -->
-        ${!isAuthor && currentUser ? `
-          <button onclick="flagShoutout('${s._id}')" 
-                  class="text-white/30 hover:text-orange-400 transition text-sm flex-shrink-0" title="Flag this alert">
-            🚩
-          </button>` : ''}
-        
-        ${isAuthor || userIsAdmin ? `
-          <button onclick="deleteShoutout('${s._id}')" 
-                  class="text-white/30 hover:text-red-400 transition text-sm flex-shrink-0" title="Delete shoutout">🗑️</button>` : ''}
-      </div>
-
-      ${clearedBanner}
-
-      <p class="text-white/85 leading-relaxed mb-3">${s.text}</p>
-      ${(s.images && s.images.length > 0) ? `
-        <div class="flex gap-2 overflow-x-auto pb-1 mb-3 hide-scrollbar" style="-webkit-overflow-scrolling:touch;">
-          ${s.images.map((src, i) => `
-            <div onclick="openShoutoutImageViewer('${s._id}', ${i}); event.stopPropagation();"
-                 class="flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden cursor-pointer bg-white/10 hover:opacity-90 transition">
-              <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover" loading="lazy">
-            </div>`).join('')}
-        </div>` : ''}
-      ${likeCount > 0 ? `<div class="text-xs text-white/35 mb-1">❤️ ${likeCount}</div>` : ''}
-
-      <!-- Cleared progress bar (only shown if votes are accumulating but not yet cleared) -->
-      ${!isCleared && clearCount > 0 ? `
-        <div class="mb-2">
-          <div class="flex justify-between text-[10px] text-white/30 mb-1">
-            <span>Cleared by community</span>
-            <span>${clearCount}/${CLEAR_THRESHOLD}</span>
-          </div>
-          <div class="h-1 bg-white/10 rounded-full overflow-hidden">
-            <div class="h-full bg-amber-400/60 rounded-full transition-all" style="width:${(clearProgress/CLEAR_THRESHOLD)*100}%"></div>
-          </div>
-        </div>` : ''}
-
-      <div class="flex items-center gap-1 border-t border-white/10 pt-2">
-        <!-- Like -->
-        <button onclick="${currentUser ? `toggleLike('${s._id}')` : `showAuthModal({message:'Sign in to like.'})`}" id="like-btn-${s._id}"
-                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-pink-400 hover:bg-white/5 transition font-medium text-sm">
-          <span id="like-icon-${s._id}">${likeCount > 0 ? '❤️' : '🤍'}</span>
-          <span id="like-label-${s._id}">Like</span>
-        </button>
-
-        <!-- Still There -->
-        ${!isCleared ? `
-        <button onclick="${currentUser ? `markStillThere('${s._id}')` : `showAuthModal({message:'Sign in to confirm alerts.'})`}"
-                id="still-there-btn-${s._id}"
-                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition font-medium text-sm
-                  ${hasVotedStillThere ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/50 hover:text-emerald-400 hover:bg-white/5'}"
-                title="${hasVotedStillThere ? 'You confirmed this is still active' : 'Confirm this alert is still active'}">
-          👀 <span id="still-there-label-${s._id}">${hasVotedStillThere ? `Still There (${stillThereCount})` : stillThereCount > 0 ? `Still There (${stillThereCount})` : 'Still There'}</span>
-        </button>` : ''}
-
-        <!-- Cleared -->
-        <button onclick="${currentUser ? `markCleared('${s._id}')` : `showAuthModal({message:'Sign in to mark alerts cleared.'})`}"
-                id="clear-btn-${s._id}"
-                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition font-medium text-sm
-                  ${isCleared ? 'text-green-400 bg-green-500/10' : hasVotedCleared ? 'text-green-400/70 bg-white/5' : 'text-white/50 hover:text-green-400 hover:bg-white/5'}"
-                title="${isCleared ? 'Alert cleared by community' : hasVotedCleared ? 'You marked this cleared' : 'Mark as cleared / resolved'}">
-          ✅ <span id="clear-label-${s._id}">${isCleared ? 'Cleared' : hasVotedCleared ? `Cleared (${clearCount}/8)` : clearCount > 0 ? `Cleared (${clearCount}/8)` : 'Cleared'}</span>
-        </button>
-
-        <!-- Comment -->
-        <button onclick="${currentUser ? `toggleCommentSection('${s._id}')` : `showAuthModal({message:'Sign in to comment.'})`}" id="comment-btn-${s._id}"
-                class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white/50 hover:text-emerald-400 hover:bg-white/5 transition font-medium text-sm">
-          ${commentLabel}
-        </button>
-      </div>
-      <div id="comment-section-${s._id}" class="hidden mt-3 border-t border-white/10 pt-3 space-y-2">
-        ${allCommentsHtml}
-        ${currentUser ? `
-          <div class="flex items-start gap-2 ${commentCount > 0 ? 'mt-3' : ''}">
-            <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
-            <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
-              <input id="commentinput-${s._id}" type="text"
-                class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none" placeholder="Write a comment...">
-              <button onclick="postComment('${s._id}')" class="text-emerald-400 font-semibold">Post</button>
-            </div>
-          </div>` : ''}
       </div>
     </div>`;
 }
@@ -4054,7 +3987,7 @@ window.showLostItemDetail = async function(id) {
       </div>`;
 
     document.body.insertAdjacentHTML('beforeend', html);
-    renderLostComments(item);
+    renderComments(item.comments || [], 'lostCommentsContainer', 'lost', item._id);
 
   } catch (e) {
     console.error(e);
@@ -4271,7 +4204,7 @@ window.showMarketplaceDetail = async function(id) {
       </div>`;
 
     document.body.insertAdjacentHTML('beforeend', html);
-    renderMarketComments(item);
+    renderComments(item.comments || [], 'marketCommentsContainer', 'market', item._id);
 
   } catch (e) {
     console.error(e);
@@ -4423,6 +4356,14 @@ function renderLostItemsPage() {
               <span>·</span>
               <span>${timeAgo(item.createdAt)}</span>
             </div>
+
+            <!-- Report Button -->
+            <div class="mt-3 flex justify-end">
+              <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
+                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+                🚩 Report
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -4557,6 +4498,14 @@ async function renderMarketplacePage() {
             <span>${timeAgo(item.createdAt)}</span>
             <span class="text-white/40">•</span>
             ${renderClickableUser(item.seller)}
+          </div>
+
+          <!-- Report Button -->
+          <div class="mt-3 flex justify-end">
+            <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')" 
+                    class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+              🚩 Report
+            </button>
           </div>
         </div>
       </div>
@@ -5597,30 +5546,42 @@ async function renderAdminReports() {
       html += `<p class="text-white/50 py-16 text-center text-lg">No pending reports — all good!</p>`;
     } else {
       html += reports.map(r => {
-        const reporterName = r.reporter?.name || r.reporter || 'Unknown';
-        const reportedName = r.reportedUser?.name || 'Unknown User';
-        const shoutoutText = r.snapshotText ? `"${r.snapshotText.substring(0, 120)}${r.snapshotText.length > 120 ? '...' : ''}"` : '';
+        let title = '';
+        let subtitle = '';
+        
+        if (r.type === 'shoutout') {
+          title = '🚦 Shoutout';
+          subtitle = r.snapshotText ? `"${r.snapshotText.substring(0, 100)}${r.snapshotText.length > 100 ? '...' : ''}"` : '';
+        } else if (r.type === 'lost') {
+          title = '🔎 Lost & Found';
+          subtitle = r.snapshotText || '';
+        } else if (r.type === 'market') {
+          title = '🛒 Marketplace';
+          subtitle = r.snapshotText || '';
+        } else if (r.type === 'user') {
+          title = '👤 User Report';
+          subtitle = `Reported user: ${r.reportedUser?.name || 'Unknown'}`;
+        } else {
+          title = r.type.toUpperCase();
+        }
+
+        const reporterName = r.reporter?.name || 'Unknown';
         
         return `
           <div class="bg-white/5 rounded-2xl p-5 mb-4 border border-white/10">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-3">
-                  <span class="px-3 py-1 text-xs font-bold rounded-full ${r.type === 'shoutout' ? 'bg-orange-500' : 'bg-red-500'}">
-                    ${r.type.toUpperCase()}
-                  </span>
+                  <span class="px-3 py-1 text-xs font-bold rounded-full bg-red-500">${title}</span>
                   <span class="text-xs text-white/60">Reported by ${reporterName}</span>
                 </div>
                 
-                <p class="font-semibold text-white mb-1">${reportedName}</p>
-                
-                ${shoutoutText ? `
-                <p class="text-white/70 text-sm mt-2 italic">${shoutoutText}</p>` : ''}
+                <p class="font-semibold text-white mb-1">${subtitle}</p>
                 
                 ${r.reason ? `
                 <div class="mt-3 bg-white/10 rounded-xl p-3 text-sm">
                   <span class="text-white/50 text-xs block mb-1">REASON:</span>
-                  <span class="text-white">${r.reason}</span>
+                  <span class="text-white">${esc(r.reason)}</span>
                 </div>` : ''}
               </div>
               
@@ -5878,6 +5839,40 @@ async function renderAdminAnalytics() {
     </div>`;
 }
 
+// ─── UNIVERSAL COMMENT RENDERER WITH REPORT BUTTON ───────────────────────
+function renderComments(comments = [], containerId, contentType, contentId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!comments || comments.length === 0) {
+    container.innerHTML = `<p class="text-white/40 text-center py-8">No comments yet — be the first!</p>`;
+    return;
+  }
+
+  let html = comments.map(c => {
+    const authorId = c.authorId?._id || c.authorId || c.author;
+    const authorName = c.author || c.authorName || 'Anonymous';
+
+    return `
+      <div class="bg-white/10 rounded-2xl p-4 mb-3">
+        <div class="flex items-center justify-between">
+          <div onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
+               class="font-medium cursor-pointer hover:underline">
+            ${esc(authorName)}
+          </div>
+          <button onclick="event.stopImmediatePropagation(); reportContent('comment', '${c._id}', '${esc(c.text || '').substring(0,80)}')" 
+                  class="text-xs text-red-400 hover:text-red-500 transition">
+            🚩 Report
+          </button>
+        </div>
+        <p class="text-white/80 mt-1">${esc(c.text)}</p>
+        <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+}
+
 // ─── ONBOARDING / WELCOME TOUR (First-time users) ───────────────────────────
 window.showOnboardingTour = function() {
   // Don't show again if already completed
@@ -5966,6 +5961,34 @@ function finishOnboarding() {
   if (tour) tour.remove();
   showToast("🎉 Welcome to Milledgeville Connect!", "success");
 }
+
+// ─── REPORT CONTENT ─────────────────────────────────────────────────────────
+window.reportContent = async function (type, id, extraInfo = '') {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to report content.' });
+    return;
+  }
+
+  const reason = prompt(`Why are you reporting this ${type}? (be specific)`);
+  if (!reason || reason.trim() === '') return;
+
+  try {
+    const res = await apiPost('/reports', {
+      type: type,
+      contentId: id,
+      reason: reason.trim(),
+      extraInfo: extraInfo
+    });
+
+    if (res.message && res.message.includes('Report submitted')) {
+      showToast('🚩 Report sent to admin team. Thank you.', 'success');
+    } else {
+      showToast('Failed to send report', 'error');
+    }
+  } catch (e) {
+    showToast('Could not send report', 'error');
+  }
+};
 
 // ─── FLAG A SHOUTOUT / TRAFFIC ALERT ───────────────────────────────────────
 window.flagShoutout = async function (shoutoutId) {
