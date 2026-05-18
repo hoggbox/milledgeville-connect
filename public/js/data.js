@@ -5562,9 +5562,26 @@ async function renderAdminBusinesses() {
     </div>`;
 }
 
-window.showAddBusinessModal = function() {
+window.showAddBusinessModal = async function() {
+  // Fetch categories if not cached
+  if (!window._dirCategories || window._dirCategories.length === 0) {
+    try {
+      const data = await apiGet('/directory');
+      window._dirCategories = data.categories || [];
+    } catch (e) {
+      window._dirCategories = [];
+    }
+  }
+
   const existing = document.getElementById('addBusinessModal');
   if (existing) existing.remove();
+
+  let categoryOptions = `<option value="">Select Category</option>`;
+  if (window._dirCategories.length) {
+    categoryOptions += window._dirCategories.map(cat => `
+      <option value="${cat._id}">${cat.icon} ${cat.name}</option>
+    `).join('');
+  }
 
   document.body.insertAdjacentHTML('beforeend', `
     <div id="addBusinessModal" onclick="if(event.target.id==='addBusinessModal') document.getElementById('addBusinessModal').remove()"
@@ -5577,17 +5594,27 @@ window.showAddBusinessModal = function() {
           <button onclick="document.getElementById('addBusinessModal').remove()" class="text-2xl text-white/50 hover:text-white leading-none">×</button>
         </div>
 
-        <div class="p-5 space-y-3">
+        <div class="p-5 space-y-4">
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Business Name *</label>
             <input id="abName" type="text" placeholder="e.g. Joe's Diner"
                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
           </div>
+
+          <div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Category *</label>
+            <select id="abCategory" 
+                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-400">
+              ${categoryOptions}
+            </select>
+          </div>
+
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Address</label>
             <input id="abAddress" type="text" placeholder="123 Main St, Milledgeville"
                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
           </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-white/50 uppercase tracking-wide">Phone</label>
@@ -5600,16 +5627,19 @@ window.showAddBusinessModal = function() {
                      class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
             </div>
           </div>
+
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Website</label>
             <input id="abWebsite" type="url" placeholder="https://..."
                    class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
           </div>
+
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Description</label>
             <textarea id="abDescription" rows="3" placeholder="Brief description of the business…"
                       class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
           </div>
+
           <div>
             <label class="text-xs text-white/50 uppercase tracking-wide">Logo URL (optional)</label>
             <input id="abLogo" type="url" placeholder="https://..."
@@ -5633,10 +5663,14 @@ window.showAddBusinessModal = function() {
 
 window.submitAddBusiness = async function() {
   const name = document.getElementById('abName').value.trim();
+  const categoryId = document.getElementById('abCategory').value;
+
   if (!name) return showToast('Business name is required', 'error');
+  if (!categoryId) return showToast('Please select a category', 'error');
 
   const payload = {
     name,
+    category: categoryId,
     address:     document.getElementById('abAddress').value.trim(),
     phone:       document.getElementById('abPhone').value.trim(),
     email:       document.getElementById('abEmail').value.trim(),
