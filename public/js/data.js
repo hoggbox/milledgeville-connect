@@ -677,7 +677,9 @@ function _renderSpotlight(businesses) {
            class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
         <div class="flex items-center gap-3 mb-3">
 ${b.logo 
-  ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0 border border-white/20" alt="${b.name}">`
+  ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
+          class="w-10 h-10 object-cover rounded-2xl flex-shrink-0 border border-white/20" 
+          alt="${b.name}">`
   : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
           <div class="flex-1 min-w-0">
             <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
@@ -1373,7 +1375,9 @@ function renderDirectory(businesses) {
       <div onclick="showBusinessDetail('${b._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
 ${b.logo 
-  ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/20" alt="${b.name}">`
+  ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
+          class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/20" 
+          alt="${b.name}">`
   : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
@@ -1459,8 +1463,9 @@ async function showBusinessDetail(id) {
 
       ${business.logo ? `
         <div class="flex items-center gap-3 pb-3 border-b border-gray-200">
-          <img src="${business.logo}" alt="${business.name} logo"
-               class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0">
+<img src="${business.logo.startsWith('data:') ? business.logo : 'data:image/jpeg;base64,' + business.logo}" 
+     class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0" 
+     alt="${business.name}">
           <div>
             <p class="font-bold text-slate-900 text-base leading-tight">${business.name}</p>
             ${business.priceRange ? `<span class="text-xs font-semibold text-gray-500">${business.priceRange} · ${business.category?.name || ''}</span>` : `<span class="text-xs text-gray-500">${business.category?.name || ''}</span>`}
@@ -1516,9 +1521,10 @@ async function showBusinessDetail(id) {
           <!-- Logo / Icon - Big and centered at the top -->
           <div class="flex justify-center mb-6">
             ${business.logo 
-              ? `<img src="${business.logo}" 
+              ? `<img src="${business.logo.startsWith('data:') ? business.logo : 'data:image/jpeg;base64,' + business.logo}" 
                       class="w-24 h-24 object-cover rounded-3xl shadow-lg border border-white/20" 
-                      alt="${esc(business.name)}">`
+                      alt="${esc(business.name)}"
+                      onerror="this.style.display='none'; this.parentElement.innerHTML = '<div class=\\'w-24 h-24 bg-white/10 rounded-3xl flex items-center justify-center text-6xl border border-white/20\\'>${business.category?.icon || '🏪'}</div>'">`
               : `<div class="w-24 h-24 bg-white/10 rounded-3xl flex items-center justify-center text-6xl border border-white/20">
                    ${business.category?.icon || '🏪'}
                  </div>`}
@@ -6004,7 +6010,8 @@ async function renderAdminBusinesses() {
             <div class="flex items-center justify-between bg-white/5 rounded-2xl p-3 gap-3">
               <div class="flex items-center gap-3 min-w-0">
 ${b.logo 
-  ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-white/20" alt="">`
+  ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
+          class="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-white/20" alt="">`
   : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
                 <div class="min-w-0">
                   <div class="font-semibold text-sm truncate">${b.name}</div>
@@ -6151,7 +6158,11 @@ window.submitAddBusiness = async function() {
 
     if (res.business || res._id) {
       showToast(`✅ "${name}" added successfully!`, 'success');
+      pendingBusinessLogo = null;        // ← ADD THIS LINE (resets the logo)
+      
       document.getElementById('addBusinessModal').remove();
+
+      // Force fresh directory fetch...
 
       // Force fresh directory fetch so category + icon appear immediately
       const freshData = await apiGet('/directory');
@@ -6410,6 +6421,8 @@ window.saveBusinessEdit = async function(businessId) {
 
     if (res.business || res.message === 'Business updated successfully') {
       showToast('✅ Business updated successfully!', 'success');
+      pendingBusinessLogo = null;        // ← ADD THIS LINE (resets the logo)
+      
       closeEditBusinessModal();
       const data = await apiGet('/directory');
       allBusinesses = data.businesses || [];
