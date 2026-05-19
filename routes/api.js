@@ -2004,13 +2004,20 @@ router.put('/owner/business', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'No verified business' });
 
     const rawBody = sanitizeContent(req.body);
-    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = rawBody;
+    const { name, address, phone, website, description, email, hours, priceRange, tags, logo, category, instagram, facebook } = rawBody;
     const updates = { name, address, phone, website, description };
-    if (email     !== undefined) updates.email     = email;
-    if (hours     !== undefined) updates.hours     = hours;
+    if (email      !== undefined) updates.email      = email;
+    if (hours      !== undefined) updates.hours      = hours;
     if (priceRange !== undefined) updates.priceRange = priceRange;
-    if (tags      !== undefined) updates.tags      = tags;
-    if (logo      !== undefined) updates.logo      = logo;
+    if (tags       !== undefined) updates.tags       = tags;
+    if (logo       !== undefined) updates.logo       = logo;
+    if (instagram  !== undefined) updates.instagram  = instagram;
+    if (facebook   !== undefined) updates.facebook   = facebook;
+    // category: owner may change their own category (validate it exists)
+    if (category !== undefined && category) {
+      const catExists = await Category.findById(category).lean();
+      if (catExists) updates.category = category;
+    }
     const business = await Business.findByIdAndUpdate(
       user.verifiedBusiness,
       updates,
@@ -2171,6 +2178,24 @@ router.delete('/owner/deals/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── OWNER: Edit a deal ────────────────────────────────────────────────────
+router.put('/owner/deals/:id', authenticate, async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
+    const { title, description, expires, category } = sanitizeContent(req.body);
+    const deal = await Deal.findOne({ _id: req.params.id, owner: req.userId });
+    if (!deal) return res.status(404).json({ message: 'Deal not found or not yours' });
+    if (title)       deal.title       = title;
+    if (description !== undefined) deal.description = description;
+    if (expires     !== undefined) deal.expires     = expires || null;
+    if (category)    deal.category    = category;
+    await deal.save();
+    res.json(deal);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/owner/events', authenticate, async (req, res) => {
   try {
     const events = await Event.find({ owner: req.userId }).sort({ date: 1 });
@@ -2217,6 +2242,50 @@ router.delete('/owner/events/:id', authenticate, async (req, res) => {
   try {
     await Event.findOneAndDelete({ _id: req.params.id, owner: req.userId });
     res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: Edit an event ─────────────────────────────────────────────────
+router.put('/owner/events/:id', authenticate, async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
+    const { title, date, location, description, category } = sanitizeContent(req.body);
+    const event = await Event.findOne({ _id: req.params.id, owner: req.userId });
+    if (!event) return res.status(404).json({ message: 'Event not found or not yours' });
+    if (title)       event.title       = title;
+    if (date)        event.date        = new Date(date);
+    if (location    !== undefined) event.location    = location;
+    if (description !== undefined) event.description = description;
+    if (category)    event.category    = category;
+    await event.save();
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: Stats summary ─────────────────────────────────────────────────
+router.get('/owner/stats', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).lean();
+    if (!user.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
+    const bizId = user.verifiedBusiness;
+
+    const [business, dealCount, eventCount, followerCount] = await Promise.all([
+      Business.findById(bizId).select('ratings').lean(),
+      Deal.countDocuments({ owner: req.userId }),
+      Event.countDocuments({ owner: req.userId }),
+      User.countDocuments({ following: bizId.toString() })
+    ]);
+
+    const ratingCount = (business?.ratings || []).length;
+    const avgRating   = ratingCount
+      ? Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / ratingCount) * 10) / 10
+      : 0;
+
+    res.json({ dealCount, eventCount, followerCount, ratingCount, avgRating });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

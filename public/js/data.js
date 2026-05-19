@@ -3253,6 +3253,29 @@ async function loadOwnerDashboard(content) {
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
+      <!-- ─── Stats Bar ────────────────────────────────────────────────────── -->
+      ${biz ? `
+      <div id="ownerStatsBar" class="px-4 mb-3">
+        <div class="grid grid-cols-4 gap-2 text-center">
+          <div class="bg-white/10 rounded-2xl py-3 px-1">
+            <div id="stat-followers" class="text-xl font-black text-emerald-400">—</div>
+            <div class="text-[10px] text-white/40 mt-0.5">Followers</div>
+          </div>
+          <div class="bg-white/10 rounded-2xl py-3 px-1">
+            <div id="stat-deals" class="text-xl font-black text-amber-400">—</div>
+            <div class="text-[10px] text-white/40 mt-0.5">Deals</div>
+          </div>
+          <div class="bg-white/10 rounded-2xl py-3 px-1">
+            <div id="stat-events" class="text-xl font-black text-sky-400">—</div>
+            <div class="text-[10px] text-white/40 mt-0.5">Events</div>
+          </div>
+          <div class="bg-white/10 rounded-2xl py-3 px-1">
+            <div id="stat-rating" class="text-xl font-black text-yellow-400">—</div>
+            <div class="text-[10px] text-white/40 mt-0.5">Avg ★</div>
+          </div>
+        </div>
+      </div>` : ''}
+
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
         <div class="flex gap-1 overflow-x-auto hide-scrollbar">
@@ -3270,17 +3293,63 @@ async function loadOwnerDashboard(content) {
         <!-- ═══ TAB: Listing ════════════════════════════════════════════════ -->
         <div id="dtabContent-listing">
 
+          <!-- Logo -->
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-3 flex items-center gap-2"><span>🖼️</span> Logo</h3>
+            <div class="flex items-center gap-4 mb-3">
+              <div id="ownerLogoPreview" class="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center text-3xl overflow-hidden flex-shrink-0">
+                ${biz && biz.logo ? `<img src="${biz.logo}" class="w-full h-full object-cover">` : '🏪'}
+              </div>
+              <div class="flex-1">
+                <button onclick="document.getElementById('ownerLogoInput').click()"
+                        class="w-full border-2 border-dashed border-white/20 hover:border-emerald-400 rounded-2xl py-3 text-white/50 hover:text-white transition text-sm font-medium">
+                  📷 Upload Logo
+                </button>
+                <input id="ownerLogoInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+                       onchange="handleOwnerLogoUpload(this)">
+              </div>
+            </div>
+            ${biz && biz.logo ? `<button onclick="removeOwnerLogo()" class="text-xs text-red-400 hover:text-red-300 transition">🗑️ Remove logo</button>` : ''}
+          </div>
+
+          <!-- Basic Info -->
           <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
             <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>🏢</span> Basic Info</h3>
             <input id="ownerName"           type="text" placeholder="Business Name *"                          class="${inputClass}">
             <input id="ownerAddress"        type="text" placeholder="Address"                                  class="${inputClass}">
             <input id="ownerPhone"          type="tel"  placeholder="Phone"                                    class="${inputClass}">
+            <input id="ownerEmail"          type="email" placeholder="Business Email"                          class="${inputClass}">
             <input id="ownerWebsite"        type="url"  placeholder="Website (e.g. https://yourbusiness.com)"  class="${inputClass}">
             <textarea id="ownerDescription" rows="3"    placeholder="Description — tell customers what makes your business special"
                       class="${inputClass} resize-none"></textarea>
             <button onclick="saveOwnerListing()"
                     class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
               💾 Save Info
+            </button>
+          </div>
+
+          <!-- Extended Details -->
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>✨</span> Extended Details</h3>
+            <label class="block text-xs text-white/50 mb-1 px-1">Category</label>
+            <select id="ownerCategory" class="${selectClass}" style="${selectStyle}">
+              <option value="">— Keep current —</option>
+              ${window._dirCategories ? window._dirCategories.map(c => `<option value="${c._id}" ${biz && (biz.category?._id === c._id || biz.category === c._id) ? 'selected' : ''}>${c.icon} ${c.name}</option>`).join('') : ''}
+            </select>
+            <label class="block text-xs text-white/50 mb-1 px-1">Price Range</label>
+            <select id="ownerPriceRange" class="${selectClass}" style="${selectStyle}">
+              <option value="">— Not set —</option>
+              <option value="$">$ · Budget-friendly</option>
+              <option value="$$">$$ · Moderate</option>
+              <option value="$$$">$$$ · Upscale</option>
+              <option value="$$$$">$$$$ · Fine Dining / Luxury</option>
+            </select>
+            <input id="ownerInstagram" type="text" placeholder="Instagram handle (without @)" class="${inputClass}">
+            <input id="ownerFacebook"  type="text" placeholder="Facebook page URL or name"    class="${inputClass}">
+            <input id="ownerTags"      type="text" placeholder="Tags (comma-separated, e.g. pizza,family,delivery)" class="${inputClass}">
+            <button onclick="saveOwnerExtended()"
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
+              💾 Save Details
             </button>
           </div>
 
@@ -3398,9 +3467,31 @@ async function loadOwnerDashboard(content) {
     document.getElementById('ownerName').value        = biz.name        || '';
     document.getElementById('ownerAddress').value     = biz.address     || '';
     document.getElementById('ownerPhone').value       = biz.phone       || '';
+    if (document.getElementById('ownerEmail'))
+      document.getElementById('ownerEmail').value     = biz.email       || '';
     document.getElementById('ownerWebsite').value     = biz.website     || '';
     document.getElementById('ownerDescription').value = biz.description || '';
     document.getElementById('ownerHours').value       = biz.hours       || '';
+    // Extended fields
+    if (document.getElementById('ownerPriceRange'))
+      document.getElementById('ownerPriceRange').value = biz.priceRange  || '';
+    if (document.getElementById('ownerInstagram'))
+      document.getElementById('ownerInstagram').value  = biz.instagram   || '';
+    if (document.getElementById('ownerFacebook'))
+      document.getElementById('ownerFacebook').value   = biz.facebook    || '';
+    if (document.getElementById('ownerTags'))
+      document.getElementById('ownerTags').value        = (biz.tags || []).join(', ');
+  }
+
+  // Load stats
+  if (currentUser?.verifiedBusiness) {
+    apiGet('/owner/stats').then(stats => {
+      const s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      s('stat-followers', stats.followerCount ?? '—');
+      s('stat-deals',     stats.dealCount     ?? '—');
+      s('stat-events',    stats.eventCount    ?? '—');
+      s('stat-rating',    stats.avgRating > 0 ? stats.avgRating : '—');
+    }).catch(() => {});
   }
 }
 
@@ -3431,14 +3522,66 @@ window.saveOwnerListing = async function () {
   const name        = document.getElementById('ownerName').value.trim();
   const address     = document.getElementById('ownerAddress').value.trim();
   const phone       = document.getElementById('ownerPhone').value.trim();
+  const email       = (document.getElementById('ownerEmail')?.value || '').trim();
   const website     = document.getElementById('ownerWebsite').value.trim();
   const description = document.getElementById('ownerDescription').value.trim();
-  const res = await apiPost('/owner/business', { name, address, phone, website, description }, 'PUT');
+  if (!name) { showToast('Business name is required', 'error'); return; }
+  const res = await apiPost('/owner/business', { name, address, phone, email, website, description }, 'PUT');
   if (res._id) {
     currentUser.verifiedBusiness = res;
     showToast('✅ Listing updated!');
   } else {
     showToast(res.message || 'Error saving', 'error');
+  }
+};
+
+window.saveOwnerExtended = async function () {
+  const category   = document.getElementById('ownerCategory')?.value  || '';
+  const priceRange = document.getElementById('ownerPriceRange')?.value || '';
+  const instagram  = (document.getElementById('ownerInstagram')?.value || '').trim().replace(/^@/, '');
+  const facebook   = (document.getElementById('ownerFacebook')?.value  || '').trim();
+  const tagsRaw    = (document.getElementById('ownerTags')?.value       || '').trim();
+  const tags       = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const payload    = { priceRange, instagram, facebook, tags };
+  if (category) payload.category = category;
+  const res = await apiPost('/owner/business', payload, 'PUT');
+  if (res._id) {
+    currentUser.verifiedBusiness = res;
+    showToast('✅ Details updated!');
+  } else {
+    showToast(res.message || 'Error saving', 'error');
+  }
+};
+
+window.handleOwnerLogoUpload = async function (input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) { showToast('Logo must be under 3 MB', 'error'); return; }
+  const compressed = await compressImage(file, 400, 0.85);
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const logo = e.target.result;
+    const preview = document.getElementById('ownerLogoPreview');
+    if (preview) preview.innerHTML = `<img src="${logo}" class="w-full h-full object-cover">`;
+    const res = await apiPost('/owner/business', { logo }, 'PUT');
+    if (res._id) {
+      currentUser.verifiedBusiness = res;
+      showToast('✅ Logo updated!');
+    } else {
+      showToast(res.message || 'Error uploading logo', 'error');
+    }
+  };
+  reader.readAsDataURL(compressed);
+};
+
+window.removeOwnerLogo = async function () {
+  if (!confirm('Remove your logo?')) return;
+  const res = await apiPost('/owner/business', { logo: null }, 'PUT');
+  if (res._id) {
+    currentUser.verifiedBusiness = res;
+    const preview = document.getElementById('ownerLogoPreview');
+    if (preview) preview.innerHTML = '🏪';
+    showToast('Logo removed');
   }
 };
 
@@ -3473,7 +3616,10 @@ async function loadOwnerDeals() {
           <div class="font-bold leading-snug">${d.title}</div>
           ${d.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${d.description}</div>` : ''}
         </div>
-        <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="editOwnerDeal(${JSON.stringify(d).replace(/`/g,'&#96;')})" class="text-sky-400 hover:text-sky-300 text-lg">✏️</button>
+          <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg">🗑️</button>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -3499,7 +3645,10 @@ async function loadOwnerEvents() {
           ${e.location ? `<div class="text-xs text-emerald-300 mt-1">📍 ${e.location}</div>` : ''}
           ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${e.description}</div>` : ''}
         </div>
-        <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="editOwnerEvent(${JSON.stringify(e).replace(/`/g,'&#96;')})" class="text-sky-400 hover:text-sky-300 text-lg">✏️</button>
+          <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg">🗑️</button>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -3551,6 +3700,100 @@ window.addOwnerEvent = async function () {
     loadOwnerEvents();
   } else {
     showToast(res.message || 'Error posting event', 'error');
+  }
+};
+
+window.editOwnerDeal = function (deal) {
+  const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
+  const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
+  const catOptions  = (window._dirCategories || []).map(c =>
+    `<option value="${c.name}" ${c.name === deal.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+  ).join('');
+  const modal = document.createElement('div');
+  modal.id = 'editDealModal';
+  modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4';
+  modal.innerHTML = `
+    <div class="bg-zinc-900 border border-white/10 rounded-3xl p-6 w-full max-w-md">
+      <h3 class="font-bold text-lg mb-4">✏️ Edit Deal</h3>
+      <input id="editDealTitle" type="text" value="${deal.title || ''}" placeholder="Deal Title *" class="${inputClass}">
+      <textarea id="editDealDesc" rows="2" placeholder="Description" class="${inputClass} resize-none">${deal.description || ''}</textarea>
+      <select id="editDealCat" class="${selectClass}" style="background:#1e293b;color-scheme:dark;">
+        <option value="">— Category —</option>${catOptions}
+      </select>
+      <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date</label>
+      <input id="editDealExpires" type="date" value="${deal.expires ? deal.expires.substring(0,10) : ''}" class="${inputClass}">
+      <div class="flex gap-3 mt-2">
+        <button onclick="document.getElementById('editDealModal').remove()"
+                class="flex-1 py-4 rounded-3xl bg-white/10 hover:bg-white/20 font-semibold transition">Cancel</button>
+        <button onclick="saveEditedDeal('${deal._id}')"
+                class="flex-1 py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-semibold transition">💾 Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+
+window.saveEditedDeal = async function (id) {
+  const title       = document.getElementById('editDealTitle').value.trim();
+  const description = document.getElementById('editDealDesc').value.trim();
+  const category    = document.getElementById('editDealCat').value;
+  const expires     = document.getElementById('editDealExpires').value;
+  if (!title) { showToast('Title required', 'error'); return; }
+  const res = await apiPost(`/owner/deals/${id}`, { title, description, category, expires }, 'PUT');
+  if (res._id) {
+    document.getElementById('editDealModal')?.remove();
+    showToast('✅ Deal updated!');
+    loadOwnerDeals();
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.editOwnerEvent = function (ev) {
+  const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
+  const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
+  const catOptions  = (window.EVENT_CATEGORIES || EVENT_CATEGORIES).map(c =>
+    `<option value="${c.name}" ${c.name === ev.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+  ).join('');
+  const dateVal = ev.date ? new Date(ev.date).toISOString().slice(0,16) : '';
+  const modal = document.createElement('div');
+  modal.id = 'editEventModal';
+  modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4';
+  modal.innerHTML = `
+    <div class="bg-zinc-900 border border-white/10 rounded-3xl p-6 w-full max-w-md">
+      <h3 class="font-bold text-lg mb-4">✏️ Edit Event</h3>
+      <input id="editEvTitle"    type="text"           value="${ev.title || ''}" placeholder="Event Title *" class="${inputClass}">
+      <label class="block text-xs text-white/50 mb-1 px-1">Date & Time</label>
+      <input id="editEvDate"     type="datetime-local"  value="${dateVal}"                                   class="${inputClass}">
+      <input id="editEvLocation" type="text"            value="${ev.location || ''}" placeholder="Location" class="${inputClass}">
+      <select id="editEvCat" class="${selectClass}" style="background:#1e293b;color-scheme:dark;">
+        <option value="">— Category —</option>${catOptions}
+      </select>
+      <textarea id="editEvDesc" rows="2" placeholder="Description" class="${inputClass} resize-none">${ev.description || ''}</textarea>
+      <div class="flex gap-3 mt-2">
+        <button onclick="document.getElementById('editEventModal').remove()"
+                class="flex-1 py-4 rounded-3xl bg-white/10 hover:bg-white/20 font-semibold transition">Cancel</button>
+        <button onclick="saveEditedEvent('${ev._id}')"
+                class="flex-1 py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-semibold transition">💾 Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+
+window.saveEditedEvent = async function (id) {
+  const title       = document.getElementById('editEvTitle').value.trim();
+  const date        = document.getElementById('editEvDate').value;
+  const location    = document.getElementById('editEvLocation').value.trim();
+  const category    = document.getElementById('editEvCat').value;
+  const description = document.getElementById('editEvDesc').value.trim();
+  if (!title) { showToast('Title required', 'error'); return; }
+  if (!date)  { showToast('Date required', 'error'); return; }
+  const res = await apiPost(`/owner/events/${id}`, { title, date, location, category, description }, 'PUT');
+  if (res._id) {
+    document.getElementById('editEventModal')?.remove();
+    showToast('✅ Event updated!');
+    loadOwnerEvents();
+  } else {
+    showToast(res.message || 'Error', 'error');
   }
 };
 
