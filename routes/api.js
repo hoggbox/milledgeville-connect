@@ -1457,9 +1457,14 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 });
 
 // ─── ORIGINAL ROUTES (everything below this is your original code unchanged) ───
-router.post('/auth/register', authLimiter, async (req, res) => {
+router.post('/auth/register', authLimiter, (req, _res, next) => {
+  // Stash raw password before sanitizeBody strips it
+  req._rawPassword = req.body && req.body.password;
+  next();
+}, async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email } = req.body;
+    const password = req._rawPassword;
     if (!name || !email || !password)
       return res.status(400).json({ message: 'All fields required' });
 
@@ -1490,9 +1495,16 @@ router.post('/auth/register', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/auth/login', authLimiter, async (req, res) => {
+router.post('/auth/login', authLimiter, (req, _res, next) => {
+  // Stash raw password before sanitizeBody strips it
+  req._rawPassword = req.body && req.body.password;
+  next();
+}, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email } = req.body;
+    const password = req._rawPassword;
+    if (!email || !password)
+      return res.status(400).json({ message: 'Invalid email or password' });
     const user = await User.findOne({ email: email.toLowerCase() }).populate('verifiedBusiness');
     if (!user) return res.status(400).json({ message: 'Invalid email or password' });
 
