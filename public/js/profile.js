@@ -248,10 +248,14 @@ function showProfileSheet() {
     ? new Date(currentUser.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : 'Recently';
 
+  const _igHandle  = escHtml((currentUser.instagram || '').replace('@', ''));
+  const _fbUrl     = escHtml(safeUrl(currentUser.facebook) || (currentUser.facebook ? 'https://facebook.com/' + currentUser.facebook : ''));
+  const _wsUrl     = escHtml(safeUrl(currentUser.website));
+  const _wsDisplay = escHtml((currentUser.website || '').replace(/^https?:\/\//, ''));
   const socials = [
-    currentUser.instagram ? `<a href="https://instagram.com/${currentUser.instagram.replace('@','')}" target="_blank" class="flex items-center gap-2 text-pink-400 hover:text-pink-300 text-sm font-medium transition"><span class="text-lg">📸</span> @${currentUser.instagram.replace('@','')}</a>` : '',
-    currentUser.facebook ? `<a href="${currentUser.facebook.startsWith('http') ? currentUser.facebook : 'https://facebook.com/'+currentUser.facebook}" target="_blank" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition"><span class="text-lg">👤</span> Facebook</a>` : '',
-    currentUser.website ? `<a href="${currentUser.website.startsWith('http') ? currentUser.website : 'https://'+currentUser.website}" target="_blank" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"><span class="text-lg">🔗</span> ${currentUser.website.replace(/^https?:\/\//,'')}</a>` : ''
+    currentUser.instagram ? `<a href="https://instagram.com/${_igHandle}" target="_blank" class="flex items-center gap-2 text-pink-400 hover:text-pink-300 text-sm font-medium transition"><span class="text-lg">📸</span> @${_igHandle}</a>` : '',
+    currentUser.facebook  ? `<a href="${_fbUrl}" target="_blank" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition"><span class="text-lg">👤</span> Facebook</a>` : '',
+    (currentUser.website && _wsUrl) ? `<a href="${_wsUrl}" target="_blank" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"><span class="text-lg">🔗</span> ${_wsDisplay}</a>` : ''
   ].filter(Boolean).join('');
 
   const isNative      = isNativePlatform();
@@ -271,15 +275,15 @@ function showProfileSheet() {
     <div class="flex justify-center -mt-20 mb-4 relative z-10">
       <div class="relative inline-block">
         <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white shadow-2xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white">
-          ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()}
+          ${currentUser.avatar ? `<img src="${escHtml(safeUrl(currentUser.avatar, true))}" class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()}
         </div>
         ${isVerified ? `<div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1 border border-white">✓ Verified</div>` : ''}
       </div>
     </div>
 
-<h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
-<p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
-${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+<h2 class="text-3xl font-bold text-slate-900 mt-2">${escHtml(currentUser.name)}</h2>
+<p class="text-emerald-600 text-base mb-1">${escHtml(currentUser.email)}</p>
+${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${escHtml(currentUser.neighborhood)}</p>` : ''}
 
 <!-- Reputation Badge for Own Profile -->
 <div class="flex justify-center mt-3 mb-6">
@@ -297,7 +301,7 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
     </div>` : ''}
 
     ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
-    ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
+    ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${escHtml(bizName)}</div>` : ''}
 
     <div class="mt-6 grid grid-cols-3 gap-3">
       <div class="bg-slate-50 border border-slate-100 rounded-2xl py-3 flex flex-col items-center">
@@ -319,7 +323,7 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
 
     ${(currentUser.phone || socials) ? `
     <div class="mt-5 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left space-y-2">
-      ${currentUser.phone ? `<div class="flex items-center gap-2 text-slate-600 text-sm"><span>📞</span><span>${currentUser.phone}</span></div>` : ''}
+      ${currentUser.phone ? `<div class="flex items-center gap-2 text-slate-600 text-sm"><span>📞</span><span>${escHtml(currentUser.phone)}</span></div>` : ''}
       ${socials}
     </div>` : ''}
 
@@ -446,7 +450,7 @@ function showEditProfileModal() {
           <div id="avatarPreview"
                class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-emerald-200 shadow-lg flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white cursor-pointer relative group"
                onclick="document.getElementById('avatarFileInput').click()">
-            ${u.avatar ? `<img src="${u.avatar}" class="w-full h-full object-cover" id="avatarImg">` : `<span id="avatarLetter">${(u.name||'?')[0].toUpperCase()}</span>`}
+            ${u.avatar ? `<img src="${escHtml(safeUrl(u.avatar, true))}" class="w-full h-full object-cover" id="avatarImg">` : `<span id="avatarLetter">${(u.name||'?')[0].toUpperCase()}</span>`}
             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-3xl">
               <span class="text-white text-3xl">📷</span>
             </div>
@@ -622,7 +626,7 @@ function handleAvatarSelect(input) {
     const preview = document.getElementById('avatarPreview');
     if (preview) {
       preview.innerHTML = `
-        <img src="${pendingAvatarData}" class="w-full h-full object-cover" id="avatarImg">
+        <img src="${escHtml(pendingAvatarData)}" class="w-full h-full object-cover" id="avatarImg">
         <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-3xl">
           <span class="text-white text-3xl">📷</span>
         </div>`;
@@ -634,7 +638,7 @@ function handleAvatarSelect(input) {
 window.removeAvatar = function () {
   pendingAvatarData = null;
   const preview = document.getElementById('avatarPreview');
-  const letter = (currentUser.name || '?')[0].toUpperCase();
+  const letter = escHtml((currentUser.name || '?')[0].toUpperCase());
   if (preview) {
     preview.innerHTML = `
       <span id="avatarLetter">${letter}</span>
@@ -701,6 +705,20 @@ function escHtml(str) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── URL safety helper ────────────────────────────────────────────────────────
+// Blocks javascript: and other dangerous protocols.
+// Pass allowData=true for avatar/image src attributes (data: URIs are OK there).
+function safeUrl(url, allowData = false) {
+  if (!url) return '';
+  try {
+    const normalized = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+    const u = new URL(normalized);
+    const allowed = ['http:', 'https:'];
+    if (allowData) allowed.push('data:');
+    return allowed.includes(u.protocol) ? url : '';
+  } catch { return ''; }
+}
+
 // ─── OTHER USER PROFILE MODAL ───────────────────────────────────────────────
 window.showUserProfileModal = async function (userId) {
   if (!currentUser) {
@@ -730,13 +748,13 @@ window.showUserProfileModal = async function (userId) {
             <!-- Avatar -->
             <div class="flex justify-center mb-4">
               <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-emerald-200 shadow-xl flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
-                ${user.avatar 
-                  ? `<img src="${user.avatar}" class="w-full h-full object-cover">` 
+              ${user.avatar 
+                  ? `<img src="${escHtml(safeUrl(user.avatar, true))}" class="w-full h-full object-cover">` 
                   : (user.name || '?')[0].toUpperCase()}
               </div>
             </div>
 
-            <h2 class="text-3xl font-bold text-center mb-1">${user.name}</h2>
+            <h2 class="text-3xl font-bold text-center mb-1">${escHtml(user.name)}</h2>
 
             <!-- Beta Tester Badge -->
             ${user.isBetaTester ? `
@@ -758,18 +776,20 @@ window.showUserProfileModal = async function (userId) {
 
             ${user.neighborhood ? `
             <div class="text-center text-slate-500 mb-6">
-              📍 ${user.neighborhood}
+              📍 ${escHtml(user.neighborhood)}
             </div>` : ''}
 
             <!-- Action Buttons -->
             <div class="flex gap-3 mt-8">
-              <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
+              <button id="upm-msg-btn"
+                      data-uid="${escHtml(user._id)}" data-uname="${escHtml(user.name)}"
                       class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
                 ✉️ Message
               </button>
               
               ${!isOwnProfile ? `
-              <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
+              <button id="upm-report-btn"
+                      data-uid="${escHtml(user._id)}" data-uname="${escHtml(user.name)}"
                       class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg">
                 🚩 Report User
               </button>` : ''}
@@ -784,6 +804,19 @@ window.showUserProfileModal = async function (userId) {
       </div>`;
 
     document.body.insertAdjacentHTML('beforeend', html);
+
+    // Wire up action buttons safely (avoids onclick string injection)
+    const _modal = document.getElementById('userProfileModal');
+    const _msgBtn = _modal?.querySelector('#upm-msg-btn');
+    if (_msgBtn) _msgBtn.addEventListener('click', () => {
+      hideUserProfileModal();
+      showComposeMessageModal(user._id, user.name);
+    });
+    const _reportBtn = _modal?.querySelector('#upm-report-btn');
+    if (_reportBtn) _reportBtn.addEventListener('click', () => {
+      reportUser(user._id, user.name);
+      hideUserProfileModal();
+    });
 
   } catch (e) {
     console.error(e);

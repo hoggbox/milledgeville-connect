@@ -2291,52 +2291,53 @@ router.get('/owner/stats', authenticate, async (req, res) => {
   }
 });
 
+// ─── ADMIN ADD BUSINESS (with logo upload) ─────────────────────────────────
 router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { 
-      name, 
-      address, 
-      phone, 
-      email, 
-      website, 
-      description, 
-      category,     // ← This should be the category _id
-      logo 
-    } = sanitizeContent(req.body);
+    const { name, category, address, phone, email, website, description, logo } = sanitizeContent(req.body);
 
-    if (!name || !category) {
-      return res.status(400).json({ message: 'Name and category are required' });
-    }
+    if (!name || !category) return res.status(400).json({ message: 'Name and category required' });
 
-    // Verify the category actually exists
     const catExists = await Category.findById(category);
-    if (!catExists) {
-      return res.status(400).json({ message: 'Invalid category selected' });
-    }
+    if (!catExists) return res.status(400).json({ message: 'Invalid category' });
 
     const business = await Business.create({
       name,
+      category,
       address: address || '',
       phone: phone || '',
       email: email || '',
       website: website || '',
       description: description || '',
-      category: category,           // ← Save the ObjectId reference
-      logo: logo || null,
-      // owner remains null for admin-added businesses
+      logo: logo || null,           // ← base64 support
     });
 
-    // Return the newly created business with populated category
-    const populated = await Business.findById(business._id)
-      .populate('category', 'name icon _id');
-
-    res.json({ 
-      message: 'Business added successfully', 
-      business: populated 
-    });
-
+    const populated = await Business.findById(business._id).populate('category', 'name icon');
+    res.json({ message: 'Business added', business: populated });
   } catch (err) {
-    console.error('Add business error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER EDIT BUSINESS (with logo upload) ───────────────────────────────
+router.put('/owner/business', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
+
+    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = sanitizeContent(req.body);
+
+    const updates = { name, address, phone, website, description, email, hours, priceRange, tags };
+    if (logo !== undefined) updates.logo = logo;   // ← allow base64 logo update
+
+    const business = await Business.findByIdAndUpdate(
+      user.verifiedBusiness,
+      updates,
+      { new: true }
+    ).populate('category', 'name icon');
+
+    res.json({ message: 'Business updated', business });
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });

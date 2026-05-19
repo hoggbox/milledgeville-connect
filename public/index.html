@@ -93,7 +93,12 @@
           <input id="loginEmail" type="email" placeholder="Email"
                  class="w-full mb-3 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
           <input id="loginPassword" type="password" placeholder="Password"
-                 class="w-full mb-6 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+                 class="w-full mb-4 px-5 py-4 rounded-3xl border border-slate-200 focus:border-emerald-500 outline-none">
+          <label class="flex items-center gap-2.5 cursor-pointer select-none mb-5 px-1">
+            <input type="checkbox" id="stayLoggedIn" checked
+                   class="w-4 h-4 rounded accent-emerald-500 cursor-pointer">
+            <span class="text-sm text-slate-500">Stay logged in</span>
+          </label>
           <button onclick="handleLogin()"
                   class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Log In</button>
           <p onclick="switchToRegister()" class="text-center text-sm mt-6 text-emerald-600 cursor-pointer">Don't have an account? Register</p>

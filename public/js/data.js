@@ -676,9 +676,9 @@ function _renderSpotlight(businesses) {
       <div onclick="showBusinessDetail('${b._id}')"
            class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
         <div class="flex items-center gap-3 mb-3">
-          ${b.logo
-            ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
-            : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+${b.logo 
+  ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0 border border-white/20" alt="${b.name}">`
+  : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
           <div class="flex-1 min-w-0">
             <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
             <p class="text-xs text-white/50">${b.category?.name || ''}</p>
@@ -1372,9 +1372,9 @@ function renderDirectory(businesses) {
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
-        ${b.logo 
-          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
-          : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+${b.logo 
+  ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/20" alt="${b.name}">`
+  : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
           <p class="text-white/70 text-sm">${esc(b.address || 'Milledgeville, GA')}</p>
@@ -1513,6 +1513,17 @@ async function showBusinessDetail(id) {
         </div>
         <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
         <div class="p-6">
+          <!-- Logo / Icon - Big and centered at the top -->
+          <div class="flex justify-center mb-6">
+            ${business.logo 
+              ? `<img src="${business.logo}" 
+                      class="w-24 h-24 object-cover rounded-3xl shadow-lg border border-white/20" 
+                      alt="${esc(business.name)}">`
+              : `<div class="w-24 h-24 bg-white/10 rounded-3xl flex items-center justify-center text-6xl border border-white/20">
+                   ${business.category?.icon || '🏪'}
+                 </div>`}
+          </div>
+
           <div class="flex items-start justify-between mb-1">
             <h1 class="text-3xl font-bold leading-tight">${esc(business.name)}</h1>
             ${isOwned ? `<span class="text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full mt-1">✓ Verified Owner</span>` : ''}
@@ -5992,9 +6003,9 @@ async function renderAdminBusinesses() {
           ${data.businesses.map(b => `
             <div class="flex items-center justify-between bg-white/5 rounded-2xl p-3 gap-3">
               <div class="flex items-center gap-3 min-w-0">
-                ${b.logo
-                  ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0">`
-                  : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+${b.logo 
+  ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-white/20" alt="">`
+  : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
                 <div class="min-w-0">
                   <div class="font-semibold text-sm truncate">${b.name}</div>
                   <div class="text-xs text-white/50 truncate">${b.address || 'No address'}</div>
@@ -6090,9 +6101,16 @@ window.showAddBusinessModal = async function() {
           </div>
 
           <div>
-            <label class="text-xs text-white/50 uppercase tracking-wide">Logo URL (optional)</label>
-            <input id="abLogo" type="url" placeholder="https://..."
-                   class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+            <label class="text-xs text-white/50 uppercase tracking-wide">Business Logo (optional)</label>
+            <div class="mt-2 flex items-center gap-3">
+              <button onclick="document.getElementById('abLogoUpload').click()" 
+                      class="bg-white/10 hover:bg-white/20 px-5 py-3 rounded-2xl text-sm font-medium flex items-center gap-2">
+                📸 Upload Logo
+              </button>
+              <input id="abLogoUpload" type="file" accept="image/*" class="hidden" 
+                     onchange="handleBusinessLogoUpload(this)">
+              <div id="abLogoPreview" class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl border border-white/20"></div>
+            </div>
           </div>
         </div>
 
@@ -6125,7 +6143,7 @@ window.submitAddBusiness = async function() {
     email:       document.getElementById('abEmail').value.trim(),
     website:     document.getElementById('abWebsite').value.trim(),
     description: document.getElementById('abDescription').value.trim(),
-    logo:        document.getElementById('abLogo').value.trim() || null,
+    logo:        pendingBusinessLogo || null,   // ← Use uploaded logo
   };
 
   try {
@@ -6339,8 +6357,24 @@ window.editBusiness = async function(businessId) {
           <textarea id="editBizDescription" rows="3" placeholder="Description"
                     class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">${business.description || ''}</textarea>
 
+          <!-- Logo Upload -->
+          <div class="mt-4">
+            <label class="block text-xs font-semibold text-gray-500 mb-2">Business Logo (optional)</label>
+            <div class="flex items-center gap-3">
+              <button onclick="document.getElementById('editBizLogoUpload').click()" 
+                      class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-5 py-3 rounded-2xl text-sm font-medium">
+                📸 Upload New Logo
+              </button>
+              <input id="editBizLogoUpload" type="file" accept="image/*" class="hidden" 
+                     onchange="handleBusinessLogoUpload(this)">
+              <div id="editBizLogoPreview" class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-2xl border border-gray-200 overflow-hidden">
+                ${business.logo ? `<img src="${business.logo}" class="w-full h-full object-cover">` : business.category?.icon || '🏪'}
+              </div>
+            </div>
+          </div>
+
           <button onclick="saveBusinessEdit('${businessId}')" 
-                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold mt-6">
             Save Changes
           </button>
         </div>
@@ -6361,7 +6395,8 @@ window.saveBusinessEdit = async function(businessId) {
     address: document.getElementById('editBizAddress').value.trim(),
     phone: document.getElementById('editBizPhone').value.trim(),
     email: document.getElementById('editBizEmail').value.trim(),
-    description: document.getElementById('editBizDescription').value.trim()
+    description: document.getElementById('editBizDescription').value.trim(),
+    logo: pendingBusinessLogo || null   // ← Use uploaded logo if any
   };
 
   if (!payload.name) {
@@ -6396,7 +6431,7 @@ window.apiPut = async function(url, data) {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('token')
+        'Authorization': 'Bearer ' + (typeof getToken === 'function' ? getToken() : localStorage.getItem('token'))
       },
       body: JSON.stringify(data)
     });
@@ -6698,6 +6733,31 @@ window.flagShoutout = async function (shoutoutId) {
     if (card) card.remove();
   } else {
     showToast('🚩 Thank you — your flag has been recorded.', 'success');
+  }
+};
+
+let pendingBusinessLogo = null;
+
+window.handleBusinessLogoUpload = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 3 * 1024 * 1024) {
+    showToast('Logo must be under 3MB', 'error');
+    return;
+  }
+
+  try {
+    const compressed = await compressImage(file, 400, 0.85); // small & sharp for logo
+    const reader = new FileReader();
+    reader.onload = e => {
+      pendingBusinessLogo = e.target.result;
+      const preview = document.getElementById('abLogoPreview');
+      if (preview) preview.innerHTML = `<img src="${pendingBusinessLogo}" class="w-full h-full object-cover rounded-2xl">`;
+    };
+    reader.readAsDataURL(compressed);
+  } catch (e) {
+    showToast('Failed to process logo', 'error');
   }
 };
 
