@@ -2899,6 +2899,9 @@ function renderEventCard(e, now) {
 // ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
 let _allResources = [];
 let _resourceCategories = [];
+let _resourcePage = 1;
+let _resourceFilteredItems = [];
+const RESOURCE_PAGE_SIZE = 8;
 
 async function loadResourcesPage(content) {
   content.innerHTML = `
@@ -2961,7 +2964,7 @@ async function loadResourcesPage(content) {
       
         <div class="flex items-center justify-between mb-5">
           <h2 class="text-3xl md:text-4xl font-bold">🌍 Community Resources</h2>
-          <span class="text-sm text-white/40">${_allResources.length} listed</span>
+          <span class="text-sm text-white/40" id="resourceTotalCount">${_allResources.length} listed</span>
         </div>
         <p class="text-white/50 text-sm mb-5 leading-relaxed">
           Free and public resources available to everyone in the Milledgeville community.
@@ -3035,12 +3038,15 @@ window.filterResources = function (categoryName) {
     return catMatch && searchMatch;
   });
 
-  renderResourcesList(filtered);
+  renderResourcesList(filtered, true);  // reset to page 1 on filter/search change
 };
 
-function renderResourcesList(items) {
+function renderResourcesList(items, resetPage = true) {
   const container = document.getElementById('resourcesResults');
   if (!container) return;
+
+  _resourceFilteredItems = items;
+  if (resetPage) _resourcePage = 1;
 
   if (!items.length) {
     container.innerHTML = `
@@ -3054,13 +3060,51 @@ function renderResourcesList(items) {
     return;
   }
 
+  const totalPages = Math.ceil(items.length / RESOURCE_PAGE_SIZE);
+  const start = (_resourcePage - 1) * RESOURCE_PAGE_SIZE;
+  const pageItems = items.slice(start, start + RESOURCE_PAGE_SIZE);
+
+  // Group only the current page's items
   const grouped = {};
-  items.forEach(item => {
+  pageItems.forEach(item => {
     const catName = item.category?.name || 'Other';
     const catIcon = item.category?.icon || '📍';
     if (!grouped[catName]) grouped[catName] = { icon: catIcon, items: [] };
     grouped[catName].items.push(item);
   });
+
+  const paginationHTML = totalPages > 1 ? `
+    <div class="flex items-center justify-center gap-2 mt-6 flex-wrap">
+      <button onclick="resourceGoToPage(${_resourcePage - 1})"
+              ${_resourcePage === 1 ? 'disabled' : ''}
+              class="px-4 py-2 rounded-2xl text-sm font-semibold transition
+                     ${_resourcePage === 1
+                       ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                       : 'bg-white/10 hover:bg-white/20 text-white'}">
+        ← Prev
+      </button>
+
+      ${Array.from({ length: totalPages }, (_, i) => i + 1).map(p => `
+        <button onclick="resourceGoToPage(${p})"
+                class="w-9 h-9 rounded-xl text-sm font-semibold transition
+                       ${p === _resourcePage
+                         ? 'bg-emerald-600 text-white'
+                         : 'bg-white/10 hover:bg-white/20 text-white/70'}">
+          ${p}
+        </button>`).join('')}
+
+      <button onclick="resourceGoToPage(${_resourcePage + 1})"
+              ${_resourcePage === totalPages ? 'disabled' : ''}
+              class="px-4 py-2 rounded-2xl text-sm font-semibold transition
+                     ${_resourcePage === totalPages
+                       ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                       : 'bg-white/10 hover:bg-white/20 text-white'}">
+        Next →
+      </button>
+    </div>
+    <p class="text-center text-xs text-white/30 mt-2">
+      Page ${_resourcePage} of ${totalPages} · ${items.length} total
+    </p>` : '';
 
   container.innerHTML = Object.entries(grouped).map(([catName, group]) => `
     <div class="mb-7">
@@ -3073,8 +3117,18 @@ function renderResourcesList(items) {
       <div class="space-y-3">
         ${group.items.map(item => renderResourceCard(item)).join('')}
       </div>
-    </div>`).join('');
+    </div>`).join('') + paginationHTML;
 }
+
+window.resourceGoToPage = function (page) {
+  const totalPages = Math.ceil(_resourceFilteredItems.length / RESOURCE_PAGE_SIZE);
+  if (page < 1 || page > totalPages) return;
+  _resourcePage = page;
+  renderResourcesList(_resourceFilteredItems, false);
+  // Scroll back to the top of the results
+  const container = document.getElementById('resourcesResults');
+  if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 function renderResourceCard(item) {
   const icon = item.category?.icon || '📍';
