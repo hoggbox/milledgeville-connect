@@ -221,43 +221,25 @@ window.shareContent = async function(type, title, extra = '') {
   }
 };
 
-// ─── SAFE Clickable User Helper (Clean Rep Badge) ─────────────────────────────
-function renderClickableUser(userData, fallbackName = 'Anonymous') {
-  if (!userData) return fallbackName;
-
-  let userId = null;
-  let displayName = fallbackName;
-  let reputation = 0;
-
-  if (typeof userData === 'object' && userData !== null) {
-    userId = userData._id || userData.id;
-    displayName = userData.name || userData.authorName || userData.author || fallbackName;
-    reputation = userData.reputation || 0;
-  } else if (typeof userData === 'string' && userData.length > 10) {
-    userId = userData;
-  }
-
-  if (!userId) return displayName;
-
-  const repHTML = reputation >= 10 
-    ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">⭐${reputation}</span>`
-    : '';
-
-  return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
-                class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
-            ${displayName}${repHTML}
-          </span>`;
+// ─── renderClickableUser is defined in security.js (safe, escaped version) ────
+// The safe version in security.js correctly escapes userId and displayName.
+// This stub is here only for load-order safety.
+function renderClickableUser(userData, fallbackName) {
+  if (window.renderClickableUser && window.renderClickableUser !== renderClickableUser)
+    return window.renderClickableUser(userData, fallbackName);
+  return esc(fallbackName || 'Anonymous');
 }
 
-// ─── In-App Update Banner ───────────────────────────────────────────────────
+// ─── In-App Update Banner (security.js overrides this with safe esc() version) ─
 function showUpdateBanner(newVersion) {
   if (document.getElementById('updateBanner')) return;
+  const safeVersion = esc(String(newVersion || ''));  // ← FIXED: escaped
 
   const bannerHTML = `
     <div id="updateBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-3xl shadow-2xl p-5 flex items-center gap-4 z-[9999] max-w-md border border-white/20">
       <div class="flex-1">
         <p class="font-semibold text-lg">🚀 New Update Available</p>
-        <p class="text-sm opacity-90">Version ${newVersion} is ready</p>
+        <p class="text-sm opacity-90">Version ${safeVersion} is ready</p>
       </div>
       <div class="flex gap-3">
         <button onclick="dismissUpdateBanner()" 
@@ -442,11 +424,16 @@ window.initGlobalSearch = function () {
       }
 
 let html = '';
+// Use safe icons from a local map — never trust server-supplied icon field
+const _SAFE_ICONS = { business:'📍', event:'📅', deal:'🔥', news:'📰', shoutout:'🚦', lost:'🔎', market:'🛒' };
 res.results.forEach(item => {
+  const safeType = esc(String(item.type || ''));
+  const safeId   = esc(String(item.id   || ''));
+  const icon     = _SAFE_ICONS[item.type] || '🔍';
   html += `
-    <div onclick="handleSearchResultClick('${item.type}', '${item.id}')" 
+    <div onclick="handleSearchResultClick('${safeType}', '${safeId}')" 
          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-none">
-      <span class="text-2xl">${esc(item.icon || '')}</span>
+      <span class="text-2xl">${icon}</span>
       <div class="flex-1 min-w-0">
         <p class="font-medium text-white text-sm leading-tight">${esc(item.title || '')}</p>
         <p class="text-white/60 text-xs line-clamp-1">${esc(item.subtitle || '')}</p>

@@ -2,11 +2,29 @@ const express = require('express');
 const router  = express.Router();
 
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
-const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
+const { sanitizeBody, securityHeaders, sanitizeContent, isValidObjectId, stripDangerousFields } = require('./Sanitize');
 
 router.use(securityHeaders);   // CSP + security headers
 router.use(sanitizeBody);      // Deep sanitization on every req.body
 const jwt     = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+
+// ─── RATE LIMITERS ─────────────────────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // max 20 auth attempts per window per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests, please try again later.' }
+});
+
+const postLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minute
+  max: 30,              // 30 API calls per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests, please slow down.' }
+});
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
 
@@ -56,6 +74,7 @@ const TIMEOUT_DURATION  = 24 * 60 * 60 * 1000; // 24-hour posting ban
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Post not found' });
 
@@ -128,6 +147,7 @@ router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/users/:id/report', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const targetUser = await User.findById(req.params.id).select('name');
     if (!targetUser) return res.status(404).json({ message: 'User not found' });
 
@@ -157,6 +177,10 @@ router.post('/users/:id/report', authenticate, async (req, res) => {
 router.post('/reports', authenticate, async (req, res) => {
   try {
     const { type, contentId, reason, extraInfo } = req.body;
+    // Validate type against allowed values to prevent injection
+    const VALID_REPORT_TYPES = new Set(['user','shoutout','lost','market','event','deal','news','comment']);
+    if (!VALID_REPORT_TYPES.has(type)) return res.status(400).json({ message: 'Invalid report type' });
+    if (!isValidObjectId(contentId)) return res.status(400).json({ message: 'Invalid content ID' });
 
     if (!type || !contentId || !reason?.trim()) {
       return res.status(400).json({ message: 'Type, contentId, and reason are required' });
@@ -320,10 +344,16 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.patch('/admin/reports/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { status, adminNote } = req.body;
+    if (!isValidObjectId(req.params.id))
+      return res.status(400).json({ message: 'Invalid report ID' });
+    const VALID_STATUSES = new Set(['pending', 'reviewed', 'dismissed']);
+    const status = req.body.status;
+    if (!status || !VALID_STATUSES.has(status))
+      return res.status(400).json({ message: 'Invalid status value' });
+    const adminNote = (req.body.adminNote || '').toString().substring(0, 1000);
     const report = await Report.findByIdAndUpdate(
       req.params.id,
-      { status, adminNote: adminNote || '' },
+      { status, adminNote },
       { new: true }
     );
     if (!report) return res.status(404).json({ message: 'Report not found' });
@@ -720,6 +750,7 @@ router.post('/messages/mark-as-read', authenticate, async (req, res) => {
 router.get('/messages/conversation/:otherUserId', authenticate, async (req, res) => {
   try {
     const { otherUserId } = req.params;
+    if (!isValidObjectId(otherUserId)) return res.status(400).json({ message: 'Invalid ID' });
     const messages = await Message.find({
       $or: [
         { sender: req.userId, receiver: otherUserId },
@@ -768,6 +799,7 @@ router.post('/messages', authenticate, async (req, res) => {
 
 router.patch('/messages/:id/read', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const msg = await Message.findByIdAndUpdate(req.params.id, { read: true }, { new: true });
     if (!msg) return res.status(404).json({ message: 'Message not found' });
     res.json(msg);
@@ -778,6 +810,7 @@ router.patch('/messages/:id/read', authenticate, async (req, res) => {
 
 router.delete('/messages/:id', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const msg = await Message.findById(req.params.id);
     if (!msg) return res.status(404).json({ message: 'Message not found' });
     if (msg.sender.toString() !== req.userId && msg.receiver.toString() !== req.userId) {
@@ -794,6 +827,7 @@ router.delete('/messages/:id', authenticate, async (req, res) => {
 // Deletes all messages between the current user and another user
 router.delete('/messages/conversation/:otherId', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.otherId)) return res.status(400).json({ message: 'Invalid ID' });
     const myId    = req.userId;
     const otherId = req.params.otherId;
     const result  = await Message.deleteMany({
@@ -832,6 +866,7 @@ router.delete('/messages/outbox', authenticate, async (req, res) => {
 
 router.post('/users/:id/block', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.userId);
     const targetId = req.params.id;
     const idx = user.blockedUsers.indexOf(targetId);
@@ -849,6 +884,7 @@ router.post('/users/:id/block', authenticate, async (req, res) => {
 
 router.get('/users/:id', optionalAuth, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.params.id).select('-password -email -blockedUsers');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
@@ -1056,6 +1092,7 @@ broadcastPush(
 
 router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.userId);
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
@@ -1089,6 +1126,7 @@ sendPushToUser(
 
 router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
     if (lost.owner.toString() !== req.userId) 
@@ -1179,6 +1217,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
 
 router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.userId);
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
@@ -1212,6 +1251,7 @@ sendPushToUser(
 
 router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
     if (item.seller.toString() !== req.userId) 
@@ -1299,6 +1339,7 @@ router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) =
 
 router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
@@ -1339,6 +1380,7 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
 
 router.delete('/shoutouts/:id', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     const user = await User.findById(req.userId);
@@ -1372,6 +1414,7 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
 
 router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
     if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
@@ -1385,6 +1428,7 @@ router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
 
 router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
     if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
@@ -1413,11 +1457,19 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 });
 
 // ─── ORIGINAL ROUTES (everything below this is your original code unchanged) ───
-router.post('/auth/register', async (req, res) => {
+router.post('/auth/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password)
       return res.status(400).json({ message: 'All fields required' });
+
+    // Basic input validation
+    if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 80)
+      return res.status(400).json({ message: 'Name must be between 2 and 80 characters' });
+    if (typeof email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+      return res.status(400).json({ message: 'Invalid email address' });
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128)
+      return res.status(400).json({ message: 'Password must be between 8 and 128 characters' });
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) return res.status(400).json({ message: 'Email already in use' });
@@ -1438,7 +1490,7 @@ router.post('/auth/register', async (req, res) => {
   }
 });
 
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() }).populate('verifiedBusiness');
@@ -1884,7 +1936,8 @@ router.put('/news/:id', authenticate, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
-    const { title, summary, content, images } = req.body;
+    const clean = sanitizeContent(req.body);
+    const { title, summary, content, images } = clean;
     article.title   = title   || article.title;
     article.summary = summary || article.summary;
     article.content = content || article.content;
@@ -1918,7 +1971,7 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
     if (business.owner)
       return res.status(400).json({ message: 'This business has already been claimed and is no longer available.' });
 
-    const { ownerName, phone, address, message, isRestaurant } = req.body;
+    const { ownerName, phone, address, message, isRestaurant } = sanitizeContent(req.body);
     const existing = await ClaimRequest.findOne({ business: req.params.businessId, user: req.userId, status: 'pending' });
     if (existing)
       return res.status(400).json({ message: 'You already have a pending claim for this business' });
@@ -1950,7 +2003,8 @@ router.put('/owner/business', authenticate, async (req, res) => {
     if (!user.verifiedBusiness)
       return res.status(403).json({ message: 'No verified business' });
 
-    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = req.body;
+    const rawBody = sanitizeContent(req.body);
+    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = rawBody;
     const updates = { name, address, phone, website, description };
     if (email     !== undefined) updates.email     = email;
     if (hours     !== undefined) updates.hours     = hours;
@@ -2077,7 +2131,7 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category } = req.body;
+    const { title, description, expires, category } = sanitizeContent(req.body);
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2129,7 +2183,7 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category } = req.body;
+    const { title, date, location, description, category } = sanitizeContent(req.body);
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2179,7 +2233,7 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
       description, 
       category,     // ← This should be the category _id
       logo 
-    } = req.body;
+    } = sanitizeContent(req.body);
 
     if (!name || !category) {
       return res.status(400).json({ message: 'Name and category are required' });
@@ -2220,7 +2274,7 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
 
 router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, address, phone, email, website, description, category, logo } = req.body;
+    const { name, address, phone, email, website, description, category, logo } = sanitizeContent(req.body);
 
     const updates = {
       name,
@@ -2422,7 +2476,9 @@ router.get('/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
-    const regex = new RegExp(q, 'i');
+    // Escape special regex characters to prevent ReDoS
+    const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').substring(0, 100);
+    const regex = new RegExp(escapedQ, 'i');
 
     const [businesses, events, deals, news, shoutouts, lostitems, marketplace] = await Promise.all([
       Business.find({ $or: [{ name: regex }, { description: regex }] }).populate('category').limit(8),
@@ -2516,6 +2572,7 @@ const CLEAR_THRESHOLD = 8; // number of "cleared" votes needed to mark alert cle
 
 router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     if (shoutout.cleared) return res.status(400).json({ message: 'Alert is already marked cleared' });
@@ -2547,6 +2604,7 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
 //   • The shoutout stays in the DB — TTL index deletes it after 8 hrs as normal
 router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
@@ -2584,45 +2642,9 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GLOBAL PROTECTION — Blocks dangerous fields on EVERY User update
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DANGEROUS_FIELDS = new Set([
-  'admin_login', 'admin_panel_url', 'confirmation_email',
-  'payment_instructions', 'payment_alert', 'urgent_message',
-  'notice_display', 'primary_payment_method', 'card_payment_status',
-  'card_available_in', 'crypto_btc', 'crypto_eth', 'crypto_trc20',
-  'crypto_discount', 'crypto_discount_active', 'crypto_discount_percent',
-  'payment_crypto', '__proto__', 'constructor', 'prototype'
-]);
-
-const originalUpdate = User.schema.methods.findByIdAndUpdate;
-User.schema.methods.findByIdAndUpdate = function(id, update, options) {
-  if (update && typeof update === 'object') {
-    DANGEROUS_FIELDS.forEach(field => delete update[field]);
-  }
-  return originalUpdate.call(this, id, update, options);
-};
-
-// ─── Helper: Sanitize content fields before saving ───────────────────────────
-function sanitizeContent(fields = {}) {
-  const out = {};
-  for (const [key, val] of Object.entries(fields)) {
-    if (typeof val === 'string') {
-      out[key] = val
-        .replace(/<script[\s\S]*?<\/script>/gi, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/\0/g, '')
-        .trim()
-        .substring(0, 10000);
-    } else {
-      out[key] = val;
-    }
-  }
-  return out;
-}
-
+// ─── NOTE: Dangerous-field blocking is handled by Sanitize.js sanitizeBody
+// middleware on every request. The sanitizeContent helper is also imported from
+// Sanitize.js. No duplicate local version needed.
 
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
 // Bump CURRENT_VERSION here on each release. The client's checkForAppUpdate()
