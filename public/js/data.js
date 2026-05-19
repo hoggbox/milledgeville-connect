@@ -679,7 +679,9 @@ function _renderSpotlight(businesses) {
 ${b.logo 
   ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
           class="w-10 h-10 object-cover rounded-2xl flex-shrink-0 border border-white/20" 
-          alt="${b.name}">`
+          alt="${b.name}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+  + `<div class="w-10 h-10 bg-white/10 rounded-2xl items-center justify-center text-2xl flex-shrink-0" style="display:none">${b.category?.icon || '🏪'}</div>`
   : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
           <div class="flex-1 min-w-0">
             <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
@@ -1377,7 +1379,9 @@ function renderDirectory(businesses) {
 ${b.logo 
   ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
           class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/20" 
-          alt="${b.name}">`
+          alt="${b.name}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+  + `<div class="w-12 h-12 bg-white/20 rounded-2xl items-center justify-center text-3xl flex-shrink-0" style="display:none">${b.category?.icon || '🏪'}</div>`
   : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
@@ -1465,7 +1469,8 @@ async function showBusinessDetail(id) {
         <div class="flex items-center gap-3 pb-3 border-b border-gray-200">
 <img src="${business.logo.startsWith('data:') ? business.logo : 'data:image/jpeg;base64,' + business.logo}" 
      class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0" 
-     alt="${business.name}">
+     alt="${business.name}"
+     onerror="this.style.display='none'">
           <div>
             <p class="font-bold text-slate-900 text-base leading-tight">${business.name}</p>
             ${business.priceRange ? `<span class="text-xs font-semibold text-gray-500">${business.priceRange} · ${business.category?.name || ''}</span>` : `<span class="text-xs text-gray-500">${business.category?.name || ''}</span>`}
@@ -3369,7 +3374,7 @@ async function loadOwnerDashboard(content) {
             <h3 class="font-bold text-base mb-3 flex items-center gap-2"><span>🖼️</span> Logo</h3>
             <div class="flex items-center gap-4 mb-3">
               <div id="ownerLogoPreview" class="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center text-3xl overflow-hidden flex-shrink-0">
-                ${biz && biz.logo ? `<img src="${biz.logo}" class="w-full h-full object-cover">` : '🏪'}
+                ${biz && biz.logo ? `<img src="${biz.logo.startsWith('data:') ? biz.logo : 'data:image/jpeg;base64,' + biz.logo}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='🏪'">` : '🏪'}
               </div>
               <div class="flex-1">
                 <button onclick="document.getElementById('ownerLogoInput').click()"
@@ -3628,7 +3633,7 @@ window.handleOwnerLogoUpload = async function (input) {
   const file = input.files[0];
   if (!file) return;
   if (file.size > 3 * 1024 * 1024) { showToast('Logo must be under 3 MB', 'error'); return; }
-  const compressed = await compressImage(file, 400, 0.85);
+  const compressed = await compressImage(file, 300, 0.75);
   const reader = new FileReader();
   reader.onload = async (e) => {
     const logo = e.target.result;
@@ -6761,7 +6766,7 @@ window.handleBusinessLogoUpload = async function(input) {
   }
 
   try {
-    const compressed = await compressImage(file, 400, 0.85); // small & sharp for logo
+    const compressed = await compressImage(file, 300, 0.75); // small & sharp for logo
     const reader = new FileReader();
     reader.onload = e => {
       pendingBusinessLogo = e.target.result;
