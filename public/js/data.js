@@ -1226,9 +1226,12 @@ async function loadDirectoryPage(content) {
         ${[1,2,3,4,5].map(() => `
           <div class="bg-white/5 rounded-3xl p-4 animate-pulse h-28"></div>`).join('')}
       </div>
-    </div>`;
+    </div>
+    <div id="dirPagination" class="flex justify-center gap-3 mt-8"></div>`;
 
   // Render cached categories INSTANTLY (fixes slow/empty category bar on load)
+  window.currentDirPage = 1;
+  window._currentDirList = [];
   if (window._dirCategories && window._dirCategories.length > 0) {
     const bar = document.getElementById('dirCategoryBar');
     if (bar) {
@@ -1351,11 +1354,21 @@ function renderDirectory(businesses) {
 
   if (!businesses || businesses.length === 0) {
     container.innerHTML = `<p class="text-center text-white/50 py-12">No businesses found</p>`;
+    const pag = document.getElementById('dirPagination');
+    if (pag) pag.innerHTML = '';
     return;
   }
 
-    let html = '<div class="space-y-4">';
-  businesses.forEach(b => {
+  // Store the current filtered list so pagination buttons can re-render correctly
+  window._currentDirList = businesses;
+
+  const PAGE_SIZE  = 8;
+  const page       = window.currentDirPage || 1;
+  const totalPages = Math.ceil(businesses.length / PAGE_SIZE) || 1;
+  const paginated  = businesses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  let html = '<div class="space-y-4">';
+  paginated.forEach(b => {
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
@@ -1372,7 +1385,32 @@ function renderDirectory(businesses) {
   });
   html += '</div>';
   container.innerHTML = html;
+
+  renderDirPagination({ currentPage: page, totalPages, hasPrev: page > 1, hasNext: page < totalPages });
 }
+
+function renderDirPagination(p) {
+  const container = document.getElementById('dirPagination');
+  if (!container) return;
+  if (!p.totalPages || p.totalPages <= 1) { container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <button onclick="changeDirPage(${Math.max(1, p.currentPage - 1)})"
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeDirPage(${Math.min(p.totalPages, p.currentPage + 1)})"
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+}
+
+window.changeDirPage = function(page) {
+  window.currentDirPage = page;
+  renderDirectory(window._currentDirList || allBusinesses);
+  document.getElementById('directoryResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 function filterDirectory() {
   const searchTerm = (document.getElementById('directorySearch')?.value || '').toLowerCase();
@@ -1381,11 +1419,13 @@ function filterDirectory() {
     (b.description && b.description.toLowerCase().includes(searchTerm)) ||
     (b.keywords && b.keywords.some(k => k.toLowerCase().includes(searchTerm)))
   );
+  window.currentDirPage = 1;
   renderDirectory(filtered);
 }
 
 async function filterByCategory(catId) {
   const filtered = allBusinesses.filter(b => b.category && b.category._id === catId);
+  window.currentDirPage = 1;
   renderDirectory(filtered);
 }
 // ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
@@ -2653,6 +2693,7 @@ async function loadEventsPage(content) {
   window._eventFilter = 'All';
   window._eventSearch = '';
   window._eventTime   = 'upcoming';
+  window.currentEventPage = 1;
 
   const now            = new Date();
   const upcomingEvents = allEvents.filter(e => new Date(e.date) >= now);
@@ -2669,8 +2710,8 @@ async function loadEventsPage(content) {
       <div class="flex gap-2 mb-4">
         <input id="eventSearchInput" type="text" placeholder="Search events…"
                class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
-               oninput="window._eventSearch=this.value; renderEventsFiltered()">
-        <select id="eventTimeSelect" onchange="window._eventTime=this.value; renderEventsFiltered()"
+               oninput="window._eventSearch=this.value; window.currentEventPage=1; renderEventsFiltered()">
+        <select id="eventTimeSelect" onchange="window._eventTime=this.value; window.currentEventPage=1; renderEventsFiltered()"
                 class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
                 style="background:#1e293b;color-scheme:dark;">
           <option value="upcoming">Upcoming</option>
@@ -2681,6 +2722,7 @@ async function loadEventsPage(content) {
 
       <div id="eventChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
       <div id="eventResults"></div>
+      <div id="eventPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
   renderEventsFiltered();
@@ -2703,14 +2745,14 @@ window.renderEventsFiltered = function () {
   const chips = document.getElementById('eventChips');
   if (chips) {
     chips.innerHTML = `
-      <button onclick="window._eventFilter='All'; renderEventsFiltered()"
+      <button onclick="window._eventFilter='All'; window.currentEventPage=1; renderEventsFiltered()"
               class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
         All
       </button>
       ${activeCats.map(cat => {
         const safe = cat.name.replace(/'/g, "\\'");
         return `
-        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered()"
+        <button onclick="window._eventFilter='${safe}'; window.currentEventPage=1; renderEventsFiltered()"
                 class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === cat.name ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
           <span>${cat.icon}</span><span>${cat.name}</span>
         </button>`;
@@ -2745,14 +2787,22 @@ let events = allEvents.filter(e => {
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">📅</p>
         <p class="text-white/50 text-sm">${msg}</p>
-        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All'; window.currentEventPage=1; renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
       </div>`;
+    const pag = document.getElementById('eventPagination');
+    if (pag) pag.innerHTML = '';
     return;
   }
 
+  // Client-side pagination
+  const PAGE_SIZE  = 8;
+  const page       = window.currentEventPage || 1;
+  const totalPages = Math.ceil(events.length / PAGE_SIZE) || 1;
+  const paginated  = events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   if (time !== 'past') {
     const grouped = {};
-    events.forEach(e => {
+    paginated.forEach(e => {
       const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(e);
@@ -2766,9 +2816,34 @@ let events = allEvents.filter(e => {
         <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
       </div>`).join('');
   } else {
-    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
+    container.innerHTML = `<div class="space-y-3">${paginated.map(e => renderEventCard(e, now)).join('')}</div>`;
   }
+
+  renderEventsPagination({ currentPage: page, totalPages, hasPrev: page > 1, hasNext: page < totalPages });
 }
+
+function renderEventsPagination(p) {
+  const container = document.getElementById('eventPagination');
+  if (!container) return;
+  if (!p.totalPages || p.totalPages <= 1) { container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <button onclick="changeEventPage(${Math.max(1, p.currentPage - 1)})"
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeEventPage(${Math.min(p.totalPages, p.currentPage + 1)})"
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+}
+
+window.changeEventPage = function(page) {
+  window.currentEventPage = page;
+  renderEventsFiltered();
+  document.getElementById('eventResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 function renderEventCard(e, now) {
   const eDate   = new Date(e.date);
@@ -4621,6 +4696,7 @@ async function loadMarketplacePage(content) {
       </div>
 
       <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
+      <div id="marketPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
   // Load data once and cache it
@@ -4635,10 +4711,12 @@ async function loadMarketplacePage(content) {
 
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
+  window.currentMarketPage   = 1;
 
   const searchInput = document.getElementById('marketSearchInput');
   searchInput.addEventListener('input', debounce(() => {
     window.currentMarketSearch = searchInput.value.trim().toLowerCase();
+    window.currentMarketPage   = 1;
     renderMarketplacePage();
   }, 250));
 
@@ -4666,10 +4744,18 @@ async function renderMarketplacePage() {
 
   if (filtered.length === 0) {
     container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+    const pag = document.getElementById('marketPagination');
+    if (pag) pag.innerHTML = '';
     return;
   }
 
-  let html = filtered.map(item => `
+  // Client-side pagination
+  const PAGE_SIZE  = 8;
+  const page       = window.currentMarketPage || 1;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  let html = paginated.map(item => `
     <div onclick="showMarketplaceDetail('${item._id}')" 
          class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
       <div class="flex gap-4">
@@ -4706,6 +4792,7 @@ async function renderMarketplacePage() {
   `).join('');
 
   container.innerHTML = html;
+  renderMarketPagination({ currentPage: page, totalPages, hasPrev: page > 1, hasNext: page < totalPages });
 }
 
 function renderMarketPagination(p) {
@@ -4732,11 +4819,12 @@ function renderMarketPagination(p) {
 window.changeMarketPage = function(page) {
   window.currentMarketPage = page;
   renderMarketplacePage();
+  document.getElementById('marketItemsList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 window.filterAndRenderMarketplace = function() {
   window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
-  window.currentMarketPage = 1;
+  window.currentMarketPage   = 1;
   renderMarketplacePage();
 };
 
