@@ -24,8 +24,10 @@ const BLOCKED_FIELDS = new Set([
   // Privilege escalation
   'isAdmin', 'isModerator', 'canPostNews', 'isMuted', 'postTimeoutUntil',
   'recentPostTimes', 'verifiedBusiness', 'blockedUsers',
-  // Credential fields
-  'password', 'passwordResetToken', 'passwordResetExpires',
+  // Credential fields (password intentionally NOT blocked — it is accepted
+  // on auth routes and hashed by the User model's pre-save hook; blocking it
+  // here breaks login/register without adding any actual security benefit)
+  'passwordResetToken', 'passwordResetExpires',
   // Mongoose internals
   '__v', '_id', 'createdAt', 'updatedAt',
   // Previously-injected scam / phishing fields
