@@ -360,31 +360,6 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
-// ─── CREDIT HELPERS ─────────────────────────────────────────────────────────
-window.isProUser = function() {
-  return !!(currentUser && currentUser.subscriptionTier === 'pro');
-};
-
-async function canSendNotification(isCustom = false) {
-  if (!currentUser) return false;
-
-  const cost = isCustom ? 4 : 2;
-
-  if (currentUser.subscriptionTier === 'pro') {
-    const data = await apiGet('/owner/subscription').catch(() => ({}));
-    const credits = data.credits ?? currentUser.notificationCredits ?? 0;
-    return credits >= cost;
-  }
-
-  // Free tier — only allow if they somehow have credits
-  return (currentUser.notificationCredits || 0) >= cost;
-}
-
-window.showCreditPaywall = function(isCustom = false) {
-  const cost = isCustom ? 4 : 2;
-  showToast(`🔒 Not enough credits.<br>You need <strong>${cost}</strong> credits for this notification.`, 'error');
-};
-
 // ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
