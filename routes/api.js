@@ -625,6 +625,8 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
       if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
 
+      // Prefer native FCM token; only fall back to web VAPID if no native token.
+      // This prevents users who have both stored from receiving 2 notifications.
       if (sub.nativeToken) {
         fcmMessages.push({
           token: sub.nativeToken,
@@ -637,9 +639,7 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
           },
           android: { priority: 'high' }
         });
-      }
-
-      if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+      } else if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
         webSubs.push(sub.subscription);
       }
     }
