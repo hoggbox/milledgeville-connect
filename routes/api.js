@@ -577,54 +577,43 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// ─── FIXED BROADCAST PUSH (No batch method - avoids firebase-admin bug) ─────
+// ─── BROADCAST PUSH (FIXED) ───────────────────────────────────────────────────
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
     console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
 
-    const query = { pushEnabled: true, ...filter };
-    const users = await User.find(query).select('nativeToken');
+    // Query users who have a native token + push enabled
+    const users = await User.find({
+      nativeToken: { $exists: true, $ne: null },
+      pushEnabled: true,
+      ...filter
+    }).select('nativeToken');
 
-    const tokens = users
-      .filter(u => u.nativeToken && typeof u.nativeToken === 'string')
-      .map(u => u.nativeToken);
+    console.log(`Found ${users.length} users with native tokens`);
 
-    if (tokens.length === 0) {
+    if (users.length === 0) {
       console.log('⚠️ No push tokens found');
-      return true;
+      return;
     }
 
-    console.log(`📤 Sending to ${tokens.length} devices...`);
+    const messages = users.map(user => ({
+      token: user.nativeToken,
+      notification: { title, body },
+      data: {
+        page: data.page || 'home',
+        id: data.id || '',
+        url: data.url || ''
+      },
+      android: { priority: 'high' }
+    }));
 
-    let success = 0;
-    let failed = 0;
-
-    // Send individually (more reliable right now)
-    for (const token of tokens) {
-      try {
-        await admin.messaging().send({
-          token: token,
-          notification: { title, body },
-          data: {
-            page: data.page || 'home',
-            id:   data.id   || '',
-            ...data
-          },
-          android: { priority: 'high' }
-        });
-        success++;
-      } catch (err) {
-        failed++;
-        console.warn(`Failed for one token:`, err.message);
-      }
-    }
-
-    console.log(`✅ Broadcast done → Success: ${success} | Failed: ${failed}`);
-    return true;
+    // Send all at once
+    const result = await admin.messaging().sendEach(messages);
+    
+    console.log(`✅ FCM Sent: ${result.successCount} success | ${result.failureCount} failed`);
 
   } catch (err) {
-    console.error('💥 broadcastPush error:', err.message);
-    return false;
+    console.error("💥 broadcastPush FAILED:", err.message);
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
