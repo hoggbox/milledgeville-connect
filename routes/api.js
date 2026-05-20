@@ -1411,6 +1411,23 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
   }
 });
 
+// ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
+router.post('/owner/custom-notification', authenticate, async (req, res) => {
+  try {
+    const { title, body } = req.body;
+    if (!title?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'Title and body required' });
+    }
+
+    await broadcastPush(title.trim(), body.trim(), { page: 'home' });
+
+    res.json({ success: true, message: 'Notification sent' });
+  } catch (err) {
+    console.error('Custom notification error:', err);
+    res.status(500).json({ message: 'Failed to send notification' });
+  }
+});
+
 // ─── ORIGINAL ROUTES (everything below this is your original code unchanged) ───
 router.post('/auth/register', async (req, res) => {
   try {

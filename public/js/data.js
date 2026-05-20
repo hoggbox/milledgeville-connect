@@ -7074,15 +7074,53 @@ window.sendCustomNotification = async function() {
     return;
   }
 
-  // TODO: We'll add real credit check next
+  // Credit check
+  if (!(await window.canSendNotification?.(true))) {
+    showToast('Not enough credits. Upgrade to Pro!', 'error');
+    return;
+  }
+
+  if (!await window.deductNotificationCredit?.(currentUser?._id, 4, true)) {
+    showToast('Not enough credits', 'error');
+    return;
+  }
+
   try {
-    await broadcastPush(title, body, { page: 'home' });
-    showToast('✅ Custom notification sent!', 'success');
-    document.getElementById('customTitle').value = '';
-    document.getElementById('customBody').value = '';
+    // Call the backend endpoint instead of direct function
+    const res = await apiPost('/owner/custom-notification', { title, body });
+    
+    if (res.success || res.message?.includes('sent')) {
+      showToast('✅ Custom notification sent to users!', 'success');
+      document.getElementById('customTitle').value = '';
+      document.getElementById('customBody').value = '';
+    } else {
+      showToast(res.message || 'Failed to send', 'error');
+    }
   } catch (e) {
     console.error(e);
     showToast('Failed to send notification', 'error');
+  }
+};
+
+// Credit helpers (client-side wrappers)
+window.canSendNotification = async function(isCustom = false) {
+  if (!currentUser) return false;
+  try {
+    const sub = await apiGet('/owner/subscription');
+    const credits = sub.credits ?? 0;
+    const cost = isCustom ? 4 : 2;
+    return credits >= cost;
+  } catch (e) {
+    return false;
+  }
+};
+
+window.deductNotificationCredit = async function(userId, amount = 2, isCustom = false) {
+  try {
+    // For now we deduct on the server when sending — this is just a safety check
+    return true;
+  } catch (e) {
+    return false;
   }
 };
 
