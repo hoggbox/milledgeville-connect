@@ -579,41 +579,52 @@ if (sub.nativeToken) {
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
-  const { notifyShoutouts = false, ...filter } = options;
+  console.log(`📢 [Broadcast] "${title}" → ${body}`);
 
-  console.log(`📢 Broadcasting: ${title} — ${body}`);
-
-  // === NATIVE FCM (Android APK) ===
+  // === NATIVE FCM (APK) ===
   const nativeSubs = await PushSubscription.find({
     nativeToken: { $exists: true, $ne: null }
-  });
+  }).lean();
+
+  console.log(`📍 Found ${nativeSubs.length} native subscriptions`);
 
   for (const sub of nativeSubs) {
     try {
-      await admin.messaging().send({
+      const message = {
         token: sub.nativeToken,
-        notification: { title, body },
+        notification: {
+          title: title,
+          body: body
+        },
         data: {
           page: data.page || 'home',
-          id:   data.id   || '',
+          id: data.id || '',
           ...data
         },
         android: {
-          priority: 'high',           // ← Important for Doze mode
-          notification: { sound: 'default' }
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            icon: 'ic_launcher'
+          }
         }
-      });
+      };
+
+      const response = await admin.messaging().send(message);
+      console.log(`✅ FCM sent successfully to ${sub.user}`);
     } catch (err) {
+      console.error(`❌ FCM failed for token ${sub.nativeToken?.substring(0,20)}...`, err.message);
+      
       if (err.code === 'messaging/registration-token-not-registered' || 
           err.code === 'messaging/invalid-registration-token') {
-        await sub.deleteOne();
-      } else {
-        console.error('FCM send error:', err);
+        await PushSubscription.deleteOne({ _id: sub._id });
+        console.log('🗑️ Removed invalid token');
       }
     }
   }
 
-  // === WEB VAPID ===
+  // === WEB VAPID (already working) ===
   const webSubs = await PushSubscription.find({
     subscription: { $exists: true, $ne: null }
   });
@@ -622,15 +633,11 @@ async function broadcastPush(title, body, data = {}, options = {}) {
     try {
       await webpush.sendNotification(
         sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data: { page: data.page, id: data.id, ...data }
-        })
+        JSON.stringify({ title, body, data })
       );
     } catch (err) {
       if (err.statusCode === 410 || err.statusCode === 404) {
-        await sub.deleteOne(); // expired subscription
+        await sub.deleteOne();
       }
     }
   }
