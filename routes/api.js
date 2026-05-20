@@ -577,39 +577,53 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// ─── BROADCAST PUSH (FIXED) ───────────────────────────────────────────────────
+// ─── BROADCAST PUSH (FINAL WORKING VERSION) ───────────────────────────────────
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
     console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
 
-    // Query users who have a native token + push enabled
-    const users = await User.find({
-      nativeToken: { $exists: true, $ne: null },
-      pushEnabled: true,
-      ...filter
-    }).select('nativeToken');
+    // Query PushSubscription where tokens actually live
+    const subs = await PushSubscription.find({
+      nativeToken: { $exists: true, $ne: null }
+    }).populate('user');
 
-    console.log(`Found ${users.length} users with native tokens`);
+    console.log(`Found ${subs.length} subscription records`);
 
-    if (users.length === 0) {
+    if (subs.length === 0) {
       console.log('⚠️ No push tokens found');
       return;
     }
 
-    const messages = users.map(user => ({
-      token: user.nativeToken,
-      notification: { title, body },
-      data: {
-        page: data.page || 'home',
-        id: data.id || '',
-        url: data.url || ''
-      },
-      android: { priority: 'high' }
-    }));
+    const messages = [];
 
-    // Send all at once
+    for (const sub of subs) {
+      const user = sub.user;
+      if (!user || !user.pushEnabled) continue;
+
+      // Respect user notification preferences
+      if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
+      if (filter.notifyDeals && !user.notifyDeals) continue;
+      if (filter.notifyEvents && !user.notifyEvents) continue;
+      if (filter.notifyLostFound && !user.notifyLostFound) continue;
+      if (filter.notifyMarketplace && !user.notifyMarketplace) continue;
+
+      messages.push({
+        token: sub.nativeToken,
+        notification: { title, body },
+        data: {
+          page: data.page || 'shoutouts',
+          id: data.id || ''
+        },
+        android: { priority: 'high' }
+      });
+    }
+
+    if (messages.length === 0) {
+      console.log('⚠️ No users matched the filter');
+      return;
+    }
+
     const result = await admin.messaging().sendEach(messages);
-    
     console.log(`✅ FCM Sent: ${result.successCount} success | ${result.failureCount} failed`);
 
   } catch (err) {
