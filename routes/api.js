@@ -360,31 +360,6 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
-// ─── CREDIT HELPERS ─────────────────────────────────────────────────────────
-window.isProUser = function() {
-  return !!(currentUser && currentUser.subscriptionTier === 'pro');
-};
-
-async function canSendNotification(isCustom = false) {
-  if (!currentUser) return false;
-
-  const cost = isCustom ? 4 : 2;
-
-  if (currentUser.subscriptionTier === 'pro') {
-    const data = await apiGet('/owner/subscription').catch(() => ({}));
-    const credits = data.credits ?? currentUser.notificationCredits ?? 0;
-    return credits >= cost;
-  }
-
-  // Free tier — only allow if they somehow have credits
-  return (currentUser.notificationCredits || 0) >= cost;
-}
-
-window.showCreditPaywall = function(isCustom = false) {
-  const cost = isCustom ? 4 : 2;
-  showToast(`🔒 Not enough credits.<br>You need <strong>${cost}</strong> credits for this notification.`, 'error');
-};
-
 // ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -1163,13 +1138,6 @@ router.post('/marketplace', authenticate, async (req, res) => {
       condition: condition || 'used'
     });
 
-    broadcastPush(
-      '🛒 New Marketplace Listing',
-      `${user.name} listed: ${title} - $${price}`,
-      { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
-      { notifyMarketplace: true }
-    );
-
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1275,27 +1243,6 @@ router.delete('/admin/marketplace/:id', authenticate, requireAdminOrModerator, a
 });
 
 // Admin — Edit Business
-router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { name, address, phone, email, description } = req.body;
-
-    const business = await Business.findByIdAndUpdate(
-      req.params.id,
-      { name, address, phone, email, description },
-      { new: true, runValidators: true }
-    );
-
-    if (!business) {
-      return res.status(404).json({ message: 'Business not found' });
-    }
-
-    res.json({ message: 'Business updated successfully', business });
-  } catch (e) {
-    console.error('Edit business error:', e);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
@@ -1364,32 +1311,6 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
     comment.deleteOne();
     await shoutout.save();
     res.json({ message: 'Deleted' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
-  try {
-    const lost = await LostItem.findById(req.params.id);
-    if (!lost) return res.status(404).json({ message: 'Not found' });
-    if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
-    lost.status = 'resolved';
-    await lost.save();
-    res.json({ message: 'Marked as resolved', item: lost });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
-  try {
-    const item = await MarketplaceItem.findById(req.params.id);
-    if (!item) return res.status(404).json({ message: 'Not found' });
-    if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
-    item.status = 'sold';
-    await item.save();
-    res.json({ message: 'Marked as sold', item });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2090,17 +2011,6 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-broadcastPush(
-  '🔥 New Deal Available!',
-  title,
-  { 
-    page: 'deals', 
-    id: deal._id.toString(),
-    url: `/deals/${deal._id}`
-  },
-  { notifyDeals: true }
-);
-
     res.json(deal);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2140,17 +2050,6 @@ router.post('/owner/events', authenticate, async (req, res) => {
       title, date, location, description,
       owner: req.userId, category: resolvedCategory || ''
     });
-
-    broadcastPush(
-    '📅 New Event Posted!',
-    title + (location ? ` · ${location}` : ''),
-    { 
-    page: 'events', 
-    id: event._id.toString(),
-    url: `/events/${event._id}`
-    },
-    { notifyEvents: true }
-);
 
     res.json(event);
   } catch (err) {
@@ -2647,7 +2546,7 @@ router.post('/owner/upgrade', authenticate, async (req, res) => {
 
     user.subscriptionTier = 'pro';
     user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    user.notificationCredits = 20;        // ← 20 credits
+    user.notificationCredits = 50;        // 50 credits/month (matches dashboard copy)
 
     await user.save();
 
@@ -2671,14 +2570,6 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-// VAPID Public Key for Web Push
-router.get('/push/vapid-public-key', (req, res) => {
-  if (!process.env.VAPID_PUBLIC_KEY) {
-    return res.status(500).json({ message: 'VAPID not configured' });
-  }
-  res.json({ key: process.env.VAPID_PUBLIC_KEY });
-});
-
 // ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
 router.post('/user/delete-request', authenticate, async (req, res) => {
   try {
@@ -2698,29 +2589,63 @@ router.post('/user/delete-request', authenticate, async (req, res) => {
   }
 });
 
-// ─── CREDIT DEDUCTION SYSTEM ───────────────────────────────────────────────
-async function deductNotificationCredit(userId, amount = 2, isCustom = false) {
-  const user = await User.findById(userId);
-  if (!user) return false;
+// ─── CREDIT DEDUCTION ENDPOINT ─────────────────────────────────────────────
+// Called by the frontend's checkNotificationCredits() before any paid action.
+// Atomically checks AND deducts credits so there is no TOCTOU race.
+router.post('/owner/credits/deduct', authenticate, async (req, res) => {
+  try {
+    const amount = parseInt(req.body.amount) || 1;
+    if (amount < 1 || amount > 10) {
+      return res.status(400).json({ message: 'Invalid credit amount' });
+    }
 
-  const cost = isCustom ? 4 : 2;
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-  if (user.subscriptionTier === 'pro') {
-    // Pro users can go slightly negative as grace period
-    user.notificationCredits = (user.notificationCredits || 0) - cost;
+    const currentCredits = user.notificationCredits || 0;
+    if (currentCredits < amount) {
+      return res.status(402).json({
+        error: true,
+        message: `Insufficient credits — you have ${currentCredits} but need ${amount}`
+      });
+    }
+
+    user.notificationCredits = currentCredits - amount;
     await user.save();
-    return true;
-  }
 
-  // Free users
-  if ((user.notificationCredits || 0) < cost) {
-    return false;
+    res.json({ success: true, credits: user.notificationCredits });
+  } catch (err) {
+    console.error('Credit deduction error:', err);
+    res.status(500).json({ message: err.message });
   }
+});
 
-  user.notificationCredits -= cost;
-  await user.save();
-  return true;
-}
+// ─── OWNER ANALYTICS ────────────────────────────────────────────────────────
+router.get('/owner/analytics', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
+
+    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [dealViews, eventRSVPs, notificationsSent] = await Promise.all([
+      Deal.countDocuments({ owner: req.userId, createdAt: { $gte: since30d } }),
+      Event.countDocuments({ owner: req.userId, rsvps: { $exists: true, $not: { $size: 0 } } }),
+      // notificationsSent is tracked on the user model; fall back to 0 if not present
+      Promise.resolve(user.notificationsSent || 0)
+    ]);
+
+    res.json({
+      profileViews:      user.profileViews      || 0,
+      notificationsSent,
+      dealViews,
+      eventRSVPs
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
