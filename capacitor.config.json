@@ -15,6 +15,11 @@
     },
     "Camera": {
       "saveToGallery": false
+    },
+    "InAppPurchase2": {
+      "google": {
+        "enableBilling": true
+      }
     }
   }
 }
