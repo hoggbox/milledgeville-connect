@@ -2437,32 +2437,38 @@ function sanitizeUser(user) {
   return u;
 }
 
+// ─── SAVE NATIVE FCM TOKEN (Fixed + More Logging) ───────────────────────────
 router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
-    const { token, platform } = req.body;
-    
-    if (!token) return res.status(400).json({ message: 'Token is required' });
+    const { token, platform = 'android' } = req.body;
 
-    const updated = await PushSubscription.findOneAndUpdate(
+    if (!token || token.length < 100) {
+      console.log('❌ Invalid token received');
+      return res.status(400).json({ message: 'Invalid token' });
+    }
+
+    console.log(`📲 Saving FCM token for user ${req.userId} | Length: ${token.length}`);
+
+    // Upsert — keeps old data if it exists
+    const sub = await PushSubscription.findOneAndUpdate(
       { user: req.userId },
-      { 
+      {
         user: req.userId,
         nativeToken: token,
-        platform: platform || 'android',
+        platform: platform,
         updatedAt: new Date()
       },
       { upsert: true, new: true }
     );
 
-    // Safer update - only change pushEnabled
-    await User.findByIdAndUpdate(req.userId, { 
-      pushEnabled: true 
-    });
+    // Make sure user has pushEnabled = true
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
 
-    console.log('✅ Native token SAVED for user', req.userId);
+    console.log(`✅ Token saved successfully for user ${req.userId}`);
     res.json({ message: 'Native token saved' });
+
   } catch (err) {
-    console.error('Native subscribe error:', err);
+    console.error('❌ native-subscribe error:', err);
     res.status(500).json({ message: err.message });
   }
 });
