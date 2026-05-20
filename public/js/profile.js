@@ -868,16 +868,34 @@ window.reportUser = async function (userId, userName) {
   }
 };
 
-// ─── GLOBAL EXPORTS (Critical for inline onclick + dynamic buttons) ────────
-window.showProfileSheet       = showProfileSheet;
-window.hideProfileSheet       = hideProfileSheet;
-window.logout                 = logout;
-window.navigate               = loadPage;
-window.showEditProfileModal   = showEditProfileModal;
-window.showDeleteAccountModal = showDeleteAccountModal;
-window.saveProfile            = saveProfile;
-window.removeAvatar           = removeAvatar;
-window.handleAvatarSelect     = handleAvatarSelect;
+// ─── GLOBAL EXPORTS ───────────────────────────────────────────────────────────
+window.showProfileSheet     = showProfileSheet;
+window.hideProfileSheet     = hideProfileSheet;
+window.showEditProfileModal = showEditProfileModal;
+window.saveProfile          = saveProfile;
+window.handleAvatarSelect   = handleAvatarSelect;
+
+// ─── HIDE PROFILE SHEET (defined here since it's used above) ─────────────────
+function hideProfileSheet() {
+  const panel = document.getElementById('profileSheetPanel');
+  const sheet = document.getElementById('profileSheet');
+  if (panel) panel.classList.add('translate-y-full');
+  setTimeout(() => { if (sheet) sheet.classList.add('hidden'); }, 300);
+}
+
+function removeAvatar() {
+  pendingAvatarData = null;
+  const preview = document.getElementById('avatarPreview');
+  const letter = (currentUser.name || '?')[0].toUpperCase();
+  if (preview) {
+    preview.innerHTML = `
+      <span id="avatarLetter">${letter}</span>
+      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-3xl">
+        <span class="text-white text-3xl">📷</span>
+      </div>`;
+  }
+}
+window.removeAvatar = removeAvatar;
 
 // Optional: Also expose the native push function for safety
 window.initPushAfterLogin     = window.initPushAfterLogin;
