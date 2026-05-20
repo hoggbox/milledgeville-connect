@@ -360,6 +360,31 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
+// ─── CREDIT HELPERS ─────────────────────────────────────────────────────────
+window.isProUser = function() {
+  return !!(currentUser && currentUser.subscriptionTier === 'pro');
+};
+
+async function canSendNotification(isCustom = false) {
+  if (!currentUser) return false;
+
+  const cost = isCustom ? 4 : 2;
+
+  if (currentUser.subscriptionTier === 'pro') {
+    const data = await apiGet('/owner/subscription').catch(() => ({}));
+    const credits = data.credits ?? currentUser.notificationCredits ?? 0;
+    return credits >= cost;
+  }
+
+  // Free tier — only allow if they somehow have credits
+  return (currentUser.notificationCredits || 0) >= cost;
+}
+
+window.showCreditPaywall = function(isCustom = false) {
+  const cost = isCustom ? 4 : 2;
+  showToast(`🔒 Not enough credits.<br>You need <strong>${cost}</strong> credits for this notification.`, 'error');
+};
+
 // ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -1138,6 +1163,13 @@ router.post('/marketplace', authenticate, async (req, res) => {
       condition: condition || 'used'
     });
 
+    broadcastPush(
+      '🛒 New Marketplace Listing',
+      `${user.name} listed: ${title} - $${price}`,
+      { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
+      { notifyMarketplace: true }
+    );
+
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1243,6 +1275,27 @@ router.delete('/admin/marketplace/:id', authenticate, requireAdminOrModerator, a
 });
 
 // Admin — Edit Business
+router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, address, phone, email, description } = req.body;
+
+    const business = await Business.findByIdAndUpdate(
+      req.params.id,
+      { name, address, phone, email, description },
+      { new: true, runValidators: true }
+    );
+
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    res.json({ message: 'Business updated successfully', business });
+  } catch (e) {
+    console.error('Edit business error:', e);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
@@ -1311,6 +1364,32 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
     comment.deleteOne();
     await shoutout.save();
     res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
+  try {
+    const lost = await LostItem.findById(req.params.id);
+    if (!lost) return res.status(404).json({ message: 'Not found' });
+    if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
+    lost.status = 'resolved';
+    await lost.save();
+    res.json({ message: 'Marked as resolved', item: lost });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
+    item.status = 'sold';
+    await item.save();
+    res.json({ message: 'Marked as sold', item });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1831,34 +1910,260 @@ router.delete('/news/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── AUTO-VERIFICATION HELPERS ───────────────────────────────────────────────
+
+// Strip everything that isn't a digit from a phone number for comparison
+function normalizePhone(p = '') {
+  return (p || '').replace(/\D/g, '').slice(-10); // last 10 digits
+}
+
+// Rough address match: compare digits + first two alpha tokens
+function addressMatchScore(submitted = '', onFile = '') {
+  if (!submitted || !onFile) return 0;
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+  const a = norm(submitted);
+  const b = norm(onFile);
+  if (!a || !b) return 0;
+
+  // Extract street number
+  const numA = a.match(/^\d+/)?.[0];
+  const numB = b.match(/^\d+/)?.[0];
+  if (!numA || !numB || numA !== numB) return 0; // street number must match exactly
+
+  // Check how many words overlap
+  const wordsA = new Set(a.split(/\s+/));
+  const wordsB = b.split(/\s+/);
+  const overlap = wordsB.filter(w => w.length > 2 && wordsA.has(w)).length;
+  return overlap >= 2 ? 30 : overlap === 1 ? 15 : 0;
+}
+
+// Extract domain from a URL or email string
+function extractDomain(str = '') {
+  const m = str.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s@]+\.[a-z]{2,})/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+// ─── COMPUTE CONFIDENCE SCORE ─────────────────────────────────────────────────
+// Returns { score: 0-100, signals: [...] }
+function computeVerificationConfidence(user, business, { ownerName, phone, address, email: submittedEmail }) {
+  let score = 0;
+  const signals = [];
+
+  // ── Signal 1: Phone match (+40) ──────────────────────────────────────────
+  const normalizedSubmitted = normalizePhone(phone);
+  const normalizedOnFile    = normalizePhone(business.phone);
+  if (normalizedSubmitted && normalizedOnFile && normalizedSubmitted === normalizedOnFile) {
+    score += 40;
+    signals.push({ label: 'Phone matches listing', points: 40, passed: true });
+  } else {
+    signals.push({ label: 'Phone matches listing', points: 40, passed: false });
+  }
+
+  // ── Signal 2: Address match (+30) ────────────────────────────────────────
+  const addrScore = addressMatchScore(address, business.address);
+  score += addrScore;
+  signals.push({ label: 'Address matches listing', points: addrScore, passed: addrScore > 0 });
+
+  // ── Signal 3: Email domain matches business website (+20) ────────────────
+  const userEmailDomain     = extractDomain(user.email || '');
+  const businessWebDomain   = extractDomain(business.website || '');
+  const submittedEmailDomain = extractDomain(submittedEmail || '');
+  const domainMatch = businessWebDomain && (
+    (userEmailDomain     && userEmailDomain     === businessWebDomain) ||
+    (submittedEmailDomain && submittedEmailDomain === businessWebDomain)
+  );
+  if (domainMatch) {
+    score += 20;
+    signals.push({ label: 'Email domain matches business website', points: 20, passed: true });
+  } else {
+    signals.push({ label: 'Email domain matches business website', points: 20, passed: false });
+  }
+
+  // ── Signal 4: Account age ≥ 7 days (+10) ─────────────────────────────────
+  const accountAgeDays = (Date.now() - new Date(user.createdAt || user.joinedAt || 0)) / 86400000;
+  if (accountAgeDays >= 7) {
+    score += 10;
+    signals.push({ label: 'Account is at least 7 days old', points: 10, passed: true });
+  } else {
+    signals.push({ label: 'Account is at least 7 days old', points: 10, passed: false });
+  }
+
+  return { score: Math.min(score, 100), signals };
+}
+
+// ─── PIN store (in-memory; swap for Redis/DB in production) ───────────────────
+// Key: `${userId}:${businessId}`  Value: { pin, expiresAt }
+const _verifyPins = new Map();
+
+// Generate a 6-digit PIN and store it for 15 minutes
+function generateVerifyPin(userId, businessId) {
+  const pin = String(Math.floor(100000 + Math.random() * 900000));
+  const key = `${userId}:${businessId}`;
+  _verifyPins.set(key, { pin, expiresAt: Date.now() + 15 * 60 * 1000 });
+  return pin;
+}
+
+function checkVerifyPin(userId, businessId, submittedPin) {
+  const key = `${userId}:${businessId}`;
+  const entry = _verifyPins.get(key);
+  if (!entry) return false;
+  if (Date.now() > entry.expiresAt) { _verifyPins.delete(key); return false; }
+  if (entry.pin !== String(submittedPin).trim()) return false;
+  _verifyPins.delete(key); // single-use
+  return true;
+}
+
+// ─── CLAIM — STEP 1: SUBMIT + AUTO-VERIFY ────────────────────────────────────
+//   POST /api/claim/:businessId
+//
+//   Returns one of three outcomes:
+//     { status: 'approved', autoApproved: true }          ← confidence ≥ 70, instant grant
+//     { status: 'pending',  needsPin: true }              ← confidence < 40, PIN required
+//     { status: 'pending',  fastTrack: true, score }      ← 40–69, queued for quick review
 router.post('/claim/:businessId', authenticate, async (req, res) => {
   try {
     const business = await Business.findById(req.params.businessId);
     if (!business) return res.status(404).json({ message: 'Business not found' });
     if (business.owner)
-      return res.status(400).json({ message: 'This business has already been claimed and is no longer available.' });
+      return res.status(400).json({ message: 'This business has already been claimed.' });
 
-    const { ownerName, phone, address, message, isRestaurant } = req.body;
-    const existing = await ClaimRequest.findOne({ business: req.params.businessId, user: req.userId, status: 'pending' });
+    const user = await User.findById(req.userId);
+    const existing = await ClaimRequest.findOne({
+      business: req.params.businessId,
+      user: req.userId,
+      status: 'pending'
+    });
     if (existing)
-      return res.status(400).json({ message: 'You already have a pending claim for this business' });
+      return res.status(400).json({ message: 'You already have a pending claim for this business.' });
 
-    await ClaimRequest.create({
+    const { ownerName, phone, address, email, message, isRestaurant } = req.body;
+
+    if (!ownerName?.trim() || !phone?.trim() || !address?.trim()) {
+      return res.status(400).json({ message: 'Name, phone, and address are required.' });
+    }
+
+    // ── Score the claim ───────────────────────────────────────────────────
+    const { score, signals } = computeVerificationConfidence(user, business, { ownerName, phone, address, email });
+
+    const claim = await ClaimRequest.create({
       user: req.userId,
       business: req.params.businessId,
-      verificationInfo: { ownerName, phone, address, message, isRestaurant: !!isRestaurant }
+      verificationInfo: { ownerName, phone, address, email, message, isRestaurant: !!isRestaurant },
+      confidenceScore: score,
+      signals
     });
-    res.json({ message: 'Claim submitted successfully' });
+
+    // ── AUTO-APPROVE (score ≥ 70) ─────────────────────────────────────────
+    if (score >= 70) {
+      claim.status = 'approved';
+      await claim.save();
+      await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
+      await User.findByIdAndUpdate(req.userId, { verifiedBusiness: business._id });
+
+      return res.json({
+        status: 'approved',
+        autoApproved: true,
+        score,
+        signals,
+        message: '✅ Verified automatically! Your business dashboard is ready.'
+      });
+    }
+
+    // ── PIN REQUIRED (score < 40) ─────────────────────────────────────────
+    if (score < 40) {
+      const pin = generateVerifyPin(req.userId, req.params.businessId);
+
+      // If Twilio is configured, send the PIN via SMS — otherwise log it
+      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM) {
+        try {
+          const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+          await twilio.messages.create({
+            body: `Your Milledgeville Connect business verification code is: ${pin}. It expires in 15 minutes.`,
+            from: process.env.TWILIO_FROM,
+            to: normalizePhone(phone).replace(/^(\d{3})(\d{3})(\d{4})$/, '+1$1$2$3')
+          });
+        } catch (smsErr) {
+          console.warn('[Verify] SMS failed — PIN logged:', pin, smsErr.message);
+        }
+      } else {
+        // Dev/no-SMS fallback: log to server console so you can test
+        console.log(`[Verify] PIN for ${req.userId} / ${req.params.businessId}: ${pin}`);
+      }
+
+      return res.json({
+        status: 'pending',
+        needsPin: true,
+        score,
+        signals,
+        message: 'A 6-digit verification code has been sent to the phone number you provided. Enter it below to complete your claim.'
+      });
+    }
+
+    // ── FAST-TRACK REVIEW (40–69) ─────────────────────────────────────────
+    // Good enough to be legit but not auto-approvable — surfaces first in admin queue
+    claim.fastTrack = true;
+    await claim.save();
+
+    return res.json({
+      status: 'pending',
+      fastTrack: true,
+      score,
+      signals,
+      message: 'Your claim looks good! It\'s been flagged for fast-track review and you\'ll hear back very shortly.'
+    });
+
   } catch (err) {
+    console.error('Claim error:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
+// ─── CLAIM — STEP 2: CONFIRM PIN ─────────────────────────────────────────────
+//   POST /api/claim/:businessId/verify-pin
+//   Body: { pin: '123456', isRestaurant: bool }
+router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
+  try {
+    const { pin, isRestaurant } = req.body;
+    if (!pin) return res.status(400).json({ message: 'PIN is required' });
+
+    if (!checkVerifyPin(req.userId, req.params.businessId, pin)) {
+      return res.status(400).json({ message: 'Incorrect or expired PIN. Please request a new one.' });
+    }
+
+    const business = await Business.findById(req.params.businessId);
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+    if (business.owner) return res.status(400).json({ message: 'Already claimed.' });
+
+    // Approve the most recent pending claim for this user+business
+    await ClaimRequest.findOneAndUpdate(
+      { business: req.params.businessId, user: req.userId, status: 'pending' },
+      { status: 'approved', confidenceScore: 100, signals: [{ label: 'Phone PIN verified', points: 100, passed: true }] },
+      { sort: { createdAt: -1 } }
+    );
+
+    await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
+    await User.findByIdAndUpdate(req.userId, { verifiedBusiness: business._id });
+
+    res.json({
+      status: 'approved',
+      pinVerified: true,
+      message: '✅ Phone verified! Your business dashboard is ready.'
+    });
+  } catch (err) {
+    console.error('PIN verify error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── CLAIM STATUS ─────────────────────────────────────────────────────────────
 router.get('/claim/status/:businessId', authenticate, async (req, res) => {
   try {
-    const claim = await ClaimRequest.findOne({ business: req.params.businessId, user: req.userId }).sort({ createdAt: -1 });
+    const claim = await ClaimRequest.findOne({
+      business: req.params.businessId,
+      user: req.userId
+    }).sort({ createdAt: -1 });
     if (!claim) return res.json({ status: 'none' });
-    res.json({ status: claim.status });
+    res.json({ status: claim.status, score: claim.confidenceScore, fastTrack: claim.fastTrack });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2011,6 +2316,17 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
+broadcastPush(
+  '🔥 New Deal Available!',
+  title,
+  { 
+    page: 'deals', 
+    id: deal._id.toString(),
+    url: `/deals/${deal._id}`
+  },
+  { notifyDeals: true }
+);
+
     res.json(deal);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2050,6 +2366,17 @@ router.post('/owner/events', authenticate, async (req, res) => {
       title, date, location, description,
       owner: req.userId, category: resolvedCategory || ''
     });
+
+    broadcastPush(
+    '📅 New Event Posted!',
+    title + (location ? ` · ${location}` : ''),
+    { 
+    page: 'events', 
+    id: event._id.toString(),
+    url: `/events/${event._id}`
+    },
+    { notifyEvents: true }
+);
 
     res.json(event);
   } catch (err) {
@@ -2546,7 +2873,7 @@ router.post('/owner/upgrade', authenticate, async (req, res) => {
 
     user.subscriptionTier = 'pro';
     user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    user.notificationCredits = 50;        // 50 credits/month (matches dashboard copy)
+    user.notificationCredits = 20;        // ← 20 credits
 
     await user.save();
 
@@ -2570,6 +2897,14 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// VAPID Public Key for Web Push
+router.get('/push/vapid-public-key', (req, res) => {
+  if (!process.env.VAPID_PUBLIC_KEY) {
+    return res.status(500).json({ message: 'VAPID not configured' });
+  }
+  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
 // ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
 router.post('/user/delete-request', authenticate, async (req, res) => {
   try {
@@ -2589,63 +2924,29 @@ router.post('/user/delete-request', authenticate, async (req, res) => {
   }
 });
 
-// ─── CREDIT DEDUCTION ENDPOINT ─────────────────────────────────────────────
-// Called by the frontend's checkNotificationCredits() before any paid action.
-// Atomically checks AND deducts credits so there is no TOCTOU race.
-router.post('/owner/credits/deduct', authenticate, async (req, res) => {
-  try {
-    const amount = parseInt(req.body.amount) || 1;
-    if (amount < 1 || amount > 10) {
-      return res.status(400).json({ message: 'Invalid credit amount' });
-    }
+// ─── CREDIT DEDUCTION SYSTEM ───────────────────────────────────────────────
+async function deductNotificationCredit(userId, amount = 2, isCustom = false) {
+  const user = await User.findById(userId);
+  if (!user) return false;
 
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+  const cost = isCustom ? 4 : 2;
 
-    const currentCredits = user.notificationCredits || 0;
-    if (currentCredits < amount) {
-      return res.status(402).json({
-        error: true,
-        message: `Insufficient credits — you have ${currentCredits} but need ${amount}`
-      });
-    }
-
-    user.notificationCredits = currentCredits - amount;
+  if (user.subscriptionTier === 'pro') {
+    // Pro users can go slightly negative as grace period
+    user.notificationCredits = (user.notificationCredits || 0) - cost;
     await user.save();
-
-    res.json({ success: true, credits: user.notificationCredits });
-  } catch (err) {
-    console.error('Credit deduction error:', err);
-    res.status(500).json({ message: err.message });
+    return true;
   }
-});
 
-// ─── OWNER ANALYTICS ────────────────────────────────────────────────────────
-router.get('/owner/analytics', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (!user.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
-
-    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const [dealViews, eventRSVPs, notificationsSent] = await Promise.all([
-      Deal.countDocuments({ owner: req.userId, createdAt: { $gte: since30d } }),
-      Event.countDocuments({ owner: req.userId, rsvps: { $exists: true, $not: { $size: 0 } } }),
-      // notificationsSent is tracked on the user model; fall back to 0 if not present
-      Promise.resolve(user.notificationsSent || 0)
-    ]);
-
-    res.json({
-      profileViews:      user.profileViews      || 0,
-      notificationsSent,
-      dealViews,
-      eventRSVPs
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  // Free users
+  if ((user.notificationCredits || 0) < cost) {
+    return false;
   }
-});
+
+  user.notificationCredits -= cost;
+  await user.save();
+  return true;
+}
 
 
 // ─── APP VERSION ──────────────────────────────────────────────────────────────

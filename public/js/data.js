@@ -1902,59 +1902,136 @@ window.showClaimModal = function (businessId) {
         <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
           <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
         </div>
-        <div class="p-6">
+
+        <!-- Step 1: Info form -->
+        <div id="claimStep1" class="p-6">
           <div class="text-center mb-6">
             <div class="text-5xl mb-3">🏷️</div>
-            <h2 class="text-2xl font-bold">Claim "${business.name}"</h2>
-            <p class="text-gray-500 text-sm mt-2">Provide your info so we can verify you're the owner. Our admin will review and approve your request.</p>
+            <h2 class="text-2xl font-bold">Claim "${esc(business.name)}"</h2>
+            <p class="text-gray-500 text-sm mt-2 leading-relaxed">
+              We'll match your info against our records. High-confidence matches are approved <strong>instantly</strong> — no waiting.
+            </p>
           </div>
+
+          <!-- Confidence signals hint -->
+          <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-5 text-sm text-emerald-800 space-y-1.5">
+            <p class="font-semibold text-emerald-700 mb-2">✅ For the fastest approval, make sure:</p>
+            <div class="flex items-start gap-2"><span>📞</span><span>Your phone number matches the one on your listing</span></div>
+            <div class="flex items-start gap-2"><span>📍</span><span>Your address matches the business address exactly</span></div>
+            <div class="flex items-start gap-2"><span>✉️</span><span>Your email domain matches your business website (optional)</span></div>
+          </div>
+
           <div class="space-y-3">
-            <input id="claimOwnerName" type="text" placeholder="Your full name (owner)"
+            <input id="claimOwnerName" type="text" placeholder="Your full name (owner) *"
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
-            <input id="claimPhone" type="tel" placeholder="Business phone number"
+            <input id="claimPhone" type="tel" placeholder="Business phone number *"
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
-            <input id="claimAddress" type="text" placeholder="Business address"
+            <input id="claimAddress" type="text" placeholder="Business address *"
+                   value="${esc(business.address || '')}"
                    class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
-            <textarea id="claimMessage" rows="3" placeholder="Anything else to verify? (optional)"
+            <input id="claimEmail" type="email" placeholder="Business email (optional — helps verify)"
+                   class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50">
+            <textarea id="claimMessage" rows="2" placeholder="Anything else? (optional)"
                       class="w-full px-5 py-4 rounded-3xl border border-gray-200 focus:border-emerald-500 outline-none bg-gray-50 resize-none"></textarea>
 
-            <!-- Food / Restaurant checkbox -->
             <label class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 cursor-pointer select-none">
               <div class="relative flex-shrink-0 mt-0.5">
                 <input type="checkbox" id="claimIsRestaurant" class="sr-only peer">
-                <div class="w-5 h-5 rounded-md border-2 border-amber-300 peer-checked:bg-amber-500 peer-checked:border-amber-500 transition-colors flex items-center justify-center">
-                  <svg class="w-3 h-3 text-white hidden peer-checked:block" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <div class="w-5 h-5 rounded-md border-2 border-amber-300 peer-checked:bg-amber-500 peer-checked:border-amber-500 transition-colors">
                 </div>
               </div>
               <div>
                 <p class="font-semibold text-amber-800 text-sm">🍽️ Food or Restaurant Business</p>
-                <p class="text-amber-600 text-xs mt-0.5">Check this if your business serves food. If approved, you'll be able to upload a menu to your listing.</p>
+                <p class="text-amber-600 text-xs mt-0.5">Enables menu uploads on your listing.</p>
               </div>
             </label>
           </div>
-          <div id="claimStatus" class="hidden mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-sm text-center">
-            ⏳ Your claim has been submitted! You'll be notified once approved.
-          </div>
-          <div class="space-y-3 mt-6" id="claimActions">
-            <button onclick="submitClaim('${businessId}')" 
+
+          <div class="space-y-3 mt-6">
+            <button onclick="submitClaim('${businessId}')" id="claimSubmitBtn"
                     class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
-              Submit Claim Request
+              Verify &amp; Claim →
             </button>
             <button onclick="closeClaimModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">
               Cancel
             </button>
           </div>
         </div>
+
+        <!-- Step 2a: Success (auto-approved) -->
+        <div id="claimStep2Success" class="hidden p-6 text-center">
+          <div class="text-6xl mb-4">🎉</div>
+          <h2 class="text-2xl font-bold text-emerald-600 mb-2">Verified!</h2>
+          <p class="text-gray-600 mb-6" id="claimSuccessMsg">Your business is now linked to your account.</p>
+          <div id="claimConfidenceBreakdown" class="bg-gray-50 rounded-2xl p-4 mb-6 text-left text-sm space-y-2"></div>
+          <button onclick="closeClaimModal(); navigate('owner-dashboard')"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+            Open My Dashboard →
+          </button>
+        </div>
+
+        <!-- Step 2b: PIN entry -->
+        <div id="claimStep2Pin" class="hidden p-6">
+          <div class="text-center mb-6">
+            <div class="text-5xl mb-3">📱</div>
+            <h2 class="text-2xl font-bold mb-2">Enter Your Verification Code</h2>
+            <p class="text-gray-500 text-sm" id="claimPinMsg">A 6-digit code was sent to the phone number you provided.</p>
+          </div>
+          <div id="claimPinSignals" class="mb-5"></div>
+          <input id="claimPinInput" type="number" inputmode="numeric" placeholder="6-digit code"
+                 class="w-full text-center text-3xl font-bold tracking-widest px-5 py-5 rounded-3xl border-2 border-gray-200 focus:border-emerald-500 outline-none bg-gray-50 mb-4">
+          <button onclick="submitClaimPin('${businessId}')"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition mb-3">
+            Confirm Code
+          </button>
+          <button onclick="submitClaim('${businessId}', true)"
+                  class="w-full text-sm text-gray-400 hover:text-gray-600 py-2 transition">
+            Resend Code
+          </button>
+        </div>
+
+        <!-- Step 2c: Fast-track pending -->
+        <div id="claimStep2FastTrack" class="hidden p-6 text-center">
+          <div class="text-6xl mb-4">⚡</div>
+          <h2 class="text-2xl font-bold text-amber-600 mb-2">Fast-Track Review</h2>
+          <p class="text-gray-600 mb-4" id="claimFastTrackMsg">Your claim looks good — you'll hear back shortly.</p>
+          <div id="claimFtSignals" class="bg-gray-50 rounded-2xl p-4 mb-6 text-left text-sm space-y-2"></div>
+          <button onclick="closeClaimModal()"
+                  class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">
+            Close — I'll wait for the email
+          </button>
+        </div>
       </div>
     </div>`;
+
   document.body.insertAdjacentHTML('beforeend', html);
 };
 
-window.submitClaim = async function (businessId) {
-  const ownerName = document.getElementById('claimOwnerName').value.trim();
-  const phone = document.getElementById('claimPhone').value.trim();
-  const address = document.getElementById('claimAddress').value.trim();
-  const message = document.getElementById('claimMessage').value.trim();
+// Render confidence signals as a checklist
+function _renderSignals(signals = []) {
+  if (!signals.length) return '';
+  return signals.map(s => `
+    <div class="flex items-center gap-2">
+      <span class="${s.passed ? 'text-emerald-500' : 'text-gray-300'} text-base">${s.passed ? '✓' : '✗'}</span>
+      <span class="${s.passed ? 'text-gray-800' : 'text-gray-400'} flex-1">${s.label}</span>
+      ${s.passed ? `<span class="text-emerald-500 font-semibold text-xs">+${s.points}</span>` : ''}
+    </div>`).join('');
+}
+
+function _showClaimStep(stepId) {
+  ['claimStep1', 'claimStep2Success', 'claimStep2Pin', 'claimStep2FastTrack']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', id !== stepId);
+    });
+}
+
+window.submitClaim = async function (businessId, resend = false) {
+  const ownerName    = document.getElementById('claimOwnerName').value.trim();
+  const phone        = document.getElementById('claimPhone').value.trim();
+  const address      = document.getElementById('claimAddress').value.trim();
+  const email        = document.getElementById('claimEmail').value.trim();
+  const message      = document.getElementById('claimMessage').value.trim();
   const isRestaurant = document.getElementById('claimIsRestaurant')?.checked || false;
 
   if (!ownerName || !phone || !address) {
@@ -1962,15 +2039,90 @@ window.submitClaim = async function (businessId) {
     return;
   }
 
-  const res = await apiPost(`/claim/${businessId}`, { ownerName, phone, address, message, isRestaurant });
+  const btn = document.getElementById('claimSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
 
-  if (res.message && res.message.includes('submitted')) {
-    document.getElementById('claimStatus').classList.remove('hidden');
-    document.getElementById('claimActions').innerHTML = `
-      <button onclick="closeClaimModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>`;
-    startVerificationPoll(businessId);
+  const res = await apiPost(`/claim/${businessId}`, { ownerName, phone, address, email, message, isRestaurant });
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Verify & Claim →'; }
+
+  if (!res || res.error) {
+    showToast(res?.message || 'Something went wrong', 'error');
+    return;
+  }
+
+  // ── Auto-approved ─────────────────────────────────────────────────────────
+  if (res.status === 'approved' && res.autoApproved) {
+    _showClaimStep('claimStep2Success');
+    const msgEl = document.getElementById('claimSuccessMsg');
+    if (msgEl) msgEl.textContent = res.message;
+    const bdEl = document.getElementById('claimConfidenceBreakdown');
+    if (bdEl) bdEl.innerHTML = `
+      <p class="font-semibold text-gray-700 mb-2">Confidence score: <span class="text-emerald-600">${res.score}/100</span></p>
+      ${_renderSignals(res.signals)}`;
+
+    // Reload user so verifiedBusiness is populated without a full page reload
+    try {
+      const userData = await apiGet('/auth/me');
+      if (userData?.user) currentUser = userData.user;
+    } catch (_) {}
+    return;
+  }
+
+  // ── PIN required ──────────────────────────────────────────────────────────
+  if (res.needsPin) {
+    _showClaimStep('claimStep2Pin');
+    const msgEl = document.getElementById('claimPinMsg');
+    if (msgEl) msgEl.textContent = resend ? '✅ New code sent! Check your phone.' : res.message;
+    const sigEl = document.getElementById('claimPinSignals');
+    if (sigEl) sigEl.innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm mb-1">
+        <p class="font-semibold text-red-700 mb-2">Confidence score: ${res.score}/100 — extra verification needed</p>
+        ${_renderSignals(res.signals)}
+      </div>`;
+    return;
+  }
+
+  // ── Fast-track ────────────────────────────────────────────────────────────
+  if (res.fastTrack) {
+    _showClaimStep('claimStep2FastTrack');
+    const msgEl = document.getElementById('claimFastTrackMsg');
+    if (msgEl) msgEl.textContent = res.message;
+    const sigEl = document.getElementById('claimFtSignals');
+    if (sigEl) sigEl.innerHTML = `
+      <p class="font-semibold text-gray-700 mb-2">Confidence score: <span class="text-amber-600">${res.score}/100</span></p>
+      ${_renderSignals(res.signals)}`;
+    return;
+  }
+
+  // Fallback — some other message
+  showToast(res.message || 'Claim submitted', 'success');
+};
+
+window.submitClaimPin = async function (businessId) {
+  const pin = document.getElementById('claimPinInput')?.value.trim();
+  const isRestaurant = document.getElementById('claimIsRestaurant')?.checked || false;
+
+  if (!pin || pin.length < 6) {
+    showToast('Please enter the 6-digit code', 'error');
+    return;
+  }
+
+  const res = await apiPost(`/claim/${businessId}/verify-pin`, { pin, isRestaurant });
+
+  if (res.status === 'approved') {
+    _showClaimStep('claimStep2Success');
+    const msgEl = document.getElementById('claimSuccessMsg');
+    if (msgEl) msgEl.textContent = res.message;
+    const bdEl = document.getElementById('claimConfidenceBreakdown');
+    if (bdEl) bdEl.innerHTML = `<div class="flex items-center gap-2 text-emerald-600 font-semibold"><span>✓</span> Phone number verified via PIN</div>`;
+
+    try {
+      const userData = await apiGet('/auth/me');
+      if (userData?.user) currentUser = userData.user;
+    } catch (_) {}
   } else {
-    showToast(res.message || 'Something went wrong', 'error');
+    showToast(res.message || 'Incorrect code — try again', 'error');
   }
 };
 
@@ -1979,10 +2131,9 @@ window.closeClaimModal = function () {
   if (el) el.remove();
 };
 
-// Stub — polls for claim approval after submission (backend integration point)
-function startVerificationPoll(businessId) {
-  // Future: poll /claim/:businessId/status every 30s and notify user when approved
-}
+// startVerificationPoll is no longer needed — outcomes are synchronous now
+function startVerificationPoll() {}
+
 
 // ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
 async function loadShoutoutsPage(content) {
@@ -3239,7 +3390,7 @@ const tabs = [
         <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <div class="text-xs opacity-75">Notification Credits</div>
-            <div class="text-4xl font-black" data-credit-count>${credits}</div>
+            <div class="text-4xl font-black">${credits}</div>
           </div>
           <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
         </div>
@@ -3526,7 +3677,7 @@ const tabs = [
 }
 
 window.switchDashTab = function (tabId) {
-  const allIds = ['listing', 'photos', 'menu', 'deals', 'events', 'homes', 'notifications', 'analytics'];
+  const allIds = ['listing', 'photos', 'menu', 'deals', 'events'];
   allIds.forEach(id => {
     const btn     = document.getElementById(`dtab-${id}`);
     const content = document.getElementById(`dtabContent-${id}`);
@@ -3543,12 +3694,9 @@ window.switchDashTab = function (tabId) {
         .trim() + ' text-white/50 hover:text-white hover:bg-white/10';
     }
   });
-  if (tabId === 'deals')         loadOwnerDeals();
-  if (tabId === 'events')        loadOwnerEvents();
-  if (tabId === 'photos')        renderOwnerPhotoGrid();
-  if (tabId === 'homes')         loadOwnerHomes();
-  if (tabId === 'notifications') loadOwnerNotificationsTab();
-  if (tabId === 'analytics')     loadOwnerAnalyticsTab();
+  if (tabId === 'deals')  loadOwnerDeals();
+  if (tabId === 'events') loadOwnerEvents();
+  if (tabId === 'photos') renderOwnerPhotoGrid();
 };
 
 window.saveOwnerBusinessChanges = async function () {
@@ -3602,12 +3750,6 @@ async function loadOwnerDeals() {
         </div>
         <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
       </div>
-      <div class="mt-3 pt-3 border-t border-white/10">
-        <button onclick="sendItemNotification('deal','${d._id}','${esc(d.title)}')"
-                class="w-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 py-2.5 rounded-2xl text-sm font-semibold transition flex items-center justify-center gap-2">
-          📢 Send Notification <span class="text-amber-400/60 text-xs font-normal">(1 credit)</span>
-        </button>
-      </div>
     </div>`).join('');
 }
 
@@ -3633,12 +3775,6 @@ async function loadOwnerEvents() {
           ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${e.description}</div>` : ''}
         </div>
         <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
-      </div>
-      <div class="mt-3 pt-3 border-t border-white/10">
-        <button onclick="sendItemNotification('event','${e._id}','${esc(e.title)}')"
-                class="w-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 py-2.5 rounded-2xl text-sm font-semibold transition flex items-center justify-center gap-2">
-          📢 Send Notification <span class="text-emerald-400/60 text-xs font-normal">(1 credit)</span>
-        </button>
       </div>
     </div>`).join('');
 }
@@ -3712,122 +3848,6 @@ window.deleteOwnerEvent = async function (id) {
   showToast('Event deleted');
   loadOwnerEvents();
 };
-
-// ─── SEND NOTIFICATION FOR A SPECIFIC ITEM (Deal / Event / Marketplace) ──────
-// Costs 1 credit. Checks + deducts via checkNotificationCredits().
-window.sendItemNotification = async function(type, id, title) {
-  if (!currentUser) {
-    showAuthModal({ message: 'Sign in to send notifications.' });
-    return;
-  }
-
-  const typeLabels = { deal: '🔥 Deal', event: '📅 Event', market: '🛒 Marketplace' };
-  const pageMap    = { deal: 'deals',   event: 'events',  market: 'marketplace' };
-  const label = typeLabels[type] || '📢';
-  const page  = pageMap[type]  || 'home';
-
-  if (!confirm(`Send a push notification to all users about this ${type}?\n\n"${title}"\n\nThis will cost 1 credit.`)) return;
-
-  if (!(await checkNotificationCredits(1))) return;
-
-  try {
-    await broadcastPush(`${label}: ${title}`, `Tap to view on Milledgeville Connect`, { page, id });
-    showToast(`✅ Notification sent for "${title}"`, 'success');
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to send notification', 'error');
-  }
-};
-
-// ─── NOTIFICATIONS TAB LOADER ─────────────────────────────────────────────────
-async function loadOwnerNotificationsTab() {
-  const container = document.getElementById('notificationsContent');
-  if (!container) return;
-
-  const sub     = await apiGet('/owner/subscription').catch(() => ({}));
-  const isPro   = sub.tier === 'pro';
-  const credits = sub.credits ?? 0;
-
-  if (!isPro) {
-    container.innerHTML = `
-      <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center">
-        <div class="text-5xl mb-4">📢</div>
-        <h3 class="text-xl font-bold mb-2">Unlock Push Notifications</h3>
-        <p class="text-white/60 mb-6 text-sm">Upgrade to Business Pro to send push notifications directly to users' devices.</p>
-        <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-10 py-4 rounded-3xl font-bold shadow-xl">
-          🚀 Upgrade to Business Pro
-        </button>
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="space-y-5">
-      <!-- Credit meter -->
-      <div class="bg-white/10 border border-white/10 rounded-3xl p-5 flex items-center justify-between">
-        <div>
-          <p class="text-xs text-white/50 uppercase tracking-wide mb-0.5">Credits Remaining</p>
-          <p class="text-4xl font-black" data-credit-count>${credits}</p>
-          <p class="text-xs text-white/40 mt-0.5">Resets monthly with your Pro subscription</p>
-        </div>
-        <button onclick="showCreditInfo()" class="text-xs underline text-white/50">How credits work →</button>
-      </div>
-
-      <!-- Custom notification form -->
-      <div class="bg-white/10 border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-base mb-1">📢 Send a Custom Notification</h3>
-        <p class="text-white/40 text-xs mb-4">Reaches all subscribed users. Costs <strong class="text-amber-400">2 credits</strong>.</p>
-
-        <input id="customTitle" type="text" placeholder="Notification title (e.g. Flash Sale Today!)"
-               class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 mb-3">
-        <textarea id="customBody" rows="3" placeholder="Notification body text…"
-                  class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none mb-4"></textarea>
-        <button onclick="sendCustomNotification()"
-                class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
-          📤 Send Notification (2 credits)
-        </button>
-      </div>
-
-      <p class="text-xs text-white/30 px-1">
-        💡 Tip: You can also send targeted notifications directly from your posted Deals and Events using the "📢 Send Notification" button on each card.
-      </p>
-    </div>`;
-}
-
-// ─── ANALYTICS TAB LOADER ────────────────────────────────────────────────────
-async function loadOwnerAnalyticsTab() {
-  const container = document.getElementById('analyticsContent');
-  if (!container) return;
-  container.innerHTML = `<div class="text-center text-white/30 py-16 text-sm">Loading analytics…</div>`;
-  try {
-    const data = await apiGet('/owner/analytics').catch(() => null);
-    if (!data) {
-      container.innerHTML = `<div class="text-center text-white/30 py-16 text-sm">Analytics data unavailable.</div>`;
-      return;
-    }
-    container.innerHTML = `
-      <div class="grid grid-cols-2 gap-4">
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
-          <p class="text-3xl font-black">${data.profileViews ?? '—'}</p>
-          <p class="text-xs text-white/50 mt-1">Profile Views (30d)</p>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
-          <p class="text-3xl font-black">${data.notificationsSent ?? '—'}</p>
-          <p class="text-xs text-white/50 mt-1">Notifications Sent</p>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
-          <p class="text-3xl font-black">${data.dealViews ?? '—'}</p>
-          <p class="text-xs text-white/50 mt-1">Deal Views</p>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
-          <p class="text-3xl font-black">${data.eventRSVPs ?? '—'}</p>
-          <p class="text-xs text-white/50 mt-1">Event RSVPs</p>
-        </div>
-      </div>`;
-  } catch (e) {
-    container.innerHTML = `<div class="text-center text-red-400 py-16 text-sm">Failed to load analytics.</div>`;
-  }
-}
 
 // ─── CUTTING-EDGE ADMIN PANEL (2026 Style) ───────────────────────────────────
 async function loadAdminPage(content) {
@@ -3976,21 +3996,44 @@ async function loadAdminClaims() {
       <div class="p-6 space-y-6">
         <h2 class="text-2xl font-bold text-white">📬 Pending Business Claims</h2>
         ${!claims.length ? '<p class="text-white/40">No pending claims.</p>' :
-          claims.map(c => `
-            <div class="bg-white/10 rounded-3xl p-5 space-y-3">
-              <div class="flex items-start justify-between gap-4">
+          claims.map(c => {
+            const score = c.confidenceScore ?? 0;
+            const scoreColor = score >= 70 ? 'emerald' : score >= 40 ? 'amber' : 'red';
+            const scoreLabel = score >= 70 ? 'High Confidence' : score >= 40 ? 'Medium — Fast Track' : 'Low Confidence';
+            const signals = c.signals || [];
+            return `
+            <div class="bg-white/10 rounded-3xl p-5 space-y-3 ${c.fastTrack ? 'ring-2 ring-amber-400/50' : ''}">
+              <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                   <p class="text-white font-semibold text-lg">${c.business?.name || 'Unknown Business'}</p>
                   <p class="text-white/60 text-sm">${c.business?.address || ''}</p>
                 </div>
-                <span class="bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-semibold">Pending</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                  ${c.fastTrack ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full text-xs font-bold">⚡ Fast Track</span>` : ''}
+                  <span class="bg-${scoreColor}-500/20 text-${scoreColor}-300 border border-${scoreColor}-500/30 px-3 py-1 rounded-full text-xs font-bold">
+                    ${score}/100 — ${scoreLabel}
+                  </span>
+                </div>
               </div>
+
+              <!-- Confidence signals -->
+              ${signals.length ? `
+              <div class="bg-black/20 rounded-2xl p-3 grid grid-cols-2 gap-2">
+                ${signals.map(s => `
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="${s.passed ? 'text-emerald-400' : 'text-white/30'}">${s.passed ? '✓' : '✗'}</span>
+                    <span class="${s.passed ? 'text-white/80' : 'text-white/30'}">${s.label}</span>
+                    ${s.passed ? `<span class="text-emerald-400/60 ml-auto">+${s.points}</span>` : ''}
+                  </div>`).join('')}
+              </div>` : ''}
+
               <div class="bg-black/20 rounded-2xl p-4 text-sm space-y-1">
                 <p class="text-white/80"><span class="text-white/40">Claimant:</span> ${c.user?.name} (${c.user?.email})</p>
                 <p class="text-white/80"><span class="text-white/40">Owner Name:</span> ${c.verificationInfo?.ownerName || '—'}</p>
                 <p class="text-white/80"><span class="text-white/40">Phone:</span> ${c.verificationInfo?.phone || '—'}</p>
                 <p class="text-white/80"><span class="text-white/40">Address:</span> ${c.verificationInfo?.address || '—'}</p>
-                <p class="text-white/80"><span class="text-white/40">Message:</span> ${c.verificationInfo?.message || '—'}</p>
+                ${c.verificationInfo?.email ? `<p class="text-white/80"><span class="text-white/40">Email:</span> ${c.verificationInfo.email}</p>` : ''}
+                ${c.verificationInfo?.message ? `<p class="text-white/80"><span class="text-white/40">Note:</span> ${c.verificationInfo.message}</p>` : ''}
                 <p class="text-white/80"><span class="text-white/40">Restaurant:</span> ${c.verificationInfo?.isRestaurant ? 'Yes' : 'No'}</p>
               </div>
               <div class="flex gap-3">
@@ -4003,7 +4046,8 @@ async function loadAdminClaims() {
                   ❌ Reject
                 </button>
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
       </div>`;
   } catch (err) {
     container.innerHTML = `<div class="p-8 text-red-400">Failed to load claims: ${err.message}</div>`;
@@ -4712,13 +4756,9 @@ window.showMarketplaceDetail = async function(id) {
           </div>
 
           ${isSeller ? `
-          <div class="p-6 border-t bg-amber-50 flex gap-3 justify-end flex-wrap">
-            <button onclick="sendItemNotification('market','${esc(String(item._id))}','${esc(item.title)}')"
-                    class="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3.5 rounded-3xl font-semibold transition flex items-center justify-center gap-2">
-              📢 Send Notification <span class="text-white/60 text-xs font-normal">(1 credit)</span>
-            </button>
+          <div class="p-6 border-t bg-amber-50 flex justify-end">
             <button onclick="markMarketSold()" 
-                    class="flex-1 bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+                    class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
               Mark as Sold ✅
             </button>
           </div>` : ''}
@@ -6599,17 +6639,21 @@ window.sendCustomNotification = async function() {
     return;
   }
 
-  // Custom notifications cost 2 credits (deducted server-side inside checkNotificationCredits)
-  if (!(await checkNotificationCredits(2))) return;
+  if (!(await canSendNotification(true))) {  // true = custom
+    showCreditPaywall(true);
+    return;
+  }
+
+  if (!await deductNotificationCredit(currentUser._id, 4, true)) {
+    showToast('Not enough credits', 'error');
+    return;
+  }
 
   try {
     await broadcastPush(title, body, { page: 'home' });
     showToast('✅ Custom notification sent!', 'success');
-    document.getElementById('customTitle').value = '';
-    document.getElementById('customBody').value = '';
   } catch (e) {
-    console.error(e);
-    showToast('Failed to send notification', 'error');
+    showToast('Failed to send', 'error');
   }
 };
 
@@ -6718,48 +6762,16 @@ window.viewReportedContent = async function (type, id) {
   }
 };
 
-// Credit check + deduction helper for posting functions
-// Returns true if the action is allowed (and credits have been deducted server-side).
-// Returns false if blocked (toast shown to user).
+// Credit check helper for other posting functions
 async function checkNotificationCredits(required = 2) {
-  if (!currentUser) {
-    showAuthModal({ message: 'Sign in to post.' });
-    return false;
-  }
+  if (!currentUser || currentUser.subscriptionTier === 'pro') return true;
 
-  // Fetch live subscription state so we always have up-to-date credit balance
   const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  const isPro = sub.tier === 'pro';
-  const credits = sub.credits ?? 0;
-
-  // Pro users still consume credits — they just start with 50/month.
-  // If they somehow run out, block them too.
-  if (credits < required) {
-    if (isPro) {
-      showToast(`You need ${required} credits but only have ${credits} remaining this month. Credits reset on renewal.`, 'error');
-    } else {
-      showToast(`You need ${required} notification credits. Upgrade to Business Pro to get 50 credits/month!`, 'error');
-      setTimeout(() => buyProTier(), 1500);
-    }
+  if ((sub.credits || 0) < required) {
+    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
     return false;
   }
-
-  // Deduct credits on the backend BEFORE the action proceeds
-  try {
-    const deductRes = await apiPost('/owner/credits/deduct', { amount: required });
-    if (deductRes.error || deductRes.message?.toLowerCase().includes('insufficient')) {
-      showToast(deductRes.message || 'Not enough credits', 'error');
-      return false;
-    }
-    // Update cached credit count in the Pro card if it's visible
-    const creditEl = document.querySelector('[data-credit-count]');
-    if (creditEl) creditEl.textContent = deductRes.credits ?? (credits - required);
-    return true;
-  } catch (e) {
-    console.error('[Credits] Deduction failed', e);
-    showToast('Could not verify credits — please try again', 'error');
-    return false;
-  }
+  return true;
 }
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
@@ -7053,8 +7065,26 @@ window.logout = function() {
 };
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM ─────────────────────────────────────
-// NOTE: The canonical sendCustomNotification (with full credit gate) is defined
-// earlier in this file. This block intentionally left empty to avoid a duplicate.
+window.sendCustomNotification = async function() {
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  // TODO: We'll add real credit check next
+  try {
+    await broadcastPush(title, body, { page: 'home' });
+    showToast('✅ Custom notification sent!', 'success');
+    document.getElementById('customTitle').value = '';
+    document.getElementById('customBody').value = '';
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to send notification', 'error');
+  }
+};
 
 // Extra protection against any accidental double broadcast
 window.addEventListener('beforeunload', () => {
