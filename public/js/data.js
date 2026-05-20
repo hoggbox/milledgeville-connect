@@ -3176,13 +3176,14 @@ async function loadOwnerDashboard(content) {
     : '';
 
   // Build tab list
-  const tabs = [
-    { id: 'listing', label: 'Listing',  icon: '📋' },
-    { id: 'photos',  label: 'Photos',   icon: '📷' },
-    ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
-    { id: 'deals',   label: 'Deals',    icon: '🔥' },
-    { id: 'events',  label: 'Events',   icon: '📅' },
-  ];
+const tabs = [
+  { id: 'listing', label: 'Listing',  icon: '📋' },
+  { id: 'photos',  label: 'Photos',   icon: '📷' },
+  ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
+  { id: 'deals',   label: 'Deals',    icon: '🔥' },
+  { id: 'events',  label: 'Events',   icon: '📅' },
+  { id: 'homes',   label: 'Homes',    icon: '🏠' }   // ← NEW
+];
 
   // === GET SUBSCRIPTION STATUS ===
   const sub = await apiGet('/owner/subscription').catch(() => ({}));
@@ -3411,6 +3412,42 @@ async function loadOwnerDashboard(content) {
           <div id="ownerEventsList"></div>
         </div>
 
+        <!-- ═══ TAB: Homes for Rent/Sale (Pro Feature) ═══════════════════════════════ -->
+<div id="dtabContent-homes" class="hidden">
+  <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-base flex items-center gap-2"><span>🏠</span> Homes for Rent/Sale</h3>
+      ${isPro ? `<span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">Pro Feature</span>` : ''}
+    </div>
+
+    ${!isPro ? `
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 text-center">
+        <p class="text-amber-400 font-semibold">Upgrade to Business Pro to post Homes</p>
+        <button onclick="buyProTier()" class="mt-4 bg-white text-amber-700 px-6 py-3 rounded-2xl font-bold">Upgrade Now</button>
+      </div>
+    ` : `
+      <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent - Downtown" class="${inputClass}">
+      <div class="grid grid-cols-2 gap-3">
+        <input id="homePrice" type="text" placeholder="Price ($/mo or sale)" class="${inputClass}">
+        <select id="homeType" class="${selectClass}" style="${selectStyle}">
+          <option value="">Type *</option>
+          <option value="rent">For Rent</option>
+          <option value="sale">For Sale</option>
+        </select>
+      </div>
+      <textarea id="homeDesc" rows="3" placeholder="Description, bedrooms, bathrooms, etc." class="${inputClass} resize-none"></textarea>
+      <input id="homeAddress" type="text" placeholder="Full Address" class="${inputClass}">
+
+      <button onclick="postHomeListing()" 
+              class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold mt-2">
+        📢 Post Home Listing
+      </button>
+    `}
+  </div>
+
+  <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Home Listings</p>
+  <div id="ownerHomesList"></div>
+</div>
       </div>
     </div>`;
 
@@ -3519,23 +3556,30 @@ async function loadOwnerEvents() {
     </div>`).join('');
 }
 
-window.addOwnerDeal = async function () {
-  const title       = document.getElementById('dealTitle').value.trim();
-  const description = document.getElementById('dealDesc').value.trim();
-  const expires     = document.getElementById('dealExpires').value;
-  const category    = document.getElementById('dealCategory').value;
-  if (!title)    { showToast('Title is required', 'error'); return; }
-  if (!category) { showToast('Please select a category', 'error'); return; }
-  const res = await apiPost('/owner/deals', { title, description, expires, category });
-  if (res._id) {
-    showToast('🔥 Deal posted!');
-    document.getElementById('dealTitle').value    = '';
-    document.getElementById('dealDesc').value     = '';
-    document.getElementById('dealExpires').value  = '';
-    document.getElementById('dealCategory').value = '';
-    loadOwnerDeals();
-  } else {
-    showToast(res.message || 'Error posting deal', 'error');
+window.addOwnerDeal = async function() {
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
+
+  const title = document.getElementById('dealTitle').value.trim();
+  const desc = document.getElementById('dealDesc').value.trim();
+  const expires = document.getElementById('dealExpires').value;
+  const category = document.getElementById('dealCategory').value;
+
+  if (!title) return showToast('Deal title required', 'error');
+
+  try {
+    const res = await apiPost('/owner/deals', { 
+      title, description: desc, expires, category 
+    });
+
+    if (res._id) {
+      showToast('🔥 Deal posted!', 'success');
+      // Clear fields
+      document.getElementById('dealTitle').value = '';
+      document.getElementById('dealDesc').value = '';
+      loadOwnerDashboard(document.getElementById('content'));
+    }
+  } catch (e) {
+    showToast('Failed to post deal', 'error');
   }
 };
 
@@ -3546,26 +3590,32 @@ window.deleteOwnerDeal = async function (id) {
   loadOwnerDeals();
 };
 
-window.addOwnerEvent = async function () {
-  const title       = document.getElementById('eventTitle').value.trim();
-  const date        = document.getElementById('eventDate').value;
-  const location    = document.getElementById('eventLocation').value.trim();
-  const description = document.getElementById('eventDesc').value.trim();
-  const category    = document.getElementById('eventCategory').value;
-  if (!title)    { showToast('Title is required', 'error'); return; }
-  if (!date)     { showToast('Date is required', 'error'); return; }
-  if (!category) { showToast('Please select a category', 'error'); return; }
-  const res = await apiPost('/owner/events', { title, date, location, description, category });
-  if (res._id) {
-    showToast('📅 Event posted!');
-    document.getElementById('eventTitle').value    = '';
-    document.getElementById('eventDate').value     = '';
-    document.getElementById('eventLocation').value = '';
-    document.getElementById('eventDesc').value     = '';
-    document.getElementById('eventCategory').value = '';
-    loadOwnerEvents();
-  } else {
-    showToast(res.message || 'Error posting event', 'error');
+window.addOwnerEvent = async function() {
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
+
+  const title = document.getElementById('eventTitle').value.trim();
+  const date = document.getElementById('eventDate').value;
+  const location = document.getElementById('eventLocation').value.trim();
+  const desc = document.getElementById('eventDesc').value.trim();
+  const category = document.getElementById('eventCategory').value;
+
+  if (!title || !date) return showToast('Title and date required', 'error');
+
+  try {
+    const res = await apiPost('/owner/events', { 
+      title, date, location, description: desc, category 
+    });
+
+    if (res._id) {
+      showToast('📅 Event posted!', 'success');
+      // Clear fields
+      document.getElementById('eventTitle').value = '';
+      document.getElementById('eventDate').value = '';
+      document.getElementById('eventDesc').value = '';
+      loadOwnerDashboard(document.getElementById('content'));
+    }
+  } catch (e) {
+    showToast('Failed to post event', 'error');
   }
 };
 
@@ -4342,54 +4392,55 @@ window.hideMarketModal = function() {
 };
 
 window.postMarketplaceItem = async function() {
+  // === CREDIT CHECK FOR MARKETPLACE ===
+  if (!(await checkNotificationCredits(2))) return;   // 2 credits for marketplace listings
+
   const title = document.getElementById('marketTitle').value.trim();
   const description = document.getElementById('marketDesc').value.trim();
   const price = parseFloat(document.getElementById('marketPrice').value);
+  const category = document.getElementById('marketCategory') ? document.getElementById('marketCategory').value : '';
+  const condition = document.getElementById('marketCondition') ? document.getElementById('marketCondition').value : 'used';
 
-  if (!title || !description || !price) {
-    showToast("Title, description and price required", 'error');
+  if (!title || !description || isNaN(price) || price <= 0) {
+    showToast("Title, description and price are required", 'error');
     return;
   }
 
-  const files = document.getElementById('marketImages').files;
-  let images = [];
+  try {
+    showToast('Posting listing...', 'success');
 
-  if (files.length) {
-    showToast('Compressing images...', 'success');
-    for (let file of files) {
-      if (file.size > 8 * 1024 * 1024) {
-        showToast(`${file.name} is too large`, 'error');
-        continue;
-      }
-      try {
-        const compressed = await compressImage(file, 1100, 0.72);
-        const base64 = await new Promise(resolve => {
-          const r = new FileReader();
-          r.onload = e => resolve(e.target.result);
-          r.readAsDataURL(compressed);
-        });
-        images.push(base64);
-      } catch (e) {
-        console.error(e);
-      }
+    const images = window._marketImages || [];
+
+    const res = await apiPost('/marketplace', {
+      title,
+      description,
+      price,
+      images,
+      category,
+      condition
+    });
+
+    if (res && res._id) {
+      showToast('🛒 Marketplace item posted!', 'success');
+      
+      // Clear form
+      document.getElementById('marketTitle').value = '';
+      document.getElementById('marketDesc').value = '';
+      document.getElementById('marketPrice').value = '';
+      if (document.getElementById('marketCategory')) document.getElementById('marketCategory').value = '';
+      
+      window._marketImages = [];
+      const preview = document.getElementById('marketImagePreviews');
+      if (preview) preview.innerHTML = '';
+
+      // Refresh marketplace page
+      navigate('marketplace');
+    } else {
+      showToast(res?.message || 'Failed to post', 'error');
     }
-  }
-
-  const payload = { 
-    title, 
-    description, 
-    price, 
-    images, 
-    condition: document.getElementById('marketCondition').value 
-  };
-
-  const res = await apiPost('/marketplace', payload);
-  if (res._id) {
-    showToast('✅ Listing posted!');
-    hideMarketModal();
-    loadPage('marketplace');
-  } else {
-    showToast(res.message || 'Error posting listing', 'error');
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
   }
 };
 
@@ -6283,11 +6334,21 @@ window.showOnboardingTour = function() {
 // ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
 let isPostingShoutout = false;
 
+// ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
 window.postShoutoutWithPhoto = async function() {
-  if (isPostingShoutout) return;   // Block double-tap / double-call
+  if (isPostingShoutout) return;
   isPostingShoutout = true;
 
   try {
+    // === CREDIT CHECK ===
+    if (currentUser && currentUser.subscriptionTier !== 'pro') {
+      const sub = await apiGet('/owner/subscription').catch(() => ({}));
+      if ((sub.credits || 0) < 2) {
+        showToast('Not enough credits. Upgrade to Pro Tier!', 'error');
+        return;
+      }
+    }
+
     const input = document.getElementById('shoutoutInput');
     const text = input ? input.value.trim() : '';
 
@@ -6300,21 +6361,16 @@ window.postShoutoutWithPhoto = async function() {
 
     showToast('Posting...', 'success');
 
-    const res = await apiPost('/shoutouts', { 
-      text, 
-      images 
-    });
+    const res = await apiPost('/shoutouts', { text, images });
 
     if (res && res._id) {
       showToast('🚦 Traffic alert posted!', 'success');
       
-      // Clear form
       if (input) input.value = '';
       window._shoutoutImages = [];
       const previewContainer = document.getElementById('shoutoutImagePreviews');
       if (previewContainer) previewContainer.innerHTML = '';
 
-      // Refresh feed
       loadShoutoutsPage(document.getElementById('content'));
     } else {
       showToast(res?.message || 'Failed to post', 'error');
@@ -6431,6 +6487,18 @@ window.viewReportedContent = async function (type, id) {
     showToast('Navigate to the content section to find this comment', 'success');
   }
 };
+
+// Credit check helper for other posting functions
+async function checkNotificationCredits(required = 2) {
+  if (!currentUser || currentUser.subscriptionTier === 'pro') return true;
+
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
+  if ((sub.credits || 0) < required) {
+    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
+    return false;
+  }
+  return true;
+}
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
 let pendingOwnerLogo = null;
@@ -6566,6 +6634,45 @@ window.flagShoutout = async function (shoutoutId) {
     showToast('🚩 Thank you — your flag has been recorded.', 'success');
   }
 };
+
+window.postHomeListing = async function() {
+  if (!(await checkNotificationCredits(2))) return;
+
+  const title = document.getElementById('homeTitle').value.trim();
+  const price = document.getElementById('homePrice').value.trim();
+  const type = document.getElementById('homeType').value;
+  const desc = document.getElementById('homeDesc').value.trim();
+  const address = document.getElementById('homeAddress').value.trim();
+
+  if (!title || !type) {
+    showToast('Title and type are required', 'error');
+    return;
+  }
+
+  try {
+    const res = await apiPost('/marketplace', {
+      title,
+      description: desc,
+      price: price || 0,
+      category: 'Homes',
+      condition: type,           // "rent" or "sale"
+      address
+    });
+
+    if (res._id) {
+      showToast('🏠 Home listing posted!', 'success');
+      loadOwnerDashboard(document.getElementById('content'));
+    }
+  } catch (e) {
+    showToast('Failed to post home listing', 'error');
+  }
+};
+
+// Simple stub for now (you can expand later)
+async function loadOwnerHomes() {
+  // Will show user's home listings
+  document.getElementById('ownerHomesList').innerHTML = `<p class="text-white/50 py-8 text-center">Your home listings will appear here.</p>`;
+}
 
 // Live badge updates every 30 seconds
 setInterval(() => {
