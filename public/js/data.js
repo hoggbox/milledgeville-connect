@@ -3734,11 +3734,84 @@ window.switchDashTab = function (tabId) {
 };
 
 // ─── NOTIFICATIONS TAB LOADER ────────────────────────────────────────────────
+
+// Templates stored in JS so onclick never needs JSON.stringify inside attributes
+const NOTIF_TEMPLATES = [
+  { label: '🔥 Daily Special',   title: 'Daily Special!',           body: "Don't miss today's special — come see us!" },
+  { label: '🎉 New Arrivals',    title: 'New Arrivals In Stock!',    body: 'Fresh inventory just arrived. Come check it out!' },
+  { label: '⏰ Closing Soon',    title: 'Closing Soon!',             body: "We close in 1 hour — stop by before we're done for the day." },
+  { label: '🏷️ Sale On Now',    title: 'Sale On Now!',              body: 'Big savings happening right now. Visit us today!' },
+  { label: '📅 Special Event',   title: 'Special Event This Week!',  body: 'Join us for a special event — details inside!' },
+];
+
+// ── Unicode bold/italic helpers (push notifications are plain text,
+//    so we use Unicode Mathematical Sans-Serif chars for styling) ──────────────
+function _toBoldUnicode(text) {
+  return [...text].map(c => {
+    const n = c.codePointAt(0);
+    if (n >= 65  && n <= 90)  return String.fromCodePoint(0x1D5D4 + n - 65);  // A-Z
+    if (n >= 97  && n <= 122) return String.fromCodePoint(0x1D5EE + n - 97);  // a-z
+    if (n >= 48  && n <= 57)  return String.fromCodePoint(0x1D7EC + n - 48);  // 0-9
+    return c;
+  }).join('');
+}
+
+function _toItalicUnicode(text) {
+  return [...text].map(c => {
+    const n = c.codePointAt(0);
+    if (n >= 65  && n <= 90)  return String.fromCodePoint(0x1D608 + n - 65);  // A-Z
+    if (n >= 97  && n <= 122) return String.fromCodePoint(0x1D622 + n - 97);  // a-z
+    return c;
+  }).join('');
+}
+
+// Strips any existing bold/italic Unicode back to plain ASCII so you can re-apply
+function _toPlainUnicode(text) {
+  return [...text].map(c => {
+    const n = c.codePointAt(0);
+    // Bold A-Z / a-z / 0-9
+    if (n >= 0x1D5D4 && n <= 0x1D5ED) return String.fromCharCode(n - 0x1D5D4 + 65);
+    if (n >= 0x1D5EE && n <= 0x1D607) return String.fromCharCode(n - 0x1D5EE + 97);
+    if (n >= 0x1D7EC && n <= 0x1D7F5) return String.fromCharCode(n - 0x1D7EC + 48);
+    // Italic A-Z / a-z
+    if (n >= 0x1D608 && n <= 0x1D621) return String.fromCharCode(n - 0x1D608 + 65);
+    if (n >= 0x1D622 && n <= 0x1D63B) return String.fromCharCode(n - 0x1D622 + 97);
+    return c;
+  }).join('');
+}
+
+window.applyNotifFormat = function(format) {
+  const ta = document.getElementById('customBody');
+  if (!ta) return;
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  if (start === end) { showToast('Select some text first, then tap B or I', 'error'); return; }
+
+  const selected = ta.value.substring(start, end);
+  // Strip existing formatting first so you don't double-encode
+  const plain = _toPlainUnicode(selected);
+  const styled = format === 'bold' ? _toBoldUnicode(plain) : _toItalicUnicode(plain);
+
+  ta.value = ta.value.substring(0, start) + styled + ta.value.substring(end);
+  ta.focus();
+  ta.setSelectionRange(start, start + styled.length);
+  ta.dispatchEvent(new Event('input'));
+};
+
+window.insertNotifEmoji = function(emoji) {
+  const ta = document.getElementById('customBody');
+  if (!ta) return;
+  const pos = ta.selectionStart ?? ta.value.length;
+  ta.value = ta.value.substring(0, pos) + emoji + ta.value.substring(pos);
+  ta.focus();
+  ta.setSelectionRange(pos + emoji.length, pos + emoji.length);
+  ta.dispatchEvent(new Event('input'));
+};
+
 async function loadNotificationsTab() {
   const el = document.getElementById('notificationsContent');
   if (!el) return;
 
-  // Show loading state
   el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
 
   let credits = 0;
@@ -3751,56 +3824,83 @@ async function loadNotificationsTab() {
     console.error('Failed to load subscription', e);
   }
 
-  const isPro = tier === 'pro';
+  const isPro   = tier === 'pro';
+  const bizName = currentUser?.verifiedBusiness?.name || currentUser?.name || 'Your Business';
 
   el.innerHTML = `
-    <div class="space-y-6 p-4">
+    <div class="space-y-5 p-4">
 
       <!-- Credit balance -->
       <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
         <div>
           <div class="text-xs text-white/50 mb-1">Available Credits</div>
-          <div class="text-3xl font-black text-white">${credits}</div>
+          <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
         </div>
-        <div class="text-right">
+        <div class="text-right space-y-0.5">
           <div class="text-xs text-white/40">Custom = 2 credits</div>
           <div class="text-xs text-white/40">Template = 1 credit</div>
-          ${!isPro ? `<button onclick="buyProTier()" class="mt-2 text-xs text-violet-400 underline">Upgrade for more →</button>` : ''}
+          ${!isPro ? `<button onclick="buyProTier()" class="mt-1 text-xs text-violet-400 underline block">Upgrade for more →</button>` : ''}
         </div>
       </div>
 
-      <!-- Custom notification form -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+      <!-- ── Custom notification form ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
         <h4 class="font-bold text-white">📢 Send Custom Notification</h4>
-        <p class="text-xs text-white/50">Broadcasts a push notification to all users with the app installed. Costs 2 credits.</p>
+        <p class="text-xs text-white/50">Broadcasts a push to all users. Costs 2 credits.</p>
 
-        <!-- "From" badge — shows recipients what business the message is from -->
-        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+        <!-- From badge -->
+        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
           <span class="text-xs text-white/40">From:</span>
-          <span class="text-sm font-semibold text-emerald-400">${
-            (typeof currentUser !== 'undefined' && currentUser?.verifiedBusiness?.name)
-              ? currentUser.verifiedBusiness.name
-              : (typeof currentUser !== 'undefined' && currentUser?.name) || 'Your Business'
-          }</span>
+          <span class="text-sm font-semibold text-emerald-400">${bizName}</span>
           <span class="text-xs text-white/30 ml-auto">shown to all recipients</span>
         </div>
 
+        <!-- Title input -->
         <input id="customTitle"
                placeholder="Notification title (e.g. Big Sale Today!)"
                class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500" />
-        <textarea id="customBody" rows="3"
-               placeholder="Message body (e.g. Stop by for 20% off all day!)"
-               class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none"></textarea>
 
-        <!-- Live preview of how it'll look on a device -->
-        <div class="bg-black/30 border border-white/10 rounded-xl p-3 space-y-1">
-          <div class="text-xs text-white/30 mb-2">Preview on device:</div>
-          <div class="text-xs font-bold text-white" id="previewTitle">Your title here</div>
-          <div class="text-xs text-white/60" id="previewBody">${
-            (typeof currentUser !== 'undefined' && currentUser?.verifiedBusiness?.name)
-              ? currentUser.verifiedBusiness.name
-              : 'Your Business'
-          } · Your message here</div>
+        <!-- ── Mini rich-text toolbar ── -->
+        <div>
+          <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-t-xl px-3 py-2 border-b-0">
+            <span class="text-xs text-white/30 mr-1">Format:</span>
+
+            <button onclick="applyNotifFormat('bold')" title="Bold — select text first"
+                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm transition flex items-center justify-center">
+              B
+            </button>
+            <button onclick="applyNotifFormat('italic')" title="Italic — select text first"
+                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white italic font-semibold text-sm transition flex items-center justify-center">
+              I
+            </button>
+
+            <div class="w-px h-5 bg-white/10 mx-1"></div>
+
+            <span class="text-xs text-white/30 mr-1">Add:</span>
+            ${['🔥','🎉','⏰','🏷️','📍','✅','💥','👋'].map(e =>
+              `<button onclick="insertNotifEmoji('${e}')"
+                      class="w-8 h-8 rounded-lg hover:bg-white/10 text-base transition flex items-center justify-center">${e}</button>`
+            ).join('')}
+
+            <div class="ml-auto text-xs text-white/20 hidden sm:block">Select text → tap B or I</div>
+          </div>
+
+          <!-- Body textarea — directly below toolbar, top corners flat -->
+          <textarea id="customBody" rows="4"
+                    placeholder="Message body — select any text then tap B or I to style it…"
+                    class="w-full bg-white/10 border border-white/10 rounded-b-xl rounded-t-none px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none font-mono"></textarea>
+        </div>
+
+        <!-- Live device preview -->
+        <div class="bg-black/40 border border-white/10 rounded-xl p-3 space-y-1">
+          <div class="text-[10px] text-white/25 uppercase tracking-widest mb-1.5">Preview on device</div>
+          <div class="flex items-start gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">MC</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white leading-snug" id="previewTitle">Your title here</div>
+              <div class="text-xs text-white/55 leading-snug mt-0.5" id="previewBody">${bizName} · Your message here</div>
+            </div>
+          </div>
         </div>
 
         <button onclick="sendCustomNotification()"
@@ -3809,30 +3909,20 @@ async function loadNotificationsTab() {
         </button>
       </div>
 
-      <!-- Quick templates -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+      <!-- ── Quick templates ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2">
         <h4 class="font-bold text-white">⚡ Quick Templates <span class="text-xs font-normal text-white/40">(1 credit each)</span></h4>
-        <p class="text-xs text-white/50">Tap a template to pre-fill the form above, then customise and send.</p>
-        ${[
-          { label: '🔥 Daily Special',   title: 'Daily Special!',          body: "Don't miss today's special — come see us!" },
-          { label: '🎉 New Arrivals',     title: 'New Arrivals In Stock!',   body: 'Fresh inventory just arrived. Come check it out!' },
-          { label: '⏰ Closing Soon',    title: 'Closing Soon!',            body: "We close in 1 hour — stop by before we're done for the day." },
-          { label: '🏷️ Sale On Now',    title: 'Sale On Now!',             body: 'Big savings happening right now. Visit us today!' },
-          { label: '📅 Special Event',   title: 'Special Event This Week!', body: 'Join us for a special event — details inside!' },
-        ].map(t => `
-          <button onclick="applyNotifTemplate(${JSON.stringify(t.title)}, ${JSON.stringify(t.body)})"
-                  class="w-full text-left bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 transition-all">
+        <p class="text-xs text-white/50 mb-1">Tap to pre-fill the form above, then customise and send.</p>
+        ${NOTIF_TEMPLATES.map((t, i) => `
+          <button onclick="applyNotifTemplate(${i})"
+                  class="w-full text-left bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 transition-all">
             ${t.label}
           </button>`).join('')}
       </div>
 
     </div>`;
 
-  // Wire up live preview — updates as the owner types
-  const bizName = (typeof currentUser !== 'undefined' && currentUser?.verifiedBusiness?.name)
-    ? currentUser.verifiedBusiness.name
-    : (typeof currentUser !== 'undefined' && currentUser?.name) || 'Your Business';
-
+  // Wire up live preview
   const titleInput   = document.getElementById('customTitle');
   const bodyInput    = document.getElementById('customBody');
   const previewTitle = document.getElementById('previewTitle');
@@ -3847,11 +3937,16 @@ async function loadNotificationsTab() {
   bodyInput?.addEventListener('input',  updatePreview);
 }
 
-window.applyNotifTemplate = function(title, body) {
+window.applyNotifTemplate = function(index) {
+  const t = NOTIF_TEMPLATES[index];
+  if (!t) return;
   const titleEl = document.getElementById('customTitle');
   const bodyEl  = document.getElementById('customBody');
-  if (titleEl) { titleEl.value = title; titleEl.dispatchEvent(new Event('input')); }
-  if (bodyEl)  { bodyEl.value  = body;  bodyEl.dispatchEvent(new Event('input'));  }
+  if (titleEl) { titleEl.value = t.title; titleEl.dispatchEvent(new Event('input')); }
+  if (bodyEl)  { bodyEl.value  = t.body;  bodyEl.dispatchEvent(new Event('input'));  }
+  // Scroll form into view and focus body so they can customise immediately
+  bodyEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  bodyEl?.focus();
   showToast('Template applied — customise then send!', 'success');
 };
 
@@ -6803,16 +6898,21 @@ window.sendCustomNotification = async function() {
     return;
   }
 
+  const btn = document.querySelector('#notificationsContent button[onclick="sendCustomNotification()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
   try {
     const res = await apiPost('/owner/custom-notification', { title, body });
 
     if (res.success) {
       showToast('✅ Custom notification sent to all users!', 'success');
       document.getElementById('customTitle').value = '';
-      document.getElementById('customBody').value = '';
-      // Refresh the credit balance display if the backend returned it
+      document.getElementById('customBody').value  = '';
+      document.getElementById('customTitle').dispatchEvent(new Event('input'));
+      document.getElementById('customBody').dispatchEvent(new Event('input'));
+      // Refresh the credit counter in the tab
       if (res.credits !== undefined) {
-        const creditEl = document.querySelector('#notificationsContent .text-3xl.font-black');
+        const creditEl = document.getElementById('notifCreditDisplay');
         if (creditEl) creditEl.textContent = res.credits;
       }
     } else {
@@ -6821,6 +6921,8 @@ window.sendCustomNotification = async function() {
   } catch (e) {
     console.error(e);
     showToast('Failed to send notification', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>'; }
   }
 };
 
