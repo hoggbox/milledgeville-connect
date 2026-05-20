@@ -6754,6 +6754,27 @@ window.hideDeleteAccountModal = function() {
   if (modal) modal.remove();
 };
 
+window.requestAccountDeletion = async function() {
+  if (!currentUser) {
+    showToast('Please sign in to request deletion', 'error');
+    return;
+  }
+
+  if (!confirm("FINAL WARNING: This will permanently delete your account and all data. Continue?")) {
+    return;
+  }
+
+  try {
+    const res = await apiPost('/user/delete-request', { 
+      reason: "Requested via public deletion link" 
+    });
+
+    showToast('✅ Deletion request submitted. You will be notified when processed.', 'success');
+  } catch (e) {
+    showToast('Failed to submit request. Please email us directly.', 'error');
+  }
+};
+
 window.confirmAccountDeletion = async function() {
   const reason = document.getElementById('deleteReason')?.value.trim() || 'No reason provided';
 

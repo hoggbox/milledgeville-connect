@@ -218,11 +218,62 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
   });
 }
 
-// Exposed globally so auth.js can call it right after a successful login
+// ─── CLEAN PUSH INIT (2026 best practices) ─────────────────────────────────
 window.initPushAfterLogin = async function() {
-  console.log('🔄 initPushAfterLogin called');
-  await _initNativePush();
+  console.log('🔄 initPushAfterLogin');
+
+  if (window.Capacitor?.isNativePlatform()) {
+    await initNativePush();
+  } else {
+    await initWebVapidPush();
+  }
 };
+
+async function initNativePush() {
+  if (!window.Capacitor?.Plugins?.PushNotifications) return;
+  const { PushNotifications } = window.Capacitor.Plugins;
+
+  try {
+    const { receive } = await PushNotifications.checkPermissions();
+    if (receive !== 'granted') {
+      const { receive: newPerm } = await PushNotifications.requestPermissions();
+      if (newPerm !== 'granted') return;
+    }
+
+    await PushNotifications.register();
+  } catch (e) {
+    console.error('Native push init failed', e);
+  }
+}
+
+async function initWebVapidPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  try {
+    await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.ready;
+
+    // Remove old subscription if exists
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) await existing.unsubscribe();
+
+    const vapidKeyRes = await apiGet('/push/vapid-public-key');
+    const vapidKey = vapidKeyRes.key;
+    if (!vapidKey) return;
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey)
+    });
+
+    await apiPost('/push/subscribe', { subscription: subscription.toJSON() });
+    if (currentUser) currentUser.pushEnabled = true;
+  } catch (err) {
+    console.error('Web VAPID failed:', err);
+  }
+}
+
+// Keep your existing listeners (pushNotificationReceived + pushNotificationActionPerformed) — they look fine.
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
 function showProfileSheet() {

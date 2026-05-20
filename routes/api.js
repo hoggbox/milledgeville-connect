@@ -577,50 +577,62 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// ─── BROADCAST PUSH - OLD RELIABLE METHOD ─────────────────────────────────────
-async function broadcastPush(title, body, data = {}, filter = {}) {
-  try {
-    console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
+// ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
+async function broadcastPush(title, body, data = {}, options = {}) {
+  const { notifyShoutouts = false, ...filter } = options;
 
-    const subs = await PushSubscription.find({
-      nativeToken: { $exists: true, $ne: null }
-    }).populate('user');
+  console.log(`📢 Broadcasting: ${title} — ${body}`);
 
-    console.log(`Found ${subs.length} subscription records`);
+  // === NATIVE FCM (Android APK) ===
+  const nativeSubs = await PushSubscription.find({
+    nativeToken: { $exists: true, $ne: null }
+  });
 
-    if (subs.length === 0) {
-      console.log('⚠️ No push tokens found');
-      return;
-    }
-
-    let sent = 0;
-
-    for (const sub of subs) {
-      const user = sub.user;
-      if (!user || !user.pushEnabled) continue;
-      if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
-
-      try {
-        await admin.messaging().sendToDevice(sub.nativeToken, {
-          notification: {
-            title: title,
-            body: body
-          },
-          data: {
-            page: data.page || 'shoutouts',
-            id: data.id || ''
-          }
-        });
-        sent++;
-      } catch (e) {
-        console.error("Failed to one token:", e.message);
+  for (const sub of nativeSubs) {
+    try {
+      await admin.messaging().send({
+        token: sub.nativeToken,
+        notification: { title, body },
+        data: {
+          page: data.page || 'home',
+          id:   data.id   || '',
+          ...data
+        },
+        android: {
+          priority: 'high',           // ← Important for Doze mode
+          notification: { sound: 'default' }
+        }
+      });
+    } catch (err) {
+      if (err.code === 'messaging/registration-token-not-registered' || 
+          err.code === 'messaging/invalid-registration-token') {
+        await sub.deleteOne();
+      } else {
+        console.error('FCM send error:', err);
       }
     }
+  }
 
-    console.log(`✅ Sent to ${sent} devices using sendToDevice`);
+  // === WEB VAPID ===
+  const webSubs = await PushSubscription.find({
+    subscription: { $exists: true, $ne: null }
+  });
 
-  } catch (err) {
-    console.error("💥 broadcastPush FAILED:", err.message);
+  for (const sub of webSubs) {
+    try {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({
+          title,
+          body,
+          data: { page: data.page, id: data.id, ...data }
+        })
+      );
+    } catch (err) {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        await sub.deleteOne(); // expired subscription
+      }
+    }
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2630,6 +2642,16 @@ router.post('/owner/upgrade', authenticate, async (req, res) => {
     console.error(err);
     res.status(500).json({ message: err.message });
   }
+});
+
+// Test both native + web
+router.post('/test-push', authenticate, async (req, res) => {
+  await broadcastPush(
+    "🧪 Test Push",
+    "If you see this, push is working on your device!",
+    { page: 'home', id: 'test123' }
+  );
+  res.json({ success: true });
 });
 
 // ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
