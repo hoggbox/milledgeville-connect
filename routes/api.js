@@ -2406,6 +2406,94 @@ router.delete('/owner/events/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── OWNER: HOMES FOR RENT / SALE ────────────────────────────────────────────
+
+// GET  /api/owner/homes  — list this owner's home marketplace items
+router.get('/owner/homes', authenticate, async (req, res) => {
+  try {
+    const items = await MarketplaceItem.find({
+      seller:   req.userId,
+      category: 'Homes'
+    }).sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/owner/homes  — create a home listing with optional push notification
+router.post('/owner/homes', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can post home listings' });
+    }
+
+    const clean = sanitizeContent(req.body);
+    const { title, description, price, condition, address, sendNotify } = clean;
+
+    if (!title?.trim()) return res.status(400).json({ message: 'Title is required' });
+    if (!condition || !['rent','sale'].includes(condition)) {
+      return res.status(400).json({ message: 'Listing type must be "rent" or "sale"' });
+    }
+
+    // Cap images at 10
+    const rawImages = Array.isArray(req.body.images) ? req.body.images : [];
+    const images = rawImages.slice(0, 10);
+
+    const bizName = user.verifiedBusiness?.name || user.name;
+
+    const item = await MarketplaceItem.create({
+      title:       title.trim(),
+      description: description || '',
+      price:       Number(price) || 0,
+      images,
+      seller:      user._id,
+      authorName:  bizName,        // show business name, not personal name
+      category:    'Homes',
+      condition,                   // 'rent' | 'sale'
+      address:     address || ''
+    });
+
+    // Optional push notification — costs 2 credits
+    if (sendNotify === true || sendNotify === 'true') {
+      const deducted = await deductNotificationCredit(req.userId, 2, false);
+      if (deducted) {
+        const typeLabel = condition === 'rent' ? 'For Rent' : 'For Sale';
+        const priceStr  = price ? ` · $${Number(price).toLocaleString()}${condition === 'rent' ? '/mo' : ''}` : '';
+        broadcastPush(
+          `🏠 ${typeLabel}: ${title.trim()}`,
+          `${bizName}${priceStr}`,
+          { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
+          { notifyMarketplace: true }
+        );
+      }
+    }
+
+    res.json(item);
+  } catch (err) {
+    console.error('Owner homes post error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/owner/homes/:id  — remove a home listing (owner only)
+router.delete('/owner/homes/:id', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findOne({
+      _id:      req.params.id,
+      seller:   req.userId,
+      category: 'Homes'
+    });
+    if (!item) return res.status(404).json({ message: 'Listing not found or not yours' });
+    await item.deleteOne();
+    res.json({ message: 'Listing deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
   try {
     const { 

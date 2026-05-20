@@ -3585,6 +3585,7 @@ const tabs = [
             <p class="text-white/60 mb-6 text-sm leading-relaxed">List properties you manage directly on Milledgeville Connect's marketplace. Requires Business Pro.</p>
             <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> List homes for rent or sale</div>
+              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Upload up to 10 photos</div>
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Optionally notify all users</div>
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Appears in Marketplace under Homes</div>
             </div>
@@ -3593,33 +3594,64 @@ const tabs = [
             </button>
           </div>
           ` : `
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-            <div class="flex items-center justify-between mb-4">
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4 space-y-3">
+            <div class="flex items-center justify-between mb-1">
               <h3 class="font-bold text-base flex items-center gap-2"><span>🏠</span> Post a Home Listing</h3>
               <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">Pro</span>
             </div>
-            <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent - Downtown" class="${inputClass}">
+
+            <!-- Title -->
+            <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent – Downtown" class="${inputClass}">
+
+            <!-- Price + Type row -->
             <div class="grid grid-cols-2 gap-3">
-              <input id="homePrice" type="text" placeholder="Price ($/mo or sale)" class="${inputClass}">
+              <input id="homePrice" type="text" placeholder="Price ($/mo or asking)" class="${inputClass}">
               <select id="homeType" class="${selectClass}" style="${selectStyle}">
-                <option value="">Type *</option>
+                <option value="">Listing Type *</option>
                 <option value="rent">For Rent</option>
                 <option value="sale">For Sale</option>
               </select>
             </div>
-            <textarea id="homeDesc" rows="3" placeholder="Bedrooms, bathrooms, amenities…" class="${inputClass} resize-none"></textarea>
-            <input id="homeAddress" type="text" placeholder="Full Address" class="${inputClass}">
-            <div class="flex items-center gap-3 mt-1 mb-4 bg-white/5 rounded-2xl p-4">
+
+            <!-- Beds + Baths row -->
+            <div class="grid grid-cols-2 gap-3">
+              <input id="homeBeds" type="number" min="0" placeholder="Bedrooms" class="${inputClass}">
+              <input id="homeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" class="${inputClass}">
+            </div>
+
+            <!-- Address -->
+            <input id="homeAddress" type="text" placeholder="Full Address or Neighborhood" class="${inputClass}">
+
+            <!-- Description -->
+            <textarea id="homeDesc" rows="3" placeholder="Describe the property — amenities, pets policy, move-in date…" class="${inputClass} resize-none"></textarea>
+
+            <!-- Photo upload — up to 10 photos -->
+            <div>
+              <label class="text-xs text-white/40 uppercase tracking-widest block mb-2">Photos (up to 10)</label>
+              <div id="homeImagePreviews" class="flex flex-wrap gap-2 mb-2"></div>
+              <label class="flex items-center gap-2 cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white/70 transition w-full">
+                <span>📷</span>
+                <span id="homePhotoLabel">Add photos…</span>
+                <input type="file" accept="image/*" multiple onchange="handleHomeImages(this)" class="hidden">
+              </label>
+              <p class="text-xs text-white/30 mt-1 px-1">Max 8MB per photo · JPEG or PNG</p>
+            </div>
+
+            <!-- Notify toggle -->
+            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
               <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer">
-                📢 Send push notification when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
+              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+                📢 Notify all users when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
               </label>
             </div>
-            <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold">
+
+            <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 py-4 rounded-3xl font-semibold transition-all">
               🏠 Post Home Listing
             </button>
           </div>
           `}
+
+          <!-- Current listings -->
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Home Listings</p>
           <div id="ownerHomesList"><div class="text-white/30 text-center py-8 text-sm">Loading…</div></div>
         </div>
@@ -3698,6 +3730,7 @@ window.switchDashTab = function (tabId) {
   if (tabId === 'events')        loadOwnerEvents();
   if (tabId === 'photos')        renderOwnerPhotoGrid();
   if (tabId === 'notifications') loadNotificationsTab();
+  if (tabId === 'homes')         loadOwnerHomes();
 };
 
 // ─── NOTIFICATIONS TAB LOADER ────────────────────────────────────────────────
@@ -7057,39 +7090,6 @@ window.flagShoutout = async function (shoutoutId) {
   }
 };
 
-window.postHomeListing = async function() {
-  if (!(await checkNotificationCredits(2))) return;
-
-  const title = document.getElementById('homeTitle').value.trim();
-  const price = document.getElementById('homePrice').value.trim();
-  const type = document.getElementById('homeType').value;
-  const desc = document.getElementById('homeDesc').value.trim();
-  const address = document.getElementById('homeAddress').value.trim();
-
-  if (!title || !type) {
-    showToast('Title and type are required', 'error');
-    return;
-  }
-
-  try {
-    const res = await apiPost('/marketplace', {
-      title,
-      description: desc,
-      price: price || 0,
-      category: 'Homes',
-      condition: type,           // "rent" or "sale"
-      address
-    });
-
-    if (res._id) {
-      showToast('🏠 Home listing posted!', 'success');
-      loadOwnerDashboard(document.getElementById('content'));
-    }
-  } catch (e) {
-    showToast('Failed to post home listing', 'error');
-  }
-};
-
 // ─── DELETE ACCOUNT FEATURE ─────────────────────────────────────────────────
 window.showDeleteAccountModal = function() {
   const html = `
@@ -7192,11 +7192,207 @@ window.saveMarketplacePreferences = async function() {
   showToast('Preferences saved!', 'success');
 };
 
-// Simple stub for now (you can expand later)
-async function loadOwnerHomes() {
-  // Will show user's home listings
-  document.getElementById('ownerHomesList').innerHTML = `<p class="text-white/50 py-8 text-center">Your home listings will appear here.</p>`;
+// ─── HOMES TAB: IMAGE STATE ──────────────────────────────────────────────────
+let _pendingHomeImages = [];
+
+window.handleHomeImages = async function(input) {
+  const files = Array.from(input.files);
+  const remaining = 10 - _pendingHomeImages.length;
+  if (remaining <= 0) {
+    showToast('Maximum 10 photos reached', 'error');
+    input.value = '';
+    return;
+  }
+  const toProcess = files.slice(0, remaining);
+  if (files.length > remaining) showToast(`Only ${remaining} more photo(s) allowed — extras ignored`, 'error');
+
+  for (const file of toProcess) {
+    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); continue; }
+    try {
+      const compressed = await compressImage(file, 1100, 0.75);
+      await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => { _pendingHomeImages.push(e.target.result); renderHomeImagePreviews(); resolve(); };
+        reader.readAsDataURL(compressed);
+      });
+    } catch (e) { console.error(e); }
+  }
+  input.value = '';
+};
+
+function renderHomeImagePreviews() {
+  const container = document.getElementById('homeImagePreviews');
+  const label     = document.getElementById('homePhotoLabel');
+  if (!container) return;
+  container.innerHTML = _pendingHomeImages.map((src, i) => `
+    <div class="relative w-20 h-20 rounded-2xl overflow-hidden bg-white/10 group flex-shrink-0">
+      <img src="${src}" class="w-full h-full object-cover">
+      <button onclick="removeHomeImage(${i})" class="absolute top-0 right-0 w-6 h-6 bg-red-500 text-white text-xs rounded-bl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">✕</button>
+      ${i === 0 ? '<div class="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-white text-center py-0.5">Cover</div>' : ''}
+    </div>`).join('');
+  if (label) label.textContent = _pendingHomeImages.length >= 10 ? '10/10 photos added' : `${_pendingHomeImages.length > 0 ? _pendingHomeImages.length + '/10 — ' : ''}Add photos…`;
 }
+
+window.removeHomeImage = function(index) {
+  _pendingHomeImages.splice(index, 1);
+  renderHomeImagePreviews();
+};
+
+// ─── HOMES TAB: POST LISTING ─────────────────────────────────────────────────
+window.postHomeListing = async function() {
+  const title   = document.getElementById('homeTitle')?.value.trim();
+  const price   = document.getElementById('homePrice')?.value.trim();
+  const type    = document.getElementById('homeType')?.value;
+  const beds    = document.getElementById('homeBeds')?.value.trim();
+  const baths   = document.getElementById('homeBaths')?.value.trim();
+  const desc    = document.getElementById('homeDesc')?.value.trim();
+  const address = document.getElementById('homeAddress')?.value.trim();
+  const notify  = document.getElementById('homeNotify')?.checked ?? true;
+
+  if (!title || !type) { showToast('Title and listing type are required', 'error'); return; }
+
+  if (notify && !(await checkNotificationCredits(2))) return;
+
+  // Build a rich description that includes beds/baths if provided
+  const fullDesc = [
+    beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
+    baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
+    address ? `📍 ${address}` : '',
+    desc   || ''
+  ].filter(Boolean).join(' · ');
+
+  const btn = document.querySelector('#dtabContent-homes button[onclick="postHomeListing()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+
+  try {
+    const res = await apiPost('/owner/homes', {
+      title,
+      description: fullDesc,
+      price:       price || '0',
+      condition:   type,        // 'rent' or 'sale' — stored in condition field
+      address:     address || '',
+      images:      _pendingHomeImages,
+      sendNotify:  notify
+    });
+
+    if (res._id) {
+      showToast('🏠 Home listing posted!', 'success');
+      // Reset form
+      ['homeTitle','homePrice','homeBeds','homeBaths','homeDesc','homeAddress'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      const typeEl = document.getElementById('homeType');
+      if (typeEl) typeEl.value = '';
+      _pendingHomeImages = [];
+      renderHomeImagePreviews();
+      loadOwnerHomes();
+    } else {
+      showToast(res.message || 'Failed to post listing', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to post home listing', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🏠 Post Home Listing'; }
+  }
+};
+
+// ─── HOMES TAB: LOAD + PAGINATED LIST ────────────────────────────────────────
+const HOMES_PAGE_SIZE = 5;
+let _homesPage = 1;
+let _homesAll  = [];
+
+async function loadOwnerHomes() {
+  const container = document.getElementById('ownerHomesList');
+  if (!container) return;
+  container.innerHTML = `<div class="text-white/30 text-center py-8 text-sm">Loading…</div>`;
+
+  try {
+    const items = await apiGet('/owner/homes');
+    _homesAll  = items || [];
+    _homesPage = 1;
+    renderHomesPage();
+  } catch (e) {
+    container.innerHTML = `<p class="text-white/40 text-center py-6 text-sm">Failed to load listings.</p>`;
+  }
+}
+
+function renderHomesPage() {
+  const container = document.getElementById('ownerHomesList');
+  if (!container) return;
+
+  if (!_homesAll.length) {
+    container.innerHTML = `<p class="text-white/40 text-center py-6 text-sm">No home listings yet. Post your first one above!</p>`;
+    return;
+  }
+
+  const totalPages = Math.ceil(_homesAll.length / HOMES_PAGE_SIZE);
+  const start      = (_homesPage - 1) * HOMES_PAGE_SIZE;
+  const page       = _homesAll.slice(start, start + HOMES_PAGE_SIZE);
+
+  const typeLabel  = { rent: '🔑 For Rent', sale: '🏷️ For Sale' };
+
+  container.innerHTML = page.map(item => {
+    const firstPhoto = item.images?.[0];
+    const photoCount = item.images?.length || 0;
+    return `
+    <div class="bg-white/10 border border-white/10 rounded-3xl overflow-hidden mb-3">
+      ${firstPhoto ? `
+      <div class="relative h-36 bg-white/5">
+        <img src="${firstPhoto}" class="w-full h-full object-cover">
+        ${photoCount > 1 ? `<span class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">📷 ${photoCount}</span>` : ''}
+        <span class="absolute top-2 left-2 bg-black/70 text-white text-xs px-2.5 py-1 rounded-full font-semibold">${typeLabel[item.condition] || item.condition}</span>
+      </div>` : ''}
+      <div class="p-4">
+        <div class="flex justify-between items-start gap-2">
+          <div class="flex-1 min-w-0">
+            ${!firstPhoto ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/20 mb-1 inline-block">${typeLabel[item.condition] || item.condition}</span>` : ''}
+            <div class="font-bold leading-snug truncate">${item.title}</div>
+            ${item.price > 0 ? `<div class="text-emerald-400 font-semibold text-sm mt-0.5">$${Number(item.price).toLocaleString()}${item.condition === 'rent' ? '/mo' : ''}</div>` : ''}
+            ${item.description ? `<div class="text-xs text-white/50 mt-1 line-clamp-2">${item.description}</div>` : ''}
+            <div class="text-xs text-white/30 mt-1.5">${new Date(item.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+          </div>
+          <button onclick="deleteOwnerHome('${item._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0 mt-1">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Pagination controls
+  if (totalPages > 1) {
+    container.insertAdjacentHTML('beforeend', `
+      <div class="flex items-center justify-between px-1 pt-2 pb-1">
+        <button onclick="homesPageNav(-1)" ${_homesPage === 1 ? 'disabled' : ''}
+                class="text-sm px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-30 transition">← Prev</button>
+        <span class="text-xs text-white/40">${_homesPage} / ${totalPages}</span>
+        <button onclick="homesPageNav(1)" ${_homesPage === totalPages ? 'disabled' : ''}
+                class="text-sm px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-30 transition">Next →</button>
+      </div>`);
+  }
+}
+
+window.homesPageNav = function(dir) {
+  const totalPages = Math.ceil(_homesAll.length / HOMES_PAGE_SIZE);
+  _homesPage = Math.max(1, Math.min(totalPages, _homesPage + dir));
+  renderHomesPage();
+  document.getElementById('ownerHomesList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.deleteOwnerHome = async function(id) {
+  if (!confirm('Delete this home listing?')) return;
+  try {
+    await apiDelete(`/owner/homes/${id}`);
+    showToast('Listing deleted');
+    _homesAll = _homesAll.filter(h => h._id !== id);
+    // Adjust page if we deleted the last item on a non-first page
+    const totalPages = Math.ceil(_homesAll.length / HOMES_PAGE_SIZE);
+    if (_homesPage > totalPages) _homesPage = Math.max(1, totalPages);
+    renderHomesPage();
+  } catch (e) {
+    showToast('Failed to delete listing', 'error');
+  }
+};
 
 // Live badge updates every 30 seconds
 setInterval(() => {
