@@ -298,6 +298,12 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
+    // ─── DEDUCT NOTIFICATION CREDITS ─────────────────────────────────────
+if (user.subscriptionTier !== 'pro') {
+  user.notificationCredits = Math.max(0, (user.notificationCredits || 0) - 2);
+  await user.save();   // save again with reduced credits
+}
+
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
