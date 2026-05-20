@@ -3205,22 +3205,35 @@ async function loadOwnerDashboard(content) {
 
       <div class="px-4 pt-6">
 
-        <!-- ═══ TAB: Listing ════════════════════════════════════════════════ -->
-        <div id="dtabContent-listing">
+        <!-- ═══ TAB: Listing ═══════════════════════════════════════════════ -->
+        <div id="dtabContent-listing" class="tab-content">
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+            <h3 class="font-bold text-lg mb-5 flex items-center gap-2">🏪 Business Logo</h3>
+            
+            <div class="flex flex-col items-center gap-6">
+              <div id="ownerLogoPreview" class="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white/20 shadow-xl flex items-center justify-center text-6xl bg-white/10">
+                ${biz.logo 
+                  ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
+                  : (biz.category?.icon || '🏪')}
+              </div>
 
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-            <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>🏢</span> Basic Info</h3>
-            <input id="ownerName"           type="text" placeholder="Business Name *"                          class="${inputClass}">
-            <input id="ownerAddress"        type="text" placeholder="Address"                                  class="${inputClass}">
-            <input id="ownerPhone"          type="tel"  placeholder="Phone"                                    class="${inputClass}">
-            <input id="ownerWebsite"        type="url"  placeholder="Website (e.g. https://yourbusiness.com)"  class="${inputClass}">
-            <textarea id="ownerDescription" rows="3"    placeholder="Description — tell customers what makes your business special"
-                      class="${inputClass} resize-none"></textarea>
-            <button onclick="saveOwnerListing()"
-                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
-              💾 Save Info
+              <div class="text-center">
+                <button onclick="document.getElementById('ownerLogoUpload').click()" 
+                        class="bg-emerald-600 hover:bg-emerald-700 px-8 py-3 rounded-2xl font-semibold flex items-center gap-2 text-sm">
+                  📸 Upload New Logo
+                </button>
+                <input id="ownerLogoUpload" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+                       onchange="handleOwnerLogoUpload(this)">
+                <p class="text-xs text-white/50 mt-3">JPG, PNG or WebP • Max 4MB</p>
+              </div>
+            </div>
+
+            <button onclick="saveOwnerBusinessLogo()" 
+                    class="w-full mt-8 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
+              💾 Save Logo
             </button>
           </div>
+        </div>
 
           <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
             <h3 class="font-bold text-base mb-1 flex items-center gap-2"><span>🕐</span> Business Hours</h3>
@@ -6305,6 +6318,56 @@ window.viewReportedContent = async function (type, id) {
     openNewsArticle(id);
   } else if (type === 'comment') {
     showToast('Navigate to the content section to find this comment', 'success');
+  }
+};
+
+// ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
+let pendingOwnerLogo = null;
+
+window.handleOwnerLogoUpload = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 4 * 1024 * 1024) {
+    showToast('Logo must be under 4MB', 'error');
+    return;
+  }
+
+  try {
+    const compressed = await compressImage(file, 400, 0.85);
+    const reader = new FileReader();
+    reader.onload = e => {
+      pendingOwnerLogo = e.target.result;
+      const preview = document.getElementById('ownerLogoPreview');
+      if (preview) preview.innerHTML = `<img src="${pendingOwnerLogo}" class="w-full h-full object-cover">`;
+    };
+    reader.readAsDataURL(compressed);
+  } catch (e) {
+    showToast('Failed to process logo', 'error');
+  }
+};
+
+window.saveOwnerBusinessLogo = async function() {
+  if (!pendingOwnerLogo) {
+    showToast('Please select a logo first', 'error');
+    return;
+  }
+
+  try {
+    showToast('Uploading logo...', 'success');
+
+    const res = await apiPost('/owner/business/logo', { logo: pendingOwnerLogo });
+
+    if (res.business) {
+      showToast('✅ Logo updated!', 'success');
+      pendingOwnerLogo = null;
+      loadOwnerDashboard(document.getElementById('content')); // refresh
+    } else {
+      showToast(res.message || 'Failed to save logo', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Upload failed', 'error');
   }
 };
 
