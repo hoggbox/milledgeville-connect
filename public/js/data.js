@@ -221,25 +221,43 @@ window.shareContent = async function(type, title, extra = '') {
   }
 };
 
-// ─── renderClickableUser is defined in security.js (safe, escaped version) ────
-// The safe version in security.js correctly escapes userId and displayName.
-// This stub is here only for load-order safety.
-function renderClickableUser(userData, fallbackName) {
-  if (window.renderClickableUser && window.renderClickableUser !== renderClickableUser)
-    return window.renderClickableUser(userData, fallbackName);
-  return esc(fallbackName || 'Anonymous');
+// ─── SAFE Clickable User Helper (Clean Rep Badge) ─────────────────────────────
+function renderClickableUser(userData, fallbackName = 'Anonymous') {
+  if (!userData) return fallbackName;
+
+  let userId = null;
+  let displayName = fallbackName;
+  let reputation = 0;
+
+  if (typeof userData === 'object' && userData !== null) {
+    userId = userData._id || userData.id;
+    displayName = userData.name || userData.authorName || userData.author || fallbackName;
+    reputation = userData.reputation || 0;
+  } else if (typeof userData === 'string' && userData.length > 10) {
+    userId = userData;
+  }
+
+  if (!userId) return displayName;
+
+  const repHTML = reputation >= 10 
+    ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">⭐${reputation}</span>`
+    : '';
+
+  return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
+                class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
+            ${displayName}${repHTML}
+          </span>`;
 }
 
-// ─── In-App Update Banner (security.js overrides this with safe esc() version) ─
+// ─── In-App Update Banner ───────────────────────────────────────────────────
 function showUpdateBanner(newVersion) {
   if (document.getElementById('updateBanner')) return;
-  const safeVersion = esc(String(newVersion || ''));  // ← FIXED: escaped
 
   const bannerHTML = `
     <div id="updateBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-3xl shadow-2xl p-5 flex items-center gap-4 z-[9999] max-w-md border border-white/20">
       <div class="flex-1">
         <p class="font-semibold text-lg">🚀 New Update Available</p>
-        <p class="text-sm opacity-90">Version ${safeVersion} is ready</p>
+        <p class="text-sm opacity-90">Version ${newVersion} is ready</p>
       </div>
       <div class="flex gap-3">
         <button onclick="dismissUpdateBanner()" 
@@ -424,16 +442,11 @@ window.initGlobalSearch = function () {
       }
 
 let html = '';
-// Use safe icons from a local map — never trust server-supplied icon field
-const _SAFE_ICONS = { business:'📍', event:'📅', deal:'🔥', news:'📰', shoutout:'🚦', lost:'🔎', market:'🛒' };
 res.results.forEach(item => {
-  const safeType = esc(String(item.type || ''));
-  const safeId   = esc(String(item.id   || ''));
-  const icon     = _SAFE_ICONS[item.type] || '🔍';
   html += `
-    <div onclick="handleSearchResultClick('${safeType}', '${safeId}')" 
+    <div onclick="handleSearchResultClick('${item.type}', '${item.id}')" 
          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-none">
-      <span class="text-2xl">${icon}</span>
+      <span class="text-2xl">${esc(item.icon || '')}</span>
       <div class="flex-1 min-w-0">
         <p class="font-medium text-white text-sm leading-tight">${esc(item.title || '')}</p>
         <p class="text-white/60 text-xs line-clamp-1">${esc(item.subtitle || '')}</p>
@@ -676,13 +689,9 @@ function _renderSpotlight(businesses) {
       <div onclick="showBusinessDetail('${b._id}')"
            class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
         <div class="flex items-center gap-3 mb-3">
-${b.logo 
-  ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
-          class="w-10 h-10 object-cover rounded-2xl flex-shrink-0 border border-white/20" 
-          alt="${b.name}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-  + `<div class="w-10 h-10 bg-white/10 rounded-2xl items-center justify-center text-2xl flex-shrink-0" style="display:none">${b.category?.icon || '🏪'}</div>`
-  : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+          ${b.logo
+            ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
+            : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
           <div class="flex-1 min-w-0">
             <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
             <p class="text-xs text-white/50">${b.category?.name || ''}</p>
@@ -1230,12 +1239,9 @@ async function loadDirectoryPage(content) {
         ${[1,2,3,4,5].map(() => `
           <div class="bg-white/5 rounded-3xl p-4 animate-pulse h-28"></div>`).join('')}
       </div>
-    </div>
-    <div id="dirPagination" class="flex justify-center gap-3 mt-8"></div>`;
+    </div>`;
 
   // Render cached categories INSTANTLY (fixes slow/empty category bar on load)
-  window.currentDirPage = 1;
-  window._currentDirList = [];
   if (window._dirCategories && window._dirCategories.length > 0) {
     const bar = document.getElementById('dirCategoryBar');
     if (bar) {
@@ -1358,31 +1364,17 @@ function renderDirectory(businesses) {
 
   if (!businesses || businesses.length === 0) {
     container.innerHTML = `<p class="text-center text-white/50 py-12">No businesses found</p>`;
-    const pag = document.getElementById('dirPagination');
-    if (pag) pag.innerHTML = '';
     return;
   }
 
-  // Store the current filtered list so pagination buttons can re-render correctly
-  window._currentDirList = businesses;
-
-  const PAGE_SIZE  = 8;
-  const page       = window.currentDirPage || 1;
-  const totalPages = Math.ceil(businesses.length / PAGE_SIZE) || 1;
-  const paginated  = businesses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  let html = '<div class="space-y-4">';
-  paginated.forEach(b => {
+    let html = '<div class="space-y-4">';
+  businesses.forEach(b => {
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
-${b.logo 
-  ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
-          class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/20" 
-          alt="${b.name}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-  + `<div class="w-12 h-12 bg-white/20 rounded-2xl items-center justify-center text-3xl flex-shrink-0" style="display:none">${b.category?.icon || '🏪'}</div>`
-  : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+        ${b.logo 
+          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
+          : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
           <p class="text-white/70 text-sm">${esc(b.address || 'Milledgeville, GA')}</p>
@@ -1393,32 +1385,7 @@ ${b.logo
   });
   html += '</div>';
   container.innerHTML = html;
-
-  renderDirPagination({ currentPage: page, totalPages, hasPrev: page > 1, hasNext: page < totalPages });
 }
-
-function renderDirPagination(p) {
-  const container = document.getElementById('dirPagination');
-  if (!container) return;
-  if (!p.totalPages || p.totalPages <= 1) { container.innerHTML = ''; return; }
-
-  container.innerHTML = `
-    <button onclick="changeDirPage(${Math.max(1, p.currentPage - 1)})"
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
-      ← Prev
-    </button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeDirPage(${Math.min(p.totalPages, p.currentPage + 1)})"
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
-      Next →
-    </button>`;
-}
-
-window.changeDirPage = function(page) {
-  window.currentDirPage = page;
-  renderDirectory(window._currentDirList || allBusinesses);
-  document.getElementById('directoryResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
 
 function filterDirectory() {
   const searchTerm = (document.getElementById('directorySearch')?.value || '').toLowerCase();
@@ -1427,13 +1394,11 @@ function filterDirectory() {
     (b.description && b.description.toLowerCase().includes(searchTerm)) ||
     (b.keywords && b.keywords.some(k => k.toLowerCase().includes(searchTerm)))
   );
-  window.currentDirPage = 1;
   renderDirectory(filtered);
 }
 
 async function filterByCategory(catId) {
   const filtered = allBusinesses.filter(b => b.category && b.category._id === catId);
-  window.currentDirPage = 1;
   renderDirectory(filtered);
 }
 // ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
@@ -1467,10 +1432,8 @@ async function showBusinessDetail(id) {
 
       ${business.logo ? `
         <div class="flex items-center gap-3 pb-3 border-b border-gray-200">
-<img src="${business.logo.startsWith('data:') ? business.logo : 'data:image/jpeg;base64,' + business.logo}" 
-     class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0" 
-     alt="${business.name}"
-     onerror="this.style.display='none'">
+          <img src="${business.logo}" alt="${business.name} logo"
+               class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0">
           <div>
             <p class="font-bold text-slate-900 text-base leading-tight">${business.name}</p>
             ${business.priceRange ? `<span class="text-xs font-semibold text-gray-500">${business.priceRange} · ${business.category?.name || ''}</span>` : `<span class="text-xs text-gray-500">${business.category?.name || ''}</span>`}
@@ -1523,18 +1486,6 @@ async function showBusinessDetail(id) {
         </div>
         <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
         <div class="p-6">
-          <!-- Logo / Icon - Big and centered at the top -->
-          <div class="flex justify-center mb-6">
-            ${business.logo 
-              ? `<img src="${business.logo.startsWith('data:') ? business.logo : 'data:image/jpeg;base64,' + business.logo}" 
-                      class="w-24 h-24 object-cover rounded-3xl shadow-lg border border-white/20" 
-                      alt="${esc(business.name)}"
-                      onerror="this.style.display='none'; this.parentElement.innerHTML = '<div class=\\'w-24 h-24 bg-white/10 rounded-3xl flex items-center justify-center text-6xl border border-white/20\\'>${business.category?.icon || '🏪'}</div>'">`
-              : `<div class="w-24 h-24 bg-white/10 rounded-3xl flex items-center justify-center text-6xl border border-white/20">
-                   ${business.category?.icon || '🏪'}
-                 </div>`}
-          </div>
-
           <div class="flex items-start justify-between mb-1">
             <h1 class="text-3xl font-bold leading-tight">${esc(business.name)}</h1>
             ${isOwned ? `<span class="text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full mt-1">✓ Verified Owner</span>` : ''}
@@ -2048,8 +1999,6 @@ async function loadShoutoutsPage(content) {
                 class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
                 placeholder="What's happening in Milledgeville?"></textarea>
 
-
-                
               <!-- Photo picker -->
               <div class="mt-3 flex items-center gap-3">
                 <button onclick="document.getElementById('shoutoutImageInput').click()" 
@@ -2062,7 +2011,7 @@ async function loadShoutoutsPage(content) {
               </div>
 
               <div class="flex justify-end mt-4">
-                <button onclick="handleShoutoutPost()" 
+                <button onclick="postShoutoutWithPhoto()" 
                         class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">
                   Post Traffic Alert
                 </button>
@@ -2717,7 +2666,6 @@ async function loadEventsPage(content) {
   window._eventFilter = 'All';
   window._eventSearch = '';
   window._eventTime   = 'upcoming';
-  window.currentEventPage = 1;
 
   const now            = new Date();
   const upcomingEvents = allEvents.filter(e => new Date(e.date) >= now);
@@ -2734,8 +2682,8 @@ async function loadEventsPage(content) {
       <div class="flex gap-2 mb-4">
         <input id="eventSearchInput" type="text" placeholder="Search events…"
                class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
-               oninput="window._eventSearch=this.value; window.currentEventPage=1; renderEventsFiltered()">
-        <select id="eventTimeSelect" onchange="window._eventTime=this.value; window.currentEventPage=1; renderEventsFiltered()"
+               oninput="window._eventSearch=this.value; renderEventsFiltered()">
+        <select id="eventTimeSelect" onchange="window._eventTime=this.value; renderEventsFiltered()"
                 class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
                 style="background:#1e293b;color-scheme:dark;">
           <option value="upcoming">Upcoming</option>
@@ -2746,7 +2694,6 @@ async function loadEventsPage(content) {
 
       <div id="eventChips" class="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;"></div>
       <div id="eventResults"></div>
-      <div id="eventPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
   renderEventsFiltered();
@@ -2769,14 +2716,14 @@ window.renderEventsFiltered = function () {
   const chips = document.getElementById('eventChips');
   if (chips) {
     chips.innerHTML = `
-      <button onclick="window._eventFilter='All'; window.currentEventPage=1; renderEventsFiltered()"
+      <button onclick="window._eventFilter='All'; renderEventsFiltered()"
               class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
         All
       </button>
       ${activeCats.map(cat => {
         const safe = cat.name.replace(/'/g, "\\'");
         return `
-        <button onclick="window._eventFilter='${safe}'; window.currentEventPage=1; renderEventsFiltered()"
+        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered()"
                 class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === cat.name ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
           <span>${cat.icon}</span><span>${cat.name}</span>
         </button>`;
@@ -2811,22 +2758,14 @@ let events = allEvents.filter(e => {
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">📅</p>
         <p class="text-white/50 text-sm">${msg}</p>
-        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All'; window.currentEventPage=1; renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
       </div>`;
-    const pag = document.getElementById('eventPagination');
-    if (pag) pag.innerHTML = '';
     return;
   }
 
-  // Client-side pagination
-  const PAGE_SIZE  = 8;
-  const page       = window.currentEventPage || 1;
-  const totalPages = Math.ceil(events.length / PAGE_SIZE) || 1;
-  const paginated  = events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   if (time !== 'past') {
     const grouped = {};
-    paginated.forEach(e => {
+    events.forEach(e => {
       const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(e);
@@ -2840,34 +2779,9 @@ let events = allEvents.filter(e => {
         <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
       </div>`).join('');
   } else {
-    container.innerHTML = `<div class="space-y-3">${paginated.map(e => renderEventCard(e, now)).join('')}</div>`;
+    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
   }
-
-  renderEventsPagination({ currentPage: page, totalPages, hasPrev: page > 1, hasNext: page < totalPages });
 }
-
-function renderEventsPagination(p) {
-  const container = document.getElementById('eventPagination');
-  if (!container) return;
-  if (!p.totalPages || p.totalPages <= 1) { container.innerHTML = ''; return; }
-
-  container.innerHTML = `
-    <button onclick="changeEventPage(${Math.max(1, p.currentPage - 1)})"
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
-      ← Prev
-    </button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeEventPage(${Math.min(p.totalPages, p.currentPage + 1)})"
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
-      Next →
-    </button>`;
-}
-
-window.changeEventPage = function(page) {
-  window.currentEventPage = page;
-  renderEventsFiltered();
-  document.getElementById('eventResults')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
 
 function renderEventCard(e, now) {
   const eDate   = new Date(e.date);
@@ -2923,9 +2837,6 @@ function renderEventCard(e, now) {
 // ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
 let _allResources = [];
 let _resourceCategories = [];
-let _resourcePage = 1;
-let _resourceFilteredItems = [];
-const RESOURCE_PAGE_SIZE = 8;
 
 async function loadResourcesPage(content) {
   content.innerHTML = `
@@ -2988,7 +2899,7 @@ async function loadResourcesPage(content) {
       
         <div class="flex items-center justify-between mb-5">
           <h2 class="text-3xl md:text-4xl font-bold">🌍 Community Resources</h2>
-          <span class="text-sm text-white/40" id="resourceTotalCount">${_allResources.length} listed</span>
+          <span class="text-sm text-white/40">${_allResources.length} listed</span>
         </div>
         <p class="text-white/50 text-sm mb-5 leading-relaxed">
           Free and public resources available to everyone in the Milledgeville community.
@@ -3062,15 +2973,12 @@ window.filterResources = function (categoryName) {
     return catMatch && searchMatch;
   });
 
-  renderResourcesList(filtered, true);  // reset to page 1 on filter/search change
+  renderResourcesList(filtered);
 };
 
-function renderResourcesList(items, resetPage = true) {
+function renderResourcesList(items) {
   const container = document.getElementById('resourcesResults');
   if (!container) return;
-
-  _resourceFilteredItems = items;
-  if (resetPage) _resourcePage = 1;
 
   if (!items.length) {
     container.innerHTML = `
@@ -3084,51 +2992,13 @@ function renderResourcesList(items, resetPage = true) {
     return;
   }
 
-  const totalPages = Math.ceil(items.length / RESOURCE_PAGE_SIZE);
-  const start = (_resourcePage - 1) * RESOURCE_PAGE_SIZE;
-  const pageItems = items.slice(start, start + RESOURCE_PAGE_SIZE);
-
-  // Group only the current page's items
   const grouped = {};
-  pageItems.forEach(item => {
+  items.forEach(item => {
     const catName = item.category?.name || 'Other';
     const catIcon = item.category?.icon || '📍';
     if (!grouped[catName]) grouped[catName] = { icon: catIcon, items: [] };
     grouped[catName].items.push(item);
   });
-
-  const paginationHTML = totalPages > 1 ? `
-    <div class="flex items-center justify-center gap-2 mt-6 flex-wrap">
-      <button onclick="resourceGoToPage(${_resourcePage - 1})"
-              ${_resourcePage === 1 ? 'disabled' : ''}
-              class="px-4 py-2 rounded-2xl text-sm font-semibold transition
-                     ${_resourcePage === 1
-                       ? 'bg-white/5 text-white/20 cursor-not-allowed'
-                       : 'bg-white/10 hover:bg-white/20 text-white'}">
-        ← Prev
-      </button>
-
-      ${Array.from({ length: totalPages }, (_, i) => i + 1).map(p => `
-        <button onclick="resourceGoToPage(${p})"
-                class="w-9 h-9 rounded-xl text-sm font-semibold transition
-                       ${p === _resourcePage
-                         ? 'bg-emerald-600 text-white'
-                         : 'bg-white/10 hover:bg-white/20 text-white/70'}">
-          ${p}
-        </button>`).join('')}
-
-      <button onclick="resourceGoToPage(${_resourcePage + 1})"
-              ${_resourcePage === totalPages ? 'disabled' : ''}
-              class="px-4 py-2 rounded-2xl text-sm font-semibold transition
-                     ${_resourcePage === totalPages
-                       ? 'bg-white/5 text-white/20 cursor-not-allowed'
-                       : 'bg-white/10 hover:bg-white/20 text-white'}">
-        Next →
-      </button>
-    </div>
-    <p class="text-center text-xs text-white/30 mt-2">
-      Page ${_resourcePage} of ${totalPages} · ${items.length} total
-    </p>` : '';
 
   container.innerHTML = Object.entries(grouped).map(([catName, group]) => `
     <div class="mb-7">
@@ -3141,18 +3011,8 @@ function renderResourcesList(items, resetPage = true) {
       <div class="space-y-3">
         ${group.items.map(item => renderResourceCard(item)).join('')}
       </div>
-    </div>`).join('') + paginationHTML;
+    </div>`).join('');
 }
-
-window.resourceGoToPage = function (page) {
-  const totalPages = Math.ceil(_resourceFilteredItems.length / RESOURCE_PAGE_SIZE);
-  if (page < 1 || page > totalPages) return;
-  _resourcePage = page;
-  renderResourcesList(_resourceFilteredItems, false);
-  // Scroll back to the top of the results
-  const container = document.getElementById('resourcesResults');
-  if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
 
 function renderResourceCard(item) {
   const icon = item.category?.icon || '📍';
@@ -3296,8 +3156,6 @@ async function loadOwnerDashboard(content) {
 
   const biz        = currentUser && currentUser.verifiedBusiness;
   const bizCatName = biz?.category?.name || (typeof biz?.category === 'string' ? biz.category : '') || '';
-    // Get subscription info for credits display
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
 
   const selectStyle = 'background:#1e293b;color-scheme:dark;';
   const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
@@ -3324,84 +3182,14 @@ async function loadOwnerDashboard(content) {
     { id: 'events',  label: 'Events',   icon: '📅' },
   ];
 
-  // Get subscription info
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
-
-      <!-- PRO TIER BANNER -->
-      <div class="mb-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
-        <div class="flex justify-between items-start">
-          <div>
-            <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
-              ⭐ PRO TIER
-            </div>
-            <h2 class="text-3xl font-bold">Business Pro — $19.99/mo</h2>
-            <p class="text-white/80 mt-2">Boosted visibility • Analytics</p>
-            
-            <!-- Live Credits -->
-            <div class="mt-4 bg-white/20 rounded-2xl px-5 py-3 flex items-center gap-3">
-              <span class="text-3xl">💎</span>
-              <div>
-                <div class="text-xs opacity-75">Credits Remaining</div>
-                <div class="text-3xl font-bold">${sub.credits || 0}</div>
-              </div>
-            </div>
-          </div>
-          
-          ${sub.tier === 'pro' ? 
-            `<div class="text-right"><div class="text-emerald-300 font-bold">ACTIVE</div><div class="text-sm">until ${new Date(sub.expires).toLocaleDateString()}</div></div>` :
-            `<button onclick="buyProTier()" class="bg-white text-purple-700 px-8 py-4 rounded-3xl font-bold hover:bg-white/90 transition">Upgrade Now</button>`
-          }
-        </div>
-      </div>
-          ${sub.tier === 'pro' ? 
-            `<div class="text-right"><div class="text-emerald-300 font-bold">ACTIVE</div><div class="text-sm">until ${new Date(sub.expires).toLocaleDateString()}</div></div>` :
-            `<button onclick="buyProTier()" class="bg-white text-purple-700 px-8 py-4 rounded-3xl font-bold hover:bg-white/90 transition">Upgrade Now</button>`
-          }
-        </div>
-      </div>
-
-      <!-- Notification Credits -->
-      <div class="mb-8 bg-white/10 border border-white/20 rounded-3xl p-6">
-        <div class="flex justify-between items-center">
-          <div>
-            <div class="text-sm text-white/60">Notification Credits</div>
-            <div class="text-5xl font-bold mt-1">${sub.credits || 0}</div>
-          </div>
-          <button onclick="showNotificationCreditInfo()" class="text-emerald-400 text-sm underline">How credits work →</button>
-        </div>
-      </div>
 
       <!-- ─── Header ───────────────────────────────────────────────────────── -->
       <div class="px-4 pt-2 pb-4">
         <h2 class="text-2xl font-bold">🏪 My Dashboard</h2>
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
-
-      <!-- ─── Stats Bar ────────────────────────────────────────────────────── -->
-      ${biz ? `
-      <div id="ownerStatsBar" class="px-4 mb-3">
-        <div class="grid grid-cols-4 gap-2 text-center">
-          <div class="bg-white/10 rounded-2xl py-3 px-1">
-            <div id="stat-followers" class="text-xl font-black text-emerald-400">—</div>
-            <div class="text-[10px] text-white/40 mt-0.5">Followers</div>
-          </div>
-          <div class="bg-white/10 rounded-2xl py-3 px-1">
-            <div id="stat-deals" class="text-xl font-black text-amber-400">—</div>
-            <div class="text-[10px] text-white/40 mt-0.5">Deals</div>
-          </div>
-          <div class="bg-white/10 rounded-2xl py-3 px-1">
-            <div id="stat-events" class="text-xl font-black text-sky-400">—</div>
-            <div class="text-[10px] text-white/40 mt-0.5">Events</div>
-          </div>
-          <div class="bg-white/10 rounded-2xl py-3 px-1">
-            <div id="stat-rating" class="text-xl font-black text-yellow-400">—</div>
-            <div class="text-[10px] text-white/40 mt-0.5">Avg ★</div>
-          </div>
-        </div>
-      </div>` : ''}
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
@@ -3420,63 +3208,17 @@ async function loadOwnerDashboard(content) {
         <!-- ═══ TAB: Listing ════════════════════════════════════════════════ -->
         <div id="dtabContent-listing">
 
-          <!-- Logo -->
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-            <h3 class="font-bold text-base mb-3 flex items-center gap-2"><span>🖼️</span> Logo</h3>
-            <div class="flex items-center gap-4 mb-3">
-              <div id="ownerLogoPreview" class="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center text-3xl overflow-hidden flex-shrink-0">
-                ${biz && biz.logo ? `<img src="${biz.logo.startsWith('data:') ? biz.logo : 'data:image/jpeg;base64,' + biz.logo}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='🏪'">` : '🏪'}
-              </div>
-              <div class="flex-1">
-                <button onclick="document.getElementById('ownerLogoInput').click()"
-                        class="w-full border-2 border-dashed border-white/20 hover:border-emerald-400 rounded-2xl py-3 text-white/50 hover:text-white transition text-sm font-medium">
-                  📷 Upload Logo
-                </button>
-                <input id="ownerLogoInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
-                       onchange="handleOwnerLogoUpload(this)">
-              </div>
-            </div>
-            ${biz && biz.logo ? `<button onclick="removeOwnerLogo()" class="text-xs text-red-400 hover:text-red-300 transition">🗑️ Remove logo</button>` : ''}
-          </div>
-
-          <!-- Basic Info -->
           <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
             <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>🏢</span> Basic Info</h3>
             <input id="ownerName"           type="text" placeholder="Business Name *"                          class="${inputClass}">
             <input id="ownerAddress"        type="text" placeholder="Address"                                  class="${inputClass}">
             <input id="ownerPhone"          type="tel"  placeholder="Phone"                                    class="${inputClass}">
-            <input id="ownerEmail"          type="email" placeholder="Business Email"                          class="${inputClass}">
             <input id="ownerWebsite"        type="url"  placeholder="Website (e.g. https://yourbusiness.com)"  class="${inputClass}">
             <textarea id="ownerDescription" rows="3"    placeholder="Description — tell customers what makes your business special"
                       class="${inputClass} resize-none"></textarea>
             <button onclick="saveOwnerListing()"
                     class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
               💾 Save Info
-            </button>
-          </div>
-
-          <!-- Extended Details -->
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-            <h3 class="font-bold text-base mb-4 flex items-center gap-2"><span>✨</span> Extended Details</h3>
-            <label class="block text-xs text-white/50 mb-1 px-1">Category</label>
-            <select id="ownerCategory" class="${selectClass}" style="${selectStyle}">
-              <option value="">— Keep current —</option>
-              ${window._dirCategories ? window._dirCategories.map(c => `<option value="${c._id}" ${biz && (biz.category?._id === c._id || biz.category === c._id) ? 'selected' : ''}>${c.icon} ${c.name}</option>`).join('') : ''}
-            </select>
-            <label class="block text-xs text-white/50 mb-1 px-1">Price Range</label>
-            <select id="ownerPriceRange" class="${selectClass}" style="${selectStyle}">
-              <option value="">— Not set —</option>
-              <option value="$">$ · Budget-friendly</option>
-              <option value="$$">$$ · Moderate</option>
-              <option value="$$$">$$$ · Upscale</option>
-              <option value="$$$$">$$$$ · Fine Dining / Luxury</option>
-            </select>
-            <input id="ownerInstagram" type="text" placeholder="Instagram handle (without @)" class="${inputClass}">
-            <input id="ownerFacebook"  type="text" placeholder="Facebook page URL or name"    class="${inputClass}">
-            <input id="ownerTags"      type="text" placeholder="Tags (comma-separated, e.g. pizza,family,delivery)" class="${inputClass}">
-            <button onclick="saveOwnerExtended()"
-                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
-              💾 Save Details
             </button>
           </div>
 
@@ -3594,31 +3336,9 @@ async function loadOwnerDashboard(content) {
     document.getElementById('ownerName').value        = biz.name        || '';
     document.getElementById('ownerAddress').value     = biz.address     || '';
     document.getElementById('ownerPhone').value       = biz.phone       || '';
-    if (document.getElementById('ownerEmail'))
-      document.getElementById('ownerEmail').value     = biz.email       || '';
     document.getElementById('ownerWebsite').value     = biz.website     || '';
     document.getElementById('ownerDescription').value = biz.description || '';
     document.getElementById('ownerHours').value       = biz.hours       || '';
-    // Extended fields
-    if (document.getElementById('ownerPriceRange'))
-      document.getElementById('ownerPriceRange').value = biz.priceRange  || '';
-    if (document.getElementById('ownerInstagram'))
-      document.getElementById('ownerInstagram').value  = biz.instagram   || '';
-    if (document.getElementById('ownerFacebook'))
-      document.getElementById('ownerFacebook').value   = biz.facebook    || '';
-    if (document.getElementById('ownerTags'))
-      document.getElementById('ownerTags').value        = (biz.tags || []).join(', ');
-  }
-
-  // Load stats
-  if (currentUser?.verifiedBusiness) {
-    apiGet('/owner/stats').then(stats => {
-      const s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-      s('stat-followers', stats.followerCount ?? '—');
-      s('stat-deals',     stats.dealCount     ?? '—');
-      s('stat-events',    stats.eventCount    ?? '—');
-      s('stat-rating',    stats.avgRating > 0 ? stats.avgRating : '—');
-    }).catch(() => {});
   }
 }
 
@@ -3649,66 +3369,14 @@ window.saveOwnerListing = async function () {
   const name        = document.getElementById('ownerName').value.trim();
   const address     = document.getElementById('ownerAddress').value.trim();
   const phone       = document.getElementById('ownerPhone').value.trim();
-  const email       = (document.getElementById('ownerEmail')?.value || '').trim();
   const website     = document.getElementById('ownerWebsite').value.trim();
   const description = document.getElementById('ownerDescription').value.trim();
-  if (!name) { showToast('Business name is required', 'error'); return; }
-  const res = await apiPost('/owner/business', { name, address, phone, email, website, description }, 'PUT');
+  const res = await apiPost('/owner/business', { name, address, phone, website, description }, 'PUT');
   if (res._id) {
     currentUser.verifiedBusiness = res;
     showToast('✅ Listing updated!');
   } else {
     showToast(res.message || 'Error saving', 'error');
-  }
-};
-
-window.saveOwnerExtended = async function () {
-  const category   = document.getElementById('ownerCategory')?.value  || '';
-  const priceRange = document.getElementById('ownerPriceRange')?.value || '';
-  const instagram  = (document.getElementById('ownerInstagram')?.value || '').trim().replace(/^@/, '');
-  const facebook   = (document.getElementById('ownerFacebook')?.value  || '').trim();
-  const tagsRaw    = (document.getElementById('ownerTags')?.value       || '').trim();
-  const tags       = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
-  const payload    = { priceRange, instagram, facebook, tags };
-  if (category) payload.category = category;
-  const res = await apiPost('/owner/business', payload, 'PUT');
-  if (res._id) {
-    currentUser.verifiedBusiness = res;
-    showToast('✅ Details updated!');
-  } else {
-    showToast(res.message || 'Error saving', 'error');
-  }
-};
-
-window.handleOwnerLogoUpload = async function (input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 3 * 1024 * 1024) { showToast('Logo must be under 3 MB', 'error'); return; }
-  const compressed = await compressImage(file, 300, 0.75);
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const logo = e.target.result;
-    const preview = document.getElementById('ownerLogoPreview');
-    if (preview) preview.innerHTML = `<img src="${logo}" class="w-full h-full object-cover">`;
-    const res = await apiPost('/owner/business', { logo }, 'PUT');
-    if (res._id) {
-      currentUser.verifiedBusiness = res;
-      showToast('✅ Logo updated!');
-    } else {
-      showToast(res.message || 'Error uploading logo', 'error');
-    }
-  };
-  reader.readAsDataURL(compressed);
-};
-
-window.removeOwnerLogo = async function () {
-  if (!confirm('Remove your logo?')) return;
-  const res = await apiPost('/owner/business', { logo: null }, 'PUT');
-  if (res._id) {
-    currentUser.verifiedBusiness = res;
-    const preview = document.getElementById('ownerLogoPreview');
-    if (preview) preview.innerHTML = '🏪';
-    showToast('Logo removed');
   }
 };
 
@@ -3743,10 +3411,7 @@ async function loadOwnerDeals() {
           <div class="font-bold leading-snug">${d.title}</div>
           ${d.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${d.description}</div>` : ''}
         </div>
-        <div class="flex gap-2 flex-shrink-0">
-          <button onclick="editOwnerDeal(${JSON.stringify(d).replace(/`/g,'&#96;')})" class="text-sky-400 hover:text-sky-300 text-lg">✏️</button>
-          <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg">🗑️</button>
-        </div>
+        <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
       </div>
     </div>`).join('');
 }
@@ -3772,10 +3437,7 @@ async function loadOwnerEvents() {
           ${e.location ? `<div class="text-xs text-emerald-300 mt-1">📍 ${e.location}</div>` : ''}
           ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${e.description}</div>` : ''}
         </div>
-        <div class="flex gap-2 flex-shrink-0">
-          <button onclick="editOwnerEvent(${JSON.stringify(e).replace(/`/g,'&#96;')})" class="text-sky-400 hover:text-sky-300 text-lg">✏️</button>
-          <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg">🗑️</button>
-        </div>
+        <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
       </div>
     </div>`).join('');
 }
@@ -3827,100 +3489,6 @@ window.addOwnerEvent = async function () {
     loadOwnerEvents();
   } else {
     showToast(res.message || 'Error posting event', 'error');
-  }
-};
-
-window.editOwnerDeal = function (deal) {
-  const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
-  const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
-  const catOptions  = (window._dirCategories || []).map(c =>
-    `<option value="${c.name}" ${c.name === deal.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`
-  ).join('');
-  const modal = document.createElement('div');
-  modal.id = 'editDealModal';
-  modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4';
-  modal.innerHTML = `
-    <div class="bg-zinc-900 border border-white/10 rounded-3xl p-6 w-full max-w-md">
-      <h3 class="font-bold text-lg mb-4">✏️ Edit Deal</h3>
-      <input id="editDealTitle" type="text" value="${deal.title || ''}" placeholder="Deal Title *" class="${inputClass}">
-      <textarea id="editDealDesc" rows="2" placeholder="Description" class="${inputClass} resize-none">${deal.description || ''}</textarea>
-      <select id="editDealCat" class="${selectClass}" style="background:#1e293b;color-scheme:dark;">
-        <option value="">— Category —</option>${catOptions}
-      </select>
-      <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date</label>
-      <input id="editDealExpires" type="date" value="${deal.expires ? deal.expires.substring(0,10) : ''}" class="${inputClass}">
-      <div class="flex gap-3 mt-2">
-        <button onclick="document.getElementById('editDealModal').remove()"
-                class="flex-1 py-4 rounded-3xl bg-white/10 hover:bg-white/20 font-semibold transition">Cancel</button>
-        <button onclick="saveEditedDeal('${deal._id}')"
-                class="flex-1 py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-semibold transition">💾 Save</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-};
-
-window.saveEditedDeal = async function (id) {
-  const title       = document.getElementById('editDealTitle').value.trim();
-  const description = document.getElementById('editDealDesc').value.trim();
-  const category    = document.getElementById('editDealCat').value;
-  const expires     = document.getElementById('editDealExpires').value;
-  if (!title) { showToast('Title required', 'error'); return; }
-  const res = await apiPost(`/owner/deals/${id}`, { title, description, category, expires }, 'PUT');
-  if (res._id) {
-    document.getElementById('editDealModal')?.remove();
-    showToast('✅ Deal updated!');
-    loadOwnerDeals();
-  } else {
-    showToast(res.message || 'Error', 'error');
-  }
-};
-
-window.editOwnerEvent = function (ev) {
-  const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
-  const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
-  const catOptions  = (window.EVENT_CATEGORIES || EVENT_CATEGORIES).map(c =>
-    `<option value="${c.name}" ${c.name === ev.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`
-  ).join('');
-  const dateVal = ev.date ? new Date(ev.date).toISOString().slice(0,16) : '';
-  const modal = document.createElement('div');
-  modal.id = 'editEventModal';
-  modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center p-4';
-  modal.innerHTML = `
-    <div class="bg-zinc-900 border border-white/10 rounded-3xl p-6 w-full max-w-md">
-      <h3 class="font-bold text-lg mb-4">✏️ Edit Event</h3>
-      <input id="editEvTitle"    type="text"           value="${ev.title || ''}" placeholder="Event Title *" class="${inputClass}">
-      <label class="block text-xs text-white/50 mb-1 px-1">Date & Time</label>
-      <input id="editEvDate"     type="datetime-local"  value="${dateVal}"                                   class="${inputClass}">
-      <input id="editEvLocation" type="text"            value="${ev.location || ''}" placeholder="Location" class="${inputClass}">
-      <select id="editEvCat" class="${selectClass}" style="background:#1e293b;color-scheme:dark;">
-        <option value="">— Category —</option>${catOptions}
-      </select>
-      <textarea id="editEvDesc" rows="2" placeholder="Description" class="${inputClass} resize-none">${ev.description || ''}</textarea>
-      <div class="flex gap-3 mt-2">
-        <button onclick="document.getElementById('editEventModal').remove()"
-                class="flex-1 py-4 rounded-3xl bg-white/10 hover:bg-white/20 font-semibold transition">Cancel</button>
-        <button onclick="saveEditedEvent('${ev._id}')"
-                class="flex-1 py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-semibold transition">💾 Save</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-};
-
-window.saveEditedEvent = async function (id) {
-  const title       = document.getElementById('editEvTitle').value.trim();
-  const date        = document.getElementById('editEvDate').value;
-  const location    = document.getElementById('editEvLocation').value.trim();
-  const category    = document.getElementById('editEvCat').value;
-  const description = document.getElementById('editEvDesc').value.trim();
-  if (!title) { showToast('Title required', 'error'); return; }
-  if (!date)  { showToast('Date required', 'error'); return; }
-  const res = await apiPost(`/owner/events/${id}`, { title, date, location, category, description }, 'PUT');
-  if (res._id) {
-    document.getElementById('editEventModal')?.remove();
-    showToast('✅ Event updated!');
-    loadOwnerEvents();
-  } else {
-    showToast(res.message || 'Error', 'error');
   }
 };
 
@@ -5066,7 +4634,6 @@ async function loadMarketplacePage(content) {
       </div>
 
       <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
-      <div id="marketPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
   // Load data once and cache it
@@ -5081,12 +4648,10 @@ async function loadMarketplacePage(content) {
 
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
-  window.currentMarketPage   = 1;
 
   const searchInput = document.getElementById('marketSearchInput');
   searchInput.addEventListener('input', debounce(() => {
     window.currentMarketSearch = searchInput.value.trim().toLowerCase();
-    window.currentMarketPage   = 1;
     renderMarketplacePage();
   }, 250));
 
@@ -5114,18 +4679,10 @@ async function renderMarketplacePage() {
 
   if (filtered.length === 0) {
     container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
-    const pag = document.getElementById('marketPagination');
-    if (pag) pag.innerHTML = '';
     return;
   }
 
-  // Client-side pagination
-  const PAGE_SIZE  = 8;
-  const page       = window.currentMarketPage || 1;
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  let html = paginated.map(item => `
+  let html = filtered.map(item => `
     <div onclick="showMarketplaceDetail('${item._id}')" 
          class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
       <div class="flex gap-4">
@@ -5162,7 +4719,6 @@ async function renderMarketplacePage() {
   `).join('');
 
   container.innerHTML = html;
-  renderMarketPagination({ currentPage: page, totalPages, hasPrev: page > 1, hasNext: page < totalPages });
 }
 
 function renderMarketPagination(p) {
@@ -5189,12 +4745,11 @@ function renderMarketPagination(p) {
 window.changeMarketPage = function(page) {
   window.currentMarketPage = page;
   renderMarketplacePage();
-  document.getElementById('marketItemsList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 window.filterAndRenderMarketplace = function() {
   window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
-  window.currentMarketPage   = 1;
+  window.currentMarketPage = 1;
   renderMarketplacePage();
 };
 
@@ -6065,10 +5620,9 @@ async function renderAdminBusinesses() {
           ${data.businesses.map(b => `
             <div class="flex items-center justify-between bg-white/5 rounded-2xl p-3 gap-3">
               <div class="flex items-center gap-3 min-w-0">
-${b.logo 
-  ? `<img src="${b.logo.startsWith('data:') ? b.logo : 'data:image/jpeg;base64,' + b.logo}" 
-          class="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-white/20" alt="">`
-  : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+                ${b.logo
+                  ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0">`
+                  : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
                 <div class="min-w-0">
                   <div class="font-semibold text-sm truncate">${b.name}</div>
                   <div class="text-xs text-white/50 truncate">${b.address || 'No address'}</div>
@@ -6164,16 +5718,9 @@ window.showAddBusinessModal = async function() {
           </div>
 
           <div>
-            <label class="text-xs text-white/50 uppercase tracking-wide">Business Logo (optional)</label>
-            <div class="mt-2 flex items-center gap-3">
-              <button onclick="document.getElementById('abLogoUpload').click()" 
-                      class="bg-white/10 hover:bg-white/20 px-5 py-3 rounded-2xl text-sm font-medium flex items-center gap-2">
-                📸 Upload Logo
-              </button>
-              <input id="abLogoUpload" type="file" accept="image/*" class="hidden" 
-                     onchange="handleBusinessLogoUpload(this)">
-              <div id="abLogoPreview" class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl border border-white/20"></div>
-            </div>
+            <label class="text-xs text-white/50 uppercase tracking-wide">Logo URL (optional)</label>
+            <input id="abLogo" type="url" placeholder="https://..."
+                   class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
           </div>
         </div>
 
@@ -6206,7 +5753,7 @@ window.submitAddBusiness = async function() {
     email:       document.getElementById('abEmail').value.trim(),
     website:     document.getElementById('abWebsite').value.trim(),
     description: document.getElementById('abDescription').value.trim(),
-    logo:        pendingBusinessLogo || null,   // ← Use uploaded logo
+    logo:        document.getElementById('abLogo').value.trim() || null,
   };
 
   try {
@@ -6214,11 +5761,7 @@ window.submitAddBusiness = async function() {
 
     if (res.business || res._id) {
       showToast(`✅ "${name}" added successfully!`, 'success');
-      pendingBusinessLogo = null;        // ← ADD THIS LINE (resets the logo)
-      
       document.getElementById('addBusinessModal').remove();
-
-      // Force fresh directory fetch...
 
       // Force fresh directory fetch so category + icon appear immediately
       const freshData = await apiGet('/directory');
@@ -6424,24 +5967,8 @@ window.editBusiness = async function(businessId) {
           <textarea id="editBizDescription" rows="3" placeholder="Description"
                     class="w-full px-4 py-3 rounded-2xl border border-gray-300 focus:border-emerald-500 outline-none">${business.description || ''}</textarea>
 
-          <!-- Logo Upload -->
-          <div class="mt-4">
-            <label class="block text-xs font-semibold text-gray-500 mb-2">Business Logo (optional)</label>
-            <div class="flex items-center gap-3">
-              <button onclick="document.getElementById('editBizLogoUpload').click()" 
-                      class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-5 py-3 rounded-2xl text-sm font-medium">
-                📸 Upload New Logo
-              </button>
-              <input id="editBizLogoUpload" type="file" accept="image/*" class="hidden" 
-                     onchange="handleBusinessLogoUpload(this)">
-              <div id="editBizLogoPreview" class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-2xl border border-gray-200 overflow-hidden">
-                ${business.logo ? `<img src="${business.logo}" class="w-full h-full object-cover">` : business.category?.icon || '🏪'}
-              </div>
-            </div>
-          </div>
-
           <button onclick="saveBusinessEdit('${businessId}')" 
-                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold mt-6">
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
             Save Changes
           </button>
         </div>
@@ -6462,8 +5989,7 @@ window.saveBusinessEdit = async function(businessId) {
     address: document.getElementById('editBizAddress').value.trim(),
     phone: document.getElementById('editBizPhone').value.trim(),
     email: document.getElementById('editBizEmail').value.trim(),
-    description: document.getElementById('editBizDescription').value.trim(),
-    logo: pendingBusinessLogo || null   // ← Use uploaded logo if any
+    description: document.getElementById('editBizDescription').value.trim()
   };
 
   if (!payload.name) {
@@ -6477,8 +6003,6 @@ window.saveBusinessEdit = async function(businessId) {
 
     if (res.business || res.message === 'Business updated successfully') {
       showToast('✅ Business updated successfully!', 'success');
-      pendingBusinessLogo = null;        // ← ADD THIS LINE (resets the logo)
-      
       closeEditBusinessModal();
       const data = await apiGet('/directory');
       allBusinesses = data.businesses || [];
@@ -6500,7 +6024,7 @@ window.apiPut = async function(url, data) {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (typeof getToken === 'function' ? getToken() : localStorage.getItem('token'))
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
       },
       body: JSON.stringify(data)
     });
@@ -6805,113 +6329,12 @@ window.flagShoutout = async function (shoutoutId) {
   }
 };
 
-let pendingBusinessLogo = null;
-
-window.handleBusinessLogoUpload = async function(input) {
-  const file = input.files[0];
-  if (!file) return;
-
-  if (file.size > 3 * 1024 * 1024) {
-    showToast('Logo must be under 3MB', 'error');
-    return;
-  }
-
-  try {
-    const compressed = await compressImage(file, 300, 0.75); // small & sharp for logo
-    const reader = new FileReader();
-    reader.onload = e => {
-      pendingBusinessLogo = e.target.result;
-      const preview = document.getElementById('abLogoPreview');
-      if (preview) preview.innerHTML = `<img src="${pendingBusinessLogo}" class="w-full h-full object-cover rounded-2xl">`;
-    };
-    reader.readAsDataURL(compressed);
-  } catch (e) {
-    showToast('Failed to process logo', 'error');
-  }
-};
-
 // Live badge updates every 30 seconds
 setInterval(() => {
   if (typeof currentUser !== 'undefined' && currentUser) {
     updateMessageBadge();
   }
 }, 30000);
-
-// CREDIT CHECK FOR SHOUTOUTS / NOTIFICATIONS
-async function checkNotificationCredits(required = 2) {
-  if (!currentUser || currentUser.subscriptionTier === 'pro') return true;
-
-  try {
-    const sub = await apiGet('/owner/subscription');
-    if ((sub.credits || 0) < required) {
-      showToast('Not enough notification credits. Upgrade to Pro!', 'error');
-      return false;
-    }
-    return true;
-  } catch (e) {
-    return true; // fail open if API is down
-  }
-}
-
-// ─── NOTIFICATION CREDITS INFO MODAL ─────────────────────────────────────────
-window.showNotificationCreditInfo = function() {
-  const html = `
-    <div id="creditModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[99999] p-4">
-      <div class="bg-white text-slate-900 max-w-md w-full rounded-3xl p-8">
-        <h2 class="text-2xl font-bold mb-6">How Notification Credits Work</h2>
-        
-        <div class="space-y-6 text-sm">
-          <div>
-            <div class="font-semibold text-emerald-600 mb-2">FREE Tier</div>
-            <p class="text-slate-600">10 credits per month</p>
-          </div>
-          
-          <div>
-            <div class="font-semibold text-violet-600 mb-2">PRO Tier — $19.99/mo</div>
-            <p class="text-slate-600">50 credits per month + boosted visibility</p>
-          </div>
-
-          <div class="pt-4 border-t">
-            <p class="font-medium mb-3">Credit Costs:</p>
-            <ul class="space-y-2 text-slate-600">
-              <li>• Template Notification (New Deal, Event, etc.) = <strong>1 credit</strong></li>
-              <li>• Custom Notification = <strong>2 credits</strong></li>
-              <li>• Homes for Rent/Sale post = <strong>2 credits</strong></li>
-            </ul>
-          </div>
-        </div>
-
-        <button onclick="document.getElementById('creditModal').remove()" 
-                class="w-full mt-8 bg-emerald-600 text-white py-4 rounded-3xl font-semibold">
-          Got it
-        </button>
-      </div>
-    </div>`;
-
-// ─── CREDIT CHECK WRAPPER FOR SHOUTOUTS ─────────────────────────────────────
-window.handleShoutoutPost = async function() {
-  if (!currentUser) {
-    showAuthModal({ message: 'Sign in to post traffic alerts.' });
-    return;
-  }
-
-  if (currentUser.subscriptionTier === 'pro') {
-    postShoutoutWithPhoto();
-    return;
-  }
-
-  // Free user credit check
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  if ((sub.credits || 0) < 2) {
-    showToast('Not enough notification credits. Upgrade to Pro!', 'error');
-    return;
-  }
-
-  postShoutoutWithPhoto();
-};
-
-  document.body.insertAdjacentHTML('beforeend', html);
-};
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
 // initPushAfterLogin is defined in profile.js (_initNativePush).

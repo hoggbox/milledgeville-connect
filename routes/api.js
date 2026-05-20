@@ -2,29 +2,11 @@ const express = require('express');
 const router  = express.Router();
 
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
-const { sanitizeBody, securityHeaders, sanitizeContent, isValidObjectId, stripDangerousFields } = require('./Sanitize');
+const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
 router.use(securityHeaders);   // CSP + security headers
 router.use(sanitizeBody);      // Deep sanitization on every req.body
 const jwt     = require('jsonwebtoken');
-const rateLimit = require('express-rate-limit');
-
-// ─── RATE LIMITERS ─────────────────────────────────────────────────────────────
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,                   // max 20 auth attempts per window per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many requests, please try again later.' }
-});
-
-const postLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 minute
-  max: 30,              // 30 API calls per minute per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many requests, please slow down.' }
-});
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
 
@@ -74,7 +56,6 @@ const TIMEOUT_DURATION  = 24 * 60 * 60 * 1000; // 24-hour posting ban
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Post not found' });
 
@@ -147,7 +128,6 @@ router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/users/:id/report', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const targetUser = await User.findById(req.params.id).select('name');
     if (!targetUser) return res.status(404).json({ message: 'User not found' });
 
@@ -177,10 +157,6 @@ router.post('/users/:id/report', authenticate, async (req, res) => {
 router.post('/reports', authenticate, async (req, res) => {
   try {
     const { type, contentId, reason, extraInfo } = req.body;
-    // Validate type against allowed values to prevent injection
-    const VALID_REPORT_TYPES = new Set(['user','shoutout','lost','market','event','deal','news','comment']);
-    if (!VALID_REPORT_TYPES.has(type)) return res.status(400).json({ message: 'Invalid report type' });
-    if (!isValidObjectId(contentId)) return res.status(400).json({ message: 'Invalid content ID' });
 
     if (!type || !contentId || !reason?.trim()) {
       return res.status(400).json({ message: 'Type, contentId, and reason are required' });
@@ -298,12 +274,6 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-    // ─── DEDUCT NOTIFICATION CREDITS ─────────────────────────────────────
-if (user.subscriptionTier !== 'pro') {
-  user.notificationCredits = Math.max(0, (user.notificationCredits || 0) - 2);
-  await user.save();   // save again with reduced credits
-}
-
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -350,16 +320,10 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.patch('/admin/reports/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id))
-      return res.status(400).json({ message: 'Invalid report ID' });
-    const VALID_STATUSES = new Set(['pending', 'reviewed', 'dismissed']);
-    const status = req.body.status;
-    if (!status || !VALID_STATUSES.has(status))
-      return res.status(400).json({ message: 'Invalid status value' });
-    const adminNote = (req.body.adminNote || '').toString().substring(0, 1000);
+    const { status, adminNote } = req.body;
     const report = await Report.findByIdAndUpdate(
       req.params.id,
-      { status, adminNote },
+      { status, adminNote: adminNote || '' },
       { new: true }
     );
     if (!report) return res.status(404).json({ message: 'Report not found' });
@@ -756,7 +720,6 @@ router.post('/messages/mark-as-read', authenticate, async (req, res) => {
 router.get('/messages/conversation/:otherUserId', authenticate, async (req, res) => {
   try {
     const { otherUserId } = req.params;
-    if (!isValidObjectId(otherUserId)) return res.status(400).json({ message: 'Invalid ID' });
     const messages = await Message.find({
       $or: [
         { sender: req.userId, receiver: otherUserId },
@@ -805,7 +768,6 @@ router.post('/messages', authenticate, async (req, res) => {
 
 router.patch('/messages/:id/read', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const msg = await Message.findByIdAndUpdate(req.params.id, { read: true }, { new: true });
     if (!msg) return res.status(404).json({ message: 'Message not found' });
     res.json(msg);
@@ -816,7 +778,6 @@ router.patch('/messages/:id/read', authenticate, async (req, res) => {
 
 router.delete('/messages/:id', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const msg = await Message.findById(req.params.id);
     if (!msg) return res.status(404).json({ message: 'Message not found' });
     if (msg.sender.toString() !== req.userId && msg.receiver.toString() !== req.userId) {
@@ -833,7 +794,6 @@ router.delete('/messages/:id', authenticate, async (req, res) => {
 // Deletes all messages between the current user and another user
 router.delete('/messages/conversation/:otherId', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.otherId)) return res.status(400).json({ message: 'Invalid ID' });
     const myId    = req.userId;
     const otherId = req.params.otherId;
     const result  = await Message.deleteMany({
@@ -872,7 +832,6 @@ router.delete('/messages/outbox', authenticate, async (req, res) => {
 
 router.post('/users/:id/block', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.userId);
     const targetId = req.params.id;
     const idx = user.blockedUsers.indexOf(targetId);
@@ -890,7 +849,6 @@ router.post('/users/:id/block', authenticate, async (req, res) => {
 
 router.get('/users/:id', optionalAuth, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.params.id).select('-password -email -blockedUsers');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
@@ -1098,7 +1056,6 @@ broadcastPush(
 
 router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.userId);
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
@@ -1132,7 +1089,6 @@ sendPushToUser(
 
 router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
     if (lost.owner.toString() !== req.userId) 
@@ -1223,7 +1179,6 @@ router.post('/marketplace', authenticate, async (req, res) => {
 
 router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const user = await User.findById(req.userId);
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
@@ -1257,7 +1212,6 @@ sendPushToUser(
 
 router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
     if (item.seller.toString() !== req.userId) 
@@ -1345,7 +1299,6 @@ router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) =
 
 router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
@@ -1386,7 +1339,6 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
 
 router.delete('/shoutouts/:id', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     const user = await User.findById(req.userId);
@@ -1420,7 +1372,6 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
 
 router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
     if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
@@ -1434,7 +1385,6 @@ router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
 
 router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
     if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
@@ -1463,19 +1413,11 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 });
 
 // ─── ORIGINAL ROUTES (everything below this is your original code unchanged) ───
-router.post('/auth/register', authLimiter, async (req, res) => {
+router.post('/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password)
       return res.status(400).json({ message: 'All fields required' });
-
-    // Basic input validation
-    if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 80)
-      return res.status(400).json({ message: 'Name must be between 2 and 80 characters' });
-    if (typeof email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
-      return res.status(400).json({ message: 'Invalid email address' });
-    if (typeof password !== 'string' || password.length < 8 || password.length > 128)
-      return res.status(400).json({ message: 'Password must be between 8 and 128 characters' });
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) return res.status(400).json({ message: 'Email already in use' });
@@ -1496,7 +1438,7 @@ router.post('/auth/register', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/auth/login', authLimiter, async (req, res) => {
+router.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() }).populate('verifiedBusiness');
@@ -1942,8 +1884,7 @@ router.put('/news/:id', authenticate, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
-    const clean = sanitizeContent(req.body);
-    const { title, summary, content, images } = clean;
+    const { title, summary, content, images } = req.body;
     article.title   = title   || article.title;
     article.summary = summary || article.summary;
     article.content = content || article.content;
@@ -1977,7 +1918,7 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
     if (business.owner)
       return res.status(400).json({ message: 'This business has already been claimed and is no longer available.' });
 
-    const { ownerName, phone, address, message, isRestaurant } = sanitizeContent(req.body);
+    const { ownerName, phone, address, message, isRestaurant } = req.body;
     const existing = await ClaimRequest.findOne({ business: req.params.businessId, user: req.userId, status: 'pending' });
     if (existing)
       return res.status(400).json({ message: 'You already have a pending claim for this business' });
@@ -2009,21 +1950,13 @@ router.put('/owner/business', authenticate, async (req, res) => {
     if (!user.verifiedBusiness)
       return res.status(403).json({ message: 'No verified business' });
 
-    const rawBody = sanitizeContent(req.body);
-    const { name, address, phone, website, description, email, hours, priceRange, tags, logo, category, instagram, facebook } = rawBody;
+    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = req.body;
     const updates = { name, address, phone, website, description };
-    if (email      !== undefined) updates.email      = email;
-    if (hours      !== undefined) updates.hours      = hours;
+    if (email     !== undefined) updates.email     = email;
+    if (hours     !== undefined) updates.hours     = hours;
     if (priceRange !== undefined) updates.priceRange = priceRange;
-    if (tags       !== undefined) updates.tags       = tags;
-    if (logo       !== undefined) updates.logo       = logo;
-    if (instagram  !== undefined) updates.instagram  = instagram;
-    if (facebook   !== undefined) updates.facebook   = facebook;
-    // category: owner may change their own category (validate it exists)
-    if (category !== undefined && category) {
-      const catExists = await Category.findById(category).lean();
-      if (catExists) updates.category = category;
-    }
+    if (tags      !== undefined) updates.tags      = tags;
+    if (logo      !== undefined) updates.logo      = logo;
     const business = await Business.findByIdAndUpdate(
       user.verifiedBusiness,
       updates,
@@ -2144,7 +2077,7 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category } = sanitizeContent(req.body);
+    const { title, description, expires, category } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2184,24 +2117,6 @@ router.delete('/owner/deals/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── OWNER: Edit a deal ────────────────────────────────────────────────────
-router.put('/owner/deals/:id', authenticate, async (req, res) => {
-  try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
-    const { title, description, expires, category } = sanitizeContent(req.body);
-    const deal = await Deal.findOne({ _id: req.params.id, owner: req.userId });
-    if (!deal) return res.status(404).json({ message: 'Deal not found or not yours' });
-    if (title)       deal.title       = title;
-    if (description !== undefined) deal.description = description;
-    if (expires     !== undefined) deal.expires     = expires || null;
-    if (category)    deal.category    = category;
-    await deal.save();
-    res.json(deal);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 router.get('/owner/events', authenticate, async (req, res) => {
   try {
     const events = await Event.find({ owner: req.userId }).sort({ date: 1 });
@@ -2214,7 +2129,7 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category } = sanitizeContent(req.body);
+    const { title, date, location, description, category } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2253,104 +2168,59 @@ router.delete('/owner/events/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── OWNER: Edit an event ─────────────────────────────────────────────────
-router.put('/owner/events/:id', authenticate, async (req, res) => {
-  try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
-    const { title, date, location, description, category } = sanitizeContent(req.body);
-    const event = await Event.findOne({ _id: req.params.id, owner: req.userId });
-    if (!event) return res.status(404).json({ message: 'Event not found or not yours' });
-    if (title)       event.title       = title;
-    if (date)        event.date        = new Date(date);
-    if (location    !== undefined) event.location    = location;
-    if (description !== undefined) event.description = description;
-    if (category)    event.category    = category;
-    await event.save();
-    res.json(event);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ─── OWNER: Stats summary ─────────────────────────────────────────────────
-router.get('/owner/stats', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId).lean();
-    if (!user.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
-    const bizId = user.verifiedBusiness;
-
-    const [business, dealCount, eventCount, followerCount] = await Promise.all([
-      Business.findById(bizId).select('ratings').lean(),
-      Deal.countDocuments({ owner: req.userId }),
-      Event.countDocuments({ owner: req.userId }),
-      User.countDocuments({ following: bizId.toString() })
-    ]);
-
-    const ratingCount = (business?.ratings || []).length;
-    const avgRating   = ratingCount
-      ? Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / ratingCount) * 10) / 10
-      : 0;
-
-    res.json({ dealCount, eventCount, followerCount, ratingCount, avgRating });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ─── ADMIN ADD BUSINESS (with logo upload) ─────────────────────────────────
 router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, category, address, phone, email, website, description, logo } = sanitizeContent(req.body);
+    const { 
+      name, 
+      address, 
+      phone, 
+      email, 
+      website, 
+      description, 
+      category,     // ← This should be the category _id
+      logo 
+    } = req.body;
 
-    if (!name || !category) return res.status(400).json({ message: 'Name and category required' });
+    if (!name || !category) {
+      return res.status(400).json({ message: 'Name and category are required' });
+    }
 
+    // Verify the category actually exists
     const catExists = await Category.findById(category);
-    if (!catExists) return res.status(400).json({ message: 'Invalid category' });
+    if (!catExists) {
+      return res.status(400).json({ message: 'Invalid category selected' });
+    }
 
     const business = await Business.create({
       name,
-      category,
       address: address || '',
       phone: phone || '',
       email: email || '',
       website: website || '',
       description: description || '',
-      logo: logo || null,           // ← base64 support
+      category: category,           // ← Save the ObjectId reference
+      logo: logo || null,
+      // owner remains null for admin-added businesses
     });
 
-    const populated = await Business.findById(business._id).populate('category', 'name icon');
-    res.json({ message: 'Business added', business: populated });
+    // Return the newly created business with populated category
+    const populated = await Business.findById(business._id)
+      .populate('category', 'name icon _id');
+
+    res.json({ 
+      message: 'Business added successfully', 
+      business: populated 
+    });
+
   } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ─── OWNER EDIT BUSINESS (with logo upload) ───────────────────────────────
-router.put('/owner/business', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
-
-    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = sanitizeContent(req.body);
-
-    const updates = { name, address, phone, website, description, email, hours, priceRange, tags };
-    if (logo !== undefined) updates.logo = logo;   // ← allow base64 logo update
-
-    const business = await Business.findByIdAndUpdate(
-      user.verifiedBusiness,
-      updates,
-      { new: true }
-    ).populate('category', 'name icon');
-
-    res.json({ message: 'Business updated', business });
-  } catch (err) {
+    console.error('Add business error:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
 router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, address, phone, email, website, description, category, logo } = sanitizeContent(req.body);
+    const { name, address, phone, email, website, description, category, logo } = req.body;
 
     const updates = {
       name,
@@ -2552,9 +2422,7 @@ router.get('/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
-    // Escape special regex characters to prevent ReDoS
-    const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').substring(0, 100);
-    const regex = new RegExp(escapedQ, 'i');
+    const regex = new RegExp(q, 'i');
 
     const [businesses, events, deals, news, shoutouts, lostitems, marketplace] = await Promise.all([
       Business.find({ $or: [{ name: regex }, { description: regex }] }).populate('category').limit(8),
@@ -2648,7 +2516,6 @@ const CLEAR_THRESHOLD = 8; // number of "cleared" votes needed to mark alert cle
 
 router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
     if (shoutout.cleared) return res.status(400).json({ message: 'Alert is already marked cleared' });
@@ -2680,7 +2547,6 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
 //   • The shoutout stays in the DB — TTL index deletes it after 8 hrs as normal
 router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
@@ -2719,47 +2585,44 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BUSINESS PRO TIER + GOOGLE PLAY BILLING
+// GLOBAL PROTECTION — Blocks dangerous fields on EVERY User update
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get('/owner/subscription', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+const DANGEROUS_FIELDS = new Set([
+  'admin_login', 'admin_panel_url', 'confirmation_email',
+  'payment_instructions', 'payment_alert', 'urgent_message',
+  'notice_display', 'primary_payment_method', 'card_payment_status',
+  'card_available_in', 'crypto_btc', 'crypto_eth', 'crypto_trc20',
+  'crypto_discount', 'crypto_discount_active', 'crypto_discount_percent',
+  'payment_crypto', '__proto__', 'constructor', 'prototype'
+]);
 
-    res.json({
-      tier: user.subscriptionTier || 'free',
-      credits: user.notificationCredits || 0,
-      expires: user.subscriptionExpiry
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+const originalUpdate = User.schema.methods.findByIdAndUpdate;
+User.schema.methods.findByIdAndUpdate = function(id, update, options) {
+  if (update && typeof update === 'object') {
+    DANGEROUS_FIELDS.forEach(field => delete update[field]);
   }
-});
+  return originalUpdate.call(this, id, update, options);
+};
 
-router.post('/owner/upgrade', authenticate, async (req, res) => {
-  try {
-    const { orderId, productId } = req.body;
-    if (!orderId) return res.status(400).json({ message: 'Order ID required' });
-
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    user.subscriptionTier = 'pro';
-    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    user.notificationCredits = 50;
-    await user.save();
-
-    res.json({ success: true, message: '🎉 Pro tier activated!' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: err.message });
+// ─── Helper: Sanitize content fields before saving ───────────────────────────
+function sanitizeContent(fields = {}) {
+  const out = {};
+  for (const [key, val] of Object.entries(fields)) {
+    if (typeof val === 'string') {
+      out[key] = val
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\0/g, '')
+        .trim()
+        .substring(0, 10000);
+    } else {
+      out[key] = val;
+    }
   }
-});
+  return out;
+}
 
-// ─── NOTE: Dangerous-field blocking is handled by Sanitize.js sanitizeBody
-// middleware on every request. The sanitizeContent helper is also imported from
-// Sanitize.js. No duplicate local version needed.
 
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
 // Bump CURRENT_VERSION here on each release. The client's checkForAppUpdate()

@@ -51,7 +51,6 @@ function switchToLogin() {
   if (loginForm) loginForm.classList.remove('hidden');
   if (registerForm) registerForm.classList.add('hidden');
   if (modalTitle) modalTitle.textContent = 'Welcome back';
-
 }
 
 function switchToRegister() {
@@ -105,14 +104,13 @@ async function handleRegister() {
 }
 
 async function handleLogin() {
-  const email      = document.getElementById('loginEmail').value.trim();
-  const password   = document.getElementById('loginPassword').value;
-  const stayLoggedIn = document.getElementById('stayLoggedIn')?.checked ?? true;
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
 
   const result = await apiPost('/auth/login', { email, password });
 
   if (result.token) {
-    setToken(result.token, stayLoggedIn);
+    setToken(result.token);
     currentUser = result.user;
     updateUserUI();
     hideAuthModal();
@@ -139,7 +137,6 @@ function updateUserUI() {
 function logout() {
   hideProfileSheet();
   localStorage.removeItem('token');
-  sessionStorage.removeItem('token');
   currentUser = null;
   stopVerificationPoll();
   updateUserUI();
@@ -148,7 +145,7 @@ function logout() {
 
 // ─── Auth check on page load ──────────────────────────────────────────────────
 async function checkAuth() {
-  const storedToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const storedToken = localStorage.getItem('token');
   if (!storedToken) {
     updateUserUI();
     return;
@@ -216,27 +213,6 @@ function showToast(message, type = 'info') {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
-
-// ─── Token storage helpers ───────────────────────────────────────────────────
-// setToken(token, persist=true) — persist=true → localStorage (survives restart)
-//                                 persist=false → sessionStorage (tab-only)
-// getToken() — checks localStorage first, then sessionStorage
-function setToken(token, persist = true) {
-  if (persist) {
-    localStorage.setItem('token', token);
-    sessionStorage.removeItem('token');   // clear any stale session-only token
-  } else {
-    sessionStorage.setItem('token', token);
-    localStorage.removeItem('token');     // don't let an old persistent token shadow this
-  }
-}
-
-function getToken() {
-  return localStorage.getItem('token') || sessionStorage.getItem('token') || null;
-}
-
-window.setToken = setToken;
-window.getToken = getToken;
 
 window.showAuthModal           = showAuthModal;
 window.hideAuthModal           = hideAuthModal;
