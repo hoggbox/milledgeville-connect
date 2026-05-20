@@ -675,21 +675,27 @@ async function loadHomePage(content) {
   })();
 
 // AFTER — fire directory fetch in background; don't block home feed on it
+// ─── SPOTLIGHT (Home Page) ───────────────────────────────────────────────────
 function _renderSpotlight(businesses) {
   const spotEl = document.getElementById('spotlightScroll');
   if (!spotEl) return;
-  // Prefer rated businesses; fall back to all businesses if none have ratings
+
   let sb = [...businesses]
     .filter(b => b.avgRating && b.avgRating > 0)
     .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
     .slice(0, 8);
-  if (!sb.length) {
-    sb = [...businesses].slice(0, 8);
-  }
-  spotEl.innerHTML = sb.length
-    ? sb.map(b => `
+
+  if (!sb.length) sb = [...businesses].slice(0, 8);
+
+  spotEl.innerHTML = sb.map(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
+
+    return `
       <div onclick="showBusinessDetail('${b._id}')"
-           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition">
+           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
+        
+        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
+
         <div class="flex items-center gap-3 mb-3">
           ${b.logo
             ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
@@ -703,8 +709,8 @@ function _renderSpotlight(businesses) {
           ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
           <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
         </div>
-      </div>`).join('')
-    : `<p class="text-white/40 text-center py-8">No trending businesses yet</p>`;
+      </div>`;
+  }).join('');
 }
 
 if (allBusinesses.length === 0) {
@@ -1369,11 +1375,16 @@ function renderDirectory(businesses) {
     return;
   }
 
-    let html = '<div class="space-y-4">';
+  let html = '<div class="space-y-4">';
   businesses.forEach(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
+
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4">
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
+        
+        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
+
         ${b.logo 
           ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
           : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
@@ -6666,6 +6677,23 @@ window.postHomeListing = async function() {
   } catch (e) {
     showToast('Failed to post home listing', 'error');
   }
+};
+
+// ─── PRO USER ANALYTICS STUB (expand later) ───────────────────────────────
+window.showProAnalytics = function() {
+  showToast("📊 Pro Analytics coming soon:\n• Notification reach\n• Profile views\n• Listing performance", "success");
+};
+
+// Marketplace category notification preferences (for users)
+window.saveMarketplacePreferences = async function() {
+  const prefs = {
+    homes: document.getElementById('prefHomes')?.checked || false,
+    cars: document.getElementById('prefCars')?.checked || false,
+    furniture: document.getElementById('prefFurniture')?.checked || false,
+  };
+
+  await apiPost('/user/marketplace-preferences', prefs);
+  showToast('Preferences saved!', 'success');
 };
 
 // Simple stub for now (you can expand later)
