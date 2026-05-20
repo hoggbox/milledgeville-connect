@@ -6630,30 +6630,37 @@ window.postShoutoutWithPhoto = async function() {
   }
 };
 
+// ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
 window.sendCustomNotification = async function() {
-  const title = document.getElementById('customTitle').value.trim();
-  const body  = document.getElementById('customBody').value.trim();
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
 
   if (!title || !body) {
     showToast('Title and message are required', 'error');
     return;
   }
 
-  if (!(await canSendNotification(true))) {  // true = custom
-    showCreditPaywall(true);
-    return;
-  }
-
-  if (!await deductNotificationCredit(currentUser._id, 4, true)) {
-    showToast('Not enough credits', 'error');
+  // Credit check
+  const canSend = await window.canSendNotification(true);
+  if (!canSend) {
+    showToast('Not enough credits. Upgrade to Pro!', 'error');
     return;
   }
 
   try {
-    await broadcastPush(title, body, { page: 'home' });
-    showToast('✅ Custom notification sent!', 'success');
+    const res = await apiPost('/owner/custom-notification', { title, body });
+
+    if (res.success) {
+      showToast('✅ Custom notification sent to all users!', 'success');
+      // Clear form
+      document.getElementById('customTitle').value = '';
+      document.getElementById('customBody').value = '';
+    } else {
+      showToast(res.message || 'Failed to send notification', 'error');
+    }
   } catch (e) {
-    showToast('Failed to send', 'error');
+    console.error(e);
+    showToast('Failed to send notification', 'error');
   }
 };
 
@@ -6797,6 +6804,20 @@ window.handleOwnerLogoUpload = async function(input) {
     reader.readAsDataURL(compressed);
   } catch (e) {
     showToast('Failed to process logo', 'error');
+  }
+};
+
+// Client-side credit helpers
+window.canSendNotification = async function(isCustom = false) {
+  if (!currentUser) return false;
+  try {
+    const sub = await apiGet('/owner/subscription');
+    const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
+    const cost = isCustom ? 4 : 2;
+    return credits >= cost;
+  } catch (e) {
+    console.error('Credit check failed', e);
+    return false;
   }
 };
 
