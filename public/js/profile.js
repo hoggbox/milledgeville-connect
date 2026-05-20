@@ -286,7 +286,6 @@ async function initWebVapidPush() {
 
 // Keep your existing listeners (pushNotificationReceived + pushNotificationActionPerformed) — they look fine.
 
-// ─── Profile Sheet ────────────────────────────────────────────────────────────
 function showProfileSheet() {
   if (!currentUser) { showAuthModal(); return; }
 
@@ -320,10 +319,7 @@ function showProfileSheet() {
     <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
          style="background: linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%);">
       <div class="absolute inset-0 opacity-10" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,.15) 20px,rgba(255,255,255,.15) 21px);"></div>
-      <button onclick="showEditProfileModal()"
-              class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">
-        ✏️ Edit Profile
-      </button>
+      <button onclick="showEditProfileModal()" class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">✏️ Edit Profile</button>
     </div>
 
     <div class="flex justify-center -mt-20 mb-4 relative z-10">
@@ -335,24 +331,16 @@ function showProfileSheet() {
       </div>
     </div>
 
-<h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
-<p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
-${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+    <h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
+    <p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
+    ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
 
-<!-- Reputation Badge for Own Profile -->
-<div class="flex justify-center mt-3 mb-6">
-  <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
-    ⭐ ${currentUser.reputation || 0}
-    <span class="text-base opacity-75">Reputation</span>
-  </div>
-</div>
-    <!-- Beta Tester Badge -->
-    ${currentUser.isBetaTester ? `
-    <div class="flex justify-center mt-2 mb-2">
-      <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow">
-        🚀 MVP Beta Tester
+    <div class="flex justify-center mt-3 mb-6">
+      <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
+        ⭐ ${currentUser.reputation || 0}
+        <span class="text-base opacity-75">Reputation</span>
       </div>
-    </div>` : ''}
+    </div>
 
     ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
     ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
@@ -381,9 +369,8 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
       ${socials}
     </div>` : ''}
 
-    <!-- ─── Push notification quick-toggle in profile sheet ─────────────── -->
     ${pushSupported ? `
-    <div class="mt-5 bg-slateald-50 border border-slate-100 rounded-2xl p-4">
+    <div class="mt-5 bg-slate-50 border border-slate-100 rounded-2xl p-4">
       <label for="sheetPushToggle" class="flex items-center justify-between gap-3 cursor-pointer select-none">
         <div class="text-left">
           <p class="text-sm font-semibold text-slate-800">🔔 Push Notifications</p>
@@ -401,21 +388,19 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
 
     <p class="text-slate-400 text-xs mt-4">${lastLoginText}</p>
 
-      <div class="mt-8 space-y-3">
-        ${isAdmin ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
-        ${isVerified ? `<button onclick="navigate('owner-dashboard');hideProfileSheet();" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
-        
-        <button onclick="showEditProfileModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">✏️ Edit Profile</button>
-        
-        <!-- Delete Account Button -->
-        <button onclick="showDeleteAccountModal()" 
-                class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
-          🗑️ Delete My Account
-        </button>
+    <div class="mt-8 space-y-3">
+      ${isAdmin ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
+      ${isVerified ? `<button onclick="navigate('owner-dashboard'); hideProfileSheet();" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
+      
+      <button onclick="showEditProfileModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">✏️ Edit Profile</button>
+      
+      <button onclick="showDeleteAccountModal()" class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
+        🗑️ Delete My Account
+      </button>
 
-        <button onclick="logout()" class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">Logout</button>
-        <button onclick="hideProfileSheet()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">Close</button>
-      </div>
+      <button onclick="logout()" class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">Logout</button>
+      <button onclick="hideProfileSheet()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">Close</button>
+    </div>
   `;
 
   sheet.classList.remove('hidden');
@@ -426,7 +411,6 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
     });
   });
 
-  // ── Wire up the sheet push toggle after render ────────────────────────────
   if (pushSupported && (isNative || !pushBlocked)) {
     _initSheetPushToggle();
   }
