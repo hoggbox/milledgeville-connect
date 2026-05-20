@@ -2437,19 +2437,24 @@ function sanitizeUser(user) {
   return u;
 }
 
-// ─── SAVE NATIVE FCM TOKEN (Fixed + More Logging) ───────────────────────────
+// ─── SAVE NATIVE FCM TOKEN (Aggressive Logging + Fixed) ─────────────────────
 router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
     const { token, platform = 'android' } = req.body;
 
-    if (!token || token.length < 100) {
-      console.log('❌ Invalid token received');
+    if (!token) {
+      console.log('❌ [native-subscribe] No token received');
+      return res.status(400).json({ message: 'Token required' });
+    }
+
+    if (token.length < 50) {
+      console.log('❌ [native-subscribe] Token too short:', token.length);
       return res.status(400).json({ message: 'Invalid token' });
     }
 
-    console.log(`📲 Saving FCM token for user ${req.userId} | Length: ${token.length}`);
+    console.log(`📲 [native-subscribe] RECEIVED token for user ${req.userId} | Length: ${token.length}`);
 
-    // Upsert — keeps old data if it exists
+    // Force save / update
     const sub = await PushSubscription.findOneAndUpdate(
       { user: req.userId },
       {
@@ -2461,15 +2466,16 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Make sure user has pushEnabled = true
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    await User.findByIdAndUpdate(req.userId, { 
+      pushEnabled: true 
+    });
 
-    console.log(`✅ Token saved successfully for user ${req.userId}`);
-    res.json({ message: 'Native token saved' });
+    console.log(`✅ [native-subscribe] TOKEN SAVED SUCCESSFULLY for user ${req.userId}`);
+    res.json({ message: 'Native token saved', success: true });
 
   } catch (err) {
-    console.error('❌ native-subscribe error:', err);
-    res.status(500).json({ message: err.message });
+    console.error('💥 [native-subscribe] CRASHED:', err.message);
+    res.status(500).json({ message: 'Server error saving token' });
   }
 });
 
