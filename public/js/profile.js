@@ -287,7 +287,10 @@ async function initWebVapidPush() {
 // Keep your existing listeners (pushNotificationReceived + pushNotificationActionPerformed) — they look fine.
 
 function showProfileSheet() {
-  if (!currentUser) { showAuthModal(); return; }
+  if (!currentUser) { 
+    showAuthModal(); 
+    return; 
+  }
 
   const sheet = document.getElementById('profileSheet');
   const content = document.getElementById('sheet-content');
@@ -319,7 +322,7 @@ function showProfileSheet() {
     <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
          style="background: linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%);">
       <div class="absolute inset-0 opacity-10" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,.15) 20px,rgba(255,255,255,.15) 21px);"></div>
-      <button onclick="showEditProfileModal()" class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">✏️ Edit Profile</button>
+      <button id="profileEditBtn" class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">✏️ Edit Profile</button>
     </div>
 
     <div class="flex justify-center -mt-20 mb-4 relative z-10">
@@ -389,26 +392,36 @@ function showProfileSheet() {
     <p class="text-slate-400 text-xs mt-4">${lastLoginText}</p>
 
     <div class="mt-8 space-y-3">
-      ${isAdmin ? `<button onclick="navigate('admin')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
-      ${isVerified ? `<button onclick="navigate('owner-dashboard'); hideProfileSheet();" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
+      ${isAdmin ? `<button id="adminBtn" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
+      ${isVerified ? `<button id="bizDashboardBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
       
-      <button onclick="showEditProfileModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">✏️ Edit Profile</button>
+      <button id="editProfileBtn" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">✏️ Edit Profile</button>
       
-      <button onclick="showDeleteAccountModal()" class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
+      <button id="deleteAccountBtn" class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
         🗑️ Delete My Account
       </button>
 
-      <button onclick="logout()" class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">Logout</button>
-      <button onclick="hideProfileSheet()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">Close</button>
+      <button id="logoutBtn" class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">Logout</button>
+      <button id="closeBtn" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">Close</button>
     </div>
   `;
 
   sheet.classList.remove('hidden');
+
+  // IMPORTANT: Attach click listeners AFTER innerHTML
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const panel = document.getElementById('profileSheetPanel');
-      if (panel) panel.classList.remove('translate-y-full');
+    document.getElementById('editProfileBtn')?.addEventListener('click', showEditProfileModal);
+    document.getElementById('bizDashboardBtn')?.addEventListener('click', () => {
+      navigate('owner-dashboard');
+      hideProfileSheet();
     });
+    document.getElementById('adminBtn')?.addEventListener('click', () => navigate('admin'));
+    document.getElementById('deleteAccountBtn')?.addEventListener('click', showDeleteAccountModal);
+    document.getElementById('logoutBtn')?.addEventListener('click', logout);
+    document.getElementById('closeBtn')?.addEventListener('click', hideProfileSheet);
+
+    const panel = document.getElementById('profileSheetPanel');
+    if (panel) panel.classList.remove('translate-y-full');
   });
 
   if (pushSupported && (isNative || !pushBlocked)) {
@@ -855,17 +868,16 @@ window.reportUser = async function (userId, userName) {
   }
 };
 
-// ─── Exports ──────────────────────────────────────────────────────────────────
-window.showProfileSheet      = showProfileSheet;
-window.hideProfileSheet      = hideProfileSheet;
-window.showEditProfileModal  = showEditProfileModal;
-window.hideEditProfileModal  = hideEditProfileModal;
-window.handleAvatarSelect    = handleAvatarSelect;
-window.saveProfile           = saveProfile;
-window.requestPushPermission = requestPushPermission;
-window.disablePushNotifications = disablePushNotifications;
-window.updateUserUI          = () => renderNav();
-// ─── Make sure all profile sheet buttons work ─────────────────────────────
-window.hideProfileSheet = hideProfileSheet;
-window.logout = logout;                    // in case it's not already exported
-window.navigate = loadPage;                // important for owner-dashboard button
+// ─── GLOBAL EXPORTS (Critical for inline onclick + dynamic buttons) ────────
+window.showProfileSheet       = showProfileSheet;
+window.hideProfileSheet       = hideProfileSheet;
+window.logout                 = logout;
+window.navigate               = loadPage;
+window.showEditProfileModal   = showEditProfileModal;
+window.showDeleteAccountModal = showDeleteAccountModal;
+window.saveProfile            = saveProfile;
+window.removeAvatar           = removeAvatar;
+window.handleAvatarSelect     = handleAvatarSelect;
+
+// Optional: Also expose the native push function for safety
+window.initPushAfterLogin     = window.initPushAfterLogin;
