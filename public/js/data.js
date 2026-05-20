@@ -3207,30 +3207,64 @@ async function loadOwnerDashboard(content) {
 
         <!-- ═══ TAB: Listing ═══════════════════════════════════════════════ -->
         <div id="dtabContent-listing" class="tab-content">
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-            <h3 class="font-bold text-lg mb-5 flex items-center gap-2">🏪 Business Logo</h3>
-            
-            <div class="flex flex-col items-center gap-6">
-              <div id="ownerLogoPreview" class="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white/20 shadow-xl flex items-center justify-center text-6xl bg-white/10">
-                ${biz.logo 
-                  ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
-                  : (biz.category?.icon || '🏪')}
-              </div>
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 space-y-6">
 
-              <div class="text-center">
+            <!-- Existing business info fields -->
+            <div>
+              <label class="block text-xs font-semibold text-white/50 mb-1">Business Name</label>
+              <input id="ownerBizName" value="${biz.name || ''}" 
+                     class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-white/50 mb-1">Phone</label>
+                <input id="ownerBizPhone" value="${biz.phone || ''}" 
+                       class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-white/50 mb-1">Email</label>
+                <input id="ownerBizEmail" value="${biz.email || ''}" 
+                       class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-white/50 mb-1">Address</label>
+              <input id="ownerBizAddress" value="${biz.address || ''}" 
+                     class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-white/50 mb-1">Description</label>
+              <textarea id="ownerBizDescription" rows="3" 
+                        class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 resize-none">${biz.description || ''}</textarea>
+            </div>
+
+            <!-- NEW: Logo Upload Section -->
+            <div class="pt-4 border-t border-white/10">
+              <h3 class="font-bold text-lg mb-4 flex items-center gap-2">🏷️ Business Logo</h3>
+              
+              <div class="flex flex-col items-center gap-4">
+                <div id="ownerLogoPreview" class="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white/20 shadow-xl flex items-center justify-center text-6xl bg-white/10">
+                  ${biz.logo 
+                    ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
+                    : (biz.category?.icon || '🏪')}
+                </div>
+
                 <button onclick="document.getElementById('ownerLogoUpload').click()" 
-                        class="bg-emerald-600 hover:bg-emerald-700 px-8 py-3 rounded-2xl font-semibold flex items-center gap-2 text-sm">
+                        class="bg-emerald-600 hover:bg-emerald-700 px-8 py-3 rounded-2xl font-semibold flex items-center gap-2">
                   📸 Upload New Logo
                 </button>
                 <input id="ownerLogoUpload" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
                        onchange="handleOwnerLogoUpload(this)">
-                <p class="text-xs text-white/50 mt-3">JPG, PNG or WebP • Max 4MB</p>
               </div>
             </div>
 
-            <button onclick="saveOwnerBusinessLogo()" 
-                    class="w-full mt-8 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
-              💾 Save Logo
+            <!-- Save Button -->
+            <button onclick="saveOwnerBusinessChanges()" 
+                    class="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
+              💾 Save All Changes
             </button>
           </div>
         </div>
