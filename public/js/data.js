@@ -6889,22 +6889,24 @@ window.logout = function() {
   window.location.reload();
 };
 
-// ─── Custom Notification Sender ─────────────────────────────────────────────
+// ─── CUSTOM NOTIFICATION + CREDIT SYSTEM ─────────────────────────────────────
 window.sendCustomNotification = async function() {
-  const title = document.getElementById('customTitle').value.trim();
-  const body  = document.getElementById('customBody').value.trim();
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
 
   if (!title || !body) {
     showToast('Title and message are required', 'error');
     return;
   }
 
+  // TODO: We'll add real credit check next
   try {
     await broadcastPush(title, body, { page: 'home' });
     showToast('✅ Custom notification sent!', 'success');
     document.getElementById('customTitle').value = '';
     document.getElementById('customBody').value = '';
   } catch (e) {
+    console.error(e);
     showToast('Failed to send notification', 'error');
   }
 };
