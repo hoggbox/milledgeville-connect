@@ -1401,13 +1401,19 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can send notifications' });
     }
 
+    // Fetch business name to stamp on the notification
+    const business = await Business.findById(user.verifiedBusiness).select('name');
+    const bizName  = business?.name || user.name;
+
     // Server-side credit deduction (2 credits for custom notification)
     const deducted = await deductNotificationCredit(req.userId, 2, true);
     if (!deducted) {
       return res.status(403).json({ message: 'Not enough notification credits. Upgrade to Business Pro.' });
     }
 
-    await broadcastPush(title.trim(), body.trim(), { page: 'home' });
+    // Prepend business name to the body so recipients always know who sent it
+    const stampedBody = `${bizName} · ${body.trim()}`;
+    await broadcastPush(title.trim(), stampedBody, { page: 'home' });
 
     // Return updated credit balance so the frontend can refresh the display
     const updated = await User.findById(req.userId).select('notificationCredits');

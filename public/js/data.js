@@ -3740,12 +3740,36 @@ async function loadNotificationsTab() {
       <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
         <h4 class="font-bold text-white">📢 Send Custom Notification</h4>
         <p class="text-xs text-white/50">Broadcasts a push notification to all users with the app installed. Costs 2 credits.</p>
+
+        <!-- "From" badge — shows recipients what business the message is from -->
+        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+          <span class="text-xs text-white/40">From:</span>
+          <span class="text-sm font-semibold text-emerald-400">${
+            (typeof currentUser !== 'undefined' && currentUser?.verifiedBusiness?.name)
+              ? currentUser.verifiedBusiness.name
+              : (typeof currentUser !== 'undefined' && currentUser?.name) || 'Your Business'
+          }</span>
+          <span class="text-xs text-white/30 ml-auto">shown to all recipients</span>
+        </div>
+
         <input id="customTitle"
                placeholder="Notification title (e.g. Big Sale Today!)"
                class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500" />
         <textarea id="customBody" rows="3"
                placeholder="Message body (e.g. Stop by for 20% off all day!)"
                class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+
+        <!-- Live preview of how it'll look on a device -->
+        <div class="bg-black/30 border border-white/10 rounded-xl p-3 space-y-1">
+          <div class="text-xs text-white/30 mb-2">Preview on device:</div>
+          <div class="text-xs font-bold text-white" id="previewTitle">Your title here</div>
+          <div class="text-xs text-white/60" id="previewBody">${
+            (typeof currentUser !== 'undefined' && currentUser?.verifiedBusiness?.name)
+              ? currentUser.verifiedBusiness.name
+              : 'Your Business'
+          } · Your message here</div>
+        </div>
+
         <button onclick="sendCustomNotification()"
                 class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all shadow-lg">
           📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>
@@ -3770,13 +3794,31 @@ async function loadNotificationsTab() {
       </div>
 
     </div>`;
+
+  // Wire up live preview — updates as the owner types
+  const bizName = (typeof currentUser !== 'undefined' && currentUser?.verifiedBusiness?.name)
+    ? currentUser.verifiedBusiness.name
+    : (typeof currentUser !== 'undefined' && currentUser?.name) || 'Your Business';
+
+  const titleInput   = document.getElementById('customTitle');
+  const bodyInput    = document.getElementById('customBody');
+  const previewTitle = document.getElementById('previewTitle');
+  const previewBody  = document.getElementById('previewBody');
+
+  function updatePreview() {
+    if (previewTitle) previewTitle.textContent = titleInput?.value.trim() || 'Your title here';
+    if (previewBody)  previewBody.textContent  = `${bizName} · ${bodyInput?.value.trim() || 'Your message here'}`;
+  }
+
+  titleInput?.addEventListener('input', updatePreview);
+  bodyInput?.addEventListener('input',  updatePreview);
 }
 
 window.applyNotifTemplate = function(title, body) {
   const titleEl = document.getElementById('customTitle');
   const bodyEl  = document.getElementById('customBody');
-  if (titleEl) titleEl.value = title;
-  if (bodyEl)  bodyEl.value  = body;
+  if (titleEl) { titleEl.value = title; titleEl.dispatchEvent(new Event('input')); }
+  if (bodyEl)  { bodyEl.value  = body;  bodyEl.dispatchEvent(new Event('input'));  }
   showToast('Template applied — customise then send!', 'success');
 };
 
