@@ -6778,10 +6778,6 @@ window.requestAccountDeletion = async function() {
 window.confirmAccountDeletion = async function() {
   const reason = document.getElementById('deleteReason')?.value.trim() || 'No reason provided';
 
-  if (!confirm("FINAL WARNING: This will permanently delete your account and all data. Are you 100% sure?")) {
-    return;
-  }
-
   try {
     const res = await apiPost('/user/delete-request', { reason });
     
@@ -6829,6 +6825,13 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
+
+window.logout = function() {
+  if (!confirm('Are you sure you want to log out?')) return;
+  localStorage.removeItem('token');
+  currentUser = null;
+  window.location.reload();
+};
 
 // Extra protection against any accidental double broadcast
 window.addEventListener('beforeunload', () => {
