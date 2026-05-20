@@ -881,3 +881,7 @@ window.saveProfile           = saveProfile;
 window.requestPushPermission = requestPushPermission;
 window.disablePushNotifications = disablePushNotifications;
 window.updateUserUI          = () => renderNav();
+// ─── Make sure all profile sheet buttons work ─────────────────────────────
+window.hideProfileSheet = hideProfileSheet;
+window.logout = logout;                    // in case it's not already exported
+window.navigate = loadPage;                // important for owner-dashboard button
