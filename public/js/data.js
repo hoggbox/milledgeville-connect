@@ -6458,6 +6458,70 @@ window.handleOwnerLogoUpload = async function(input) {
   }
 };
 
+// ─── GOOGLE PLAY BILLING - BUY PRO TIER ─────────────────────────────────────
+window.buyProTier = async function() {
+  if (!window.Capacitor) {
+    showToast('Google Play Billing only works in the Android app', 'error');
+    return;
+  }
+
+  try {
+    showToast('Opening Google Play...', 'success');
+
+    const { InAppPurchase2 } = window.Capacitor.Plugins;
+
+    // Replace with your actual Google Play product ID
+    const productId = 'pro_monthly';   // ← Change this if your product ID is different
+
+    await InAppPurchase2.buy({
+      productId: productId,
+      type: 'inapp'   // or 'subs' if you set it up as subscription in Play Console
+    });
+
+    // This will be called by the purchase listener below when successful
+  } catch (err) {
+    console.error(err);
+    showToast('Purchase failed or cancelled', 'error');
+  }
+};
+
+// Listen for successful purchase and activate Pro on backend
+function setupBillingListener() {
+  if (!window.Capacitor) return;
+
+  const { InAppPurchase2 } = window.Capacitor.Plugins;
+
+  InAppPurchase2.addListener('purchaseSucceeded', async (purchase) => {
+    try {
+      const res = await apiPost('/owner/upgrade', {
+        orderId: purchase.orderId || purchase.transactionId,
+        productId: purchase.productId
+      });
+
+      if (res.success) {
+        showToast('🎉 Thank you! You are now Business Pro!', 'success');
+        // Refresh dashboard
+        loadOwnerDashboard(document.getElementById('content'));
+      }
+    } catch (e) {
+      showToast('Failed to activate Pro tier', 'error');
+    }
+  });
+
+  InAppPurchase2.addListener('purchaseFailed', () => {
+    showToast('Purchase failed or cancelled', 'error');
+  });
+}
+
+// Call this once when app loads (add near the bottom of your file)
+document.addEventListener('DOMContentLoaded', () => {
+  setupBillingListener();
+});
+
+window.showCreditInfo = function() {
+  showToast(`Pro Tier gives 50 credits/month.\nCustom Notification = 2 credits\nTemplate = 1 credit`, 'success');
+};
+
 window.saveOwnerBusinessLogo = async function() {
   if (!pendingOwnerLogo) {
     showToast('Please select a logo first', 'error');
