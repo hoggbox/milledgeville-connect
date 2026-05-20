@@ -82,7 +82,7 @@ window.submitRating = async function (businessId, score) {
   }
 };
 
-// ─── HANDLE PUSH NOTIFICATION DEEP LINK ─────────────────────────────────────
+// ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
 window.handlePushNotificationClick = function(data) {
   if (!data?.page) {
     navigate('home');
@@ -91,37 +91,39 @@ window.handlePushNotificationClick = function(data) {
 
   const { page, id } = data;
 
-  if (page === 'shoutouts') {
+  if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
-    if (id) setTimeout(() => {
-      const el = document.getElementById(`shoutout-${id}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 600);
+    if (id) {
+      setTimeout(() => {
+        const el = document.getElementById(`shoutout-${id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 800);
+    }
   } 
-  else if (page === 'events' && id) {
-    navigate('events');
-    setTimeout(() => showEventDetail(id), 600);
-  } 
-  else if (page === 'deals' && id) {
-    navigate('deals');
-    setTimeout(() => showDealDetail(id), 600);
-  } 
-  else if (page === 'marketplace' && id) {
+  else if (page === 'marketplace' || page === 'market') {
     navigate('marketplace');
-    setTimeout(() => showMarketplaceDetail(id), 600);
+    if (id) setTimeout(() => showMarketplaceDetail(id), 800);
   } 
-  else if (page === 'lostfound' && id) {
+  else if (page === 'lostfound' || page === 'lost') {
     navigate('lostfound');
-    setTimeout(() => showLostDetail(id), 600);
-  }
-  else if (page === 'messages' && id) {
-    navigate('messages');
-    setTimeout(() => openConversation(id), 600);
-  }
-  else if (page === 'news' && id) {
+    if (id) setTimeout(() => showLostDetail(id), 800);
+  } 
+  else if (page === 'events' || page === 'event') {
+    navigate('events');
+    if (id) setTimeout(() => showEventDetail(id), 800);
+  } 
+  else if (page === 'deals' || page === 'deal') {
+    navigate('deals');
+    if (id) setTimeout(() => showDealDetail(id), 800);
+  } 
+  else if (page === 'news') {
     navigate('news');
-    setTimeout(() => showNewsDetail(id), 600);
-  }
+    if (id) setTimeout(() => openNewsArticle(id), 800);
+  } 
+  else if (page === 'messages') {
+    navigate('messages');
+    if (id) setTimeout(() => openConversation(id), 800);
+  } 
   else {
     navigate(page);
   }
@@ -3150,7 +3152,7 @@ window.closeResourceDetail = function () {
   if (el) el.remove();
 };
 
-// ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
+// ─── OWNER DASHBOARD (with Business Pro Tier) ─────────────────────────────────
 async function loadOwnerDashboard(content) {
   await ensureDirCategories();
 
@@ -3173,7 +3175,7 @@ async function loadOwnerDashboard(content) {
     ? `<p class="text-xs text-emerald-400/70 -mt-1 mb-3 px-1">✨ Auto-selected: ${bizCatName}</p>`
     : '';
 
-  // Build tab list — Menu tab only for restaurants
+  // Build tab list
   const tabs = [
     { id: 'listing', label: 'Listing',  icon: '📋' },
     { id: 'photos',  label: 'Photos',   icon: '📷' },
@@ -3182,6 +3184,11 @@ async function loadOwnerDashboard(content) {
     { id: 'events',  label: 'Events',   icon: '📅' },
   ];
 
+  // === GET SUBSCRIPTION STATUS ===
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
+  const isPro = sub.tier === 'pro';
+  const credits = sub.credits || 0;
+
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
 
@@ -3189,6 +3196,39 @@ async function loadOwnerDashboard(content) {
       <div class="px-4 pt-2 pb-4">
         <h2 class="text-2xl font-bold">🏪 My Dashboard</h2>
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
+      </div>
+
+      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
+      <div class="mx-4 mb-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-7 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-3">
+              ⭐ BUSINESS PRO
+            </div>
+            <h3 class="text-2xl font-bold">$19.99 / month</h3>
+            <p class="text-white/80 text-sm mt-1">Boosted visibility • More credits • Analytics</p>
+          </div>
+          
+          ${isPro ? `
+            <div class="text-right">
+              <div class="text-emerald-300 font-bold">ACTIVE</div>
+              <div class="text-xs opacity-75">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
+            </div>
+          ` : `
+            <button onclick="buyProTier()" 
+                    class="bg-white text-purple-700 px-7 py-3 rounded-3xl font-bold hover:bg-white/90 transition shadow-xl">
+              Upgrade Now
+            </button>
+          `}
+        </div>
+
+        <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <div class="text-xs opacity-75">Notification Credits</div>
+            <div class="text-4xl font-black">${credits}</div>
+          </div>
+          <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
+        </div>
       </div>
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->

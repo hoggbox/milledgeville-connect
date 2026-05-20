@@ -63,6 +63,18 @@ const userSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now }
   }],
 
+// Add these fields inside your User Schema
+subscriptionTier: { 
+  type: String, 
+  enum: ['free', 'pro'], 
+  default: 'free' 
+},
+subscriptionExpiry: { type: Date, default: null },
+notificationCredits: { 
+  type: Number, 
+  default: 10   // Free users start with 0 or 5, Pro gets 10+ 
+},
+
   // ─── Token Storage ─────────────────────────────────────────────────────────
   fcmTokens: [{ type: String }],
 

@@ -2623,6 +2623,62 @@ function sanitizeContent(fields = {}) {
   return out;
 }
 
+// ─── BUSINESS PRO TIER + GOOGLE PLAY BILLING ───────────────────────────────
+
+router.get('/owner/subscription', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json({
+      tier: user.subscriptionTier || 'free',
+      credits: user.notificationCredits || 0,
+      expires: user.subscriptionExpiry
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/owner/upgrade', authenticate, async (req, res) => {
+  try {
+    const { orderId, productId } = req.body;
+    if (!orderId) return res.status(400).json({ message: 'Order ID required' });
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Activate Pro
+    user.subscriptionTier = 'pro';
+    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    user.notificationCredits = 50; // Generous starting credits
+
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: '🎉 Pro tier activated! Welcome to Business Pro.' 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Credit check helper (used before sending notifications)
+async function deductNotificationCredit(userId, amount = 2) {
+  const user = await User.findById(userId);
+  if (!user || user.subscriptionTier === 'pro') return true; // Pro = unlimited
+
+  if ((user.notificationCredits || 0) < amount) {
+    return false;
+  }
+
+  user.notificationCredits -= amount;
+  await user.save();
+  return true;
+}
+
 
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
 // Bump CURRENT_VERSION here on each release. The client's checkForAppUpdate()
