@@ -3188,14 +3188,14 @@ async function loadOwnerDashboard(content) {
 
   // Build tab list
 const tabs = [
-  { id: 'listing', label: 'Listing',  icon: '📋' },
-  { id: 'photos',  label: 'Photos',   icon: '📷' },
+  { id: 'listing',       label: 'Listing',       icon: '📋' },
+  { id: 'photos',        label: 'Photos',         icon: '📷' },
   ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
-  { id: 'deals',   label: 'Deals',    icon: '🔥' },
-  { id: 'events',  label: 'Events',   icon: '📅' },
-  { id: 'homes',   label: 'Homes',    icon: '🏠' },
-  { id: 'custom', label: 'Custom Notification', icon: '✍️' },
-  { id: 'analytics', label: 'Analytics', icon: '📊' }   // ← NEW
+  { id: 'deals',         label: 'Deals',          icon: '🔥' },
+  { id: 'events',        label: 'Events',         icon: '📅' },
+  { id: 'homes',         label: 'Homes',          icon: '🏠' },
+  { id: 'notifications', label: 'Notifications',  icon: '📢' },
+  { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
 
   // === GET SUBSCRIPTION STATUS ===
@@ -3425,91 +3425,101 @@ const tabs = [
           <div id="ownerEventsList"></div>
         </div>
 
-        <!-- ═══ TAB: Homes for Rent/Sale (Pro Feature) ═══════════════════════════════ -->
-<div id="dtabContent-homes" class="hidden">
-  <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="font-bold text-base flex items-center gap-2"><span>🏠</span> Homes for Rent/Sale</h3>
-      ${isPro ? `<span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">Pro Feature</span>` : ''}
-    </div>
-
-    ${!isPro ? `
-      <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 text-center">
-        <p class="text-amber-400 font-semibold">Upgrade to Business Pro to post Homes</p>
-        <button onclick="buyProTier()" class="mt-4 bg-white text-amber-700 px-6 py-3 rounded-2xl font-bold">Upgrade Now</button>
-      </div>
-    ` : `
-      <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent - Downtown" class="${inputClass}">
-      <div class="grid grid-cols-2 gap-3">
-        <input id="homePrice" type="text" placeholder="Price ($/mo or sale)" class="${inputClass}">
-        <select id="homeType" class="${selectClass}" style="${selectStyle}">
-          <option value="">Type *</option>
-          <option value="rent">For Rent</option>
-          <option value="sale">For Sale</option>
-        </select>
-      </div>
-      <textarea id="homeDesc" rows="3" placeholder="Description, bedrooms, bathrooms, etc." class="${inputClass} resize-none"></textarea>
-      <input id="homeAddress" type="text" placeholder="Full Address" class="${inputClass}">
-
-      <button onclick="postHomeListing()" 
-              class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold mt-2">
-        📢 Post Home Listing
-      </button>
-    `}
-  </div>
-
-  <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Home Listings</p>
-  <div id="ownerHomesList"></div>
-</div>
-
-<!-- ═══ TAB: Analytics (Pro Feature) ═════════════════════════════════════════ -->
-<div id="dtabContent-analytics" class="hidden">
-  <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-    <h3 class="font-bold text-lg mb-6 flex items-center gap-2"><span>📊</span> Business Analytics</h3>
-    
-    ${isPro ? `
-      <div class="grid grid-cols-2 gap-4 mb-8">
-        <div class="bg-white/5 rounded-2xl p-5">
-          <div class="text-emerald-400 text-3xl mb-1">👀</div>
-          <div class="text-4xl font-black">247</div>
-          <div class="text-xs text-white/50">Profile Views (30 days)</div>
-        </div>
-        <div class="bg-white/5 rounded-2xl p-5">
-          <div class="text-violet-400 text-3xl mb-1">📢</div>
-          <div class="text-4xl font-black">12</div>
-          <div class="text-xs text-white/50">Notifications Sent</div>
-        </div>
-      </div>
-      
-      <p class="text-white/60 text-sm">More detailed analytics (reach, engagement, top listings) coming soon.</p>
-    ` : `
-      <div class="text-center py-12">
-        <div class="text-5xl mb-4 opacity-30">📊</div>
-        <p class="font-semibold text-lg mb-2">Upgrade to Pro</p>
-        <p class="text-white/50">Unlock full analytics, reach tracking, and performance insights.</p>
-        <button onclick="buyProTier()" class="mt-6 bg-white text-purple-700 px-8 py-3.5 rounded-3xl font-bold">Upgrade to Pro</button>
-      </div>
-    `}
-  </div>
-</div>
-        <!-- ═══ TAB: Custom Notification ═══════════════════════════════════════════════ -->
-        <div id="dtabContent-custom" class="tab-content hidden">
-          <div class="bg-white/10 rounded-3xl p-8">
-            <h2 class="text-2xl font-bold mb-2">✍️ Send Custom Notification</h2>
-            <p class="text-white/60 mb-6">Costs <strong>4 credits</strong></p>
-            
-            <input id="customTitle" placeholder="Notification Title" 
-                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 mb-4 text-lg">
-            
-            <textarea id="customBody" rows="5" placeholder="Write your message here..." 
-                      class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4"></textarea>
-            
-            <button onclick="sendCustomNotification()" 
-                    class="mt-6 w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold text-lg">
-              🚀 Send Custom Notification (4 credits)
+        <!-- ═══ TAB: Homes for Rent/Sale ════════════════════════════════════════════ -->
+        <div id="dtabContent-homes" class="hidden">
+          ${!isPro ? `
+          <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
+            <div class="text-5xl mb-4">🏠</div>
+            <h3 class="text-xl font-bold mb-2">Homes for Rent / Sale</h3>
+            <p class="text-white/60 mb-6 text-sm leading-relaxed">List properties you manage directly on Milledgeville Connect's marketplace. Requires Business Pro.</p>
+            <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> List homes for rent or sale</div>
+              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Optionally notify all users</div>
+              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Appears in Marketplace under Homes</div>
+            </div>
+            <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+              🚀 Upgrade to Business Pro
             </button>
           </div>
+          ` : `
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-base flex items-center gap-2"><span>🏠</span> Post a Home Listing</h3>
+              <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">Pro</span>
+            </div>
+            <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent - Downtown" class="${inputClass}">
+            <div class="grid grid-cols-2 gap-3">
+              <input id="homePrice" type="text" placeholder="Price ($/mo or sale)" class="${inputClass}">
+              <select id="homeType" class="${selectClass}" style="${selectStyle}">
+                <option value="">Type *</option>
+                <option value="rent">For Rent</option>
+                <option value="sale">For Sale</option>
+              </select>
+            </div>
+            <textarea id="homeDesc" rows="3" placeholder="Bedrooms, bathrooms, amenities…" class="${inputClass} resize-none"></textarea>
+            <input id="homeAddress" type="text" placeholder="Full Address" class="${inputClass}">
+            <div class="flex items-center gap-3 mt-1 mb-4 bg-white/5 rounded-2xl p-4">
+              <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer">
+                📢 Send push notification when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
+              </label>
+            </div>
+            <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold">
+              🏠 Post Home Listing
+            </button>
+          </div>
+          `}
+          <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Home Listings</p>
+          <div id="ownerHomesList"><div class="text-white/30 text-center py-8 text-sm">Loading…</div></div>
         </div>
+
+<!-- ═══ TAB: Analytics ════════════════════════════════════════════════════════ -->
+<div id="dtabContent-analytics" class="hidden">
+  ${!isPro ? `
+  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center">
+    <div class="text-5xl mb-4 opacity-50">📊</div>
+    <h3 class="text-xl font-bold mb-2">Business Analytics</h3>
+    <p class="text-white/60 mb-6 text-sm leading-relaxed">See how your listing is performing — profile views, notification reach, deal &amp; event engagement.</p>
+    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Profile view counts (30-day)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Notifications sent and credits used</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deal and event engagement</div>
+    </div>
+    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+      🚀 Upgrade to Business Pro
+    </button>
+  </div>
+  ` : `
+  <div id="analyticsContent">
+    <div class="text-white/30 text-center py-12 text-sm">Loading analytics…</div>
+  </div>
+  `}
+</div>
+
+<!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
+<div id="dtabContent-notifications" class="hidden">
+  ${!isPro ? `
+  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
+    <div class="text-5xl mb-4">📢</div>
+    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
+    <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
+    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
+    </div>
+    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+      🚀 Upgrade to Business Pro
+    </button>
+  </div>
+  ` : `
+  <div id="notificationsContent">
+    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
+  </div>
+  `}
+</div>
+
       </div>
     </div>`;
 
