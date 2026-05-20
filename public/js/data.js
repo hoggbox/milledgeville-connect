@@ -3209,7 +3209,7 @@ async function loadOwnerDashboard(content) {
         <div id="dtabContent-listing" class="tab-content">
           <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 space-y-6">
 
-            <!-- Existing business info fields -->
+            <!-- Business Info -->
             <div>
               <label class="block text-xs font-semibold text-white/50 mb-1">Business Name</label>
               <input id="ownerBizName" value="${biz.name || ''}" 
@@ -3235,13 +3235,20 @@ async function loadOwnerDashboard(content) {
                      class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
             </div>
 
+            <!-- HOURS — ONLY on Listing tab -->
+            <div>
+              <label class="block text-xs font-semibold text-white/50 mb-1">Hours (e.g. Mon-Fri 8am-5pm)</label>
+              <input id="ownerBizHours" value="${biz.hours || ''}" 
+                     class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+            </div>
+
             <div>
               <label class="block text-xs font-semibold text-white/50 mb-1">Description</label>
               <textarea id="ownerBizDescription" rows="3" 
                         class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 resize-none">${biz.description || ''}</textarea>
             </div>
 
-            <!-- NEW: Logo Upload Section -->
+            <!-- Logo Upload -->
             <div class="pt-4 border-t border-white/10">
               <h3 class="font-bold text-lg mb-4 flex items-center gap-2">🏷️ Business Logo</h3>
               
@@ -3261,7 +3268,6 @@ async function loadOwnerDashboard(content) {
               </div>
             </div>
 
-            <!-- Save Button -->
             <button onclick="saveOwnerBusinessChanges()" 
                     class="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
               💾 Save All Changes
