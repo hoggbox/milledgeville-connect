@@ -2445,45 +2445,34 @@ function sanitizeUser(user) {
   return u;
 }
 
-// ─── SAVE NATIVE FCM TOKEN (Aggressive Logging + Fixed) ─────────────────────
 router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
     const { token, platform = 'android' } = req.body;
-
-    if (!token) {
-      console.log('❌ [native-subscribe] No token received');
-      return res.status(400).json({ message: 'Token required' });
-    }
-
-    if (token.length < 50) {
-      console.log('❌ [native-subscribe] Token too short:', token.length);
+    if (!token || token.length < 100) {
       return res.status(400).json({ message: 'Invalid token' });
     }
 
-    console.log(`📲 [native-subscribe] RECEIVED token for user ${req.userId} | Length: ${token.length}`);
-
-    // Force save / update
     const sub = await PushSubscription.findOneAndUpdate(
       { user: req.userId },
-      {
-        user: req.userId,
-        nativeToken: token,
-        platform: platform,
-        updatedAt: new Date()
+      { 
+        $set: {
+          user: req.userId,
+          nativeToken: token,
+          platform: platform,
+          updatedAt: new Date()
+        }
       },
       { upsert: true, new: true }
     );
 
-    await User.findByIdAndUpdate(req.userId, { 
-      pushEnabled: true 
-    });
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
 
-    console.log(`✅ [native-subscribe] TOKEN SAVED SUCCESSFULLY for user ${req.userId}`);
-    res.json({ message: 'Native token saved', success: true });
+    console.log(`✅ Native token saved for user ${req.userId}`);
+    res.json({ message: 'Token saved', success: true });
 
   } catch (err) {
-    console.error('💥 [native-subscribe] CRASHED:', err.message);
-    res.status(500).json({ message: 'Server error saving token' });
+    console.error('Native subscribe error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

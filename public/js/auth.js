@@ -13,7 +13,6 @@ function showAuthModal(opts = {}) {
 
   modal.classList.remove('hidden');
 
-  // If a specific prompt message was requested, show it above the form
   if (opts.message) {
     let msgEl = document.getElementById('authPromptMsg');
     if (!msgEl) {
@@ -38,9 +37,7 @@ function showAuthModal(opts = {}) {
 
 function hideAuthModal() {
   const modal = document.getElementById('authModal');
-  if (modal) {
-    modal.classList.add('hidden');
-  }
+  if (modal) modal.classList.add('hidden');
 }
 
 function switchToLogin() {
@@ -93,7 +90,8 @@ async function handleRegister() {
       updateUserUI();
       hideAuthModal();
       loadPage('home');
-      // ─── Wire up native push for new accounts too ─────────────────────────
+      
+      // ─── Native push for new accounts ─────────────────────────
       if (typeof window.initPushAfterLogin === 'function') {
         setTimeout(() => window.initPushAfterLogin(), 800);
       }
@@ -116,8 +114,6 @@ async function handleLogin() {
     hideAuthModal();
 
     // ─── Native push: wire up FCM token after login ───────────────────────────
-    // initPushAfterLogin is defined in profile.js. It handles permission check,
-    // register(), and all 4 PushNotifications listeners. No-ops on web (non-Capacitor).
     if (typeof window.initPushAfterLogin === 'function') {
       setTimeout(() => window.initPushAfterLogin(), 800);
     }
@@ -129,7 +125,6 @@ async function handleLogin() {
 }
 
 // ─── updateUserUI ─────────────────────────────────────────────────────────────
-// Fallback — overridden by profile.js once it loads
 function updateUserUI() {
   renderNav();
 }
@@ -155,16 +150,17 @@ async function checkAuth() {
     if (result.user) {
       currentUser = result.user;
       updateUserUI();
+      
       // ─── Re-wire native push for returning logged-in users ──────────────────
-      // Small delay ensures profile.js has fully loaded and exposed initPushAfterLogin.
       if (typeof window.initPushAfterLogin === 'function') {
-        setTimeout(() => window.initPushAfterLogin(), 1000);
+        setTimeout(() => window.initPushAfterLogin(), 1200);  // Slightly longer delay
       }
     } else {
       localStorage.removeItem('token');
       updateUserUI();
     }
   } catch (e) {
+    console.warn('Auth check failed:', e);
     updateUserUI();
   }
 }
@@ -214,6 +210,7 @@ function showToast(message, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
+// ─── Exports ──────────────────────────────────────────────────────────────────
 window.showAuthModal           = showAuthModal;
 window.hideAuthModal           = hideAuthModal;
 window.switchToLogin           = switchToLogin;

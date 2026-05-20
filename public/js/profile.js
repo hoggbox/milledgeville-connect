@@ -230,19 +230,30 @@ window.initPushAfterLogin = async function() {
 };
 
 async function initNativePush() {
-  if (!window.Capacitor?.Plugins?.PushNotifications) return;
+  if (!window.Capacitor?.Plugins?.PushNotifications) {
+    console.log('❌ PushNotifications plugin not available');
+    return;
+  }
+
   const { PushNotifications } = window.Capacitor.Plugins;
 
   try {
-    const { receive } = await PushNotifications.checkPermissions();
-    if (receive !== 'granted') {
-      const { receive: newPerm } = await PushNotifications.requestPermissions();
-      if (newPerm !== 'granted') return;
+    console.log('🔍 Checking native push permissions...');
+    let perm = await PushNotifications.checkPermissions();
+    
+    if (perm.receive !== 'granted') {
+      console.log('Requesting permission...');
+      perm = await PushNotifications.requestPermissions();
     }
 
-    await PushNotifications.register();
+    if (perm.receive === 'granted') {
+      console.log('✅ Permission granted — registering...');
+      await PushNotifications.register();
+    } else {
+      console.warn('⚠️ Push permission denied by user');
+    }
   } catch (e) {
-    console.error('Native push init failed', e);
+    console.error('❌ initNativePush failed:', e);
   }
 }
 
@@ -741,6 +752,14 @@ async function saveProfile() {
 function escHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── AUTO INIT NATIVE PUSH ON APK STARTUP ─────────────────────────────
+if (window.Capacitor?.isNativePlatform()) {
+  console.log('📱 Detected native platform — auto-initializing push');
+  setTimeout(() => {
+    window.initPushAfterLogin?.();
+  }, 1200);
 }
 
 // ─── OTHER USER PROFILE MODAL ───────────────────────────────────────────────
