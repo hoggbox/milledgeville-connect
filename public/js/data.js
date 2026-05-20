@@ -3239,7 +3239,7 @@ const tabs = [
         <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <div class="text-xs opacity-75">Notification Credits</div>
-            <div class="text-4xl font-black">${credits}</div>
+            <div class="text-4xl font-black" data-credit-count>${credits}</div>
           </div>
           <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
         </div>
@@ -3526,7 +3526,7 @@ const tabs = [
 }
 
 window.switchDashTab = function (tabId) {
-  const allIds = ['listing', 'photos', 'menu', 'deals', 'events'];
+  const allIds = ['listing', 'photos', 'menu', 'deals', 'events', 'homes', 'notifications', 'analytics'];
   allIds.forEach(id => {
     const btn     = document.getElementById(`dtab-${id}`);
     const content = document.getElementById(`dtabContent-${id}`);
@@ -3543,9 +3543,12 @@ window.switchDashTab = function (tabId) {
         .trim() + ' text-white/50 hover:text-white hover:bg-white/10';
     }
   });
-  if (tabId === 'deals')  loadOwnerDeals();
-  if (tabId === 'events') loadOwnerEvents();
-  if (tabId === 'photos') renderOwnerPhotoGrid();
+  if (tabId === 'deals')         loadOwnerDeals();
+  if (tabId === 'events')        loadOwnerEvents();
+  if (tabId === 'photos')        renderOwnerPhotoGrid();
+  if (tabId === 'homes')         loadOwnerHomes();
+  if (tabId === 'notifications') loadOwnerNotificationsTab();
+  if (tabId === 'analytics')     loadOwnerAnalyticsTab();
 };
 
 window.saveOwnerBusinessChanges = async function () {
@@ -3599,6 +3602,12 @@ async function loadOwnerDeals() {
         </div>
         <button onclick="deleteOwnerDeal('${d._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
       </div>
+      <div class="mt-3 pt-3 border-t border-white/10">
+        <button onclick="sendItemNotification('deal','${d._id}','${esc(d.title)}')"
+                class="w-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 py-2.5 rounded-2xl text-sm font-semibold transition flex items-center justify-center gap-2">
+          📢 Send Notification <span class="text-amber-400/60 text-xs font-normal">(1 credit)</span>
+        </button>
+      </div>
     </div>`).join('');
 }
 
@@ -3624,6 +3633,12 @@ async function loadOwnerEvents() {
           ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${e.description}</div>` : ''}
         </div>
         <button onclick="deleteOwnerEvent('${e._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0">🗑️</button>
+      </div>
+      <div class="mt-3 pt-3 border-t border-white/10">
+        <button onclick="sendItemNotification('event','${e._id}','${esc(e.title)}')"
+                class="w-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 py-2.5 rounded-2xl text-sm font-semibold transition flex items-center justify-center gap-2">
+          📢 Send Notification <span class="text-emerald-400/60 text-xs font-normal">(1 credit)</span>
+        </button>
       </div>
     </div>`).join('');
 }
@@ -3697,6 +3712,122 @@ window.deleteOwnerEvent = async function (id) {
   showToast('Event deleted');
   loadOwnerEvents();
 };
+
+// ─── SEND NOTIFICATION FOR A SPECIFIC ITEM (Deal / Event / Marketplace) ──────
+// Costs 1 credit. Checks + deducts via checkNotificationCredits().
+window.sendItemNotification = async function(type, id, title) {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to send notifications.' });
+    return;
+  }
+
+  const typeLabels = { deal: '🔥 Deal', event: '📅 Event', market: '🛒 Marketplace' };
+  const pageMap    = { deal: 'deals',   event: 'events',  market: 'marketplace' };
+  const label = typeLabels[type] || '📢';
+  const page  = pageMap[type]  || 'home';
+
+  if (!confirm(`Send a push notification to all users about this ${type}?\n\n"${title}"\n\nThis will cost 1 credit.`)) return;
+
+  if (!(await checkNotificationCredits(1))) return;
+
+  try {
+    await broadcastPush(`${label}: ${title}`, `Tap to view on Milledgeville Connect`, { page, id });
+    showToast(`✅ Notification sent for "${title}"`, 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to send notification', 'error');
+  }
+};
+
+// ─── NOTIFICATIONS TAB LOADER ─────────────────────────────────────────────────
+async function loadOwnerNotificationsTab() {
+  const container = document.getElementById('notificationsContent');
+  if (!container) return;
+
+  const sub     = await apiGet('/owner/subscription').catch(() => ({}));
+  const isPro   = sub.tier === 'pro';
+  const credits = sub.credits ?? 0;
+
+  if (!isPro) {
+    container.innerHTML = `
+      <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center">
+        <div class="text-5xl mb-4">📢</div>
+        <h3 class="text-xl font-bold mb-2">Unlock Push Notifications</h3>
+        <p class="text-white/60 mb-6 text-sm">Upgrade to Business Pro to send push notifications directly to users' devices.</p>
+        <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-10 py-4 rounded-3xl font-bold shadow-xl">
+          🚀 Upgrade to Business Pro
+        </button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="space-y-5">
+      <!-- Credit meter -->
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-5 flex items-center justify-between">
+        <div>
+          <p class="text-xs text-white/50 uppercase tracking-wide mb-0.5">Credits Remaining</p>
+          <p class="text-4xl font-black" data-credit-count>${credits}</p>
+          <p class="text-xs text-white/40 mt-0.5">Resets monthly with your Pro subscription</p>
+        </div>
+        <button onclick="showCreditInfo()" class="text-xs underline text-white/50">How credits work →</button>
+      </div>
+
+      <!-- Custom notification form -->
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold text-base mb-1">📢 Send a Custom Notification</h3>
+        <p class="text-white/40 text-xs mb-4">Reaches all subscribed users. Costs <strong class="text-amber-400">2 credits</strong>.</p>
+
+        <input id="customTitle" type="text" placeholder="Notification title (e.g. Flash Sale Today!)"
+               class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 mb-3">
+        <textarea id="customBody" rows="3" placeholder="Notification body text…"
+                  class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none mb-4"></textarea>
+        <button onclick="sendCustomNotification()"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
+          📤 Send Notification (2 credits)
+        </button>
+      </div>
+
+      <p class="text-xs text-white/30 px-1">
+        💡 Tip: You can also send targeted notifications directly from your posted Deals and Events using the "📢 Send Notification" button on each card.
+      </p>
+    </div>`;
+}
+
+// ─── ANALYTICS TAB LOADER ────────────────────────────────────────────────────
+async function loadOwnerAnalyticsTab() {
+  const container = document.getElementById('analyticsContent');
+  if (!container) return;
+  container.innerHTML = `<div class="text-center text-white/30 py-16 text-sm">Loading analytics…</div>`;
+  try {
+    const data = await apiGet('/owner/analytics').catch(() => null);
+    if (!data) {
+      container.innerHTML = `<div class="text-center text-white/30 py-16 text-sm">Analytics data unavailable.</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
+          <p class="text-3xl font-black">${data.profileViews ?? '—'}</p>
+          <p class="text-xs text-white/50 mt-1">Profile Views (30d)</p>
+        </div>
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
+          <p class="text-3xl font-black">${data.notificationsSent ?? '—'}</p>
+          <p class="text-xs text-white/50 mt-1">Notifications Sent</p>
+        </div>
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
+          <p class="text-3xl font-black">${data.dealViews ?? '—'}</p>
+          <p class="text-xs text-white/50 mt-1">Deal Views</p>
+        </div>
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-6 text-center">
+          <p class="text-3xl font-black">${data.eventRSVPs ?? '—'}</p>
+          <p class="text-xs text-white/50 mt-1">Event RSVPs</p>
+        </div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `<div class="text-center text-red-400 py-16 text-sm">Failed to load analytics.</div>`;
+  }
+}
 
 // ─── CUTTING-EDGE ADMIN PANEL (2026 Style) ───────────────────────────────────
 async function loadAdminPage(content) {
@@ -4581,9 +4712,13 @@ window.showMarketplaceDetail = async function(id) {
           </div>
 
           ${isSeller ? `
-          <div class="p-6 border-t bg-amber-50 flex justify-end">
+          <div class="p-6 border-t bg-amber-50 flex gap-3 justify-end flex-wrap">
+            <button onclick="sendItemNotification('market','${esc(String(item._id))}','${esc(item.title)}')"
+                    class="flex-1 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3.5 rounded-3xl font-semibold transition flex items-center justify-center gap-2">
+              📢 Send Notification <span class="text-white/60 text-xs font-normal">(1 credit)</span>
+            </button>
             <button onclick="markMarketSold()" 
-                    class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+                    class="flex-1 bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
               Mark as Sold ✅
             </button>
           </div>` : ''}
@@ -6464,21 +6599,17 @@ window.sendCustomNotification = async function() {
     return;
   }
 
-  if (!(await canSendNotification(true))) {  // true = custom
-    showCreditPaywall(true);
-    return;
-  }
-
-  if (!await deductNotificationCredit(currentUser._id, 4, true)) {
-    showToast('Not enough credits', 'error');
-    return;
-  }
+  // Custom notifications cost 2 credits (deducted server-side inside checkNotificationCredits)
+  if (!(await checkNotificationCredits(2))) return;
 
   try {
     await broadcastPush(title, body, { page: 'home' });
     showToast('✅ Custom notification sent!', 'success');
+    document.getElementById('customTitle').value = '';
+    document.getElementById('customBody').value = '';
   } catch (e) {
-    showToast('Failed to send', 'error');
+    console.error(e);
+    showToast('Failed to send notification', 'error');
   }
 };
 
@@ -6587,16 +6718,48 @@ window.viewReportedContent = async function (type, id) {
   }
 };
 
-// Credit check helper for other posting functions
+// Credit check + deduction helper for posting functions
+// Returns true if the action is allowed (and credits have been deducted server-side).
+// Returns false if blocked (toast shown to user).
 async function checkNotificationCredits(required = 2) {
-  if (!currentUser || currentUser.subscriptionTier === 'pro') return true;
-
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  if ((sub.credits || 0) < required) {
-    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to post.' });
     return false;
   }
-  return true;
+
+  // Fetch live subscription state so we always have up-to-date credit balance
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
+  const isPro = sub.tier === 'pro';
+  const credits = sub.credits ?? 0;
+
+  // Pro users still consume credits — they just start with 50/month.
+  // If they somehow run out, block them too.
+  if (credits < required) {
+    if (isPro) {
+      showToast(`You need ${required} credits but only have ${credits} remaining this month. Credits reset on renewal.`, 'error');
+    } else {
+      showToast(`You need ${required} notification credits. Upgrade to Business Pro to get 50 credits/month!`, 'error');
+      setTimeout(() => buyProTier(), 1500);
+    }
+    return false;
+  }
+
+  // Deduct credits on the backend BEFORE the action proceeds
+  try {
+    const deductRes = await apiPost('/owner/credits/deduct', { amount: required });
+    if (deductRes.error || deductRes.message?.toLowerCase().includes('insufficient')) {
+      showToast(deductRes.message || 'Not enough credits', 'error');
+      return false;
+    }
+    // Update cached credit count in the Pro card if it's visible
+    const creditEl = document.querySelector('[data-credit-count]');
+    if (creditEl) creditEl.textContent = deductRes.credits ?? (credits - required);
+    return true;
+  } catch (e) {
+    console.error('[Credits] Deduction failed', e);
+    showToast('Could not verify credits — please try again', 'error');
+    return false;
+  }
 }
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
@@ -6890,26 +7053,8 @@ window.logout = function() {
 };
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM ─────────────────────────────────────
-window.sendCustomNotification = async function() {
-  const title = document.getElementById('customTitle')?.value.trim();
-  const body  = document.getElementById('customBody')?.value.trim();
-
-  if (!title || !body) {
-    showToast('Title and message are required', 'error');
-    return;
-  }
-
-  // TODO: We'll add real credit check next
-  try {
-    await broadcastPush(title, body, { page: 'home' });
-    showToast('✅ Custom notification sent!', 'success');
-    document.getElementById('customTitle').value = '';
-    document.getElementById('customBody').value = '';
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to send notification', 'error');
-  }
-};
+// NOTE: The canonical sendCustomNotification (with full credit gate) is defined
+// earlier in this file. This block intentionally left empty to avoid a duplicate.
 
 // Extra protection against any accidental double broadcast
 window.addEventListener('beforeunload', () => {
