@@ -382,24 +382,22 @@ router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => 
     const users = await User.find(query).select('_id pushEnabled');
 
     let sentCount = 0;
-    const processedUsers = new Set(); // Prevent duplicates
 
     for (const user of users) {
-      if (processedUsers.has(user._id.toString())) continue;
-      processedUsers.add(user._id.toString());
+      try {
+        await broadcastPush(
+          ownersOnly ? "📢 Owner Announcement" : "📢 Community Update",
+          safeMessage.length > 140 ? safeMessage.substring(0, 137) + '...' : safeMessage,
+          { 
+            page: 'home', 
+            url: 'https://milledgevilleconnect.com/app.html' 
+          }
+        );
 
-      if (!user.pushEnabled) continue;
-
-      await broadcastPush(
-        ownersOnly ? "📢 Owner Announcement" : "📢 Community Update",
-        safeMessage.length > 140 ? safeMessage.substring(0, 137) + '...' : safeMessage,
-        { 
-          page: 'home', 
-          url: 'https://milledgevilleconnect.com/app.html' 
-        }
-      );
-
-      sentCount++;
+        sentCount++;
+      } catch (e) {
+        console.error(`Failed to send to user ${user._id}:`, e);
+      }
     }
 
     res.json({ 
