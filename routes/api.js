@@ -577,12 +577,11 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// ─── FIXED & SIMPLE BROADCAST PUSH ───────────────────────────────────────────
+// ─── FIXED BROADCAST PUSH (No batch method - avoids firebase-admin bug) ─────
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
-    console.log(`🔥 BROADCAST: "${title}" | Filter:`, filter);
+    console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
 
-    // Get users who have push enabled + match any filter (e.g. notifyShoutouts: true)
     const query = { pushEnabled: true, ...filter };
     const users = await User.find(query).select('nativeToken');
 
@@ -597,23 +596,30 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
 
     console.log(`📤 Sending to ${tokens.length} devices...`);
 
-    const message = {
-      notification: { title, body },
-      data: {
-        page: data.page || 'home',
-        id:   data.id   || '',
-        ...data
-      },
-      android: { priority: 'high' }
-    };
+    let success = 0;
+    let failed = 0;
 
-    const response = await admin.messaging().sendMulticast({
-      ...message,
-      tokens
-    });
+    // Send individually (more reliable right now)
+    for (const token of tokens) {
+      try {
+        await admin.messaging().send({
+          token: token,
+          notification: { title, body },
+          data: {
+            page: data.page || 'home',
+            id:   data.id   || '',
+            ...data
+          },
+          android: { priority: 'high' }
+        });
+        success++;
+      } catch (err) {
+        failed++;
+        console.warn(`Failed for one token:`, err.message);
+      }
+    }
 
-    console.log(`✅ Broadcast complete → Success: ${response.successCount} | Failed: ${response.failureCount}`);
-
+    console.log(`✅ Broadcast done → Success: ${success} | Failed: ${failed}`);
     return true;
 
   } catch (err) {
