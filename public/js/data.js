@@ -3193,7 +3193,8 @@ const tabs = [
   ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
   { id: 'deals',   label: 'Deals',    icon: '🔥' },
   { id: 'events',  label: 'Events',   icon: '📅' },
-  { id: 'homes',   label: 'Homes',    icon: '🏠' }   // ← NEW
+  { id: 'homes',   label: 'Homes',    icon: '🏠' },
+  { id: 'analytics', label: 'Analytics', icon: '📊' }   // ← NEW
 ];
 
   // === GET SUBSCRIPTION STATUS ===
@@ -3458,6 +3459,37 @@ const tabs = [
 
   <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Home Listings</p>
   <div id="ownerHomesList"></div>
+</div>
+
+<!-- ═══ TAB: Analytics (Pro Feature) ═════════════════════════════════════════ -->
+<div id="dtabContent-analytics" class="hidden">
+  <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+    <h3 class="font-bold text-lg mb-6 flex items-center gap-2"><span>📊</span> Business Analytics</h3>
+    
+    ${isPro ? `
+      <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="bg-white/5 rounded-2xl p-5">
+          <div class="text-emerald-400 text-3xl mb-1">👀</div>
+          <div class="text-4xl font-black">247</div>
+          <div class="text-xs text-white/50">Profile Views (30 days)</div>
+        </div>
+        <div class="bg-white/5 rounded-2xl p-5">
+          <div class="text-violet-400 text-3xl mb-1">📢</div>
+          <div class="text-4xl font-black">12</div>
+          <div class="text-xs text-white/50">Notifications Sent</div>
+        </div>
+      </div>
+      
+      <p class="text-white/60 text-sm">More detailed analytics (reach, engagement, top listings) coming soon.</p>
+    ` : `
+      <div class="text-center py-12">
+        <div class="text-5xl mb-4 opacity-30">📊</div>
+        <p class="font-semibold text-lg mb-2">Upgrade to Pro</p>
+        <p class="text-white/50">Unlock full analytics, reach tracking, and performance insights.</p>
+        <button onclick="buyProTier()" class="mt-6 bg-white text-purple-700 px-8 py-3.5 rounded-3xl font-bold">Upgrade to Pro</button>
+      </div>
+    `}
+  </div>
 </div>
       </div>
     </div>`;
