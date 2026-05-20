@@ -79,18 +79,17 @@ function sanitizeBody(req, res, next) {
 }
 
 function securityHeaders(req, res, next) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "connect-src 'self'",
-    "frame-ancestors 'none'"
-  ].join('; '));
+res.setHeader('Content-Security-Policy', [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://www.gstatic.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  // Allow connections to Firebase/FCM and browser push endpoints
+  "connect-src 'self' https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseinstallations.googleapis.com https://identitytoolkit.googleapis.com",
+  // Required for the service worker that handles web push
+  "worker-src 'self'",
+  "frame-ancestors 'none'"
+].join('; '));
   next();
 }
 
