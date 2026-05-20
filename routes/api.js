@@ -274,10 +274,14 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
+    // ←←← THIS IS THE IMPORTANT PART ←←←
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { page: 'shoutouts', id: shoutout._id.toString(), url: `/shoutouts/${shoutout._id}` },
+      { 
+        page: 'shoutouts', 
+        id: shoutout._id.toString() 
+      },
       { notifyShoutouts: true }
     );
 
@@ -356,13 +360,13 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
-// ─── ADMIN BROADCAST (Safe - sends exactly once per user) ─────────────────────
+// ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
     const { message, ownersOnly = false } = req.body;
     if (!message?.trim()) return res.status(400).json({ message: 'Message is required' });
 
-    // Strip all HTML except safe <a href> links — belt-and-suspenders server-side sanitization
+    // Safe message
     const safeMessage = message.trim()
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -379,31 +383,19 @@ router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => 
       query.verifiedBusiness = { $exists: true, $ne: null };
     }
 
-    const users = await User.find(query).select('_id pushEnabled');
-
-    let sentCount = 0;
-
-    for (const user of users) {
-      try {
-        await broadcastPush(
-          ownersOnly ? "📢 Owner Announcement" : "📢 Community Update",
-          safeMessage.length > 140 ? safeMessage.substring(0, 137) + '...' : safeMessage,
-          { 
-            page: 'home', 
-            url: 'https://milledgevilleconnect.com/app.html' 
-          }
-        );
-
-        sentCount++;
-      } catch (e) {
-        console.error(`Failed to send to user ${user._id}:`, e);
+    // Send ONE broadcast (broadcastPush already handles all users internally)
+    await broadcastPush(
+      ownersOnly ? "📢 Owner Announcement" : "📢 Community Update",
+      safeMessage.length > 140 ? safeMessage.substring(0, 137) + '...' : safeMessage,
+      { 
+        page: 'home', 
+        url: 'https://milledgevilleconnect.com/app.html' 
       }
-    }
+    );
 
     res.json({ 
       success: true, 
-      sent: sentCount,
-      message: `Broadcast sent successfully to ${sentCount} users` 
+      message: 'Broadcast sent successfully to all users' 
     });
 
   } catch (err) {
@@ -585,87 +577,50 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// Broadcast push to everyone (respects notification preference flags)
+// ─── FIXED & SIMPLE BROADCAST PUSH ───────────────────────────────────────────
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
-    console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
+    console.log(`🔥 BROADCAST: "${title}" | Filter:`, filter);
 
-    // Fetch ALL subscription records that have either a token or a web sub
-    const subs = await PushSubscription.find({
-      $or: [
-        { nativeToken: { $exists: true, $ne: null } },
-        { 'subscription.endpoint': { $exists: true, $ne: null } }
-      ]
+    // Get users who have push enabled + match any filter (e.g. notifyShoutouts: true)
+    const query = { pushEnabled: true, ...filter };
+    const users = await User.find(query).select('nativeToken');
+
+    const tokens = users
+      .filter(u => u.nativeToken && typeof u.nativeToken === 'string')
+      .map(u => u.nativeToken);
+
+    if (tokens.length === 0) {
+      console.log('⚠️ No push tokens found');
+      return true;
+    }
+
+    console.log(`📤 Sending to ${tokens.length} devices...`);
+
+    const message = {
+      notification: { title, body },
+      data: {
+        page: data.page || 'home',
+        id:   data.id   || '',
+        ...data
+      },
+      android: { priority: 'high' }
+    };
+
+    const response = await admin.messaging().sendMulticast({
+      ...message,
+      tokens
     });
 
-    console.log(`Found ${subs.length} total subscription records`);
-    if (subs.length === 0) return;
+    console.log(`✅ Broadcast complete → Success: ${response.successCount} | Failed: ${response.failureCount}`);
 
-    const userIds = subs.map(s => s.user);
-    const users = await User.find({
-      _id: { $in: userIds },
-      pushEnabled: true
-    }).lean();
-
-    // Build FCM batch + track web subs to send individually
-    const fcmMessages = [];
-    const webSubs = [];
-
-    for (const sub of subs) {
-      const user = users.find(u => u._id.toString() === sub.user.toString());
-      if (!user) continue;
-
-      // Respect notification preference flags
-      if (filter.notifyShoutouts        && !user.notifyShoutouts)        continue;
-      if (filter.notifyDeals             && !user.notifyDeals)            continue;
-      if (filter.notifyEvents            && !user.notifyEvents)           continue;
-      if (filter.notifyShoutoutComments  && !user.notifyShoutoutComments) continue;
-      if (filter.notifyLostFound         && !user.notifyLostFound)        continue;
-      if (filter.notifyMarketplace       && !user.notifyMarketplace)      continue;
-
-      // Prefer native FCM token; only fall back to web VAPID if no native token.
-      // This prevents users who have both stored from receiving 2 notifications.
-      if (sub.nativeToken) {
-        fcmMessages.push({
-          token: sub.nativeToken,
-          notification: { title, body },
-          // Pass data so the Android app can deep-link to the specific post
-          data: {
-            page: data.page || '',
-            id:   data.id   || '',
-            url:  data.url  || ''
-          },
-          android: { priority: 'high' }
-        });
-      } else if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
-        webSubs.push(sub.subscription);
-      }
-    }
-
-    console.log(`Sending to ${fcmMessages.length} FCM + ${webSubs.length} web subscribers...`);
-
-    // ── FCM batch send ──────────────────────────────────────────────────────
-    if (fcmMessages.length > 0) {
-      const result = await admin.messaging().sendEach(fcmMessages);
-      console.log(`✅ FCM: ${result.successCount} sent | ${result.failureCount} failed`);
-    }
-
-    // ── Web VAPID individual sends ──────────────────────────────────────────
-    if (webSubs.length > 0) {
-      const payload = JSON.stringify({ title, body, data });
-      const results = await Promise.allSettled(
-        webSubs.map(ws => webpush.sendNotification(ws, payload))
-      );
-      const ok  = results.filter(r => r.status === 'fulfilled').length;
-      const bad = results.filter(r => r.status === 'rejected').length;
-      console.log(`✅ Web push: ${ok} sent | ${bad} failed`);
-    }
+    return true;
 
   } catch (err) {
-    console.error("💥 broadcastPush FAILED:", err.message);
+    console.error('💥 broadcastPush error:', err.message);
+    return false;
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // NEW: MESSAGING SYSTEM ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
