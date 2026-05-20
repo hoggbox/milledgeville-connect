@@ -226,7 +226,10 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
 }
 
 // Exposed globally so auth.js can call it right after a successful login
-window.initPushAfterLogin = _initNativePush;
+window.initPushAfterLogin = async function() {
+  console.log('🔄 initPushAfterLogin called');
+  await _initNativePush();
+};
 
 // ─── Profile Sheet ────────────────────────────────────────────────────────────
 function showProfileSheet() {
