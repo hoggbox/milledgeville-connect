@@ -577,7 +577,7 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// ─── BROADCAST PUSH (SIMPLE & RELIABLE) ───────────────────────────────────────
+// ─── BROADCAST PUSH - OLD RELIABLE METHOD ─────────────────────────────────────
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
     console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
@@ -593,34 +593,31 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       return;
     }
 
-    let success = 0;
-    let failed = 0;
+    let sent = 0;
 
     for (const sub of subs) {
       const user = sub.user;
       if (!user || !user.pushEnabled) continue;
-
-      // Filter by notification preference
       if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
 
       try {
-        await admin.messaging().send({
-          token: sub.nativeToken,
-          notification: { title, body },
+        await admin.messaging().sendToDevice(sub.nativeToken, {
+          notification: {
+            title: title,
+            body: body
+          },
           data: {
             page: data.page || 'shoutouts',
             id: data.id || ''
-          },
-          android: { priority: 'high' }
+          }
         });
-        success++;
+        sent++;
       } catch (e) {
-        failed++;
-        console.error("Failed to send to token:", e.message);
+        console.error("Failed to one token:", e.message);
       }
     }
 
-    console.log(`✅ FCM Sent: ${success} success | ${failed} failed`);
+    console.log(`✅ Sent to ${sent} devices using sendToDevice`);
 
   } catch (err) {
     console.error("💥 broadcastPush FAILED:", err.message);
