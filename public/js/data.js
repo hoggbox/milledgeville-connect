@@ -3235,13 +3235,6 @@ async function loadOwnerDashboard(content) {
                      class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
             </div>
 
-            <!-- HOURS — ONLY on Listing tab -->
-            <div>
-              <label class="block text-xs font-semibold text-white/50 mb-1">Hours (e.g. Mon-Fri 8am-5pm)</label>
-              <input id="ownerBizHours" value="${biz.hours || ''}" 
-                     class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
-            </div>
-
             <div>
               <label class="block text-xs font-semibold text-white/50 mb-1">Description</label>
               <textarea id="ownerBizDescription" rows="3" 
@@ -3268,25 +3261,23 @@ async function loadOwnerDashboard(content) {
               </div>
             </div>
 
+            <!-- Business Hours -->
+            <div>
+              <label class="block text-xs font-semibold text-white/50 mb-1">Business Hours</label>
+              <p class="text-white/35 text-xs mb-2">Format: <span class="font-mono text-white/50">Mon-Fri 9am-5pm • Sat 10am-3pm • Sun Closed</span></p>
+              <input id="ownerHours" type="text"
+                     placeholder="e.g. Mon-Fri 9am-5pm • Sat 10am-3pm"
+                     value="${biz.hours || ''}"
+                     class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+              <p class="text-white/30 text-xs mt-1 px-1">Drives the live Open/Closed badge on your business card.</p>
+            </div>
+
             <button onclick="saveOwnerBusinessChanges()" 
                     class="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
               💾 Save All Changes
             </button>
           </div>
         </div>
-
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4">
-            <h3 class="font-bold text-base mb-1 flex items-center gap-2"><span>🕐</span> Business Hours</h3>
-            <p class="text-white/35 text-xs mb-3">Format: <span class="font-mono text-white/50">Mon-Fri 9am-5pm • Sat 10am-3pm • Sun Closed</span></p>
-            <input id="ownerHours" type="text"
-                   placeholder="e.g. Mon-Fri 9am-5pm • Sat 10am-3pm"
-                   class="${inputClass}">
-            <p class="text-white/30 text-xs mb-4 -mt-1 px-1">Drives the live Open/Closed badge on your business card.</p>
-            <button onclick="saveOwnerHours()"
-                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold transition">
-              💾 Save Hours
-            </button>
-          </div>
 
         </div>
 
@@ -3383,16 +3374,6 @@ async function loadOwnerDashboard(content) {
       </div>
     </div>`;
 
-  // Pre-populate listing fields
-  if (currentUser && currentUser.verifiedBusiness) {
-    const biz = currentUser.verifiedBusiness;
-    document.getElementById('ownerName').value        = biz.name        || '';
-    document.getElementById('ownerAddress').value     = biz.address     || '';
-    document.getElementById('ownerPhone').value       = biz.phone       || '';
-    document.getElementById('ownerWebsite').value     = biz.website     || '';
-    document.getElementById('ownerDescription').value = biz.description || '';
-    document.getElementById('ownerHours').value       = biz.hours       || '';
-  }
 }
 
 window.switchDashTab = function (tabId) {
@@ -3418,23 +3399,26 @@ window.switchDashTab = function (tabId) {
   if (tabId === 'photos') renderOwnerPhotoGrid();
 };
 
-window.saveOwnerListing = async function () {
-  const name        = document.getElementById('ownerName').value.trim();
-  const address     = document.getElementById('ownerAddress').value.trim();
-  const phone       = document.getElementById('ownerPhone').value.trim();
-  const website     = document.getElementById('ownerWebsite').value.trim();
-  const description = document.getElementById('ownerDescription').value.trim();
-  const res = await apiPost('/owner/business', { name, address, phone, website, description }, 'PUT');
+window.saveOwnerBusinessChanges = async function () {
+  const name        = document.getElementById('ownerBizName')?.value.trim()        || '';
+  const phone       = document.getElementById('ownerBizPhone')?.value.trim()       || '';
+  const email       = document.getElementById('ownerBizEmail')?.value.trim()       || '';
+  const address     = document.getElementById('ownerBizAddress')?.value.trim()     || '';
+  const description = document.getElementById('ownerBizDescription')?.value.trim() || '';
+  const hours       = document.getElementById('ownerHours')?.value.trim()          || '';
+
+  const res = await apiPost('/owner/business', { name, phone, email, address, description, hours }, 'PUT');
   if (res._id) {
     currentUser.verifiedBusiness = res;
-    showToast('✅ Listing updated!');
+    showToast('✅ Listing saved!');
   } else {
     showToast(res.message || 'Error saving', 'error');
   }
 };
 
+// Keep saveOwnerHours as a standalone in case it's called elsewhere
 window.saveOwnerHours = async function () {
-  const hours = document.getElementById('ownerHours').value.trim();
+  const hours = document.getElementById('ownerHours')?.value.trim() || '';
   const res = await apiPost('/owner/business', { hours }, 'PUT');
   if (res._id) {
     currentUser.verifiedBusiness = res;
@@ -6256,11 +6240,11 @@ window.showOnboardingTour = function() {
   window.currentTourSlide = 1;
 };
 
-// ─── SINGLE NOTIFICATION WRAPPER ───────────────────────────────────────────
+// ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
 let isPostingShoutout = false;
 
 window.postShoutoutWithPhoto = async function() {
-  if (isPostingShoutout) return;   // ← Prevents double call
+  if (isPostingShoutout) return;   // Block double-tap / double-call
   isPostingShoutout = true;
 
   try {
@@ -6272,23 +6256,34 @@ window.postShoutoutWithPhoto = async function() {
       return;
     }
 
-    // Your existing photo + post logic here (whatever you had before)
-    // ... (keep your original code that collects images and calls apiPost)
+    const images = window._shoutoutImages || [];
 
-    const res = await apiPost('/shoutouts', { text, images: window._shoutoutImages || [] });
+    showToast('Posting...', 'success');
 
-    if (res._id) {
+    const res = await apiPost('/shoutouts', { 
+      text, 
+      images 
+    });
+
+    if (res && res._id) {
       showToast('🚦 Traffic alert posted!', 'success');
-      input.value = '';
+      
+      // Clear form
+      if (input) input.value = '';
       window._shoutoutImages = [];
-      document.getElementById('shoutoutImagePreviews').innerHTML = '';
-      loadShoutoutsPage(document.getElementById('content')); // refresh feed
+      const previewContainer = document.getElementById('shoutoutImagePreviews');
+      if (previewContainer) previewContainer.innerHTML = '';
+
+      // Refresh feed
+      loadShoutoutsPage(document.getElementById('content'));
+    } else {
+      showToast(res?.message || 'Failed to post', 'error');
     }
   } catch (e) {
     console.error(e);
-    showToast('Failed to post alert', 'error');
+    showToast('Network error — try again', 'error');
   } finally {
-    isPostingShoutout = false;   // Reset flag
+    isPostingShoutout = false;
   }
 };
 
@@ -6474,6 +6469,11 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
+
+// Extra protection against any accidental double broadcast
+window.addEventListener('beforeunload', () => {
+  isPostingShoutout = false;
+});
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
 // initPushAfterLogin is defined in profile.js (_initNativePush).
