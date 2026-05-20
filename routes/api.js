@@ -1394,9 +1394,24 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Title and body required' });
     }
 
+    // Must have a verified business
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can send notifications' });
+    }
+
+    // Server-side credit deduction (2 credits for custom notification)
+    const deducted = await deductNotificationCredit(req.userId, 2, true);
+    if (!deducted) {
+      return res.status(403).json({ message: 'Not enough notification credits. Upgrade to Business Pro.' });
+    }
+
     await broadcastPush(title.trim(), body.trim(), { page: 'home' });
 
-    res.json({ success: true, message: 'Notification sent' });
+    // Return updated credit balance so the frontend can refresh the display
+    const updated = await User.findById(req.userId).select('notificationCredits');
+    res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
   } catch (err) {
     console.error('Custom notification error:', err);
     res.status(500).json({ message: 'Failed to send notification' });

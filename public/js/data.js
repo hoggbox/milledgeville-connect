@@ -3677,7 +3677,7 @@ const tabs = [
 }
 
 window.switchDashTab = function (tabId) {
-  const allIds = ['listing', 'photos', 'menu', 'deals', 'events'];
+  const allIds = ['listing', 'photos', 'menu', 'deals', 'events', 'homes', 'notifications', 'analytics'];
   allIds.forEach(id => {
     const btn     = document.getElementById(`dtab-${id}`);
     const content = document.getElementById(`dtabContent-${id}`);
@@ -3694,9 +3694,90 @@ window.switchDashTab = function (tabId) {
         .trim() + ' text-white/50 hover:text-white hover:bg-white/10';
     }
   });
-  if (tabId === 'deals')  loadOwnerDeals();
-  if (tabId === 'events') loadOwnerEvents();
-  if (tabId === 'photos') renderOwnerPhotoGrid();
+  if (tabId === 'deals')         loadOwnerDeals();
+  if (tabId === 'events')        loadOwnerEvents();
+  if (tabId === 'photos')        renderOwnerPhotoGrid();
+  if (tabId === 'notifications') loadNotificationsTab();
+};
+
+// ─── NOTIFICATIONS TAB LOADER ────────────────────────────────────────────────
+async function loadNotificationsTab() {
+  const el = document.getElementById('notificationsContent');
+  if (!el) return;
+
+  // Show loading state
+  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
+
+  let credits = 0;
+  let tier = 'free';
+  try {
+    const sub = await apiGet('/owner/subscription');
+    credits = sub.credits ?? 0;
+    tier    = sub.tier   ?? 'free';
+  } catch (e) {
+    console.error('Failed to load subscription', e);
+  }
+
+  const isPro = tier === 'pro';
+
+  el.innerHTML = `
+    <div class="space-y-6 p-4">
+
+      <!-- Credit balance -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-white/50 mb-1">Available Credits</div>
+          <div class="text-3xl font-black text-white">${credits}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-white/40">Custom = 2 credits</div>
+          <div class="text-xs text-white/40">Template = 1 credit</div>
+          ${!isPro ? `<button onclick="buyProTier()" class="mt-2 text-xs text-violet-400 underline">Upgrade for more →</button>` : ''}
+        </div>
+      </div>
+
+      <!-- Custom notification form -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+        <h4 class="font-bold text-white">📢 Send Custom Notification</h4>
+        <p class="text-xs text-white/50">Broadcasts a push notification to all users with the app installed. Costs 2 credits.</p>
+        <input id="customTitle"
+               placeholder="Notification title (e.g. Big Sale Today!)"
+               class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500" />
+        <textarea id="customBody" rows="3"
+               placeholder="Message body (e.g. Stop by for 20% off all day!)"
+               class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+        <button onclick="sendCustomNotification()"
+                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all shadow-lg">
+          📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>
+        </button>
+      </div>
+
+      <!-- Quick templates -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+        <h4 class="font-bold text-white">⚡ Quick Templates <span class="text-xs font-normal text-white/40">(1 credit each)</span></h4>
+        <p class="text-xs text-white/50">Tap a template to pre-fill the form above, then customise and send.</p>
+        ${[
+          { label: '🔥 Daily Special',   title: 'Daily Special!',          body: "Don't miss today's special — come see us!" },
+          { label: '🎉 New Arrivals',     title: 'New Arrivals In Stock!',   body: 'Fresh inventory just arrived. Come check it out!' },
+          { label: '⏰ Closing Soon',    title: 'Closing Soon!',            body: "We close in 1 hour — stop by before we're done for the day." },
+          { label: '🏷️ Sale On Now',    title: 'Sale On Now!',             body: 'Big savings happening right now. Visit us today!' },
+          { label: '📅 Special Event',   title: 'Special Event This Week!', body: 'Join us for a special event — details inside!' },
+        ].map(t => `
+          <button onclick="applyNotifTemplate(${JSON.stringify(t.title)}, ${JSON.stringify(t.body)})"
+                  class="w-full text-left bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 transition-all">
+            ${t.label}
+          </button>`).join('')}
+      </div>
+
+    </div>`;
+}
+
+window.applyNotifTemplate = function(title, body) {
+  const titleEl = document.getElementById('customTitle');
+  const bodyEl  = document.getElementById('customBody');
+  if (titleEl) titleEl.value = title;
+  if (bodyEl)  bodyEl.value  = body;
+  showToast('Template applied — customise then send!', 'success');
 };
 
 window.saveOwnerBusinessChanges = async function () {
@@ -6640,7 +6721,7 @@ window.sendCustomNotification = async function() {
     return;
   }
 
-  // Credit check
+  // Client-side credit pre-check (2 credits for custom)
   const canSend = await window.canSendNotification(true);
   if (!canSend) {
     showToast('Not enough credits. Upgrade to Pro!', 'error');
@@ -6652,9 +6733,13 @@ window.sendCustomNotification = async function() {
 
     if (res.success) {
       showToast('✅ Custom notification sent to all users!', 'success');
-      // Clear form
       document.getElementById('customTitle').value = '';
       document.getElementById('customBody').value = '';
+      // Refresh the credit balance display if the backend returned it
+      if (res.credits !== undefined) {
+        const creditEl = document.querySelector('#notificationsContent .text-3xl.font-black');
+        if (creditEl) creditEl.textContent = res.credits;
+      }
     } else {
       showToast(res.message || 'Failed to send notification', 'error');
     }
@@ -6813,7 +6898,7 @@ window.canSendNotification = async function(isCustom = false) {
   try {
     const sub = await apiGet('/owner/subscription');
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const cost = isCustom ? 4 : 2;
+    const cost = isCustom ? 2 : 1;   // custom = 2 credits, template = 1 credit
     return credits >= cost;
   } catch (e) {
     console.error('Credit check failed', e);
@@ -7085,65 +7170,9 @@ window.logout = function() {
   window.location.reload();
 };
 
-// ─── CUSTOM NOTIFICATION + CREDIT SYSTEM ─────────────────────────────────────
-window.sendCustomNotification = async function() {
-  const title = document.getElementById('customTitle')?.value.trim();
-  const body  = document.getElementById('customBody')?.value.trim();
-
-  if (!title || !body) {
-    showToast('Title and message are required', 'error');
-    return;
-  }
-
-  // Credit check
-  if (!(await window.canSendNotification?.(true))) {
-    showToast('Not enough credits. Upgrade to Pro!', 'error');
-    return;
-  }
-
-  if (!await window.deductNotificationCredit?.(currentUser?._id, 4, true)) {
-    showToast('Not enough credits', 'error');
-    return;
-  }
-
-  try {
-    // Call the backend endpoint instead of direct function
-    const res = await apiPost('/owner/custom-notification', { title, body });
-    
-    if (res.success || res.message?.includes('sent')) {
-      showToast('✅ Custom notification sent to users!', 'success');
-      document.getElementById('customTitle').value = '';
-      document.getElementById('customBody').value = '';
-    } else {
-      showToast(res.message || 'Failed to send', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to send notification', 'error');
-  }
-};
-
-// Credit helpers (client-side wrappers)
-window.canSendNotification = async function(isCustom = false) {
-  if (!currentUser) return false;
-  try {
-    const sub = await apiGet('/owner/subscription');
-    const credits = sub.credits ?? 0;
-    const cost = isCustom ? 4 : 2;
-    return credits >= cost;
-  } catch (e) {
-    return false;
-  }
-};
-
-window.deductNotificationCredit = async function(userId, amount = 2, isCustom = false) {
-  try {
-    // For now we deduct on the server when sending — this is just a safety check
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
+// ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
+// Duplicate definitions removed to prevent the second copy from silently
+// overwriting the first and breaking the credit-check flow.
 
 // Extra protection against any accidental double broadcast
 window.addEventListener('beforeunload', () => {
