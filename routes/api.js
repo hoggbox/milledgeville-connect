@@ -360,6 +360,31 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
   }
 });
 
+// ─── CREDIT HELPERS ─────────────────────────────────────────────────────────
+window.isProUser = function() {
+  return !!(currentUser && currentUser.subscriptionTier === 'pro');
+};
+
+async function canSendNotification(isCustom = false) {
+  if (!currentUser) return false;
+
+  const cost = isCustom ? 4 : 2;
+
+  if (currentUser.subscriptionTier === 'pro') {
+    const data = await apiGet('/owner/subscription').catch(() => ({}));
+    const credits = data.credits ?? currentUser.notificationCredits ?? 0;
+    return credits >= cost;
+  }
+
+  // Free tier — only allow if they somehow have credits
+  return (currentUser.notificationCredits || 0) >= cost;
+}
+
+window.showCreditPaywall = function(isCustom = false) {
+  const cost = isCustom ? 4 : 2;
+  showToast(`🔒 Not enough credits.<br>You need <strong>${cost}</strong> credits for this notification.`, 'error');
+};
+
 // ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -2617,25 +2642,21 @@ router.get('/owner/subscription', authenticate, async (req, res) => {
 
 router.post('/owner/upgrade', authenticate, async (req, res) => {
   try {
-    const { orderId, productId } = req.body;
-    if (!orderId) return res.status(400).json({ message: 'Order ID required' });
-
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Activate Pro
     user.subscriptionTier = 'pro';
-    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-    user.notificationCredits = 50; // Generous starting credits
+    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    user.notificationCredits = 20;        // ← 20 credits
 
     await user.save();
 
     res.json({ 
       success: true, 
-      message: '🎉 Pro tier activated! Welcome to Business Pro.' 
+      message: '🎉 Business Pro Activated — 20 credits/month',
+      credits: 20
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -2677,16 +2698,26 @@ router.post('/user/delete-request', authenticate, async (req, res) => {
   }
 });
 
-// Credit check helper (used before sending notifications)
-async function deductNotificationCredit(userId, amount = 2) {
+// ─── CREDIT DEDUCTION SYSTEM ───────────────────────────────────────────────
+async function deductNotificationCredit(userId, amount = 2, isCustom = false) {
   const user = await User.findById(userId);
-  if (!user || user.subscriptionTier === 'pro') return true; // Pro = unlimited
+  if (!user) return false;
 
-  if ((user.notificationCredits || 0) < amount) {
+  const cost = isCustom ? 4 : 2;
+
+  if (user.subscriptionTier === 'pro') {
+    // Pro users can go slightly negative as grace period
+    user.notificationCredits = (user.notificationCredits || 0) - cost;
+    await user.save();
+    return true;
+  }
+
+  // Free users
+  if ((user.notificationCredits || 0) < cost) {
     return false;
   }
 
-  user.notificationCredits -= amount;
+  user.notificationCredits -= cost;
   await user.save();
   return true;
 }

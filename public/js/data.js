@@ -3194,6 +3194,7 @@ const tabs = [
   { id: 'deals',   label: 'Deals',    icon: '🔥' },
   { id: 'events',  label: 'Events',   icon: '📅' },
   { id: 'homes',   label: 'Homes',    icon: '🏠' },
+  { id: 'custom', label: 'Custom Notification', icon: '✍️' },
   { id: 'analytics', label: 'Analytics', icon: '📊' }   // ← NEW
 ];
 
@@ -3491,6 +3492,24 @@ const tabs = [
     `}
   </div>
 </div>
+        <!-- ═══ TAB: Custom Notification ═══════════════════════════════════════════════ -->
+        <div id="dtabContent-custom" class="tab-content hidden">
+          <div class="bg-white/10 rounded-3xl p-8">
+            <h2 class="text-2xl font-bold mb-2">✍️ Send Custom Notification</h2>
+            <p class="text-white/60 mb-6">Costs <strong>4 credits</strong></p>
+            
+            <input id="customTitle" placeholder="Notification Title" 
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 mb-4 text-lg">
+            
+            <textarea id="customBody" rows="5" placeholder="Write your message here..." 
+                      class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4"></textarea>
+            
+            <button onclick="sendCustomNotification()" 
+                    class="mt-6 w-full bg-emerald-600 hover:bg-emerald-700 py-5 rounded-3xl font-semibold text-lg">
+              🚀 Send Custom Notification (4 credits)
+            </button>
+          </div>
+        </div>
       </div>
     </div>`;
 
@@ -6426,6 +6445,33 @@ window.postShoutoutWithPhoto = async function() {
   }
 };
 
+window.sendCustomNotification = async function() {
+  const title = document.getElementById('customTitle').value.trim();
+  const body  = document.getElementById('customBody').value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  if (!(await canSendNotification(true))) {  // true = custom
+    showCreditPaywall(true);
+    return;
+  }
+
+  if (!await deductNotificationCredit(currentUser._id, 4, true)) {
+    showToast('Not enough credits', 'error');
+    return;
+  }
+
+  try {
+    await broadcastPush(title, body, { page: 'home' });
+    showToast('✅ Custom notification sent!', 'success');
+  } catch (e) {
+    showToast('Failed to send', 'error');
+  }
+};
+
 window.nextOnboardingSlide = function() {
   const slide1  = document.getElementById('slide1');
   const slide2  = document.getElementById('slide2');
@@ -6831,6 +6877,26 @@ window.logout = function() {
   localStorage.removeItem('token');
   currentUser = null;
   window.location.reload();
+};
+
+// ─── Custom Notification Sender ─────────────────────────────────────────────
+window.sendCustomNotification = async function() {
+  const title = document.getElementById('customTitle').value.trim();
+  const body  = document.getElementById('customBody').value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  try {
+    await broadcastPush(title, body, { page: 'home' });
+    showToast('✅ Custom notification sent!', 'success');
+    document.getElementById('customTitle').value = '';
+    document.getElementById('customBody').value = '';
+  } catch (e) {
+    showToast('Failed to send notification', 'error');
+  }
 };
 
 // Extra protection against any accidental double broadcast
