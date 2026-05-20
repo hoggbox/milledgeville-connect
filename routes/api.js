@@ -2665,6 +2665,25 @@ router.post('/owner/upgrade', authenticate, async (req, res) => {
   }
 });
 
+// ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
+router.post('/user/delete-request', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Mark for deletion (soft delete - don't delete immediately)
+    user.deletionRequestedAt = new Date();
+    user.deletionReason = req.body.reason || 'No reason provided';
+    await user.save();
+
+    // TODO: Send email to admin (you) for review
+
+    res.json({ message: 'Account deletion request submitted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Credit check helper (used before sending notifications)
 async function deductNotificationCredit(userId, amount = 2) {
   const user = await User.findById(userId);

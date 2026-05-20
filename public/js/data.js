@@ -6711,6 +6711,74 @@ window.postHomeListing = async function() {
   }
 };
 
+// ─── DELETE ACCOUNT FEATURE ─────────────────────────────────────────────────
+window.showDeleteAccountModal = function() {
+  const html = `
+    <div id="deleteAccountModal" onclick="if(event.target.id==='deleteAccountModal') hideDeleteAccountModal()" 
+         class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000]">
+      <div onclick="event.stopImmediatePropagation()" 
+           class="bg-zinc-900 border border-red-500/30 rounded-3xl max-w-md w-full mx-4 p-6">
+        
+        <div class="text-center">
+          <div class="text-5xl mb-4">⚠️</div>
+          <h2 class="text-2xl font-bold text-red-400 mb-2">Delete Account?</h2>
+          <p class="text-white/70 leading-relaxed">
+            This will permanently delete your account, all posts, messages, listings, and data.<br><br>
+            <strong>This action cannot be undone.</strong>
+          </p>
+        </div>
+
+        <div class="mt-8">
+          <textarea id="deleteReason" rows="3" placeholder="Reason for deletion (optional)"
+                    class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-4 text-white placeholder:text-white/40 focus:outline-none"></textarea>
+        </div>
+
+        <div class="flex gap-3 mt-8">
+          <button onclick="hideDeleteAccountModal()" 
+                  class="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-semibold transition">
+            Cancel
+          </button>
+          <button onclick="confirmAccountDeletion()" 
+                  class="flex-1 py-4 bg-red-600 hover:bg-red-700 rounded-2xl font-semibold transition">
+            Yes, Delete My Account
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.hideDeleteAccountModal = function() {
+  const modal = document.getElementById('deleteAccountModal');
+  if (modal) modal.remove();
+};
+
+window.confirmAccountDeletion = async function() {
+  const reason = document.getElementById('deleteReason')?.value.trim() || 'No reason provided';
+
+  if (!confirm("FINAL WARNING: This will permanently delete your account and all data. Are you 100% sure?")) {
+    return;
+  }
+
+  try {
+    const res = await apiPost('/user/delete-request', { reason });
+    
+    if (res.message) {
+      showToast('🗑️ Account deletion requested. You will receive an email confirmation.', 'success');
+      hideDeleteAccountModal();
+      
+      // Optional: Log user out after request
+      setTimeout(() => {
+        localStorage.removeItem('token');
+        window.location.reload();
+      }, 2000);
+    }
+  } catch (e) {
+    showToast('Failed to submit deletion request', 'error');
+  }
+};
+
 // ─── PRO USER ANALYTICS STUB (expand later) ───────────────────────────────
 window.showProAnalytics = function() {
   showToast("📊 Pro Analytics coming soon:\n• Notification reach\n• Profile views\n• Listing performance", "success");
