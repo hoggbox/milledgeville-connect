@@ -2654,6 +2654,14 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// VAPID Public Key for Web Push
+router.get('/push/vapid-public-key', (req, res) => {
+  if (!process.env.VAPID_PUBLIC_KEY) {
+    return res.status(500).json({ message: 'VAPID not configured' });
+  }
+  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
 // ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
 router.post('/user/delete-request', authenticate, async (req, res) => {
   try {

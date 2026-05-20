@@ -422,14 +422,12 @@ ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center
 }
 
 // Initialise the push toggle in the profile sheet.
-// Handles both native Capacitor (FCM) and web push (VAPID) paths.
 async function _initSheetPushToggle() {
   const toggle   = document.getElementById('sheetPushToggle');
   const statusEl = document.getElementById('sheetPushStatus');
   if (!toggle) return;
 
   const native = isNativePlatform();
-  console.log('🔔 Native platform in toggle:', native);
 
   if (native) {
     toggle.checked = true;
@@ -440,7 +438,7 @@ async function _initSheetPushToggle() {
       toggle.disabled = true;
 
       if (enabling) {
-        await _initNativePush();
+        await initNativePush();           // Correct - using the new function
         if (statusEl) statusEl.textContent = '✅ Notifications on';
         showToast('✅ Push notifications enabled!');
       } else {
@@ -450,21 +448,10 @@ async function _initSheetPushToggle() {
       toggle.disabled = false;
     };
   } else {
+    // Web push
     const hasSub = await _browserHasPushSubscription();
     toggle.checked = hasSub;
     if (statusEl) statusEl.textContent = hasSub ? '✅ Notifications on' : 'Tap to enable';
-  }
-}
-
-function hideProfileSheet() {
-  const sheet = document.getElementById('profileSheet');
-  if (!sheet) return;
-  const panel = document.getElementById('profileSheetPanel');
-  if (panel) {
-    panel.classList.add('translate-y-full');
-    setTimeout(() => { sheet.classList.add('hidden'); }, 300);
-  } else {
-    sheet.classList.add('hidden');
   }
 }
 
