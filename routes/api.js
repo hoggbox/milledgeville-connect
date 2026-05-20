@@ -577,12 +577,11 @@ if (sub.nativeToken) {
   return sent;
 }
 
-// ─── BROADCAST PUSH (FINAL WORKING VERSION) ───────────────────────────────────
+// ─── BROADCAST PUSH (SIMPLE & RELIABLE) ───────────────────────────────────────
 async function broadcastPush(title, body, data = {}, filter = {}) {
   try {
     console.log(`🔥 BROADCAST STARTED: "${title}" | filter:`, filter);
 
-    // Query PushSubscription where tokens actually live
     const subs = await PushSubscription.find({
       nativeToken: { $exists: true, $ne: null }
     }).populate('user');
@@ -594,37 +593,34 @@ async function broadcastPush(title, body, data = {}, filter = {}) {
       return;
     }
 
-    const messages = [];
+    let success = 0;
+    let failed = 0;
 
     for (const sub of subs) {
       const user = sub.user;
       if (!user || !user.pushEnabled) continue;
 
-      // Respect user notification preferences
+      // Filter by notification preference
       if (filter.notifyShoutouts && !user.notifyShoutouts) continue;
-      if (filter.notifyDeals && !user.notifyDeals) continue;
-      if (filter.notifyEvents && !user.notifyEvents) continue;
-      if (filter.notifyLostFound && !user.notifyLostFound) continue;
-      if (filter.notifyMarketplace && !user.notifyMarketplace) continue;
 
-      messages.push({
-        token: sub.nativeToken,
-        notification: { title, body },
-        data: {
-          page: data.page || 'shoutouts',
-          id: data.id || ''
-        },
-        android: { priority: 'high' }
-      });
+      try {
+        await admin.messaging().send({
+          token: sub.nativeToken,
+          notification: { title, body },
+          data: {
+            page: data.page || 'shoutouts',
+            id: data.id || ''
+          },
+          android: { priority: 'high' }
+        });
+        success++;
+      } catch (e) {
+        failed++;
+        console.error("Failed to send to token:", e.message);
+      }
     }
 
-    if (messages.length === 0) {
-      console.log('⚠️ No users matched the filter');
-      return;
-    }
-
-    const result = await admin.messaging().sendEach(messages);
-    console.log(`✅ FCM Sent: ${result.successCount} success | ${result.failureCount} failed`);
+    console.log(`✅ FCM Sent: ${success} success | ${failed} failed`);
 
   } catch (err) {
     console.error("💥 broadcastPush FAILED:", err.message);
