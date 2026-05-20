@@ -6256,6 +6256,42 @@ window.showOnboardingTour = function() {
   window.currentTourSlide = 1;
 };
 
+// ─── SINGLE NOTIFICATION WRAPPER ───────────────────────────────────────────
+let isPostingShoutout = false;
+
+window.postShoutoutWithPhoto = async function() {
+  if (isPostingShoutout) return;   // ← Prevents double call
+  isPostingShoutout = true;
+
+  try {
+    const input = document.getElementById('shoutoutInput');
+    const text = input ? input.value.trim() : '';
+
+    if (!text) {
+      showToast('Please write a traffic alert', 'error');
+      return;
+    }
+
+    // Your existing photo + post logic here (whatever you had before)
+    // ... (keep your original code that collects images and calls apiPost)
+
+    const res = await apiPost('/shoutouts', { text, images: window._shoutoutImages || [] });
+
+    if (res._id) {
+      showToast('🚦 Traffic alert posted!', 'success');
+      input.value = '';
+      window._shoutoutImages = [];
+      document.getElementById('shoutoutImagePreviews').innerHTML = '';
+      loadShoutoutsPage(document.getElementById('content')); // refresh feed
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to post alert', 'error');
+  } finally {
+    isPostingShoutout = false;   // Reset flag
+  }
+};
+
 window.nextOnboardingSlide = function() {
   const slide1  = document.getElementById('slide1');
   const slide2  = document.getElementById('slide2');
