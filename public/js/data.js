@@ -2048,6 +2048,8 @@ async function loadShoutoutsPage(content) {
                 class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm" 
                 placeholder="What's happening in Milledgeville?"></textarea>
 
+
+                
               <!-- Photo picker -->
               <div class="mt-3 flex items-center gap-3">
                 <button onclick="document.getElementById('shoutoutImageInput').click()" 
@@ -2060,7 +2062,7 @@ async function loadShoutoutsPage(content) {
               </div>
 
               <div class="flex justify-end mt-4">
-                <button onclick="postShoutoutWithPhoto()" 
+                <button onclick="handleShoutoutPost()" 
                         class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-2xl text-sm font-semibold transition">
                   Post Traffic Alert
                 </button>
@@ -3294,6 +3296,8 @@ async function loadOwnerDashboard(content) {
 
   const biz        = currentUser && currentUser.verifiedBusiness;
   const bizCatName = biz?.category?.name || (typeof biz?.category === 'string' ? biz.category : '') || '';
+    // Get subscription info for credits display
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
 
   const selectStyle = 'background:#1e293b;color-scheme:dark;';
   const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
@@ -3320,8 +3324,55 @@ async function loadOwnerDashboard(content) {
     { id: 'events',  label: 'Events',   icon: '📅' },
   ];
 
+  // Get subscription info
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
+
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
+
+      <!-- PRO TIER BANNER -->
+      <div class="mb-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
+              ⭐ PRO TIER
+            </div>
+            <h2 class="text-3xl font-bold">Business Pro — $19.99/mo</h2>
+            <p class="text-white/80 mt-2">Boosted visibility • Analytics</p>
+            
+            <!-- Live Credits -->
+            <div class="mt-4 bg-white/20 rounded-2xl px-5 py-3 flex items-center gap-3">
+              <span class="text-3xl">💎</span>
+              <div>
+                <div class="text-xs opacity-75">Credits Remaining</div>
+                <div class="text-3xl font-bold">${sub.credits || 0}</div>
+              </div>
+            </div>
+          </div>
+          
+          ${sub.tier === 'pro' ? 
+            `<div class="text-right"><div class="text-emerald-300 font-bold">ACTIVE</div><div class="text-sm">until ${new Date(sub.expires).toLocaleDateString()}</div></div>` :
+            `<button onclick="buyProTier()" class="bg-white text-purple-700 px-8 py-4 rounded-3xl font-bold hover:bg-white/90 transition">Upgrade Now</button>`
+          }
+        </div>
+      </div>
+          ${sub.tier === 'pro' ? 
+            `<div class="text-right"><div class="text-emerald-300 font-bold">ACTIVE</div><div class="text-sm">until ${new Date(sub.expires).toLocaleDateString()}</div></div>` :
+            `<button onclick="buyProTier()" class="bg-white text-purple-700 px-8 py-4 rounded-3xl font-bold hover:bg-white/90 transition">Upgrade Now</button>`
+          }
+        </div>
+      </div>
+
+      <!-- Notification Credits -->
+      <div class="mb-8 bg-white/10 border border-white/20 rounded-3xl p-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="text-sm text-white/60">Notification Credits</div>
+            <div class="text-5xl font-bold mt-1">${sub.credits || 0}</div>
+          </div>
+          <button onclick="showNotificationCreditInfo()" class="text-emerald-400 text-sm underline">How credits work →</button>
+        </div>
+      </div>
 
       <!-- ─── Header ───────────────────────────────────────────────────────── -->
       <div class="px-4 pt-2 pb-4">
@@ -6785,6 +6836,82 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
+
+// CREDIT CHECK FOR SHOUTOUTS / NOTIFICATIONS
+async function checkNotificationCredits(required = 2) {
+  if (!currentUser || currentUser.subscriptionTier === 'pro') return true;
+
+  try {
+    const sub = await apiGet('/owner/subscription');
+    if ((sub.credits || 0) < required) {
+      showToast('Not enough notification credits. Upgrade to Pro!', 'error');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return true; // fail open if API is down
+  }
+}
+
+// ─── NOTIFICATION CREDITS INFO MODAL ─────────────────────────────────────────
+window.showNotificationCreditInfo = function() {
+  const html = `
+    <div id="creditModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[99999] p-4">
+      <div class="bg-white text-slate-900 max-w-md w-full rounded-3xl p-8">
+        <h2 class="text-2xl font-bold mb-6">How Notification Credits Work</h2>
+        
+        <div class="space-y-6 text-sm">
+          <div>
+            <div class="font-semibold text-emerald-600 mb-2">FREE Tier</div>
+            <p class="text-slate-600">10 credits per month</p>
+          </div>
+          
+          <div>
+            <div class="font-semibold text-violet-600 mb-2">PRO Tier — $19.99/mo</div>
+            <p class="text-slate-600">50 credits per month + boosted visibility</p>
+          </div>
+
+          <div class="pt-4 border-t">
+            <p class="font-medium mb-3">Credit Costs:</p>
+            <ul class="space-y-2 text-slate-600">
+              <li>• Template Notification (New Deal, Event, etc.) = <strong>1 credit</strong></li>
+              <li>• Custom Notification = <strong>2 credits</strong></li>
+              <li>• Homes for Rent/Sale post = <strong>2 credits</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <button onclick="document.getElementById('creditModal').remove()" 
+                class="w-full mt-8 bg-emerald-600 text-white py-4 rounded-3xl font-semibold">
+          Got it
+        </button>
+      </div>
+    </div>`;
+
+// ─── CREDIT CHECK WRAPPER FOR SHOUTOUTS ─────────────────────────────────────
+window.handleShoutoutPost = async function() {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to post traffic alerts.' });
+    return;
+  }
+
+  if (currentUser.subscriptionTier === 'pro') {
+    postShoutoutWithPhoto();
+    return;
+  }
+
+  // Free user credit check
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
+  if ((sub.credits || 0) < 2) {
+    showToast('Not enough notification credits. Upgrade to Pro!', 'error');
+    return;
+  }
+
+  postShoutoutWithPhoto();
+};
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
 // initPushAfterLogin is defined in profile.js (_initNativePush).

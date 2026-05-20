@@ -126,7 +126,19 @@
   <script src="/js/nav.js"></script>
   <script src="/js/profile.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/billing.js"></script>
   <script src="/js/main.js"></script>
+
+  <!-- Force re-attach auth handlers for APK -->
+  <script>
+    setTimeout(() => {
+      if (typeof window.showAuthModal === 'function') {
+        window.showAuthModal = showAuthModal;
+        window.handleLogin = handleLogin;
+        window.handleRegister = handleRegister;
+      }
+    }, 800);
+  </script>
 
   <script>
     // PWA Install Prompt

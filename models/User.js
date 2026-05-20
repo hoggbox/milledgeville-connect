@@ -83,7 +83,17 @@ const userSchema = new mongoose.Schema({
   blockedUsers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }]
+  }],
+
+  // ─── BUSINESS PRO TIER ─────────────────────────────────────────────────────
+  subscriptionTier: { 
+    type: String, 
+    enum: ['free', 'pro'], 
+    default: 'free' 
+  },
+  subscriptionExpiry: { type: Date, default: null },
+  notificationCredits: { type: Number, default: 10 },
+  lastCreditReset: { type: Date, default: Date.now }
 });
 
 userSchema.pre('save', async function (next) {

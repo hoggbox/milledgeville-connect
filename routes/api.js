@@ -2712,6 +2712,45 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BUSINESS PRO TIER + GOOGLE PLAY BILLING
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/owner/subscription', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json({
+      tier: user.subscriptionTier || 'free',
+      credits: user.notificationCredits || 0,
+      expires: user.subscriptionExpiry
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/owner/upgrade', authenticate, async (req, res) => {
+  try {
+    const { orderId, productId } = req.body;
+    if (!orderId) return res.status(400).json({ message: 'Order ID required' });
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.subscriptionTier = 'pro';
+    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    user.notificationCredits = 50;
+    await user.save();
+
+    res.json({ success: true, message: '🎉 Pro tier activated!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ─── NOTE: Dangerous-field blocking is handled by Sanitize.js sanitizeBody
 // middleware on every request. The sanitizeContent helper is also imported from
 // Sanitize.js. No duplicate local version needed.
