@@ -5,6 +5,13 @@ let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
 
+// Directory pagination state
+let _directoryPage = 1;
+const DIRECTORY_PAGE_SIZE = 8;
+let allMarketplaceItems = [];
+let _marketplacePage = 1;
+const MARKETPLACE_PAGE_SIZE = 8;
+
 // ─── App-wide constants ───────────────────────────────────────────────────────
 
 function esc(str) {
@@ -1411,9 +1418,16 @@ function renderDirectory(businesses) {
     return;
   }
 
+  // Pagination logic
+  const totalPages = Math.ceil(businesses.length / DIRECTORY_PAGE_SIZE);
+  _directoryPage = Math.max(1, Math.min(_directoryPage, totalPages));
+
+  const start = (_directoryPage - 1) * DIRECTORY_PAGE_SIZE;
+  const pageItems = businesses.slice(start, start + DIRECTORY_PAGE_SIZE);
+
   let html = '<div class="space-y-4">';
-  businesses.forEach(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
+  pageItems.forEach(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
@@ -1433,10 +1447,33 @@ function renderDirectory(businesses) {
       </div>`;
   });
   html += '</div>';
+
+  // Pagination controls
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="directoryPageNav(-1)" ${_directoryPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-40 text-sm font-medium transition">
+          ← Prev
+        </button>
+        <span class="text-xs text-white/50">Page ${_directoryPage} of ${totalPages}</span>
+        <button onclick="directoryPageNav(1)" ${_directoryPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-40 text-sm font-medium transition">
+          Next →
+        </button>
+      </div>`;
+  }
+
   container.innerHTML = html;
 }
 
+function directoryPageNav(dir) {
+  _directoryPage += dir;
+  renderDirectory(allBusinesses);
+}
+
 function filterDirectory() {
+  _directoryPage = 1;
   const searchTerm = (document.getElementById('directorySearch')?.value || '').toLowerCase();
   const filtered = allBusinesses.filter(b =>
     b.name.toLowerCase().includes(searchTerm) ||
@@ -1447,9 +1484,11 @@ function filterDirectory() {
 }
 
 async function filterByCategory(catId) {
+  _directoryPage = 1;
   const filtered = allBusinesses.filter(b => b.category && b.category._id === catId);
   renderDirectory(filtered);
 }
+
 // ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
 async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
@@ -5600,7 +5639,7 @@ async function renderMarketplacePage() {
 
   container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
 
-  let filtered = allMarketplaceItems;
+  let filtered = allMarketplaceItems || [];
 
   if (window.currentMarketSearch) {
     filtered = filtered.filter(item => 
@@ -5609,16 +5648,26 @@ async function renderMarketplacePage() {
     );
   }
 
-  if (window.currentMarketFilter !== 'all') {
+  if (window.currentMarketFilter && window.currentMarketFilter !== 'all') {
     filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
   }
 
-  if (filtered.length === 0) {
+  // === PAGINATION (8 per page) ===
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / MARKETPLACE_PAGE_SIZE) || 1;
+  _marketplacePage = Math.max(1, Math.min(_marketplacePage || 1, totalPages));
+
+  const start = (_marketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + MARKETPLACE_PAGE_SIZE);
+
+  if (pageItems.length === 0) {
     container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+    const pagContainer = document.getElementById('marketPagination');
+    if (pagContainer) pagContainer.innerHTML = '';
     return;
   }
 
-  let html = filtered.map(item => `
+  let html = pageItems.map(item => `
     <div onclick="showMarketplaceDetail('${item._id}')" 
          class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
       <div class="flex gap-4">
@@ -5655,47 +5704,15 @@ async function renderMarketplacePage() {
   `).join('');
 
   container.innerHTML = html;
-}
 
-function renderMarketPagination(p) {
-  const container = document.getElementById('marketPagination');
-  if (!p.totalPages || p.totalPages <= 1) {
-    container.innerHTML = '';
-    return;
-  }
-
-  let html = `
-    <button onclick="changeMarketPage(${Math.max(1, window.currentMarketPage-1)})" 
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
-      ← Prev
-    </button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeMarketPage(${Math.min(p.totalPages, window.currentMarketPage+1)})" 
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
-      Next →
-    </button>`;
-
-  container.innerHTML = html;
-}
-
-window.changeMarketPage = function(page) {
-  window.currentMarketPage = page;
-  renderMarketplacePage();
-};
-
-window.filterAndRenderMarketplace = function() {
-  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
-  window.currentMarketPage = 1;
-  renderMarketplacePage();
-};
-
-// Simple debounce helper
-function debounce(func, delay) {
-  let timeout;
-  return function() {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, arguments), delay);
+  // Show pagination controls
+  const paginationData = {
+    currentPage: _marketplacePage,
+    totalPages: totalPages,
+    hasPrev: _marketplacePage > 1,
+    hasNext: _marketplacePage < totalPages
   };
+  renderMarketPagination(paginationData);
 }
 
 // ─── SAFE LOADERS FOR ORIGINAL PANELS ─────────────────────────────────────
@@ -5781,6 +5798,29 @@ async function markMessagesAsRead(inboxMsgs = null) {
   } catch (e) {
     console.warn('⚠️ markMessagesAsRead partial failure:', e);
   }
+}
+
+function renderMarketPagination(p) {
+  const container = document.getElementById('marketPagination');
+  if (!container) return;
+
+  if (!p || !p.totalPages || p.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <button onclick="changeMarketPage(${Math.max(1, p.currentPage - 1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeMarketPage(${Math.min(p.totalPages, p.currentPage + 1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+
+  container.innerHTML = html;
 }
 
 async function renderMessagesList(tab) {
@@ -7978,6 +8018,11 @@ window.markStillThere = async function (shoutoutId) {
   } else {
     showToast(res.message || 'Error confirming alert', 'error');
   }
+};
+
+window.changeMarketPage = function(page) {
+  _marketplacePage = page;
+  renderMarketplacePage();
 };
 
 // ─── CLEARED — mark a traffic alert as resolved ───────────────────────────────
