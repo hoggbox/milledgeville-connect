@@ -5073,6 +5073,31 @@ window.hideMarketModal = function() {
   if (modal) modal.remove();
 };
 
+window.postMarketplaceComment = async function(itemId) {
+  const input = document.getElementById('marketCommentInput');
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!requireAuth('Sign in to comment')) return;
+
+  try {
+    await apiPost(`/marketplace/${itemId}/comments`, { text });
+    input.value = '';
+    showToast('Comment posted');
+
+    // Refresh comments
+    const res = await apiGet(`/marketplace/${itemId}`);
+    const container = document.getElementById('marketCommentsContainer');
+    if (container && res.comments) {
+      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
+    }
+  } catch (e) {
+    showToast('Failed to post comment', 'error');
+  }
+};
+
 window.postMarketplaceItem = async function() {
   const category  = document.getElementById('marketCategory')?.value;
   const title     = document.getElementById('marketTitle')?.value.trim();
@@ -5198,17 +5223,24 @@ window.showMarketplaceDetail = async function(id) {
               <span>${timeAgo(item.createdAt)}</span>
             </div>
 
-            <div class="mt-10">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-semibold text-lg">💬 Comments</h3>
-                ${!isSeller && item.seller ? `
-                  <button onclick="showComposeMessageModal('${item.seller._id || item.seller}', '${esc(item.seller.name || 'Seller')}')" 
-                          class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-2xl font-medium">
-                    ✉️ Message Seller
-                  </button>` : ''}
-              </div>
-              <div id="marketCommentsContainer" class="space-y-4"></div>
-            </div>
+<div class="mt-10">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="font-semibold text-lg">💬 Comments</h3>
+  </div>
+
+  <!-- Comment Input -->
+  <div class="flex gap-2 mb-4">
+    <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
+           class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400"
+           onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
+    <button onclick="postMarketplaceComment('${item._id}')" 
+            class="bg-emerald-600 hover:bg-emerald-700 px-6 rounded-2xl text-sm font-semibold transition">
+      Post
+    </button>
+  </div>
+
+  <div id="marketCommentsContainer" class="space-y-4"></div>
+</div>
           </div>
 
           ${isSeller ? `
@@ -7133,68 +7165,34 @@ function renderComments(comments = [], containerId, contentType, contentId) {
   if (!container) return;
 
   if (!comments || comments.length === 0) {
-    container.innerHTML = `
-      <p class="text-white/40 text-center py-6">No comments yet — be the first!</p>
-      ${renderCommentInput(contentType, contentId)}
-    `;
+    container.innerHTML = `<p class="text-white/40 text-center py-6">No comments yet — be the first!</p>`;
     return;
   }
 
-  const key = containerId;
-  if (!_commentVisibleCount[key]) _commentVisibleCount[key] = 5;
-
-  const visibleCount = Math.min(_commentVisibleCount[key], comments.length);
-  const visibleComments = comments.slice(0, visibleCount);
-  const remaining = comments.length - visibleCount;
-
   let html = '<div class="space-y-3">';
 
-  visibleComments.forEach(c => {
+  comments.forEach(c => {
     const authorId = c.authorId?._id || c.authorId;
     const authorName = c.author || c.authorName || 'Anonymous';
 
     html += `
       <div class="bg-white/10 rounded-2xl p-4">
-        <div class="flex items-center justify-between">
+        <div class="flex justify-between items-center">
           <div onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
                class="font-medium cursor-pointer hover:underline text-emerald-400">
             ${esc(authorName)}
           </div>
-          <button onclick="event.stopImmediatePropagation(); reportContent('comment', '${c._id}', '${esc(c.text || '').substring(0,80)}')" 
-                  class="text-xs text-red-400 hover:text-red-500 transition">
-            🚩 Report
+          <button onclick="event.stopImmediatePropagation(); reportContent('comment', '${c._id}')" 
+                  class="text-xs text-red-400 hover:text-red-500">
+            🚩
           </button>
         </div>
         <p class="text-white/90 mt-1.5">${esc(c.text)}</p>
-        <div class="flex items-center justify-between mt-2">
-          <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
-        </div>
+        <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
       </div>`;
   });
 
   html += '</div>';
-
-  // View more / Show less controls
-  if (comments.length > 5) {
-    html += `
-      <div class="flex justify-center gap-4 mt-3">
-        ${visibleCount < comments.length ? `
-          <button onclick="viewMoreComments('${containerId}', ${contentType}, '${contentId}', ${comments.length})" 
-                  class="text-sm text-emerald-400 hover:text-emerald-300 font-medium">
-            View more comments (${remaining} more)
-          </button>` : ''}
-
-        ${visibleCount > 5 ? `
-          <button onclick="showLessComments('${containerId}', ${contentType}, '${contentId}')" 
-                  class="text-sm text-white/50 hover:text-white/70 font-medium">
-            Show less
-          </button>` : ''}
-      </div>`;
-  }
-
-  // Comment input
-  html += renderCommentInput(contentType, contentId);
-
   container.innerHTML = html;
 }
 
