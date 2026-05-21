@@ -4,6 +4,10 @@ let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
+// ─── DIRECTORY PAGINATION STATE ─────────────────────────────────────────────
+let directoryCurrentPage = 1;
+const DIRECTORY_PAGE_SIZE = 8;
+let currentDirectoryBusinesses = [];
 
 // ─── App-wide constants ───────────────────────────────────────────────────────
 
@@ -1227,11 +1231,6 @@ window.loadDirectoryAndOpen = async function (businessId) {
   showBusinessDetail(businessId);
 };
 
-// Directory Pagination
-let directoryCurrentPage = 1;
-const DIRECTORY_PAGE_SIZE = 8;
-let currentDirectoryBusinesses = [];
-
 async function loadDirectoryPage(content) {
   // Paint the shell instantly — user sees the page right away
   content.innerHTML = `
@@ -1371,11 +1370,21 @@ function getOpenStatus(hoursStr) {
   }
 }
 
+function goToDirectoryPage(page) {
+  const totalPages = Math.ceil(currentDirectoryBusinesses.length / DIRECTORY_PAGE_SIZE);
+  if (page < 1 || page > totalPages) return;
+
+  directoryCurrentPage = page;
+  renderDirectory(currentDirectoryBusinesses);
+}
+
+// Make sure the function is globally available
+window.goToDirectoryPage = goToDirectoryPage;
+
 function renderDirectory(businesses) {
   const container = document.getElementById('directoryResults');
   if (!container) return;
 
-  // Store the full list for pagination
   currentDirectoryBusinesses = businesses || [];
 
   if (currentDirectoryBusinesses.length === 0) {
@@ -1383,15 +1392,14 @@ function renderDirectory(businesses) {
     return;
   }
 
-  // Calculate pagination
   const totalPages = Math.ceil(currentDirectoryBusinesses.length / DIRECTORY_PAGE_SIZE);
-  directoryCurrentPage = Math.min(directoryCurrentPage, totalPages); // safety
+  directoryCurrentPage = Math.min(directoryCurrentPage, totalPages);
 
   const start = (directoryCurrentPage - 1) * DIRECTORY_PAGE_SIZE;
   const pageBusinesses = currentDirectoryBusinesses.slice(start, start + DIRECTORY_PAGE_SIZE);
 
-  // Render business cards
   let html = '<div class="space-y-4">';
+
   pageBusinesses.forEach(b => {
     const isPro = b.owner && b.owner.subscriptionTier === 'pro';
 
@@ -1413,9 +1421,10 @@ function renderDirectory(businesses) {
         </div>
       </div>`;
   });
+
   html += '</div>';
 
-  // Add pagination controls
+  // Pagination controls
   if (totalPages > 1) {
     html += `
       <div class="flex items-center justify-between mt-6 px-1">
@@ -6173,6 +6182,7 @@ window.showBusinessDetail    = showBusinessDetail;
 window.hideBusinessModal     = hideBusinessModal;
 window.switchAdminTab        = switchAdminTab;
 window.renderDirectory       = renderDirectory;
+window.goToDirectoryPage   = goToDirectoryPage;
 window.getDirections = function(address) {
   if (!address) {
     showToast('No address available for this business', 'error');
