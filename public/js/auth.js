@@ -72,7 +72,9 @@ async function handleRegister() {
   const email    = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPassword').value;
 
-  if (!name || !email || !password) return alert('All fields are required');
+  if (!name || !email || !password) {
+    return showToast('All fields are required', 'error');
+  }
 
   const result = await apiPost('/auth/register', { name, email, password });
 
@@ -84,6 +86,7 @@ async function handleRegister() {
         Account Created!<br>
         <span class="text-xl text-slate-600">Logging you in...</span>`;
     }
+
     setTimeout(() => {
       setToken(result.token);
       currentUser = result.user;
@@ -91,13 +94,12 @@ async function handleRegister() {
       hideAuthModal();
       loadPage('home');
       
-      // ─── Native push for new accounts ─────────────────────────
       if (typeof window.initPushAfterLogin === 'function') {
         setTimeout(() => window.initPushAfterLogin(), 800);
       }
     }, 1600);
   } else {
-    alert(result.message || 'Registration failed');
+    showToast(result.message || 'Registration failed', 'error');
   }
 }
 

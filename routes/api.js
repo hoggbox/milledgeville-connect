@@ -1426,29 +1426,44 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
   }
 });
 
-// ─── ORIGINAL ROUTES (everything below this is your original code unchanged) ───
+// ─── REGISTER ───────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ message: 'All fields required' });
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) return res.status(400).json({ message: 'Email already in use' });
+    if (!name?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
 
-    const registrationIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) return res.status(409).json({ message: 'Email already in use' });
 
-    // Check if this IP is banned
-    const ipBanned = await User.findOne({ isIpBanned: true, registrationIp });
-    if (ipBanned) return res.status(403).json({ message: 'Registration not allowed.' });
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user  = await User.create({ name, email, password, registrationIp });
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    const u = sanitizeUser(user);
-    u.isAdmin = ADMIN_EMAILS.has(user.email);
-    res.json({ token, user: u });
+    const newUser = await User.create({
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      notificationCredits: 0,        // ← Normal users start with 0
+      subscriptionTier: 'free'
+    });
+
+    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+    res.json({ 
+      token, 
+      user: {
+        _id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        notificationCredits: newUser.notificationCredits,
+        subscriptionTier: newUser.subscriptionTier
+      }
+    });
+
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: 'Registration failed' });
   }
 });
 
@@ -2626,11 +2641,26 @@ router.post('/admin/claims/:id/decision', authenticate, requireAdmin, async (req
     claim.status = decision;
     await claim.save();
 
-    if (decision === 'approved') {
-      const isRestaurant = claim.verificationInfo?.isRestaurant === true;
-      await Business.findByIdAndUpdate(claim.business._id, { owner: claim.user._id, isRestaurant });
-      await User.findByIdAndUpdate(claim.user._id, { verifiedBusiness: claim.business._id });
+if (decision === 'approved') {
+  const isRestaurant = claim.verificationInfo?.isRestaurant === true;
+
+  await Business.findByIdAndUpdate(claim.business._id, { 
+    owner: claim.user._id, 
+    isRestaurant 
+  });
+
+  const user = await User.findById(claim.user._id);
+  if (user) {
+    user.verifiedBusiness = claim.business._id;
+    
+    // Give 5 starting credits ONLY when they become a verified business owner
+    if (user.notificationCredits === 0 || user.notificationCredits === undefined) {
+      user.notificationCredits = 5;
     }
+    
+    await user.save();
+  }
+}
 
     res.json({ message: `Claim ${decision}` });
   } catch (err) {
@@ -2965,41 +2995,33 @@ function sanitizeContent(fields = {}) {
   return out;
 }
 
-// ─── BUSINESS PRO TIER + GOOGLE PLAY BILLING ───────────────────────────────
-
+// ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
 router.get('/owner/subscription', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    // Only verified business owners get credits
+    if (!user.verifiedBusiness) {
+      return res.json({
+        tier: 'free',
+        credits: 0,
+        expires: null
+      });
+    }
+
+    // Default to 10 credits if they have no field yet (Pro tier gets more)
+    const credits = user.notificationCredits !== undefined ? user.notificationCredits : 10;
+
     res.json({
       tier: user.subscriptionTier || 'free',
-      credits: user.notificationCredits || 0,
+      credits: credits,
       expires: user.subscriptionExpiry
     });
+
   } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.post('/owner/upgrade', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    user.subscriptionTier = 'pro';
-    user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    user.notificationCredits = 12;        // ← Changed to 12
-
-    await user.save();
-
-    res.json({ 
-      success: true, 
-      message: '🎉 Business Pro Activated — $29.99/mo (12 credits/month)',
-      credits: 12
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
