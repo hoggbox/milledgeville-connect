@@ -2489,7 +2489,8 @@ function renderShoutoutCard(s) {
             </button>
           </div>
         </div>
-        <!-- Comment Section -->
+      </div>
+      <!-- Comment Section -->
 <div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4 space-y-3">
   ${comments.map(c => renderCommentRow(c, s._id)).join('')}
   ${currentUser ? `
@@ -2510,7 +2511,6 @@ function renderShoutoutCard(s) {
       <button onclick="showAuthModal()" class="text-emerald-400 hover:underline">Sign in</button> to comment
     </p>`}
 </div>
-      </div>
     </div>`;
 }
 
