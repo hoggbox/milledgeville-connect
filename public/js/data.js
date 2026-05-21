@@ -27,25 +27,24 @@ function sanitizeBroadcast(raw) {
   return safe;
 }
 
-// ─── Facebook-style Hover Tooltip for Likes / Still There ─────────────────────
+// ─── Facebook-style Hover Tooltip ─────────────────────
 let _tooltipEl = null;
 
 window.showVoterTooltip = function(element, voters = []) {
   if (_tooltipEl) _tooltipEl.remove();
-
   if (!voters || voters.length === 0) return;
 
   const names = voters.map(v => {
     if (typeof v === 'string') return v;
     return v?.name || v?.author || 'Someone';
-  }).slice(0, 8); // show max 8 names
+  }).slice(0, 8);
 
   const more = voters.length > 8 ? ` +${voters.length - 8} more` : '';
 
   _tooltipEl = document.createElement('div');
   _tooltipEl.className = 'fixed z-[99999] bg-zinc-900 text-white text-xs px-3 py-2 rounded-xl shadow-xl border border-white/10 max-w-[220px]';
   _tooltipEl.innerHTML = `
-    <div class="font-semibold mb-1 text-emerald-400">Liked by</div>
+    <div class="font-semibold mb-1 text-emerald-400">Confirmed by</div>
     <div class="text-white/90 leading-snug">${names.join(', ')}${more}</div>
   `;
 
@@ -55,20 +54,13 @@ window.showVoterTooltip = function(element, voters = []) {
   _tooltipEl.style.left = `${rect.left + window.scrollX}px`;
   _tooltipEl.style.top = `${rect.bottom + window.scrollY + 6}px`;
 
-  // Auto hide after 4 seconds
   setTimeout(() => {
-    if (_tooltipEl) {
-      _tooltipEl.remove();
-      _tooltipEl = null;
-    }
-  }, 4000);
+    if (_tooltipEl) { _tooltipEl.remove(); _tooltipEl = null; }
+  }, 4500);
 };
 
 window.hideVoterTooltip = function() {
-  if (_tooltipEl) {
-    _tooltipEl.remove();
-    _tooltipEl = null;
-  }
+  if (_tooltipEl) { _tooltipEl.remove(); _tooltipEl = null; }
 };
 
 /** Returns true if the currently logged-in user is a site admin. */
@@ -2455,11 +2447,8 @@ function renderShoutoutCard(s) {
           <!-- Actions Bar -->
           <div class="flex items-center justify-between mt-4 pt-3 border-t border-white/10 text-xs">
             <div class="flex gap-5 text-white/70">
-              <button onclick="likeShoutout('${s._id}')" 
-              class="flex items-center gap-1 hover:text-white transition"
-              onmouseenter="showVoterTooltip(this, ${JSON.stringify(s.likes || s.stillThereVoters || [])})"
-              onmouseleave="hideVoterTooltip()">
-              ❤️ <span id="like-count-${s._id}">${likeCount}</span>
+              <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+                ❤️ <span id="like-count-${s._id}">${likeCount}</span>
               </button>
               <button onclick="commentOnShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
                 💬 ${commentCount}
@@ -2476,6 +2465,35 @@ function renderShoutoutCard(s) {
               🚩 Report
             </button>
           </div>
+
+          <!-- Still There + Cleared Voting -->
+          ${!isCleared ? `
+          <div class="flex gap-2 mt-3">
+            <button id="still-there-btn-${s._id}"
+                    onclick="markStillThere('${s._id}')"
+                    onmouseenter="showVoterTooltip(this, ${JSON.stringify(stillThereVoters)})"
+                    onmouseleave="hideVoterTooltip()"
+                    class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-medium transition
+                           ${hasVotedStillThere ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/70 hover:text-emerald-400 hover:bg-white/5'}">
+              👀 Still There 
+              <span id="still-there-label-${s._id}">(${stillThereCount})</span>
+            </button>
+
+            <button id="clear-btn-${s._id}"
+                    onclick="markCleared('${s._id}')"
+                    onmouseenter="showVoterTooltip(this, ${JSON.stringify(clearedBy)})"
+                    onmouseleave="hideVoterTooltip()"
+                    class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-medium transition
+                           ${hasVotedCleared ? 'text-green-400 bg-green-500/10' : 'text-white/70 hover:text-green-400 hover:bg-white/5'}">
+              ✅ Cleared 
+              <span id="clear-label-${s._id}">(${clearCount}/8)</span>
+            </button>
+          </div>
+          ` : `
+          <div class="mt-3 flex items-center gap-2 text-green-400 text-xs bg-green-500/10 px-3 py-2 rounded-2xl">
+            ✅ <span>Community marked this alert as cleared</span>
+          </div>
+          `}
         </div>
       </div>
     </div>`;
