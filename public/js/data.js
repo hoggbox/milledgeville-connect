@@ -3392,10 +3392,10 @@ const tabs = [
           <div class="flex justify-between items-center">
             <div>
               <div class="text-sm text-white/60">Notification Credits</div>
-              <div id="ownerCreditCount" class="text-5xl font-bold mt-1">${sub.credits || credits || 0}</div>
+              <div id="ownerCreditCount" class="text-5xl font-bold mt-1">${sub.credits || 0}</div>
             </div>
             
-            ${ (sub.credits || credits || 0) > 0 ? `
+            ${ (sub.credits || 0) > 0 ? `
               <button onclick="showCreditInfo()" 
                       class="text-emerald-400 text-sm underline">How credits work →</button>
             ` : `
@@ -3404,8 +3404,8 @@ const tabs = [
             `}
           </div>
 
-          ${ (sub.credits || credits || 0) === 0 ? `
-            <p class="text-amber-400 text-sm mt-4 leading-snug">
+          ${ (sub.credits || 0) === 0 ? `
+            <p class="text-amber-400 text-sm mt-4">
               You've used your free credits.<br>
               Buy more or upgrade to Pro for 12 monthly credits.
             </p>
@@ -7116,14 +7116,16 @@ window.handleOwnerLogoUpload = async function(input) {
   }
 };
 
-// Client-side credit helpers
+// ─── CREDIT CHECK (Fixed) ───────────────────────────────────────────────────
 window.canSendNotification = async function(isCustom = false) {
-  if (!currentUser) return false;
+  if (!currentUser?.verifiedBusiness) return true; // normal users have no credit system
+
   try {
-    const sub = await apiGet('/owner/subscription');
+    const sub = await apiGet('/owner/subscription').catch(() => ({}));
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
-    return credits >= cost;
+
+    // Verified owners can use their starter 5 credits even if not Pro
+    return credits > 0;
   } catch (e) {
     console.error('Credit check failed', e);
     return false;
