@@ -3405,6 +3405,18 @@ const tabs = [
         ` : credits === 0 && !isPro ? `
           <p class="text-white/70 text-xs mt-3 text-center">Your 5 free starter credits have been used. Upgrade to Pro for 12 credits/month.</p>
         ` : ''}
+
+        <!-- Free Sponsored Post Perk -->
+        <div class="mt-4 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm">
+          <div class="flex items-center gap-2 text-emerald-300">
+            <span>📣</span>
+            <span class="font-semibold">Pro Perk:</span>
+          </div>
+          <p class="text-white/80 text-xs mt-1 leading-snug">
+            You get <span class="font-semibold text-white">1 free sponsored post per month</span> in the Milledgeville Facebook group (45k members).<br>
+            Message <span class="font-medium">@imhoggbox</span> or use the Admin panel to request it.
+          </p>
+        </div>
       </div>
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->

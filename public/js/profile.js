@@ -543,28 +543,59 @@ function showEditProfileModal() {
           <div class="text-right text-xs text-slate-400 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
         </div>
 
-        <!-- Notification preferences -->
-        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-4">
+        <!-- Notification preferences - Major Overhaul -->
+        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-5">
           <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notification Preferences</p>
 
-          <!-- In-app toggles -->
-          ${[
-            { id: 'ep-notifyDeals',           label: '🔥 New Deals',                    checked: u.notifyDeals !== false },
-            { id: 'ep-notifyEvents',          label: '📅 Upcoming Events',               checked: u.notifyEvents !== false },
-            { id: 'ep-notifyShoutouts',       label: '🚗 New Traffic Alerts',            checked: !!u.notifyShoutouts },
-            { id: 'ep-notifyShoutoutComments',label: '💬 Comments on Traffic Alerts',    checked: !!u.notifyShoutoutComments },
-          ].map(n => `
-            <label class="flex items-center justify-between cursor-pointer select-none">
-              <span class="text-sm font-medium text-slate-700">${n.label}</span>
-              <div class="relative">
-                <input type="checkbox" id="${n.id}" ${n.checked ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
-                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
-              </div>
-            </label>`).join('')}
+          <!-- Marketplace Notifications -->
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-sm font-semibold text-slate-700">🛒 Marketplace</span>
+            </div>
+            <div class="space-y-2 pl-1">
+              ${[
+                { id: 'ep-prefHomes',     label: '🏠 Homes & Apartments', checked: u.marketplacePreferences?.homes !== false },
+                { id: 'ep-prefCars',      label: '🚗 Vehicles',           checked: u.marketplacePreferences?.cars !== false },
+                { id: 'ep-prefFurniture', label: '🪑 Furniture & Home',   checked: u.marketplacePreferences?.furniture !== false },
+                { id: 'ep-prefOther',     label: '📦 Other Items',        checked: u.marketplacePreferences?.other !== false },
+              ].map(n => `
+                <label class="flex items-center justify-between cursor-pointer select-none text-sm">
+                  <span class="text-slate-700">${n.label}</span>
+                  <div class="relative">
+                    <input type="checkbox" id="${n.id}" ${n.checked ? 'checked' : ''} class="sr-only peer">
+                    <div class="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
+                    <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                  </div>
+                </label>`).join('')}
+            </div>
+          </div>
 
-          <!-- Push notification master toggle -->
-          <div class="border-t border-emerald-200 pt-4 mt-2">
+          <!-- Community & Alerts -->
+          <div class="pt-3 border-t border-emerald-200">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-sm font-semibold text-slate-700">🚦 Community & Alerts</span>
+            </div>
+            <div class="space-y-2 pl-1">
+              ${[
+                { id: 'ep-notifyDeals',           label: '🔥 New Deals',                    checked: u.notifyDeals !== false },
+                { id: 'ep-notifyEvents',          label: '📅 Upcoming Events',               checked: u.notifyEvents !== false },
+                { id: 'ep-notifyShoutouts',       label: '🚗 New Traffic Alerts',            checked: !!u.notifyShoutouts },
+                { id: 'ep-notifyShoutoutComments',label: '💬 Comments on Traffic Alerts',    checked: !!u.notifyShoutoutComments },
+                { id: 'ep-notifyLostFound',       label: '🔎 Lost & Found Updates',          checked: u.notifyLostFound !== false },
+              ].map(n => `
+                <label class="flex items-center justify-between cursor-pointer select-none text-sm">
+                  <span class="text-slate-700">${n.label}</span>
+                  <div class="relative">
+                    <input type="checkbox" id="${n.id}" ${n.checked ? 'checked' : ''} class="sr-only peer">
+                    <div class="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
+                    <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                  </div>
+                </label>`).join('')}
+            </div>
+          </div>
+
+          <!-- Push Notifications -->
+          <div class="pt-3 border-t border-emerald-200">
             <label for="ep-pushEnabled" class="flex items-start justify-between gap-3 ${pushSupported && !pushBlocked ? 'cursor-pointer' : ''} select-none">
               <div class="flex-1">
                 <p class="text-sm font-semibold text-slate-700">🔔 Push Notifications</p>
@@ -572,8 +603,8 @@ function showEditProfileModal() {
               </div>
               <div class="relative flex-shrink-0 mt-0.5">
                 <input type="checkbox" id="ep-pushEnabled" class="sr-only peer" ${!pushSupported || pushBlocked ? 'disabled' : ''}>
-                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${!pushSupported || pushBlocked ? 'opacity-40' : ''}"></div>
-                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
+                <div class="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${!pushSupported || pushBlocked ? 'opacity-40' : ''}"></div>
+                <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
               </div>
             </label>
           </div>
@@ -744,6 +775,15 @@ async function saveProfile() {
 
     pushEnabled: pushIsOn,
   };
+
+  // Save Marketplace sub-category preferences
+  const marketplacePrefs = {
+    homes:     document.getElementById('ep-prefHomes')?.checked ?? true,
+    cars:      document.getElementById('ep-prefCars')?.checked ?? true,
+    furniture: document.getElementById('ep-prefFurniture')?.checked ?? true,
+    other:     document.getElementById('ep-prefOther')?.checked ?? true,
+  };
+  apiPost('/user/marketplace-preferences', marketplacePrefs).catch(() => {});
 
   if (pendingAvatarData !== undefined) payload.avatar = pendingAvatarData;
 
