@@ -580,66 +580,84 @@ if (sub.nativeToken) {
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
+// Sends exactly ONE notification per user:
+//   • If the user has a native FCM token → use FCM (preferred, higher delivery rate)
+//   • Else if the user has a web VAPID subscription → use VAPID
+//   • Users with BOTH channels only receive one notification (no duplicates)
 async function broadcastPush(title, body, data = {}, options = {}) {
   console.log(`📢 [Broadcast] "${title}" → ${body}`);
 
-  // === NATIVE FCM (APK) ===
-  const nativeSubs = await PushSubscription.find({
-    nativeToken: { $exists: true, $ne: null }
+  // Load every subscription record once, grouped by user
+  const allSubs = await PushSubscription.find({
+    $or: [
+      { nativeToken: { $exists: true, $ne: null } },
+      { subscription: { $exists: true, $ne: null } }
+    ]
   }).lean();
 
-  console.log(`📍 Found ${nativeSubs.length} native subscriptions`);
-
-  for (const sub of nativeSubs) {
-    try {
-      const message = {
-        token: sub.nativeToken,
-        notification: {
-          title: title,
-          body: body
-        },
-        data: {
-          page: data.page || 'home',
-          id: data.id || '',
-          ...data
-        },
-        android: {
-          priority: 'high',
-          notification: {
-            sound: 'default',
-            channelId: 'default',
-            icon: 'ic_launcher'
-          }
-        }
-      };
-
-      const response = await admin.messaging().send(message);
-      console.log(`✅ FCM sent successfully to ${sub.user}`);
-    } catch (err) {
-      console.error(`❌ FCM failed for token ${sub.nativeToken?.substring(0,20)}...`, err.message);
-      
-      if (err.code === 'messaging/registration-token-not-registered' || 
-          err.code === 'messaging/invalid-registration-token') {
-        await PushSubscription.deleteOne({ _id: sub._id });
-        console.log('🗑️ Removed invalid token');
-      }
+  // Deduplicate: one record per user — prefer nativeToken over web VAPID
+  const byUser = new Map();
+  for (const sub of allSubs) {
+    const uid = sub.user?.toString();
+    if (!uid) continue;
+    const existing = byUser.get(uid);
+    // Prefer the record that has a nativeToken
+    if (!existing || (!existing.nativeToken && sub.nativeToken)) {
+      byUser.set(uid, sub);
     }
   }
 
-  // === WEB VAPID (already working) ===
-  const webSubs = await PushSubscription.find({
-    subscription: { $exists: true, $ne: null }
-  });
+  console.log(`📍 Sending to ${byUser.size} unique users`);
 
-  for (const sub of webSubs) {
-    try {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify({ title, body, data })
-      );
-    } catch (err) {
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        await sub.deleteOne();
+  for (const sub of byUser.values()) {
+    // ── Native FCM path (preferred) ────────────────────────────────────────
+    if (sub.nativeToken) {
+      try {
+        const message = {
+          token: sub.nativeToken,
+          notification: { title, body },
+          data: {
+            page: data.page || 'home',
+            id:   data.id   || '',
+            ...data
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound:     'default',
+              channelId: 'default',
+              icon:      'ic_launcher'
+            }
+          }
+        };
+        await admin.messaging().send(message);
+        console.log(`✅ FCM sent to user ${sub.user}`);
+        continue; // sent via FCM — skip VAPID for this user
+      } catch (err) {
+        console.error(`❌ FCM failed for user ${sub.user}:`, err.message);
+        if (
+          err.code === 'messaging/registration-token-not-registered' ||
+          err.code === 'messaging/invalid-registration-token'
+        ) {
+          await PushSubscription.updateOne({ _id: sub._id }, { $unset: { nativeToken: '' } });
+          console.log('🗑️ Cleared invalid FCM token');
+        }
+        // Fall through to VAPID if available
+      }
+    }
+
+    // ── Web VAPID fallback ──────────────────────────────────────────────────
+    if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+      try {
+        await webpush.sendNotification(
+          sub.subscription,
+          JSON.stringify({ title, body, data })
+        );
+        console.log(`✅ VAPID sent to user ${sub.user}`);
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await PushSubscription.updateOne({ _id: sub._id }, { $unset: { subscription: '' } });
+        }
       }
     }
   }
@@ -2091,14 +2109,28 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
       claim.status = 'approved';
       await claim.save();
       await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
-      await User.findByIdAndUpdate(req.userId, { verifiedBusiness: business._id });
+
+      // Grant 5 free starter credits as a one-time registration gift
+      await User.findByIdAndUpdate(req.userId, {
+        verifiedBusiness: business._id,
+        notificationCredits: 5
+      });
+
+      // Send a personal welcome push to the new owner
+      sendPushToUser(
+        req.userId,
+        '🎉 Business Verified! You have 5 free credits',
+        `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+        { page: 'home' }
+      );
 
       return res.json({
         status: 'approved',
         autoApproved: true,
         score,
         signals,
-        message: '✅ Verified automatically! Your business dashboard is ready.'
+        notificationCredits: 5,
+        message: "✅ Verified automatically! Your business dashboard is ready. We've gifted you 5 free notification credits to get started!"
       });
     }
 
@@ -2184,17 +2216,28 @@ router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
       isRestaurant: !!isRestaurant 
     });
 
-    await User.findByIdAndUpdate(req.userId, { 
-      verifiedBusiness: business._id 
+    // Grant 5 free starter credits as a one-time registration gift
+    await User.findByIdAndUpdate(req.userId, {
+      verifiedBusiness: business._id,
+      notificationCredits: 5
     });
 
     // Log to admin for audit
-    console.log(`✅ AUTO-APPROVED CLAIM: ${business.name} by user ${req.userId}`);
+    console.log(`✅ AUTO-APPROVED CLAIM (PIN): ${business.name} by user ${req.userId}`);
+
+    // Send a personal welcome push to the new owner
+    sendPushToUser(
+      req.userId,
+      '🎉 Business Verified! You have 5 free credits',
+      `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+      { page: 'home' }
+    );
 
     res.json({
       status: 'approved',
       pinVerified: true,
-      message: '✅ Business successfully verified and claimed!'
+      notificationCredits: 5,
+      message: "✅ Business successfully verified and claimed! We've gifted you 5 free notification credits to get started!"
     });
   } catch (err) {
     console.error('PIN verify error:', err);
@@ -2655,13 +2698,19 @@ if (decision === 'approved') {
   const user = await User.findById(claim.user._id);
   if (user) {
     user.verifiedBusiness = claim.business._id;
-    
-    // Give 5 starting credits ONLY when they become a verified business owner
-    if (user.notificationCredits === 0 || user.notificationCredits === undefined) {
-      user.notificationCredits = 5;
-    }
-    
+
+    // Always grant 5 free starter credits as a one-time registration gift
+    user.notificationCredits = 5;
+
     await user.save();
+
+    // Send a personal welcome push to the newly verified owner
+    sendPushToUser(
+      user._id.toString(),
+      '🎉 Business Verified! You have 5 free credits',
+      `Welcome to Milledgeville Connect, ${claim.business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+      { page: 'home' }
+    );
   }
 }
 
