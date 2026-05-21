@@ -3576,52 +3576,72 @@ const tabs = [
           <div id="ownerEventsList"></div>
         </div>
 
-        <!-- ═══ TAB: Marketplace Items (was Homes) ════════════════════════════════════════════ -->
+                <!-- ═══ TAB: Marketplace Items ════════════════════════════════════════════ -->
         <div id="dtabContent-homes" class="hidden">
-          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4 space-y-3">
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4 space-y-4">
+
             <div class="flex items-center justify-between mb-1">
-              <h3 class="font-bold text-base flex items-center gap-2"><span>🛒</span> Post to Marketplace</h3>
-              <div class="flex items-center gap-2">
-                <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">as ${biz?.name || 'Your Business'}</span>
-                <span class="text-xs bg-white/10 text-white/60 px-2.5 py-1 rounded-full">${credits} credits</span>
-              </div>
+              <h3 class="font-bold text-base flex items-center gap-2"><span>🛒</span> Post Marketplace Item</h3>
+              <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">as ${biz?.name || 'Your Business'}</span>
             </div>
 
-            <p class="text-xs text-white/50 -mt-1 mb-3">Post homes, vehicles, furniture or general items. Home listings get extra fields. Use credits to notify the community (deep-links to your listing).</p>
-
-            <!-- Title -->
-            <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent – Downtown" class="${inputClass}">
-
-            <!-- Price + Type row -->
-            <div class="grid grid-cols-2 gap-3">
-              <input id="homePrice" type="text" placeholder="Price ($/mo or asking)" class="${inputClass}">
-              <select id="homeType" class="${selectClass}" style="${selectStyle}">
-                <option value="">Listing Type *</option>
-                <option value="rent">For Rent</option>
-                <option value="sale">For Sale</option>
-                <option value="other">Other / General</option>
+            <!-- Category -->
+            <div>
+              <label class="text-xs text-white/50 block mb-1.5">Category</label>
+              <select id="homeCategory" class="${selectClass}" style="${selectStyle}" onchange="toggleHomeExtraFields()">
+                <option value="">Select category...</option>
+                <option value="Homes">🏠 Homes (Rent / Sale)</option>
+                <option value="Cars">🚗 Cars & Vehicles</option>
+                <option value="Furniture">🪑 Furniture</option>
+                <option value="Electronics">📱 Electronics</option>
+                <option value="General">📦 General / Other</option>
               </select>
             </div>
 
-            <!-- Beds + Baths + Pet Friendly + SqFt row (enhanced for Homes) -->
-            <div class="grid grid-cols-2 gap-3">
-              <input id="homeBeds" type="number" min="0" placeholder="Bedrooms" class="${inputClass}">
-              <input id="homeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" class="${inputClass}">
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
-                <input type="checkbox" id="homePetFriendly" class="w-5 h-5 accent-emerald-500"> Pet Friendly
-              </label>
-              <input id="homeSqft" type="number" min="0" placeholder="Sq Ft (optional)" class="${inputClass}">
-            </div>
+            <!-- Title -->
+            <input id="homeTitle" type="text" placeholder="Title *" class="${inputClass}">
 
-            <!-- Address -->
-            <input id="homeAddress" type="text" placeholder="Full Address or Neighborhood" class="${inputClass}">
+            <!-- Price + Condition -->
+            <div class="grid grid-cols-2 gap-3">
+              <input id="homePrice" type="text" placeholder="Price ($)" class="${inputClass}">
+              <select id="homeCondition" class="${selectClass}" style="${selectStyle}">
+                <option value="used">Used / Good</option>
+                <option value="like-new">Like New</option>
+                <option value="new">New</option>
+                <option value="fair">Fair</option>
+              </select>
+            </div>
 
             <!-- Description -->
-            <textarea id="homeDesc" rows="3" placeholder="Describe the item — amenities, condition, move-in date, etc." class="${inputClass} resize-none"></textarea>
+            <textarea id="homeDesc" rows="3" placeholder="Description" class="${inputClass} resize-none"></textarea>
 
-            <!-- Photo upload — up to 10 photos -->
+            <!-- ═══ HOME EXTRA FIELDS (only visible when Homes is selected) ═══ -->
+            <div id="homeExtraFields" class="hidden space-y-3 border border-white/10 rounded-2xl p-4 bg-white/5">
+              <div class="text-xs font-semibold text-emerald-400 mb-1">Home Details</div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <select id="homeType" class="${selectClass}" style="${selectStyle}">
+                  <option value="">Listing Type</option>
+                  <option value="rent">For Rent</option>
+                  <option value="sale">For Sale</option>
+                </select>
+                <input id="homeSqft" type="number" placeholder="Sq Ft" class="${inputClass}">
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <input id="homeBeds" type="number" min="0" placeholder="Bedrooms" class="${inputClass}">
+                <input id="homeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" class="${inputClass}">
+              </div>
+
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 text-sm text-white/80 cursor-pointer flex-1">
+                  <input type="checkbox" id="homePetFriendly" class="w-5 h-5 accent-emerald-500"> Pet Friendly
+                </label>
+                <input id="homeAddress" type="text" placeholder="Address / Neighborhood" class="${inputClass} flex-1">
+              </div>
+            </div>
+
+            <!-- Photos -->
             <div>
               <label class="text-xs text-white/40 uppercase tracking-widest block mb-2">Photos (up to 10)</label>
               <div id="homeImagePreviews" class="flex flex-wrap gap-2 mb-2"></div>
@@ -3630,24 +3650,22 @@ const tabs = [
                 <span id="homePhotoLabel">Add photos…</span>
                 <input type="file" accept="image/*" multiple onchange="handleHomeImages(this)" class="hidden">
               </label>
-              <p class="text-xs text-white/30 mt-1 px-1">Max 8MB per photo · JPEG or PNG</p>
             </div>
 
-            <!-- Notify toggle (credit-aware) -->
+            <!-- Notify -->
             <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
-              <input type="checkbox" id="homeNotify" ${credits >= 2 ? 'checked' : 'disabled'} class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug flex-1">
+              <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
                 📢 Notify all users when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
-                ${credits < 2 ? `<span class="block text-xs text-red-400 mt-0.5">You have ${credits} credits. Upgrade or buy more to notify.</span>` : ''}
               </label>
             </div>
 
             <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 py-4 rounded-3xl font-semibold transition-all">
-              🛒 Post Marketplace Listing
+              🛒 Post to Marketplace
             </button>
           </div>
 
-          <!-- Current listings -->
+          <!-- Your listings -->
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Marketplace Listings</p>
           <div id="ownerHomesList"><div class="text-white/30 text-center py-8 text-sm">Loading…</div></div>
         </div>
@@ -7431,68 +7449,114 @@ window.removeHomeImage = function(index) {
   renderHomeImagePreviews();
 };
 
+window.toggleHomeExtraFields = function() {
+  const category = document.getElementById('ownerMarketCategory')?.value;
+  const extra = document.getElementById('homeExtraFields');
+  if (!extra) return;
+
+  if (category === 'Homes') {
+    extra.classList.remove('hidden');
+  } else {
+    extra.classList.add('hidden');
+  }
+};
+
 // ─── HOMES TAB: POST LISTING ─────────────────────────────────────────────────
 window.postHomeListing = async function() {
-  const title   = document.getElementById('homeTitle')?.value.trim();
-  const price   = document.getElementById('homePrice')?.value.trim();
-  const type    = document.getElementById('homeType')?.value;
-  const beds    = document.getElementById('homeBeds')?.value.trim();
-  const baths   = document.getElementById('homeBaths')?.value.trim();
-  const pet     = document.getElementById('homePetFriendly')?.checked;
-  const sqft    = document.getElementById('homeSqft')?.value.trim();
-  const desc    = document.getElementById('homeDesc')?.value.trim();
-  const address = document.getElementById('homeAddress')?.value.trim();
-  const notify  = document.getElementById('homeNotify')?.checked ?? false;
+  const category  = document.getElementById('homeCategory')?.value;
+  const title     = document.getElementById('homeTitle')?.value.trim();
+  const price     = document.getElementById('homePrice')?.value.trim();
+  const condition = document.getElementById('homeCondition')?.value || 'used';
+  const desc      = document.getElementById('homeDesc')?.value.trim();
+  const notify    = document.getElementById('homeNotify')?.checked ?? false;
 
-  if (!title || !type) { showToast('Title and listing type are required', 'error'); return; }
+  if (!title || !category) {
+    showToast('Title and Category are required', 'error');
+    return;
+  }
 
   if (notify && !(await checkNotificationCredits(2))) return;
-
-  // Build rich description (includes new fields)
-  const fullDesc = [
-    beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
-    baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
-    sqft   ? `${sqft} sq ft` : '',
-    pet    ? '🐾 Pet Friendly' : '',
-    address ? `📍 ${address}` : '',
-    desc   || ''
-  ].filter(Boolean).join(' · ');
 
   const btn = document.querySelector('#dtabContent-homes button[onclick="postHomeListing()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
 
   try {
-    const res = await apiPost('/owner/homes', {
+    let payload = {
       title,
-      description: fullDesc,
-      price:       price || '0',
-      condition:   type,        // 'rent' | 'sale' | 'other'
-      address:     address || '',
-      images:      _pendingHomeImages,
-      sendNotify:  notify
-    });
+      description: desc || '',
+      price: price || '0',
+      condition,
+      images: _pendingHomeImages,
+      category,
+      sendNotify: notify
+    };
 
-    if (res._id) {
-      showToast('🛒 Marketplace listing posted!', 'success');
-      // Reset form
-      ['homeTitle','homePrice','homeBeds','homeBaths','homeSqft','homeDesc','homeAddress'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      const typeEl = document.getElementById('homeType');
-      if (typeEl) typeEl.value = '';
-      if (document.getElementById('homePetFriendly')) document.getElementById('homePetFriendly').checked = false;
-      _pendingHomeImages = [];
-      renderHomeImagePreviews();
-      loadOwnerHomes();
-    } else {
-      showToast(res.message || 'Failed to post listing', 'error');
+    // === HOMES CATEGORY → use rich fields + /owner/homes endpoint ===
+    if (category === 'Homes') {
+      const type    = document.getElementById('homeType')?.value;
+      const beds    = document.getElementById('homeBeds')?.value.trim();
+      const baths   = document.getElementById('homeBaths')?.value.trim();
+      const pet     = document.getElementById('homePetFriendly')?.checked;
+      const sqft    = document.getElementById('homeSqft')?.value.trim();
+      const address = document.getElementById('homeAddress')?.value.trim();
+
+      const homeDetails = [
+        type ? (type === 'rent' ? 'For Rent' : 'For Sale') : '',
+        beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
+        baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
+        sqft   ? `${sqft} sq ft` : '',
+        pet    ? '🐾 Pet Friendly' : '',
+        address ? `📍 ${address}` : ''
+      ].filter(Boolean).join(' · ');
+
+      payload.description = homeDetails ? `${homeDetails}\n\n${desc || ''}`.trim() : desc;
+      payload.condition   = type || condition;
+      payload.address     = address || '';
+
+      const res = await apiPost('/owner/homes', payload);
+      if (res._id) {
+        showToast('🏠 Home listing posted!', 'success');
+      } else {
+        showToast(res.message || 'Failed to post', 'error');
+        return;
+      }
+    } 
+    else {
+      // === OTHER CATEGORIES → normal marketplace post ===
+      const res = await apiPost('/marketplace', payload);
+      if (res._id) {
+        showToast('🛒 Item posted to Marketplace!', 'success');
+      } else {
+        showToast(res.message || 'Failed to post', 'error');
+        return;
+      }
     }
+
+    // Reset form
+    ['homeTitle', 'homePrice', 'homeDesc', 'homeSqft', 'homeBeds', 'homeBaths', 'homeAddress'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const catEl = document.getElementById('homeCategory');
+    if (catEl) catEl.value = '';
+    const typeEl = document.getElementById('homeType');
+    if (typeEl) typeEl.value = '';
+    if (document.getElementById('homePetFriendly')) document.getElementById('homePetFriendly').checked = false;
+    if (document.getElementById('homeCondition')) document.getElementById('homeCondition').value = 'used';
+
+    _pendingHomeImages = [];
+    renderHomeImagePreviews();
+
+    const extra = document.getElementById('homeExtraFields');
+    if (extra) extra.classList.add('hidden');
+
+    loadOwnerHomes();
+
   } catch (e) {
     console.error(e);
     showToast('Failed to post listing', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🛒 Post Marketplace Listing'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🛒 Post to Marketplace'; }
   }
 };
 
@@ -7646,6 +7710,18 @@ window.logout = function() {
   localStorage.removeItem('token');
   currentUser = null;
   window.location.reload();
+};
+
+window.toggleHomeExtraFields = function() {
+  const cat = document.getElementById('homeCategory')?.value;
+  const extra = document.getElementById('homeExtraFields');
+  if (!extra) return;
+
+  if (cat === 'Homes') {
+    extra.classList.remove('hidden');
+  } else {
+    extra.classList.add('hidden');
+  }
 };
 
 // ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
