@@ -2473,9 +2473,9 @@ function renderShoutoutCard(s) {
               <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
                 ❤️ <span id="like-count-${s._id}">${likeCount}</span>
               </button>
-              <button onclick="commentOnShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
-                💬 ${commentCount}
-              </button>
+              <button onclick="toggleCommentSection('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+  💬 ${commentCount}
+</button>
               <button onclick="event.stopImmediatePropagation(); shareContent('shoutout', ${JSON.stringify(esc(s.text || '').substring(0,120))})"
                       class="flex items-center gap-1 hover:text-white transition">
                 🔗 Share
@@ -2489,6 +2489,27 @@ function renderShoutoutCard(s) {
             </button>
           </div>
         </div>
+        <!-- Comment Section -->
+<div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4 space-y-3">
+  ${comments.map(c => renderCommentRow(c, s._id)).join('')}
+  ${currentUser ? `
+    <div class="flex items-center gap-2 mt-3">
+      <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">
+        ${currentUser.name[0].toUpperCase()}
+      </div>
+      <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
+        <input id="commentinput-${s._id}" type="text"
+               class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
+               placeholder="Write a comment…"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
+        <button onclick="submitComment('${s._id}')"
+                class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition">Post</button>
+      </div>
+    </div>` : `
+    <p class="text-xs text-white/40 text-center mt-2">
+      <button onclick="showAuthModal()" class="text-emerald-400 hover:underline">Sign in</button> to comment
+    </p>`}
+</div>
       </div>
     </div>`;
 }
@@ -2573,42 +2594,6 @@ window.toggleLike = async function (shoutoutId) {
   }
 };
 
-window.submitComment = async function(contentType, contentId) {
-  const input = document.getElementById(`comment-input-${contentId}`);
-  if (!input) return;
-
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!requireAuth('Sign in to comment')) return;
-
-  try {
-    let endpoint = '';
-    if (contentType === 'market') endpoint = `/marketplace/${contentId}/comments`;
-    else if (contentType === 'lost') endpoint = `/lostitems/${contentId}/comments`;
-
-    if (!endpoint) return;
-
-    await apiPost(endpoint, { text });
-
-    input.value = '';
-    showToast('Comment posted!', 'success');
-
-    // Refresh the detail modal to show new comment
-    if (contentType === 'market') {
-      const modal = document.getElementById('marketDetailModal');
-      if (modal) modal.remove();
-      showMarketplaceDetail(contentId);
-    } else if (contentType === 'lost') {
-      const modal = document.getElementById('lostDetailModal');
-      if (modal) modal.remove();
-      showLostDetail(contentId);
-    }
-  } catch (e) {
-    showToast('Failed to post comment', 'error');
-  }
-};
-
 window.toggleCommentSection = function (shoutoutId) {
   const section = document.getElementById(`comment-section-${shoutoutId}`);
   if (!section) return;
@@ -2620,17 +2605,56 @@ window.toggleCommentSection = function (shoutoutId) {
   }
 };
 
-window.submitComment = async function (shoutoutId) {
-  if (!requireAuth('Sign in to comment.')) return;
-  const input = document.getElementById(`commentinput-${shoutoutId}`);
-  if (!input || !input.value.trim()) return;
+window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
+  // Called as submitComment('market', itemId) or submitComment('lost', itemId)
+  // OR as submitComment(shoutoutId) from shoutout cards
+  
+  const isShoutout = !contentId; // shoutouts pass only one arg
+  
+  if (isShoutout) {
+    const shoutoutId = contentTypeOrShoutoutId;
+    if (!requireAuth('Sign in to comment.')) return;
+    const input = document.getElementById(`commentinput-${shoutoutId}`);
+    if (!input || !input.value.trim()) return;
+    const text = input.value.trim();
+    input.value = '';
+    const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text });
+    if (res._id) {
+      await loadShoutoutsPage(document.getElementById('content'));
+    } else {
+      showToast(res.message || 'Error posting comment', 'error');
+    }
+    return;
+  }
+
+  // Marketplace or Lost+Found
+  const contentType = contentTypeOrShoutoutId;
+  const input = document.getElementById(`comment-input-${contentId}`);
+  if (!input) return;
   const text = input.value.trim();
-  input.value = '';
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text });
-  if (res._id) {
-    await loadShoutoutsPage(document.getElementById('content'));
-  } else {
-    showToast(res.message || 'Error posting comment', 'error');
+  if (!text) return;
+  if (!requireAuth('Sign in to comment')) return;
+
+  let endpoint = '';
+  if (contentType === 'market') endpoint = `/marketplace/${contentId}/comments`;
+  else if (contentType === 'lost') endpoint = `/lostitems/${contentId}/comments`;
+  if (!endpoint) return;
+
+  try {
+    await apiPost(endpoint, { text });
+    input.value = '';
+    showToast('Comment posted!', 'success');
+    if (contentType === 'market') {
+      const modal = document.getElementById('marketDetailModal');
+      if (modal) modal.remove();
+      showMarketplaceDetail(contentId);
+    } else if (contentType === 'lost') {
+      const modal = document.getElementById('lostDetailModal');
+      if (modal) modal.remove();
+      showLostDetail(contentId);
+    }
+  } catch (e) {
+    showToast('Failed to post comment', 'error');
   }
 };
 
@@ -8111,36 +8135,6 @@ window.deleteOwnerHome = async function(id) {
     renderHomesPage();
   } catch (e) {
     showToast('Failed to delete listing', 'error');
-  }
-};
-
-window.postMarketplaceComment = async function(itemId) {
-  const input = document.getElementById('marketCommentInput');
-  if (!input) {
-    showToast('Comment input not found', 'error');
-    return;
-  }
-
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!requireAuth('Sign in to comment')) return;
-
-  try {
-    await apiPost(`/marketplace/${itemId}/comments`, { text });
-    input.value = '';
-    showToast('Comment posted!', 'success');
-
-    // Refresh the comments section only
-    const res = await apiGet(`/marketplace/${itemId}`);
-    const container = document.getElementById('marketCommentsContainer');
-    
-    if (container && res.comments) {
-      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to post comment', 'error');
   }
 };
 
