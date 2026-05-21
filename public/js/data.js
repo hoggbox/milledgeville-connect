@@ -3593,7 +3593,13 @@ const tabs = [
           <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
             <div class="text-5xl mb-4">🏠</div>
             <h3 class="text-xl font-bold mb-2">🏠 My Listings</h3>
-            <p class="text-white/60 mb-6 text-sm leading-relaxed">List properties you manage directly on Milledgeville Connect's marketplace. Requires Business Pro.</p>
+            <p class="text-white/60 text-sm mb-6">Post homes, apartments, rentals, or properties for sale. You can notify the community (costs credits).</p>
+            <button onclick="showPostHomeModal()" 
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold text-lg transition mb-6">
+              ➕ Post New Listing
+            </button>
+
+            <div id="ownerHomesList" class="space-y-4"></div>
             <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> List homes for rent or sale</div>
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Upload up to 10 photos</div>
