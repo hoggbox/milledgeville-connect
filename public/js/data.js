@@ -3363,54 +3363,49 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
-<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
-  <div class="flex justify-between items-start">
-    <div>
-      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
-        ⭐ PRO TIER
-      </div>
-      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
-      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
-    </div>
-          
+      <!-- 🔥 BUSINESS PRO TIER BANNER (top only — does not affect rest of panel) -->
+      <div class="mx-0 mb-4 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-6 text-white">
+        <div class="flex justify-between items-start gap-4">
+          <div class="min-w-0">
+            <div class="inline-flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full text-xs mb-3">
+              ⭐ PRO TIER
+            </div>
+            <h2 class="text-xl font-bold leading-tight">Business Pro — $29.99/mo</h2>
+            <p class="text-white/80 text-sm mt-1">Boosted visibility • 12 credits/month • Analytics</p>
+          </div>
           ${isPro ? `
-            <div class="text-right">
-              <div class="text-emerald-300 font-bold">ACTIVE</div>
-              <div class="text-xs opacity-75">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
+            <div class="text-right flex-shrink-0">
+              <div class="text-emerald-300 font-bold text-sm">✅ ACTIVE</div>
+              <div class="text-xs text-white/60 mt-0.5">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
             </div>
           ` : `
-            <button onclick="buyProTier()" 
-                    class="bg-white text-purple-700 px-7 py-3 rounded-3xl font-bold hover:bg-white/90 transition shadow-xl">
+            <button onclick="buyProTier()"
+                    class="flex-shrink-0 bg-white text-purple-700 px-5 py-2.5 rounded-2xl font-bold text-sm hover:bg-white/90 transition shadow-xl">
               Upgrade Now
             </button>
           `}
         </div>
 
-        <!-- Notification Credits -->
-        <div class="mt-6 bg-white/10 border border-white/20 rounded-3xl p-6">
-          <div class="flex justify-between items-center">
-            <div>
-              <div class="text-sm text-white/60">Notification Credits</div>
-              <div id="ownerCreditCount" class="text-5xl font-bold mt-1">${sub.credits || 0}</div>
-            </div>
-            
-            ${ (sub.credits || 0) > 0 ? `
-              <button onclick="showCreditInfo()" 
-                      class="text-emerald-400 text-sm underline">How credits work →</button>
-            ` : `
-              <button onclick="buyCreditsModal()" 
-                      class="bg-amber-500 hover:bg-amber-600 px-6 py-3 rounded-2xl text-sm font-semibold">Buy More Credits</button>
-            `}
+        <!-- Credit balance row inside banner -->
+        <div class="mt-4 bg-white/10 border border-white/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
+          <div>
+            <div class="text-xs text-white/60 mb-0.5">Notification Credits</div>
+            <div id="ownerCreditCount" class="text-4xl font-bold leading-none">${credits}</div>
           </div>
-
-          ${ (sub.credits || 0) === 0 ? `
-            <p class="text-amber-400 text-sm mt-4">
-              You've used your free credits.<br>
-              Buy more or upgrade to Pro for 12 monthly credits.
-            </p>
-          ` : ''}
+          ${credits > 0 ? `
+            <button onclick="showCreditInfo()" class="text-white/70 text-sm underline hover:text-white transition">How credits work →</button>
+          ` : isPro ? `
+            <button onclick="buyCreditsModal()" class="bg-amber-500 hover:bg-amber-600 px-5 py-2.5 rounded-2xl text-sm font-bold transition shadow">Buy More Credits</button>
+          ` : `
+            <button onclick="buyProTier()" class="bg-amber-500 hover:bg-amber-600 px-5 py-2.5 rounded-2xl text-sm font-bold transition shadow">Get Pro for Credits</button>
+          `}
         </div>
+        ${credits === 0 && isPro ? `
+          <p class="text-amber-300 text-xs mt-3 text-center">You've used all your monthly credits. Buy a credit pack to keep sending notifications.</p>
+        ` : credits === 0 && !isPro ? `
+          <p class="text-white/70 text-xs mt-3 text-center">Your 5 free starter credits have been used. Upgrade to Pro for 12 credits/month.</p>
+        ` : ''}
+      </div>
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
@@ -3697,24 +3692,35 @@ const tabs = [
 
 <!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
 <div id="dtabContent-notifications" class="hidden">
-  ${!isPro ? `
-  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
+  ${credits > 0 || isPro ? `
+  <div id="notificationsContent">
+    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
+  </div>
+  ` : isPro && credits === 0 ? `
+  <!-- Pro member out of credits — prompt to buy more -->
+  <div class="bg-white/5 border border-amber-500/30 rounded-3xl p-8 text-center mb-4">
     <div class="text-5xl mb-4">📢</div>
-    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
-    <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
-    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
-    </div>
-    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-      🚀 Upgrade to Business Pro
+    <h3 class="text-xl font-bold mb-2">Out of Credits</h3>
+    <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used all your monthly credits. Buy a credit pack to keep sending notifications to your customers.</p>
+    <button onclick="buyCreditsModal()" class="bg-amber-500 hover:bg-amber-600 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+      🛒 Buy More Credits
     </button>
   </div>
   ` : `
-  <div id="notificationsContent">
-    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
+  <!-- No credits at all — free tier with 0 credits remaining -->
+  <div class="bg-white/5 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
+    <div class="text-5xl mb-4">📢</div>
+    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
+    <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used your 5 free starter credits. Upgrade to Business Pro to keep reaching your customers every month.</p>
+    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 12 credits / month included</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (2 credits each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Analytics &amp; boosted listing visibility</div>
+    </div>
+    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+      🚀 Upgrade to Business Pro — $29.99/mo
+    </button>
   </div>
   `}
 </div>
@@ -3825,10 +3831,10 @@ window.insertNotifEmoji = function(emoji) {
 };
 
 async function loadNotificationsTab() {
-  const el = document.getElementById('notificationsContent');
-  if (!el) return;
-
-  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
+  // The notificationsContent div only exists when credits > 0 or isPro at render time.
+  // If the owner ran out of credits between renders, we need to handle the locked-state container too.
+  const tabContainer = document.getElementById('dtabContent-notifications');
+  let el = document.getElementById('notificationsContent');
 
   let credits = 0;
   let tier = 'free';
@@ -3841,6 +3847,51 @@ async function loadNotificationsTab() {
   }
 
   const isPro   = tier === 'pro';
+  const hasAccess = credits > 0 || isPro;
+
+  // If no access (no credits, not pro), show the upsell screen instead
+  if (!hasAccess && tabContainer) {
+    tabContainer.innerHTML = `
+    <div class="bg-white/5 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
+      <div class="text-5xl mb-4">📢</div>
+      <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
+      <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used your 5 free starter credits. Upgrade to Business Pro to keep reaching your customers every month.</p>
+      <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 12 credits / month included</div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (2 credits each)</div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Analytics &amp; boosted listing visibility</div>
+      </div>
+      <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+        🚀 Upgrade to Business Pro — $29.99/mo
+      </button>
+    </div>`;
+    return;
+  }
+
+  // Pro member with 0 credits — show buy-more prompt
+  if (isPro && credits === 0 && tabContainer) {
+    tabContainer.innerHTML = `
+    <div class="bg-white/5 border border-amber-500/30 rounded-3xl p-8 text-center mb-4">
+      <div class="text-5xl mb-4">📢</div>
+      <h3 class="text-xl font-bold mb-2">Out of Credits</h3>
+      <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used all your monthly credits. Buy a credit pack to keep sending notifications to your customers.</p>
+      <button onclick="buyCreditsModal()" class="bg-amber-500 hover:bg-amber-600 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+        🛒 Buy More Credits
+      </button>
+    </div>`;
+    return;
+  }
+
+  // Ensure the notificationsContent div exists (may have been replaced by upsell on a prior visit)
+  if (!el && tabContainer) {
+    tabContainer.innerHTML = `<div id="notificationsContent"><div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div></div>`;
+    el = document.getElementById('notificationsContent');
+  }
+  if (!el) return;
+
+  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
+
   const bizName = currentUser?.verifiedBusiness?.name || currentUser?.name || 'Your Business';
 
   el.innerHTML = `
