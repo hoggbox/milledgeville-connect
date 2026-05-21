@@ -6643,46 +6643,59 @@ window.saveBusinessEdit = async function(businessId) {
     address: document.getElementById('editBizAddress').value.trim(),
     phone: document.getElementById('editBizPhone').value.trim(),
     email: document.getElementById('editBizEmail').value.trim(),
-    description: document.getElementById('editBizDescription').value.trim()
+    description: document.getElementById('editBizDescription').value.trim(),
+    category: document.getElementById('editBizCategory')?.value || null,
+    logo: window.pendingBusinessLogo || null   // ← Important for logo upload
   };
 
   if (!payload.name) {
     return showToast('Business name is required', 'error');
   }
 
+  if (payload.category && !mongoose.Types.ObjectId.isValid(payload.category)) {
+    return showToast('Please select a valid category', 'error');
+  }
+
   try {
-    showToast('Saving changes...', 'success');
+    showToast('Saving changes...', 'loading');
 
-    const res = await apiRequest(`/admin/business/${businessId}`, payload, 'PUT');
+    const response = await apiPut(`/admin/business/${businessId}`, payload);
 
-    if (res.business || res.message === 'Business updated successfully') {
+    if (response.success || response.message?.includes('success')) {
       showToast('✅ Business updated successfully!', 'success');
       closeEditBusinessModal();
-      const data = await apiGet('/directory');
-      allBusinesses = data.businesses || [];
-      renderAdminBusinesses();
+      
+      // Refresh the admin businesses list
+      await renderAdminBusinesses();
     } else {
-      showToast(res.message || 'Failed to save changes', 'error');
-      console.error("Update failed:", res);
+      showToast(response.message || 'Failed to update business', 'error');
     }
-  } catch (e) {
-    console.error(e);
-    showToast(e.message || 'Failed to save changes', 'error');
+
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to save business. Please try again.', 'error');
   }
 };
 
-// Helper for PUT requests (add near your other api functions if not present)
+// API PUT helper
 window.apiPut = async function(url, data) {
   try {
+    const token = localStorage.getItem('token');
     const res = await fetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('token')
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(data)
     });
-    return await res.json();
+
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return { message: text || 'Server error' };
+    }
   } catch (e) {
     console.error(e);
     return { message: 'Network error' };

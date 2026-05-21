@@ -2508,30 +2508,26 @@ router.delete('/owner/homes/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── ADMIN: ADD / UPDATE BUSINESS ────────────────────────────────────────────
 router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
   try {
-    let { name, address, phone, email, website, description, category, logo } = req.body;
+    const { name, address, phone, email, website, description, category, logo } = req.body;
 
-    if (!name || !category) {
-      return res.status(400).json({ message: 'Name and category are required' });
+    if (!name?.trim() || !address?.trim() || !category) {
+      return res.status(400).json({ message: 'Name, address, and category are required' });
     }
 
-    // Skip heavy sanitizer for admin route
-    name = String(name).trim();
-    description = description ? String(description).trim() : '';
-
-    const catExists = await Category.findById(category);
-    if (!catExists) {
-      return res.status(400).json({ message: 'Invalid category' });
+    if (!mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({ message: 'Invalid category selected' });
     }
 
     const business = await Business.create({
-      name,
-      address: address || '',
-      phone: phone || '',
-      email: email || '',
-      website: website || '',
-      description,
+      name: name.trim(),
+      address: address.trim(),
+      phone: phone?.trim() || '',
+      email: email?.trim() || '',
+      website: website?.trim() || '',
+      description: description?.trim() || '',
       category,
       logo: logo || null
     });
@@ -2539,13 +2535,14 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
     const populated = await Business.findById(business._id).populate('category', 'name icon');
 
     res.json({ 
-      message: 'Business added successfully', 
+      success: true, 
+      message: 'Business added successfully',
       business: populated 
     });
 
   } catch (err) {
-    console.error('Add business error:', err);
-    res.status(500).json({ message: err.message });
+    console.error('Admin Add Business Error:', err);
+    res.status(500).json({ message: err.message || 'Server error' });
   }
 });
 
@@ -2554,35 +2551,46 @@ router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) =
     const { name, address, phone, email, website, description, category, logo } = req.body;
 
     const updates = {
-      name,
-      address: address || '',
-      phone: phone || '',
-      email: email || '',
-      website: website || '',
-      description: description || '',
+      name: name?.trim(),
+      address: address?.trim(),
+      phone: phone?.trim() || '',
+      email: email?.trim() || '',
+      website: website?.trim() || '',
+      description: description?.trim() || '',
       logo: logo || null
     };
 
+    // Only update category if a valid one is sent
     if (category) {
+      if (!mongoose.Types.ObjectId.isValid(category)) {
+        return res.status(400).json({ message: 'Invalid category selected' });
+      }
       const catExists = await Category.findById(category);
-      if (catExists) updates.category = category;
+      if (!catExists) {
+        return res.status(400).json({ message: 'Category not found' });
+      }
+      updates.category = category;
     }
 
     const business = await Business.findByIdAndUpdate(
       req.params.id,
       updates,
       { new: true }
-    ).populate('category', 'name icon _id');
+    ).populate('category', 'name icon');
 
-    if (!business) return res.status(404).json({ message: 'Business not found' });
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
 
     res.json({ 
+      success: true,
       message: 'Business updated successfully', 
       business 
     });
+
   } catch (err) {
-    console.error('Update business error:', err);
-    res.status(500).json({ message: err.message });
+    console.error('Admin Update Business Error:', err);
+    res.status(500).json({ message: err.message || 'Server error' });
   }
 });
 
