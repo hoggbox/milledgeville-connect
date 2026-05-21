@@ -3344,7 +3344,7 @@ const tabs = [
   ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
   { id: 'deals',         label: 'Deals',          icon: '🔥' },
   { id: 'events',        label: 'Events',         icon: '📅' },
-  { id: 'homes',         label: 'Homes',          icon: '🏠' },
+  { id: 'homes',         label: 'Marketplace Items', icon: '🛒' },
   { id: 'notifications', label: 'Notifications',  icon: '📢' },
   { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
@@ -3576,29 +3576,18 @@ const tabs = [
           <div id="ownerEventsList"></div>
         </div>
 
-        <!-- ═══ TAB: Homes for Rent/Sale ════════════════════════════════════════════ -->
+        <!-- ═══ TAB: Marketplace Items (was Homes) ════════════════════════════════════════════ -->
         <div id="dtabContent-homes" class="hidden">
-          ${!isPro ? `
-          <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
-            <div class="text-5xl mb-4">🏠</div>
-            <h3 class="text-xl font-bold mb-2">Homes for Rent / Sale</h3>
-            <p class="text-white/60 mb-6 text-sm leading-relaxed">List properties you manage directly on Milledgeville Connect's marketplace. Requires Business Pro.</p>
-            <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> List homes for rent or sale</div>
-              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Upload up to 10 photos</div>
-              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Optionally notify all users</div>
-              <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Appears in Marketplace under Homes</div>
-            </div>
-            <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-              🚀 Upgrade to Business Pro
-            </button>
-          </div>
-          ` : `
           <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-4 space-y-3">
             <div class="flex items-center justify-between mb-1">
-              <h3 class="font-bold text-base flex items-center gap-2"><span>🏠</span> Post a Home Listing</h3>
-              <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">Pro</span>
+              <h3 class="font-bold text-base flex items-center gap-2"><span>🛒</span> Post to Marketplace</h3>
+              <div class="flex items-center gap-2">
+                <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">as ${biz?.name || 'Your Business'}</span>
+                <span class="text-xs bg-white/10 text-white/60 px-2.5 py-1 rounded-full">${credits} credits</span>
+              </div>
             </div>
+
+            <p class="text-xs text-white/50 -mt-1 mb-3">Post homes, vehicles, furniture or general items. Home listings get extra fields. Use credits to notify the community (deep-links to your listing).</p>
 
             <!-- Title -->
             <input id="homeTitle" type="text" placeholder="e.g. 3BR House for Rent – Downtown" class="${inputClass}">
@@ -3610,20 +3599,27 @@ const tabs = [
                 <option value="">Listing Type *</option>
                 <option value="rent">For Rent</option>
                 <option value="sale">For Sale</option>
+                <option value="other">Other / General</option>
               </select>
             </div>
 
-            <!-- Beds + Baths row -->
+            <!-- Beds + Baths + Pet Friendly + SqFt row (enhanced for Homes) -->
             <div class="grid grid-cols-2 gap-3">
               <input id="homeBeds" type="number" min="0" placeholder="Bedrooms" class="${inputClass}">
               <input id="homeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" class="${inputClass}">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
+                <input type="checkbox" id="homePetFriendly" class="w-5 h-5 accent-emerald-500"> Pet Friendly
+              </label>
+              <input id="homeSqft" type="number" min="0" placeholder="Sq Ft (optional)" class="${inputClass}">
             </div>
 
             <!-- Address -->
             <input id="homeAddress" type="text" placeholder="Full Address or Neighborhood" class="${inputClass}">
 
             <!-- Description -->
-            <textarea id="homeDesc" rows="3" placeholder="Describe the property — amenities, pets policy, move-in date…" class="${inputClass} resize-none"></textarea>
+            <textarea id="homeDesc" rows="3" placeholder="Describe the item — amenities, condition, move-in date, etc." class="${inputClass} resize-none"></textarea>
 
             <!-- Photo upload — up to 10 photos -->
             <div>
@@ -3637,22 +3633,22 @@ const tabs = [
               <p class="text-xs text-white/30 mt-1 px-1">Max 8MB per photo · JPEG or PNG</p>
             </div>
 
-            <!-- Notify toggle -->
+            <!-- Notify toggle (credit-aware) -->
             <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
-              <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+              <input type="checkbox" id="homeNotify" ${credits >= 2 ? 'checked' : 'disabled'} class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug flex-1">
                 📢 Notify all users when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
+                ${credits < 2 ? `<span class="block text-xs text-red-400 mt-0.5">You have ${credits} credits. Upgrade or buy more to notify.</span>` : ''}
               </label>
             </div>
 
             <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 py-4 rounded-3xl font-semibold transition-all">
-              🏠 Post Home Listing
+              🛒 Post Marketplace Listing
             </button>
           </div>
-          `}
 
           <!-- Current listings -->
-          <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Home Listings</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Marketplace Listings</p>
           <div id="ownerHomesList"><div class="text-white/30 text-center py-8 text-sm">Loading…</div></div>
         </div>
 
@@ -7378,18 +7374,22 @@ window.postHomeListing = async function() {
   const type    = document.getElementById('homeType')?.value;
   const beds    = document.getElementById('homeBeds')?.value.trim();
   const baths   = document.getElementById('homeBaths')?.value.trim();
+  const pet     = document.getElementById('homePetFriendly')?.checked;
+  const sqft    = document.getElementById('homeSqft')?.value.trim();
   const desc    = document.getElementById('homeDesc')?.value.trim();
   const address = document.getElementById('homeAddress')?.value.trim();
-  const notify  = document.getElementById('homeNotify')?.checked ?? true;
+  const notify  = document.getElementById('homeNotify')?.checked ?? false;
 
   if (!title || !type) { showToast('Title and listing type are required', 'error'); return; }
 
   if (notify && !(await checkNotificationCredits(2))) return;
 
-  // Build a rich description that includes beds/baths if provided
+  // Build rich description (includes new fields)
   const fullDesc = [
     beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
     baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
+    sqft   ? `${sqft} sq ft` : '',
+    pet    ? '🐾 Pet Friendly' : '',
     address ? `📍 ${address}` : '',
     desc   || ''
   ].filter(Boolean).join(' · ');
@@ -7402,21 +7402,22 @@ window.postHomeListing = async function() {
       title,
       description: fullDesc,
       price:       price || '0',
-      condition:   type,        // 'rent' or 'sale' — stored in condition field
+      condition:   type,        // 'rent' | 'sale' | 'other'
       address:     address || '',
       images:      _pendingHomeImages,
       sendNotify:  notify
     });
 
     if (res._id) {
-      showToast('🏠 Home listing posted!', 'success');
+      showToast('🛒 Marketplace listing posted!', 'success');
       // Reset form
-      ['homeTitle','homePrice','homeBeds','homeBaths','homeDesc','homeAddress'].forEach(id => {
+      ['homeTitle','homePrice','homeBeds','homeBaths','homeSqft','homeDesc','homeAddress'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
       const typeEl = document.getElementById('homeType');
       if (typeEl) typeEl.value = '';
+      if (document.getElementById('homePetFriendly')) document.getElementById('homePetFriendly').checked = false;
       _pendingHomeImages = [];
       renderHomeImagePreviews();
       loadOwnerHomes();
@@ -7425,9 +7426,9 @@ window.postHomeListing = async function() {
     }
   } catch (e) {
     console.error(e);
-    showToast('Failed to post home listing', 'error');
+    showToast('Failed to post listing', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🏠 Post Home Listing'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🛒 Post Marketplace Listing'; }
   }
 };
 
