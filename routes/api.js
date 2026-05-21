@@ -2974,14 +2974,14 @@ router.post('/owner/upgrade', authenticate, async (req, res) => {
 
     user.subscriptionTier = 'pro';
     user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    user.notificationCredits = 20;        // ← 20 credits
+    user.notificationCredits = 12;        // ← 20 credits
 
     await user.save();
 
     res.json({ 
       success: true, 
-      message: '🎉 Business Pro Activated — 20 credits/month',
-      credits: 20
+      message: '🎉 Business Pro Activated — 12 credits/month',
+      credits: 12
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
