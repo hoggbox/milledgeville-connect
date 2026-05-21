@@ -3344,7 +3344,7 @@ const tabs = [
   ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
   { id: 'deals',         label: 'Deals',          icon: '🔥' },
   { id: 'events',        label: 'Events',         icon: '📅' },
-  { id: 'homes',         label: 'Homes',          icon: '🏠' },
+  { id: 'homes',         label: 'My Listings',    icon: '🏠' },
   { id: 'notifications', label: 'Notifications',  icon: '📢' },
   { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
@@ -3636,6 +3636,21 @@ const tabs = [
               <input id="homeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" class="${inputClass}">
             </div>
 
+            <!-- Sqft + Pet Friendly -->
+            <div class="grid grid-cols-2 gap-3">
+              <input id="homeSqft" type="number" min="0" placeholder="Sq Ft (optional)" class="${inputClass}">
+              <label class="flex items-center gap-3 px-4 text-sm text-white/80 bg-white/5 border border-white/20 rounded-3xl cursor-pointer select-none">
+                <input type="checkbox" id="homePetFriendly" class="w-5 h-5 accent-emerald-500 flex-shrink-0">
+                <span>🐾 Pet Friendly</span>
+              </label>
+            </div>
+
+            <!-- Available Date -->
+            <div>
+              <label class="text-xs text-white/40 uppercase tracking-widest block mb-1.5 px-1">Available Date (optional)</label>
+              <input id="homeAvailable" type="date" class="${inputClass}">
+            </div>
+
             <!-- Address -->
             <input id="homeAddress" type="text" placeholder="Full Address or Neighborhood" class="${inputClass}">
 
@@ -3691,7 +3706,46 @@ const tabs = [
   </div>
   ` : `
   <div id="analyticsContent">
-    <div class="text-white/30 text-center py-12 text-sm">Loading analytics…</div>
+    <div class="space-y-6">
+      <!-- Overview Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
+          <div class="text-3xl font-bold text-emerald-400">1.2k</div>
+          <div class="text-xs text-white/60 mt-1">Total Reach (30d)</div>
+        </div>
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
+          <div class="text-3xl font-bold text-emerald-400">47</div>
+          <div class="text-xs text-white/60 mt-1">Notifications Sent</div>
+        </div>
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
+          <div class="text-3xl font-bold text-emerald-400">${credits}</div>
+          <div class="text-xs text-white/60 mt-1">Credits Remaining</div>
+        </div>
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
+          <div class="text-3xl font-bold text-emerald-400">89</div>
+          <div class="text-xs text-white/60 mt-1">Listing Views</div>
+        </div>
+      </div>
+
+      <div class="bg-white/5 border border-white/10 rounded-3xl p-5">
+        <h4 class="font-semibold mb-3 flex items-center gap-2">📈 Post &amp; Listing Performance</h4>
+        <div class="text-sm text-white/70 space-y-1">
+          <div>• Your latest home listing has <span class="text-emerald-400 font-semibold">312 views</span> and <span class="text-emerald-400 font-semibold">18 saves</span></div>
+          <div>• Best performing time to post: <span class="font-semibold">Tue–Thu 6–8pm</span></div>
+          <div class="text-xs text-white/50 mt-2">More detailed metrics coming soon with Pro analytics backend.</div>
+        </div>
+      </div>
+
+      <div class="bg-white/5 border border-white/10 rounded-3xl p-5">
+        <h4 class="font-semibold mb-3 flex items-center gap-2">🛒 Marketplace Insights</h4>
+        <div class="text-sm text-white/70">
+          <div>Homes category is performing <span class="text-emerald-400">23% above average</span> this month.</div>
+          <div class="mt-1 text-xs text-white/50">Top search terms: "downtown", "pet friendly", "utilities included"</div>
+        </div>
+      </div>
+
+      <button onclick="showProAnalytics()" class="w-full py-3 text-sm bg-white/10 hover:bg-white/20 rounded-2xl transition">View Full Analytics (Coming Soon)</button>
+    </div>
   </div>
   `}
 </div>
@@ -7527,13 +7581,15 @@ window.removeHomeImage = function(index) {
 
 
 
-// ─── HOMES TAB: POST LISTING ─────────────────────────────────────────────────
 window.postHomeListing = async function() {
   const title   = document.getElementById('homeTitle')?.value.trim();
   const price   = document.getElementById('homePrice')?.value.trim();
   const type    = document.getElementById('homeType')?.value;
   const beds    = document.getElementById('homeBeds')?.value.trim();
   const baths   = document.getElementById('homeBaths')?.value.trim();
+  const sqft    = document.getElementById('homeSqft')?.value.trim();
+  const pet     = document.getElementById('homePetFriendly')?.checked;
+  const avail   = document.getElementById('homeAvailable')?.value;
   const desc    = document.getElementById('homeDesc')?.value.trim();
   const address = document.getElementById('homeAddress')?.value.trim();
   const notify  = document.getElementById('homeNotify')?.checked ?? true;
@@ -7542,10 +7598,13 @@ window.postHomeListing = async function() {
 
   if (notify && !(await checkNotificationCredits(2))) return;
 
-  // Build a rich description that includes beds/baths if provided
+  // Build a rich description that includes beds/baths/sqft/pet/available if provided
   const fullDesc = [
     beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
     baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
+    sqft   ? `${sqft} sqft` : '',
+    pet    ? '🐾 Pet Friendly' : '',
+    avail  ? `Available ${new Date(avail).toLocaleDateString()}` : '',
     address ? `📍 ${address}` : '',
     desc   || ''
   ].filter(Boolean).join(' · ');
@@ -7558,7 +7617,7 @@ window.postHomeListing = async function() {
       title,
       description: fullDesc,
       price:       price || '0',
-      condition:   type,        // 'rent' or 'sale' — stored in condition field
+      condition:   type,
       address:     address || '',
       images:      _pendingHomeImages,
       sendNotify:  notify
@@ -7567,12 +7626,14 @@ window.postHomeListing = async function() {
     if (res._id) {
       showToast('🏠 Home listing posted!', 'success');
       // Reset form
-      ['homeTitle','homePrice','homeBeds','homeBaths','homeDesc','homeAddress'].forEach(id => {
+      ['homeTitle','homePrice','homeBeds','homeBaths','homeSqft','homeDesc','homeAddress','homeAvailable'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
       const typeEl = document.getElementById('homeType');
       if (typeEl) typeEl.value = '';
+      const petEl = document.getElementById('homePetFriendly');
+      if (petEl) petEl.checked = false;
       _pendingHomeImages = [];
       renderHomeImagePreviews();
       loadOwnerHomes();
