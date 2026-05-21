@@ -27,6 +27,50 @@ function sanitizeBroadcast(raw) {
   return safe;
 }
 
+// ─── Facebook-style Hover Tooltip for Likes / Still There ─────────────────────
+let _tooltipEl = null;
+
+window.showVoterTooltip = function(element, voters = []) {
+  if (_tooltipEl) _tooltipEl.remove();
+
+  if (!voters || voters.length === 0) return;
+
+  const names = voters.map(v => {
+    if (typeof v === 'string') return v;
+    return v?.name || v?.author || 'Someone';
+  }).slice(0, 8); // show max 8 names
+
+  const more = voters.length > 8 ? ` +${voters.length - 8} more` : '';
+
+  _tooltipEl = document.createElement('div');
+  _tooltipEl.className = 'fixed z-[99999] bg-zinc-900 text-white text-xs px-3 py-2 rounded-xl shadow-xl border border-white/10 max-w-[220px]';
+  _tooltipEl.innerHTML = `
+    <div class="font-semibold mb-1 text-emerald-400">Liked by</div>
+    <div class="text-white/90 leading-snug">${names.join(', ')}${more}</div>
+  `;
+
+  document.body.appendChild(_tooltipEl);
+
+  const rect = element.getBoundingClientRect();
+  _tooltipEl.style.left = `${rect.left + window.scrollX}px`;
+  _tooltipEl.style.top = `${rect.bottom + window.scrollY + 6}px`;
+
+  // Auto hide after 4 seconds
+  setTimeout(() => {
+    if (_tooltipEl) {
+      _tooltipEl.remove();
+      _tooltipEl = null;
+    }
+  }, 4000);
+};
+
+window.hideVoterTooltip = function() {
+  if (_tooltipEl) {
+    _tooltipEl.remove();
+    _tooltipEl = null;
+  }
+};
+
 /** Returns true if the currently logged-in user is a site admin. */
 function isAdmin() {
   return !!(currentUser && currentUser.isAdmin === true);
@@ -2411,8 +2455,11 @@ function renderShoutoutCard(s) {
           <!-- Actions Bar -->
           <div class="flex items-center justify-between mt-4 pt-3 border-t border-white/10 text-xs">
             <div class="flex gap-5 text-white/70">
-              <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
-                ❤️ <span id="like-count-${s._id}">${likeCount}</span>
+              <button onclick="likeShoutout('${s._id}')" 
+              class="flex items-center gap-1 hover:text-white transition"
+              onmouseenter="showVoterTooltip(this, ${JSON.stringify(s.likes || s.stillThereVoters || [])})"
+              onmouseleave="hideVoterTooltip()">
+              ❤️ <span id="like-count-${s._id}">${likeCount}</span>
               </button>
               <button onclick="commentOnShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
                 💬 ${commentCount}
