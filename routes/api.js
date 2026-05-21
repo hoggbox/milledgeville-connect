@@ -1,5 +1,6 @@
 const express = require('express');
 const router  = express.Router();
+const mongoose = require('mongoose');
 
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
 const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
@@ -20,6 +21,7 @@ const ClaimRequest    = require('../models/ClaimRequest');
 const News            = require('../models/News');
 const Review          = require('../models/Review');
 const PushSubscription = require('../models/PushSubscription');
+
 
 
 // ─── NEW MODELS ─────────────────────────────────────────────────────────────
