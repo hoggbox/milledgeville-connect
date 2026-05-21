@@ -5258,7 +5258,35 @@ async function loadMarketplacePage(content) {
           <option value="fair">Fair</option>
         </select>
       </div>
+      <!-- 🔔 Marketplace Notification Preferences -->
+      <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-6">
+        <h3 class="font-semibold mb-3 flex items-center gap-2">🔔 Marketplace Alerts</h3>
+        <p class="text-xs text-white/60 mb-4">Get notified when new items are posted in these categories:</p>
+        
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="prefHomes" class="w-4 h-4 accent-emerald-500" checked>
+            <span>🏠 Homes for Rent/Sale</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="prefCars" class="w-4 h-4 accent-emerald-500" checked>
+            <span>🚗 Vehicles</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="prefFurniture" class="w-4 h-4 accent-emerald-500" checked>
+            <span>🛋️ Furniture</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="prefOther" class="w-4 h-4 accent-emerald-500" checked>
+            <span>📦 Other</span>
+          </label>
+        </div>
 
+        <button onclick="saveMarketplacePreferences()" 
+                class="mt-5 w-full bg-emerald-600 hover:bg-emerald-700 py-3.5 rounded-2xl text-sm font-semibold transition">
+          Save Preferences
+        </button>
+      </div>
       <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
     </div>`;
 
@@ -7493,6 +7521,23 @@ window.deleteOwnerHome = async function(id) {
     renderHomesPage();
   } catch (e) {
     showToast('Failed to delete listing', 'error');
+  }
+};
+
+// ─── SAVE MARKETPLACE NOTIFICATION PREFERENCES ─────────────────────────────
+window.saveMarketplacePreferences = async function() {
+  try {
+    const prefs = {
+      homes:     document.getElementById('prefHomes')?.checked ?? true,
+      cars:      document.getElementById('prefCars')?.checked ?? true,
+      furniture: document.getElementById('prefFurniture')?.checked ?? true,
+      other:     document.getElementById('prefOther')?.checked ?? true
+    };
+
+    await apiPost('/user/marketplace-preferences', prefs);
+    showToast('✅ Marketplace preferences saved!', 'success');
+  } catch (e) {
+    showToast('Failed to save preferences', 'error');
   }
 };
 
