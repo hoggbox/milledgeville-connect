@@ -8,6 +8,10 @@ let lastBroadcastTime = 0;
 let directoryCurrentPage = 1;
 const DIRECTORY_PAGE_SIZE = 8;
 let currentDirectoryBusinesses = [];
+// ─── MARKETPLACE PAGINATION STATE ───────────────────────────────────────────
+let marketplaceCurrentPage = 1;
+const MARKETPLACE_PAGE_SIZE = 8;
+let currentMarketplaceItems = [];
 
 // ─── App-wide constants ───────────────────────────────────────────────────────
 
@@ -5547,10 +5551,12 @@ async function loadMarketplacePage(content) {
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
   window.currentMarketCategoryFilter = 'all';
+  marketplaceCurrentPage = 1;
 
   const searchInput = document.getElementById('marketSearchInput');
   searchInput.addEventListener('input', debounce(() => {
     window.currentMarketSearch = searchInput.value.trim().toLowerCase();
+    marketplaceCurrentPage = 1;
     renderMarketplacePage();
   }, 250));
 
@@ -5576,9 +5582,24 @@ window.setMarketCategoryFilter = function(category) {
 // Improved filter + render function (replaces old filterAndRenderMarketplace if it exists)
 window.filterAndRenderMarketplace = function() {
   const conditionSelect = document.getElementById('marketConditionFilter');
-  if (conditionSelect) {
-    window.currentMarketFilter = conditionSelect.value;
-  }
+  if (conditionSelect) window.currentMarketFilter = conditionSelect.value;
+  marketplaceCurrentPage = 1;
+  renderMarketplacePage();
+};
+
+window.setMarketCategoryFilter = function(category) {
+  window.currentMarketCategoryFilter = category;
+  marketplaceCurrentPage = 1;
+
+  // Update active button styles...
+  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
+    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
+    } else {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+    }
+  });
+
   renderMarketplacePage();
 };
 
@@ -5588,64 +5609,109 @@ async function renderMarketplacePage() {
 
   container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
 
-  let filtered = allMarketplaceItems;
+  let filtered = allMarketplaceItems || [];
 
-  // Search
+  // Apply search filter
   if (window.currentMarketSearch) {
-    filtered = filtered.filter(item => 
+    filtered = filtered.filter(item =>
       (item.title || '').toLowerCase().includes(window.currentMarketSearch) ||
       (item.description || '').toLowerCase().includes(window.currentMarketSearch)
     );
   }
 
-  // Condition filter
+  // Apply condition filter
   if (window.currentMarketFilter && window.currentMarketFilter !== 'all') {
     filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
   }
 
-  // NEW: Category filter
+  // Apply category filter
   if (window.currentMarketCategoryFilter && window.currentMarketCategoryFilter !== 'all') {
     filtered = filtered.filter(item => item.category === window.currentMarketCategoryFilter);
   }
 
-  let html = filtered.map(item => `
-    <div onclick="showMarketplaceDetail('${item._id}')" 
-         class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
-      <div class="flex gap-4">
-        ${item.images?.[0] ? 
-          `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` : 
-          `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0">🛒</div>`}
-        <div class="flex-1 min-w-0">
-          <div class="flex justify-between items-start">
-            <h3 class="font-semibold text-lg leading-tight pr-2">${esc(item.title)}</h3>
-            <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
-          </div>
-          <p class="text-white/70 line-clamp-2 mt-1">${esc(item.description || '')}</p>
-          <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
-            <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
-            <span>${timeAgo(item.createdAt)}</span>
-            <span class="text-white/40">•</span>
-            ${renderClickableUser(item.seller)}
-          </div>
+  // Sort by most recent first
+  filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-          <!-- Report Button -->
-          <div class="mt-3 flex justify-end gap-3">
-            <button onclick="event.stopImmediatePropagation(); shareContent('market', '${esc(item.title)}', '$${item.price}')" 
-                    class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
-              🔗 Share
-            </button>
-            <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')" 
-                    class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
-              🚩 Report
-            </button>
+  currentMarketplaceItems = filtered;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+    return;
+  }
+
+  // Pagination logic
+  const totalPages = Math.ceil(filtered.length / MARKETPLACE_PAGE_SIZE);
+  marketplaceCurrentPage = Math.min(marketplaceCurrentPage, totalPages);
+
+  const start = (marketplaceCurrentPage - 1) * MARKETPLACE_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + MARKETPLACE_PAGE_SIZE);
+
+  let html = '<div class="space-y-4">';
+
+  pageItems.forEach(item => {
+    html += `
+      <div onclick="showMarketplaceDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
+        <div class="flex gap-4">
+          ${item.images?.[0] 
+            ? `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` 
+            : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0">🛒</div>`}
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start">
+              <h3 class="font-semibold text-lg leading-tight pr-2">${esc(item.title)}</h3>
+              <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
+            </div>
+            <p class="text-white/70 line-clamp-2 mt-1">${esc(item.description || '')}</p>
+            
+            <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
+              <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
+              <span>${timeAgo(item.createdAt)}</span>
+              <span class="text-white/40">•</span>
+              ${renderClickableUser(item.seller)}
+            </div>
           </div>
         </div>
+      </div>`;
+  });
+
+  html += '</div>';
+
+  // Pagination controls
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="goToMarketplacePage(${marketplaceCurrentPage - 1})" 
+                ${marketplaceCurrentPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+
+        <div class="text-sm text-white/60">
+          Page <span class="font-semibold text-white">${marketplaceCurrentPage}</span> of ${totalPages}
+        </div>
+
+        <button onclick="goToMarketplacePage(${marketplaceCurrentPage + 1})" 
+                ${marketplaceCurrentPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
       </div>
-    </div>
-  `).join('');
+    `;
+  }
 
   container.innerHTML = html;
 }
+
+function goToMarketplacePage(page) {
+  const totalPages = Math.ceil(currentMarketplaceItems.length / MARKETPLACE_PAGE_SIZE);
+  if (page < 1 || page > totalPages) return;
+
+  marketplaceCurrentPage = page;
+  renderMarketplacePage();
+}
+
+window.goToMarketplacePage = goToMarketplacePage;
 
 function renderMarketPagination(p) {
   const container = document.getElementById('marketPagination');
