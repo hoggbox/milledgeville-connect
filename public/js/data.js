@@ -4660,6 +4660,75 @@ function renderOwnerPhotoGrid() {
     </div>`).join('');
 }
 
+// ─── POST HOME / LISTING MODAL ───────────────────────────────────────────────
+window.showPostHomeModal = function() {
+  const html = `
+    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000] p-4">
+      <div class="bg-zinc-900 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-auto">
+        <div class="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-zinc-900">
+          <h2 class="text-2xl font-bold">🏠 Post New Listing</h2>
+          <button onclick="this.closest('.fixed').remove()" class="text-white/50 hover:text-white text-3xl leading-none">×</button>
+        </div>
+
+        <div class="p-6 space-y-5">
+          <input id="homeTitle" type="text" placeholder="Title (e.g. 3BR House for Rent)" 
+                 class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+
+          <div class="grid grid-cols-2 gap-4">
+            <input id="homePrice" type="number" placeholder="Price ($)" 
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+            <input id="homeAvailable" type="date" placeholder="Available Date" 
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+          </div>
+
+          <div class="grid grid-cols-3 gap-4">
+            <input id="homeBeds" type="number" placeholder="Beds" 
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+            <input id="homeBaths" type="number" step="0.5" placeholder="Baths" 
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+            <input id="homeSqft" type="number" placeholder="Sq Ft" 
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+          </div>
+
+          <div class="flex items-center gap-3">
+            <input id="homePetFriendly" type="checkbox" class="w-5 h-5 accent-emerald-500">
+            <label for="homePetFriendly" class="text-white/80">Pet Friendly</label>
+          </div>
+
+          <textarea id="homeDesc" rows="4" placeholder="Full description, amenities, etc..." 
+                    class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
+
+          <!-- Photo Upload -->
+          <div>
+            <button onclick="document.getElementById('homeImageInput').click()" 
+                    class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-5 py-3 rounded-2xl text-sm">
+              📸 Add Photos (up to 10)
+            </button>
+            <input id="homeImageInput" type="file" accept="image/*" multiple class="hidden"
+                   onchange="handleHomeImages(this)">
+            <div id="homeImagePreviews" class="flex gap-3 flex-wrap mt-4"></div>
+          </div>
+
+          <div class="flex items-center justify-between pt-4 border-t border-white/10">
+            <label class="flex items-center gap-2 text-white/70">
+              <input id="sendNotification" type="checkbox" class="accent-emerald-500">
+              Send notification to community (2 credits)
+            </label>
+          </div>
+        </div>
+
+        <div class="p-6 border-t border-white/10 flex gap-3">
+          <button onclick="this.closest('.fixed').remove()" 
+                  class="flex-1 py-4 rounded-3xl font-semibold border border-white/20">Cancel</button>
+          <button onclick="postHomeListing()" 
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold">Post Listing</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LOST & FOUND + MARKETPLACE — FULL MODALS & DETAIL VIEWS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -7707,6 +7776,35 @@ window.buyCreditsModal = function() {
     </div>`;
 
   document.body.insertAdjacentHTML('beforeend', html);
+};
+
+// ─── OWNER DASHBOARD TAB SWITCHER ───────────────────────────────────────────
+window.switchOwnerTab = function(tab) {
+  // Hide all tab contents
+  document.querySelectorAll('.tab-content, [id^="ownerTabContent"], [id^="dtabContent"]').forEach(el => {
+    if (el) el.classList.add('hidden');
+  });
+
+  // Show the selected one
+  const activeContent = document.getElementById(tab === 0 ? 'ownerTabContent-0' : 
+                       tab === 1 ? 'dtabContent-homes' : 'ownerTabContent-2');
+  if (activeContent) activeContent.classList.remove('hidden');
+
+  // Update active tab styling
+  document.querySelectorAll('[id^="ownerTab"]').forEach(btn => {
+    btn.classList.remove('border-b-2', 'border-emerald-400', 'text-emerald-400');
+    btn.classList.add('text-white/70');
+  });
+
+  const activeBtn = document.getElementById(`ownerTab${tab}`);
+  if (activeBtn) {
+    activeBtn.classList.add('border-b-2', 'border-emerald-400', 'text-emerald-400');
+  }
+
+  // Refresh listings when My Listings tab is opened
+  if (tab === 1) {
+    setTimeout(loadOwnerHomes, 100);
+  }
 };
 
 window.hideBuyCreditsModal = function() {
