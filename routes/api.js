@@ -260,7 +260,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     }
 
     // ── All checks passed — create the shoutout ────────────────────────────────
-    const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
+    const expiresAt = new Date(now + 5 * 60 * 60 * 1000); // 5 hours
 
     const shoutout = await Shoutout.create({
       text: text.trim(),
