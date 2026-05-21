@@ -4878,32 +4878,89 @@ window.showPostMarketplaceModal = function() {
   }
 
   modal.innerHTML = `
-    <div onclick="if(event.target.id==='marketModal')hideMarketModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl overflow-hidden">
+    <div onclick="if(event.target.id==='marketModal')hideMarketModal()" 
+         class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl overflow-hidden">
+
       <div class="px-6 pt-6 pb-2">
         <h2 class="text-2xl font-bold mb-4">Post Marketplace Listing</h2>
-        
-        <input id="marketTitle" type="text" placeholder="Item title" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4">
-        <textarea id="marketDesc" rows="3" placeholder="Description" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4"></textarea>
-        
+
+        <!-- Category -->
+        <div class="mb-4">
+          <label class="block text-sm font-semibold mb-1.5 text-slate-700">Category</label>
+          <select id="marketCategory" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none"
+                  onchange="toggleMarketHomeFields()">
+            <option value="">Select category...</option>
+            <option value="Homes">🏠 Homes (Rent / Sale)</option>
+            <option value="Cars">🚗 Cars & Vehicles</option>
+            <option value="Furniture">🪑 Furniture</option>
+            <option value="Electronics">📱 Electronics</option>
+            <option value="General">📦 General / Other</option>
+          </select>
+        </div>
+
+        <!-- Title -->
+        <input id="marketTitle" type="text" placeholder="Item title *" 
+               class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4">
+
+        <!-- Price + Condition -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label class="block text-sm font-semibold mb-1">Price ($)</label>
-            <input id="marketPrice" type="number" placeholder="25" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+            <input id="marketPrice" type="number" placeholder="25" 
+                   class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
           </div>
           <div>
             <label class="block text-sm font-semibold mb-1">Condition</label>
             <select id="marketCondition" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
-              <option value="new">New</option>
+              <option value="used">Used</option>
               <option value="like-new">Like New</option>
-              <option value="used" selected>Used</option>
+              <option value="new">New</option>
               <option value="fair">Fair</option>
             </select>
           </div>
         </div>
 
+        <!-- Description -->
+        <textarea id="marketDesc" rows="3" placeholder="Description" 
+                  class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4"></textarea>
+
+        <!-- ═══ HOME FIELDS (only shown when Homes is selected) ═══ -->
+        <div id="marketHomeFields" class="hidden mb-4 space-y-3 border border-slate-200 rounded-2xl p-4 bg-slate-50">
+          <div class="text-xs font-semibold text-emerald-600 mb-1">Home Listing Details</div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <select id="marketHomeType" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+              <option value="">Listing Type</option>
+              <option value="rent">For Rent</option>
+              <option value="sale">For Sale</option>
+            </select>
+            <input id="marketHomeSqft" type="number" placeholder="Sq Ft" 
+                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <input id="marketHomeBeds" type="number" min="0" placeholder="Bedrooms" 
+                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+            <input id="marketHomeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" 
+                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+          </div>
+
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer flex-1">
+              <input type="checkbox" id="marketHomePetFriendly" class="w-5 h-5 accent-emerald-500"> Pet Friendly
+            </label>
+            <input id="marketHomeAddress" type="text" placeholder="Address / Neighborhood" 
+                   class="flex-1 px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <!-- Photos -->
         <div class="mb-6">
           <label class="block text-sm font-semibold mb-2">Photos</label>
-          <input type="file" id="marketImages" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+          <input type="file" id="marketImages" multiple accept="image/*" 
+                 class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                 onchange="handleMarketImages(this)">
+          <div id="marketImagePreviews" class="flex flex-wrap gap-2 mt-3"></div>
         </div>
       </div>
 
@@ -4912,6 +4969,7 @@ window.showPostMarketplaceModal = function() {
         <button onclick="postMarketplaceItem()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Post Listing</button>
       </div>
     </div>`;
+  
   modal.style.display = 'flex';
 };
 
@@ -4921,26 +4979,52 @@ window.hideMarketModal = function() {
 };
 
 window.postMarketplaceItem = async function() {
-  const title = document.getElementById('marketTitle').value.trim();
-  const description = document.getElementById('marketDesc').value.trim();
-  const price = parseFloat(document.getElementById('marketPrice').value);
-  const category = document.getElementById('marketCategory') ? document.getElementById('marketCategory').value : '';
-  const condition = document.getElementById('marketCondition') ? document.getElementById('marketCondition').value : 'used';
+  const category  = document.getElementById('marketCategory')?.value;
+  const title     = document.getElementById('marketTitle')?.value.trim();
+  const price     = parseFloat(document.getElementById('marketPrice')?.value);
+  const condition = document.getElementById('marketCondition')?.value || 'used';
+  const desc      = document.getElementById('marketDesc')?.value.trim();
 
-  if (!title || !description || isNaN(price) || price <= 0) {
-    showToast("Title, description and price are required", 'error');
+  if (!title || !category) {
+    showToast('Title and Category are required', 'error');
     return;
   }
 
+  const btn = document.querySelector('#marketModal button[onclick="postMarketplaceItem()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+
   try {
-    showToast('Posting listing...', 'success');
+    let finalDescription = desc || '';
+
+    // If Homes category → build rich description with extra fields
+    if (category === 'Homes') {
+      const type    = document.getElementById('marketHomeType')?.value;
+      const beds    = document.getElementById('marketHomeBeds')?.value.trim();
+      const baths   = document.getElementById('marketHomeBaths')?.value.trim();
+      const pet     = document.getElementById('marketHomePetFriendly')?.checked;
+      const sqft    = document.getElementById('marketHomeSqft')?.value.trim();
+      const address = document.getElementById('marketHomeAddress')?.value.trim();
+
+      const homeDetails = [
+        type ? (type === 'rent' ? 'For Rent' : 'For Sale') : '',
+        beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
+        baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
+        sqft   ? `${sqft} sq ft` : '',
+        pet    ? '🐾 Pet Friendly' : '',
+        address ? `📍 ${address}` : ''
+      ].filter(Boolean).join(' · ');
+
+      if (homeDetails) {
+        finalDescription = homeDetails + (desc ? '\n\n' + desc : '');
+      }
+    }
 
     const images = window._marketImages || [];
 
     const res = await apiPost('/marketplace', {
       title,
-      description,
-      price,
+      description: finalDescription,
+      price: isNaN(price) ? 0 : price,
       images,
       category,
       condition
@@ -4948,13 +5032,9 @@ window.postMarketplaceItem = async function() {
 
     if (res && res._id) {
       showToast('🛒 Marketplace item posted!', 'success');
-      
-      // Clear form
-      document.getElementById('marketTitle').value = '';
-      document.getElementById('marketDesc').value = '';
-      document.getElementById('marketPrice').value = '';
-      if (document.getElementById('marketCategory')) document.getElementById('marketCategory').value = '';
-      
+      hideMarketModal();
+
+      // Clear form state
       window._marketImages = [];
       const preview = document.getElementById('marketImagePreviews');
       if (preview) preview.innerHTML = '';
@@ -4967,6 +5047,8 @@ window.postMarketplaceItem = async function() {
   } catch (e) {
     console.error(e);
     showToast('Network error — try again', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Post Listing'; }
   }
 };
 
@@ -5089,6 +5171,52 @@ function renderMarketComments(item) {
       </div>`;
   }).join('');
 }
+
+window.handleMarketImages = function(input) {
+  const files = Array.from(input.files);
+  if (!window._marketImages) window._marketImages = [];
+
+  const remaining = 6 - window._marketImages.length; // limit to 6 photos
+  if (remaining <= 0) {
+    showToast('Maximum 6 photos allowed', 'error');
+    return;
+  }
+
+  const toProcess = files.slice(0, remaining);
+
+  toProcess.forEach(file => {
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 8MB)`, 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      window._marketImages.push(e.target.result);
+      renderMarketImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+function renderMarketImagePreviews() {
+  const container = document.getElementById('marketImagePreviews');
+  if (!container || !window._marketImages) return;
+
+  container.innerHTML = window._marketImages.map((src, i) => `
+    <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200">
+      <img src="${src}" class="w-full h-full object-cover">
+      <button onclick="removeMarketImage(${i})" 
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center">✕</button>
+    </div>
+  `).join('');
+}
+
+window.removeMarketImage = function(index) {
+  if (!window._marketImages) return;
+  window._marketImages.splice(index, 1);
+  renderMarketImagePreviews();
+};
 
 window.markMarketSold = async function() {
   if (confirm('Mark this item as sold?')) {
@@ -5263,6 +5391,21 @@ window.filterAndRenderLostItems = function() {
 };
 
 async function loadMarketplacePage(content) {
+
+  // Fix select dropdown visibility in dark mode
+  const style = document.createElement('style');
+  style.textContent = `
+    select {
+      color: white !important;
+      background-color: #1e293b !important; /* slate-800 */
+    }
+    select option {
+      background-color: #1e293b;
+      color: white;
+    }
+  `;
+  document.head.appendChild(style);
+
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2">
       <div class="flex justify-between items-center mb-6">
@@ -5273,12 +5416,13 @@ async function loadMarketplacePage(content) {
         </button>
       </div>
 
-      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
         <input id="marketSearchInput" type="text" placeholder="Search items..." 
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
         
+        <!-- Condition Filter -->
         <select id="marketConditionFilter" onchange="filterAndRenderMarketplace()"
-                class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
+        class="bg-slate-800 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
           <option value="all">All Conditions</option>
           <option value="new">New</option>
           <option value="like-new">Like New</option>
@@ -5286,6 +5430,23 @@ async function loadMarketplacePage(content) {
           <option value="fair">Fair</option>
         </select>
       </div>
+
+      <!-- Category Filter Chips -->
+      <div class="flex gap-2 overflow-x-auto pb-3 mb-4 hide-scrollbar">
+        <button onclick="setMarketCategoryFilter('all')" id="cat-all"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white">All</button>
+        <button onclick="setMarketCategoryFilter('Homes')" id="cat-Homes"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">🏠 Homes</button>
+        <button onclick="setMarketCategoryFilter('Cars')" id="cat-Cars"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">🚗 Cars</button>
+        <button onclick="setMarketCategoryFilter('Furniture')" id="cat-Furniture"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">🪑 Furniture</button>
+        <button onclick="setMarketCategoryFilter('Electronics')" id="cat-Electronics"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📱 Electronics</button>
+        <button onclick="setMarketCategoryFilter('General')" id="cat-General"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📦 General</button>
+      </div>
+
       <!-- 🔔 Marketplace Notification Preferences -->
       <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-6">
         <h3 class="font-semibold mb-3 flex items-center gap-2">🔔 Marketplace Alerts</h3>
@@ -5294,19 +5455,19 @@ async function loadMarketplacePage(content) {
         <div class="grid grid-cols-2 gap-3 text-sm">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="prefHomes" class="w-4 h-4 accent-emerald-500" checked>
-            <span>🏠 Homes for Rent/Sale</span>
+            <span>🏠 Homes</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="prefCars" class="w-4 h-4 accent-emerald-500" checked>
-            <span>🚗 Vehicles</span>
+            <span>🚗 Cars & Vehicles</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="prefFurniture" class="w-4 h-4 accent-emerald-500" checked>
-            <span>🛋️ Furniture</span>
+            <span>🪑 Furniture</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="prefOther" class="w-4 h-4 accent-emerald-500" checked>
-            <span>📦 Other</span>
+            <span>📦 Electronics & General</span>
           </label>
         </div>
 
@@ -5330,6 +5491,7 @@ async function loadMarketplacePage(content) {
 
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
+  window.currentMarketCategoryFilter = 'all';
 
   const searchInput = document.getElementById('marketSearchInput');
   searchInput.addEventListener('input', debounce(() => {
@@ -5340,6 +5502,31 @@ async function loadMarketplacePage(content) {
   renderMarketplacePage();
 }
 
+// Set active category filter
+window.setMarketCategoryFilter = function(category) {
+  window.currentMarketCategoryFilter = category;
+
+  // Update active button styles
+  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
+    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
+    } else {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+    }
+  });
+
+  renderMarketplacePage();
+};
+
+// Improved filter + render function (replaces old filterAndRenderMarketplace if it exists)
+window.filterAndRenderMarketplace = function() {
+  const conditionSelect = document.getElementById('marketConditionFilter');
+  if (conditionSelect) {
+    window.currentMarketFilter = conditionSelect.value;
+  }
+  renderMarketplacePage();
+};
+
 async function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
   if (!container) return;
@@ -5348,6 +5535,7 @@ async function renderMarketplacePage() {
 
   let filtered = allMarketplaceItems;
 
+  // Search
   if (window.currentMarketSearch) {
     filtered = filtered.filter(item => 
       (item.title || '').toLowerCase().includes(window.currentMarketSearch) ||
@@ -5355,13 +5543,14 @@ async function renderMarketplacePage() {
     );
   }
 
-  if (window.currentMarketFilter !== 'all') {
+  // Condition filter
+  if (window.currentMarketFilter && window.currentMarketFilter !== 'all') {
     filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
   }
 
-  if (filtered.length === 0) {
-    container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
-    return;
+  // NEW: Category filter
+  if (window.currentMarketCategoryFilter && window.currentMarketCategoryFilter !== 'all') {
+    filtered = filtered.filter(item => item.category === window.currentMarketCategoryFilter);
   }
 
   let html = filtered.map(item => `
