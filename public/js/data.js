@@ -3827,16 +3827,33 @@ async function loadNotificationsTab() {
     <div class="space-y-5 p-4">
 
       <!-- Credit balance -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-        <div>
-          <div class="text-xs text-white/50 mb-1">Available Credits</div>
-          <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="text-xs text-white/50 mb-1">Available Credits</div>
+            <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-white/40">Custom = 2 credits</div>
+            <div class="text-xs text-white/40">Template = 1 credit</div>
+          </div>
         </div>
-        <div class="text-right space-y-0.5">
-          <div class="text-xs text-white/40">Custom = 2 credits</div>
-          <div class="text-xs text-white/40">Template = 1 credit</div>
-          ${!isPro ? `<button onclick="buyProTier()" class="mt-1 text-xs text-violet-400 underline block">Upgrade for more →</button>` : ''}
+
+        <div class="flex flex-wrap gap-2">
+          ${!isPro ? `
+            <button onclick="buyProTier()" 
+                    class="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition">
+              🚀 Upgrade to Pro (12 credits/mo)
+            </button>
+          ` : ''}
+
+          <button onclick="buyCreditPack()" 
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition flex items-center justify-center gap-2">
+            💳 Buy 10 Credits <span class="text-[10px] opacity-75">($4.99)</span>
+          </button>
         </div>
+
+        <p class="text-[10px] text-white/40 mt-2 text-center">One-time credit packs never expire. Pro members get 12 fresh credits every month.</p>
       </div>
 
       <!-- ── Custom notification form ── -->
@@ -7137,28 +7154,75 @@ window.buyProTier = async function() {
   }
 };
 
+// ─── BUY CREDIT PACK (10 credits for $4.99) ─────────────────────────────────
+window.buyCreditPack = async function() {
+  if (!window.Capacitor) {
+    showToast('Credit purchases are only available in the Android app', 'error');
+    return;
+  }
+
+  try {
+    showToast('Opening Google Play...', 'success');
+
+    const { InAppPurchase2 } = window.Capacitor.Plugins;
+
+    // ←←← CHANGE THIS if your product ID in Google Play Console is different
+    const productId = 'credits_10_pack';
+
+    await InAppPurchase2.buy({
+      productId: productId,
+      type: 'consumable'   // Important: this is a one-time consumable, not a subscription
+    });
+
+    // The actual credit grant happens in purchaseSucceeded listener below
+  } catch (err) {
+    console.error(err);
+    showToast('Purchase failed or cancelled', 'error');
+  }
+};
+
 // Listen for successful purchase and activate Pro on backend
 function setupBillingListener() {
   if (!window.Capacitor) return;
 
   const { InAppPurchase2 } = window.Capacitor.Plugins;
 
-  InAppPurchase2.addListener('purchaseSucceeded', async (purchase) => {
-    try {
+InAppPurchase2.addListener('purchaseSucceeded', async (purchase) => {
+  try {
+    const productId = purchase.productId || '';
+
+    if (productId.includes('pro_monthly')) {
+      // Existing Pro subscription flow
       const res = await apiPost('/owner/upgrade', {
         orderId: purchase.orderId || purchase.transactionId,
-        productId: purchase.productId
+        productId: productId
       });
 
       if (res.success) {
         showToast('🎉 Thank you! You are now Business Pro!', 'success');
-        // Refresh dashboard
         loadOwnerDashboard(document.getElementById('content'));
       }
-    } catch (e) {
-      showToast('Failed to activate Pro tier', 'error');
+    } 
+    else if (productId.includes('credits_10_pack') || productId.includes('credit')) {
+      // New credit pack flow
+      const res = await apiPost('/owner/buy-credits', {
+        orderId: purchase.orderId || purchase.transactionId,
+        productId: productId,
+        credits: 10
+      });
+
+      if (res.success) {
+        showToast('✅ 10 credits added to your account!', 'success');
+        // Refresh the notifications tab so credit count updates
+        if (typeof loadNotificationsTab === 'function') {
+          loadNotificationsTab();
+        }
+      }
     }
-  });
+  } catch (e) {
+    showToast('Failed to activate purchase', 'error');
+  }
+});
 
   InAppPurchase2.addListener('purchaseFailed', () => {
     showToast('Purchase failed or cancelled', 'error');

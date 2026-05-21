@@ -3160,6 +3160,30 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── BUY CREDIT PACK (one-time purchase) ─────────────────────────────────────
+router.post('/owner/buy-credits', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || !user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can buy credits' });
+    }
+
+    const { credits = 10 } = req.body;
+
+    user.notificationCredits = (user.notificationCredits || 0) + Number(credits);
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      credits: user.notificationCredits,
+      message: `${credits} credits added successfully`
+    });
+  } catch (err) {
+    console.error('Buy credits error:', err);
+    res.status(500).json({ message: 'Failed to add credits' });
+  }
+});
+
 // VAPID Public Key route is defined earlier in the PUSH NOTIFICATION ROUTES section
 
 // ─── USER: MARKETPLACE NOTIFICATION PREFERENCES ─────────────────────────────
