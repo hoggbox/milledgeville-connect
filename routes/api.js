@@ -2134,33 +2134,47 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
 // ─── CLAIM — STEP 2: CONFIRM PIN ─────────────────────────────────────────────
 //   POST /api/claim/:businessId/verify-pin
 //   Body: { pin: '123456', isRestaurant: bool }
+// ─── IMPROVED CLAIM VERIFICATION (Auto-approve on PIN success) ───────────────
 router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
   try {
     const { pin, isRestaurant } = req.body;
     if (!pin) return res.status(400).json({ message: 'PIN is required' });
 
     if (!checkVerifyPin(req.userId, req.params.businessId, pin)) {
-      return res.status(400).json({ message: 'Incorrect or expired PIN. Please request a new one.' });
+      return res.status(400).json({ message: 'Incorrect or expired PIN.' });
     }
 
     const business = await Business.findById(req.params.businessId);
     if (!business) return res.status(404).json({ message: 'Business not found' });
     if (business.owner) return res.status(400).json({ message: 'Already claimed.' });
 
-    // Approve the most recent pending claim for this user+business
+    // Auto-approve on successful PIN
     await ClaimRequest.findOneAndUpdate(
       { business: req.params.businessId, user: req.userId, status: 'pending' },
-      { status: 'approved', confidenceScore: 100, signals: [{ label: 'Phone PIN verified', points: 100, passed: true }] },
+      { 
+        status: 'approved', 
+        confidenceScore: 95,
+        signals: [{ label: 'Phone PIN verified', points: 95, passed: true }]
+      },
       { sort: { createdAt: -1 } }
     );
 
-    await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
-    await User.findByIdAndUpdate(req.userId, { verifiedBusiness: business._id });
+    await Business.findByIdAndUpdate(business._id, { 
+      owner: req.userId, 
+      isRestaurant: !!isRestaurant 
+    });
+
+    await User.findByIdAndUpdate(req.userId, { 
+      verifiedBusiness: business._id 
+    });
+
+    // Log to admin for audit
+    console.log(`✅ AUTO-APPROVED CLAIM: ${business.name} by user ${req.userId}`);
 
     res.json({
       status: 'approved',
       pinVerified: true,
-      message: '✅ Phone verified! Your business dashboard is ready.'
+      message: '✅ Business successfully verified and claimed!'
     });
   } catch (err) {
     console.error('PIN verify error:', err);
@@ -2496,40 +2510,33 @@ router.delete('/owner/homes/:id', authenticate, async (req, res) => {
 
 router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { 
-      name, 
-      address, 
-      phone, 
-      email, 
-      website, 
-      description, 
-      category,     // Must be a valid Category _id
-      logo 
-    } = req.body;
+    let { name, address, phone, email, website, description, category, logo } = req.body;
 
     if (!name || !category) {
       return res.status(400).json({ message: 'Name and category are required' });
     }
 
-    // Verify category exists
+    // Skip heavy sanitizer for admin route
+    name = String(name).trim();
+    description = description ? String(description).trim() : '';
+
     const catExists = await Category.findById(category);
     if (!catExists) {
-      return res.status(400).json({ message: 'Invalid category selected' });
+      return res.status(400).json({ message: 'Invalid category' });
     }
 
     const business = await Business.create({
-      name: name.trim(),
+      name,
       address: address || '',
       phone: phone || '',
       email: email || '',
       website: website || '',
-      description: description || '',
-      category: category,
-      logo: logo || null,
+      description,
+      category,
+      logo: logo || null
     });
 
-    const populated = await Business.findById(business._id)
-      .populate('category', 'name icon _id');
+    const populated = await Business.findById(business._id).populate('category', 'name icon');
 
     res.json({ 
       message: 'Business added successfully', 

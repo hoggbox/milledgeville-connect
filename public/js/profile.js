@@ -392,17 +392,37 @@ function showProfileSheet() {
     <p class="text-slate-400 text-xs mt-4">${lastLoginText}</p>
 
     <div class="mt-8 space-y-3">
-      ${isAdmin ? `<button id="adminBtn" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">🔧 Admin Panel</button>` : ''}
-      ${isVerified ? `<button id="bizDashboardBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">🏪 My Business Dashboard</button>` : ''}
-      
-      <button id="editProfileBtn" class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">✏️ Edit Profile</button>
-      
-      <button id="deleteAccountBtn" class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
+      ${isAdmin ? `
+      <button onclick="navigate('admin'); hideProfileSheet();" 
+              class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
+        🔧 Admin Panel
+      </button>` : ''}
+
+      ${isVerified ? `
+      <button onclick="navigate('owner-dashboard'); hideProfileSheet();" 
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+        🏪 My Business Dashboard
+      </button>` : ''}
+
+      <button onclick="showEditProfileModal()" 
+              class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+        ✏️ Edit Profile
+      </button>
+
+      <button onclick="showDeleteAccountModal()" 
+              class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
         🗑️ Delete My Account
       </button>
 
-      <button id="logoutBtn" class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">Logout</button>
-      <button id="closeBtn" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">Close</button>
+      <button onclick="logout()" 
+              class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
+        Logout
+      </button>
+
+      <button onclick="hideProfileSheet()" 
+              class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">
+        Close
+      </button>
     </div>
   `;
 
