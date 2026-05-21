@@ -4890,9 +4890,6 @@ window.hideMarketModal = function() {
 };
 
 window.postMarketplaceItem = async function() {
-  // === CREDIT CHECK FOR MARKETPLACE ===
-  if (!(await checkNotificationCredits(2))) return;   // 2 credits for marketplace listings
-
   const title = document.getElementById('marketTitle').value.trim();
   const description = document.getElementById('marketDesc').value.trim();
   const price = parseFloat(document.getElementById('marketPrice').value);
@@ -6879,15 +6876,6 @@ window.postShoutoutWithPhoto = async function() {
   isPostingShoutout = true;
 
   try {
-    // === CREDIT CHECK ===
-    if (currentUser && currentUser.subscriptionTier !== 'pro') {
-      const sub = await apiGet('/owner/subscription').catch(() => ({}));
-      if ((sub.credits || 0) < 2) {
-        showToast('Not enough credits (need 12/month). Upgrade to Pro Tier!', 'error');
-        return;
-      }
-    }
-
     const input = document.getElementById('shoutoutInput');
     const text = input ? input.value.trim() : '';
 
@@ -7074,7 +7062,9 @@ window.viewReportedContent = async function (type, id) {
 
 // Credit check helper for other posting functions
 async function checkNotificationCredits(required = 2) {
-  if (!currentUser || currentUser.subscriptionTier === 'pro') return true;
+  // Only verified business owners have a credit system at all
+  if (!currentUser || !currentUser.verifiedBusiness) return true;
+  if (currentUser.subscriptionTier === 'pro') return true;
 
   const sub = await apiGet('/owner/subscription').catch(() => ({}));
   if ((sub.credits || 0) < required) {
@@ -7116,7 +7106,7 @@ window.canSendNotification = async function(isCustom = false) {
   try {
     const sub = await apiGet('/owner/subscription');
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const cost = isCustom ? 2 : 1;   // custom = 2 credits, template = 1 credit
+    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
     return credits >= cost;
   } catch (e) {
     console.error('Credit check failed', e);
@@ -7141,7 +7131,7 @@ window.buyProTier = async function() {
 
     await InAppPurchase2.buy({
       productId: productId,
-      type: 'inapp'   // or 'subs' if you set it up as subscription in Play Console
+      type: 'subs'   // recurring subscription in Play Console
     });
 
     // This will be called by the purchase listener below when successful
@@ -7185,7 +7175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 50 credits/month.\nCustom Notification = 2 credits\nTemplate = 1 credit`, 'success');
+  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
 };
 
 window.saveOwnerBusinessLogo = async function() {
@@ -7514,6 +7504,31 @@ function renderHomesPage() {
       </div>`);
   }
 }
+
+// Call this after login and on owner-dashboard load
+window.validateProSubscription = async function() {
+  if (!currentUser || !window.Capacitor) return;
+
+  try {
+    // Get the latest purchase token from Google Play (you'll need to store it)
+    const { InAppPurchase2 } = window.Capacitor.Plugins;
+    const purchases = await InAppPurchase2.getPurchases();
+
+    const proPurchase = purchases.find(p => p.productId.includes('pro_monthly'));
+    if (!proPurchase?.purchaseToken) return;
+
+    const res = await apiPost('/owner/validate-subscription', {
+      purchaseToken: proPurchase.purchaseToken
+    });
+
+    if (res.success) {
+      currentUser.subscriptionTier = res.tier;
+      if (res.credits !== undefined) currentUser.notificationCredits = res.credits;
+    }
+  } catch (e) {
+    console.error('Subscription validation failed', e);
+  }
+};
 
 window.homesPageNav = function(dir) {
   const totalPages = Math.ceil(_homesAll.length / HOMES_PAGE_SIZE);

@@ -1407,10 +1407,13 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     const business = await Business.findById(user.verifiedBusiness).select('name');
     const bizName  = business?.name || user.name;
 
-    // Server-side credit deduction (2 credits for custom notification)
-    const deducted = await deductNotificationCredit(req.userId, 2, true);
+    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
+    const deducted = await deductNotificationCredit(req.userId);
     if (!deducted) {
-      return res.status(403).json({ message: 'Not enough notification credits. Upgrade to Business Pro.' });
+      return res.status(403).json({
+        message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
+        outOfCredits: true
+      });
     }
 
     // Prepend business name to the body so recipients always know who sent it
@@ -3001,7 +3004,7 @@ router.get('/owner/subscription', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Only verified business owners get credits
+    // Normal users (no verified business) have zero access to credits
     if (!user.verifiedBusiness) {
       return res.json({
         tier: 'free',
@@ -3010,18 +3013,91 @@ router.get('/owner/subscription', authenticate, async (req, res) => {
       });
     }
 
-    // Default to 10 credits if they have no field yet (Pro tier gets more)
-    const credits = user.notificationCredits !== undefined ? user.notificationCredits : 10;
+    // Verified business owners start with 5 free credits if field was never set.
+    // Grant those 5 credits now and persist so we don't keep re-granting.
+    if (user.notificationCredits === undefined || user.notificationCredits === null) {
+      user.notificationCredits = 5;
+      await user.save();
+    }
 
     res.json({
       tier: user.subscriptionTier || 'free',
-      credits: credits,
+      credits: user.notificationCredits,
       expires: user.subscriptionExpiry
     });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ─── GOOGLE PLAY SUBSCRIPTION VALIDATION ────────────────────────────────────
+// Called by the Android app after a purchase/renewal to verify with Google
+// and activate / refresh the user's Pro tier + 12 monthly credits.
+router.post('/owner/validate-subscription', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Must be a verified business owner to have a subscription
+    if (!user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can subscribe' });
+    }
+
+    const { purchaseToken } = req.body;
+    if (!purchaseToken) {
+      return res.status(400).json({ message: 'purchaseToken required' });
+    }
+
+    const packageName  = 'com.ghogg.milledgevilleconnect';
+    const productId    = 'pro_monthly_29_99';
+
+    const response = await fetch(
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GOOGLE_PLAY_ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.expiryTimeMillis && parseInt(data.expiryTimeMillis) > Date.now()) {
+      // Subscription is active — upgrade user and grant 12 credits for this cycle
+      const newExpiry = new Date(parseInt(data.expiryTimeMillis));
+
+      // Only reset credits when the expiry has actually rolled forward
+      // (avoid double-granting if the app sends the token twice in the same cycle)
+      const creditReset = !user.subscriptionExpiry ||
+                          newExpiry.getTime() > new Date(user.subscriptionExpiry).getTime();
+
+      user.subscriptionTier   = 'pro';
+      user.subscriptionExpiry = newExpiry;
+      if (creditReset) user.notificationCredits = 12;
+      await user.save();
+
+      return res.json({
+        success: true,
+        tier: 'pro',
+        credits: user.notificationCredits,
+        expires: user.subscriptionExpiry
+      });
+    } else {
+      // Subscription expired or cancelled — downgrade to free, keep remaining credits
+      user.subscriptionTier = 'free';
+      await user.save();
+      return res.json({
+        success: true,
+        tier: 'free',
+        credits: user.notificationCredits
+      });
+    }
+
+  } catch (err) {
+    console.error('Subscription validation error:', err);
+    res.status(500).json({ message: 'Validation failed' });
   }
 });
 
@@ -3035,12 +3111,47 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-// VAPID Public Key for Web Push
-router.get('/push/vapid-public-key', (req, res) => {
-  if (!process.env.VAPID_PUBLIC_KEY) {
-    return res.status(500).json({ message: 'VAPID not configured' });
+// VAPID Public Key route is defined earlier in the PUSH NOTIFICATION ROUTES section
+
+// ─── USER: MARKETPLACE NOTIFICATION PREFERENCES ─────────────────────────────
+router.post('/user/marketplace-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { homes, cars, furniture, other } = req.body;
+
+    user.marketplacePreferences = {
+      homes:     !!homes,
+      cars:      !!cars,
+      furniture: !!furniture,
+      other:     !!other
+    };
+
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Marketplace preferences saved',
+      preferences: user.marketplacePreferences 
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to save preferences' });
   }
-  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
+// Optional: GET route so frontend can load current prefs
+router.get('/user/marketplace-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    res.json(user.marketplacePreferences || {
+      homes: true, cars: true, furniture: true, other: true
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load preferences' });
+  }
 });
 
 // ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
@@ -3063,27 +3174,58 @@ router.post('/user/delete-request', authenticate, async (req, res) => {
 });
 
 // ─── CREDIT DEDUCTION SYSTEM ───────────────────────────────────────────────
-async function deductNotificationCredit(userId, amount = 2, isCustom = false) {
+// All notification sends cost 2 credits regardless of tier.
+// Pro users have their 12 monthly credits refreshed each billing cycle.
+// Normal users (no verifiedBusiness) should never reach this function,
+// but we guard against it anyway.
+async function deductNotificationCredit(userId) {
   const user = await User.findById(userId);
   if (!user) return false;
 
-  const cost = isCustom ? 4 : 2;
+  // Non-owners cannot use notification credits at all
+  if (!user.verifiedBusiness) return false;
 
-  if (user.subscriptionTier === 'pro') {
-    // Pro users can go slightly negative as grace period
-    user.notificationCredits = (user.notificationCredits || 0) - cost;
-    await user.save();
-    return true;
-  }
+  const cost = 2;
 
-  // Free users
   if ((user.notificationCredits || 0) < cost) {
-    return false;
+    return false; // Out of credits — blocked for both free and pro owners
   }
 
   user.notificationCredits -= cost;
   await user.save();
   return true;
+}
+
+// ─── PRO TIER MONTHLY CREDIT RESET ──────────────────────────────────────────
+// Runs daily but only resets credits for users whose subscriptionExpiry has
+// rolled over into a new billing cycle (i.e. expiry advanced since last reset).
+async function resetProCredits() {
+  try {
+    const now = new Date();
+    // Only reset users whose billing cycle just renewed:
+    // their subscriptionExpiry is in the future AND creditsLastReset is before
+    // the start of the current billing period (i.e. before their last expiry rollover).
+    const result = await User.updateMany(
+      {
+        subscriptionTier: 'pro',
+        subscriptionExpiry: { $gt: now },
+        // creditsLastReset is either unset or older than one billing period ago
+        $or: [
+          { creditsLastReset: { $exists: false } },
+          { $expr: { $lt: ['$creditsLastReset', { $subtract: ['$subscriptionExpiry', 30 * 24 * 60 * 60 * 1000] }] } }
+        ]
+      },
+      {
+        $set: { notificationCredits: 12, creditsLastReset: now }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(`✅ Reset ${result.modifiedCount} Pro users to 12 credits (billing cycle rollover)`);
+    }
+  } catch (err) {
+    console.error('Monthly credit reset failed:', err);
+  }
 }
 
 
@@ -3095,6 +3237,10 @@ const CURRENT_VERSION = '1.2.5';
 router.get('/app/version', (req, res) => {
   res.json({ latest: CURRENT_VERSION });
 });
+
+// Check daily whether any billing cycles have rolled over
+setInterval(resetProCredits, 24 * 60 * 60 * 1000); // every 24 hours
+resetProCredits(); // run once on server start
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
