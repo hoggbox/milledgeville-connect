@@ -2573,6 +2573,42 @@ window.toggleLike = async function (shoutoutId) {
   }
 };
 
+window.submitComment = async function(contentType, contentId) {
+  const input = document.getElementById(`comment-input-${contentId}`);
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!requireAuth('Sign in to comment')) return;
+
+  try {
+    let endpoint = '';
+    if (contentType === 'market') endpoint = `/marketplace/${contentId}/comments`;
+    else if (contentType === 'lost') endpoint = `/lostitems/${contentId}/comments`;
+
+    if (!endpoint) return;
+
+    await apiPost(endpoint, { text });
+
+    input.value = '';
+    showToast('Comment posted!', 'success');
+
+    // Refresh the detail modal to show new comment
+    if (contentType === 'market') {
+      const modal = document.getElementById('marketDetailModal');
+      if (modal) modal.remove();
+      showMarketplaceDetail(contentId);
+    } else if (contentType === 'lost') {
+      const modal = document.getElementById('lostDetailModal');
+      if (modal) modal.remove();
+      showLostDetail(contentId);
+    }
+  } catch (e) {
+    showToast('Failed to post comment', 'error');
+  }
+};
+
 window.toggleCommentSection = function (shoutoutId) {
   const section = document.getElementById(`comment-section-${shoutoutId}`);
   if (!section) return;
@@ -7089,25 +7125,39 @@ async function renderAdminAnalytics() {
     </div>`;
 }
 
-// ─── UNIVERSAL COMMENT RENDERER WITH REPORT BUTTON ───────────────────────
+// Track how many comments are visible per container
+const _commentVisibleCount = {};
+
 function renderComments(comments = [], containerId, contentType, contentId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
   if (!comments || comments.length === 0) {
-    container.innerHTML = `<p class="text-white/40 text-center py-8">No comments yet — be the first!</p>`;
+    container.innerHTML = `
+      <p class="text-white/40 text-center py-6">No comments yet — be the first!</p>
+      ${renderCommentInput(contentType, contentId)}
+    `;
     return;
   }
 
-  let html = comments.map(c => {
-    const authorId = c.authorId?._id || c.authorId || c.author;
+  const key = containerId;
+  if (!_commentVisibleCount[key]) _commentVisibleCount[key] = 5;
+
+  const visibleCount = Math.min(_commentVisibleCount[key], comments.length);
+  const visibleComments = comments.slice(0, visibleCount);
+  const remaining = comments.length - visibleCount;
+
+  let html = '<div class="space-y-3">';
+
+  visibleComments.forEach(c => {
+    const authorId = c.authorId?._id || c.authorId;
     const authorName = c.author || c.authorName || 'Anonymous';
 
-    return `
-      <div class="bg-white/10 rounded-2xl p-4 mb-3">
+    html += `
+      <div class="bg-white/10 rounded-2xl p-4">
         <div class="flex items-center justify-between">
           <div onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
-               class="font-medium cursor-pointer hover:underline">
+               class="font-medium cursor-pointer hover:underline text-emerald-400">
             ${esc(authorName)}
           </div>
           <button onclick="event.stopImmediatePropagation(); reportContent('comment', '${c._id}', '${esc(c.text || '').substring(0,80)}')" 
@@ -7115,13 +7165,80 @@ function renderComments(comments = [], containerId, contentType, contentId) {
             🚩 Report
           </button>
         </div>
-        <p class="text-white/80 mt-1">${esc(c.text)}</p>
-        <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
+        <p class="text-white/90 mt-1.5">${esc(c.text)}</p>
+        <div class="flex items-center justify-between mt-2">
+          <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
+        </div>
       </div>`;
-  }).join('');
+  });
+
+  html += '</div>';
+
+  // View more / Show less controls
+  if (comments.length > 5) {
+    html += `
+      <div class="flex justify-center gap-4 mt-3">
+        ${visibleCount < comments.length ? `
+          <button onclick="viewMoreComments('${containerId}', ${contentType}, '${contentId}', ${comments.length})" 
+                  class="text-sm text-emerald-400 hover:text-emerald-300 font-medium">
+            View more comments (${remaining} more)
+          </button>` : ''}
+
+        ${visibleCount > 5 ? `
+          <button onclick="showLessComments('${containerId}', ${contentType}, '${contentId}')" 
+                  class="text-sm text-white/50 hover:text-white/70 font-medium">
+            Show less
+          </button>` : ''}
+      </div>`;
+  }
+
+  // Comment input
+  html += renderCommentInput(contentType, contentId);
 
   container.innerHTML = html;
 }
+
+function renderCommentInput(contentType, contentId) {
+  return `
+    <div class="mt-4 flex gap-2">
+      <input id="comment-input-${contentId}" type="text" placeholder="Write a comment..." 
+             class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400"
+             onkeypress="if(event.key === 'Enter') submitComment('${contentType}', '${contentId}')">
+      <button onclick="submitComment('${contentType}', '${contentId}')" 
+              class="bg-emerald-600 hover:bg-emerald-700 px-6 rounded-2xl text-sm font-semibold transition">
+        Post
+      </button>
+    </div>`;
+}
+
+window.viewMoreComments = function(containerId, contentType, contentId, total) {
+  _commentVisibleCount[containerId] = (_commentVisibleCount[containerId] || 5) + 5;
+  // Re-render with full list (we need to store it)
+  // For now we'll reload the detail modal or fetch fresh data
+  if (contentType === 'market') {
+    // Re-open or refresh marketplace detail
+    const modal = document.getElementById('marketDetailModal');
+    if (modal) modal.remove();
+    showMarketplaceDetail(contentId);
+  } else if (contentType === 'lost') {
+    const modal = document.getElementById('lostDetailModal');
+    if (modal) modal.remove();
+    showLostDetail(contentId);
+  }
+};
+
+window.showLessComments = function(containerId, contentType, contentId) {
+  _commentVisibleCount[containerId] = 5;
+  if (contentType === 'market') {
+    const modal = document.getElementById('marketDetailModal');
+    if (modal) modal.remove();
+    showMarketplaceDetail(contentId);
+  } else if (contentType === 'lost') {
+    const modal = document.getElementById('lostDetailModal');
+    if (modal) modal.remove();
+    showLostDetail(contentId);
+  }
+};
 
 // ─── ONBOARDING / WELCOME TOUR (First-time users) ───────────────────────────
 window.showOnboardingTour = function() {
