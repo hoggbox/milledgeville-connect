@@ -7226,7 +7226,7 @@ function renderComments(comments = [], containerId, contentType, contentId) {
   if (!container) return;
 
   if (!comments || comments.length === 0) {
-    container.innerHTML = `<p class="text-white/40 text-center py-6">No comments yet — be the first!</p>`;
+    container.innerHTML = `<p class="text-slate-400 text-center py-6">No comments yet — be the first!</p>`;
     return;
   }
 
@@ -7237,10 +7237,10 @@ function renderComments(comments = [], containerId, contentType, contentId) {
     const authorName = c.author || c.authorName || 'Anonymous';
 
     html += `
-      <div class="bg-white/10 rounded-2xl p-4">
+      <div class="bg-slate-100 rounded-2xl p-4">
         <div class="flex justify-between items-center">
           <div onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
-               class="font-medium cursor-pointer hover:underline text-emerald-400">
+               class="font-medium cursor-pointer hover:underline text-emerald-600">
             ${esc(authorName)}
           </div>
           <button onclick="event.stopImmediatePropagation(); reportContent('comment', '${c._id}')" 
@@ -7248,8 +7248,8 @@ function renderComments(comments = [], containerId, contentType, contentId) {
             🚩
           </button>
         </div>
-        <p class="text-white/90 mt-1.5">${esc(c.text)}</p>
-        <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
+        <p class="text-slate-800 mt-1.5">${esc(c.text)}</p>
+        <span class="text-[10px] text-slate-400">${timeAgo(c.createdAt)}</span>
       </div>`;
   });
 
