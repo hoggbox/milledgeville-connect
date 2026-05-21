@@ -5505,36 +5505,6 @@ async function loadMarketplacePage(content) {
         <button onclick="setMarketCategoryFilter('General')" id="cat-General"
                 class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📦 General</button>
       </div>
-
-      <!-- 🔔 Marketplace Notification Preferences -->
-      <div class="bg-white/10 border border-white/10 rounded-3xl p-5 mb-6">
-        <h3 class="font-semibold mb-3 flex items-center gap-2">🔔 Marketplace Alerts</h3>
-        <p class="text-xs text-white/60 mb-4">Get notified when new items are posted in these categories:</p>
-        
-        <div class="grid grid-cols-2 gap-3 text-sm">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="prefHomes" class="w-4 h-4 accent-emerald-500" checked>
-            <span>🏠 Homes</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="prefCars" class="w-4 h-4 accent-emerald-500" checked>
-            <span>🚗 Cars & Vehicles</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="prefFurniture" class="w-4 h-4 accent-emerald-500" checked>
-            <span>🪑 Furniture</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="prefOther" class="w-4 h-4 accent-emerald-500" checked>
-            <span>📦 Electronics & General</span>
-          </label>
-        </div>
-
-        <button onclick="saveMarketplacePreferences()" 
-                class="mt-5 w-full bg-emerald-600 hover:bg-emerald-700 py-3.5 rounded-2xl text-sm font-semibold transition">
-          Save Preferences
-        </button>
-      </div>
       <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
     </div>`;
 
