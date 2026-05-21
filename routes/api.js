@@ -260,7 +260,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     }
 
     // ── All checks passed — create the shoutout ────────────────────────────────
-    const expiresAt = new Date(now + 5 * 60 * 60 * 1000); // 5 hours
+    const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
 
     const shoutout = await Shoutout.create({
       text: text.trim(),
@@ -2687,42 +2687,35 @@ router.post('/admin/claims/:id/decision', authenticate, requireAdmin, async (req
     claim.status = decision;
     await claim.save();
 
-    if (decision === 'approved') {
-      const isRestaurant = claim.verificationInfo?.isRestaurant === true;
+if (decision === 'approved') {
+  const isRestaurant = claim.verificationInfo?.isRestaurant === true;
 
-      await Business.findByIdAndUpdate(claim.business._id, { 
-        owner: claim.user._id, 
-        isRestaurant 
-      });
+  await Business.findByIdAndUpdate(claim.business._id, { 
+    owner: claim.user._id, 
+    isRestaurant 
+  });
 
-      const user = await User.findById(claim.user._id);
-      if (user) {
-        user.verifiedBusiness = claim.business._id;
+  const user = await User.findById(claim.user._id);
+  if (user) {
+    user.verifiedBusiness = claim.business._id;
 
-        // Give 5 free starter credits as a ONE-TIME welcome gift
-        const isFirstTime = !user.notificationCredits || user.notificationCredits === 0;
-        if (isFirstTime) {
-          user.notificationCredits = 5;
-        }
+    // Always grant 5 free starter credits as a one-time registration gift
+    user.notificationCredits = 5;
 
-        await user.save();
+    await user.save();
 
-        // Send welcome message only on first verification
-        if (isFirstTime) {
-          sendPushToUser(
-            user._id.toString(),
-            '🎉 Business Verified! You have 5 free credits',
-            `Welcome to Milledgeville Connect, ${claim.business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
-            { page: 'owner-dashboard' }
-          );
-        }
-      }
-    }
+    // Send a personal welcome push to the newly verified owner
+    sendPushToUser(
+      user._id.toString(),
+      '🎉 Business Verified! You have 5 free credits',
+      `Welcome to Milledgeville Connect, ${claim.business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+      { page: 'home' }
+    );
+  }
+}
 
     res.json({ message: `Claim ${decision}` });
-
   } catch (err) {
-    console.error('Claim approval error:', err);
     res.status(500).json({ message: err.message });
   }
 });

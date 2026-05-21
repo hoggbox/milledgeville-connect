@@ -23,13 +23,6 @@ const shoutoutSchema = new mongoose.Schema({
   comments: [commentSchema],
   images: [{ type: String }],
 
-  // Still There voting (community confirmation that alert is still active)
-  stillThereVoters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-
-  // Cleared voting (community resolution)
-  clearedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  cleared: { type: Boolean, default: false },
-
   // Auto-delete after 4 hours
   expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
 

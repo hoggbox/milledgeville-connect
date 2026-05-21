@@ -28,28 +28,11 @@ async function apiRequest(endpoint, data = null, method = 'GET') {
   const res = await fetch(API_BASE + endpoint, options);
   const text = await res.text();
 
-  let json;
   try {
-    json = JSON.parse(text);
+    return JSON.parse(text);
   } catch (e) {
-    json = { message: text || 'Server error' };
+    return { message: text || 'Server error' };
   }
-
-  // Graceful handling for expected conflict / validation errors
-  if (!res.ok) {
-    // Don't treat 409 (already voted) or 422 as fatal errors in console
-    if (res.status === 409 || res.status === 422) {
-      return json; // return the body so the caller can handle alreadyVoted etc.
-    }
-    console.warn(`API ${method} ${endpoint} → ${res.status}`, json);
-  }
-
-  return json;
-}
-
-// ─── NEW: DELETE helper for admin moderation (critical for Lost & Found + Marketplace) ───
-async function apiDelete(endpoint) {
-  return apiRequest(endpoint, null, 'DELETE');
 }
 
 async function apiGet(endpoint) {
@@ -62,6 +45,11 @@ async function apiPost(endpoint, data, method = 'POST') {
 
 async function apiPatch(endpoint, data) {
   return apiRequest(endpoint, data, 'PATCH');
+}
+
+// ─── NEW: DELETE helper for admin moderation (critical for Lost & Found + Marketplace) ───
+async function apiDelete(endpoint) {
+  return apiRequest(endpoint, null, 'DELETE');
 }
 
 window.apiGet    = apiGet;

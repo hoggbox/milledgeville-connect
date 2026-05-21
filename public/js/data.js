@@ -5,13 +5,6 @@ let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
 
-// Directory pagination state
-let _directoryPage = 1;
-const DIRECTORY_PAGE_SIZE = 8;
-let allMarketplaceItems = [];
-let _marketplacePage = 1;
-const MARKETPLACE_PAGE_SIZE = 8;
-
 // ─── App-wide constants ───────────────────────────────────────────────────────
 
 function esc(str) {
@@ -33,42 +26,6 @@ function sanitizeBroadcast(raw) {
   );
   return safe;
 }
-
-// ─── Facebook-style Hover Tooltip ─────────────────────
-let _tooltipEl = null;
-
-window.showVoterTooltip = function(element, voters = []) {
-  if (_tooltipEl) _tooltipEl.remove();
-  if (!voters || voters.length === 0) return;
-
-  const names = voters.map(v => {
-    if (typeof v === 'string') return v;
-    return v?.name || v?.author || 'Someone';
-  }).slice(0, 8);
-
-  const more = voters.length > 8 ? ` +${voters.length - 8} more` : '';
-
-  _tooltipEl = document.createElement('div');
-  _tooltipEl.className = 'fixed z-[99999] bg-zinc-900 text-white text-xs px-3 py-2 rounded-xl shadow-xl border border-white/10 max-w-[220px]';
-  _tooltipEl.innerHTML = `
-    <div class="font-semibold mb-1 text-emerald-400">Confirmed by</div>
-    <div class="text-white/90 leading-snug">${names.join(', ')}${more}</div>
-  `;
-
-  document.body.appendChild(_tooltipEl);
-
-  const rect = element.getBoundingClientRect();
-  _tooltipEl.style.left = `${rect.left + window.scrollX}px`;
-  _tooltipEl.style.top = `${rect.bottom + window.scrollY + 6}px`;
-
-  setTimeout(() => {
-    if (_tooltipEl) { _tooltipEl.remove(); _tooltipEl = null; }
-  }, 4500);
-};
-
-window.hideVoterTooltip = function() {
-  if (_tooltipEl) { _tooltipEl.remove(); _tooltipEl = null; }
-};
 
 /** Returns true if the currently logged-in user is a site admin. */
 function isAdmin() {
@@ -1418,16 +1375,9 @@ function renderDirectory(businesses) {
     return;
   }
 
-  // Pagination logic
-  const totalPages = Math.ceil(businesses.length / DIRECTORY_PAGE_SIZE);
-  _directoryPage = Math.max(1, Math.min(_directoryPage, totalPages));
-
-  const start = (_directoryPage - 1) * DIRECTORY_PAGE_SIZE;
-  const pageItems = businesses.slice(start, start + DIRECTORY_PAGE_SIZE);
-
   let html = '<div class="space-y-4">';
-  pageItems.forEach(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
+  businesses.forEach(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
@@ -1447,33 +1397,10 @@ function renderDirectory(businesses) {
       </div>`;
   });
   html += '</div>';
-
-  // Pagination controls
-  if (totalPages > 1) {
-    html += `
-      <div class="flex items-center justify-between mt-6 px-1">
-        <button onclick="directoryPageNav(-1)" ${_directoryPage === 1 ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-40 text-sm font-medium transition">
-          ← Prev
-        </button>
-        <span class="text-xs text-white/50">Page ${_directoryPage} of ${totalPages}</span>
-        <button onclick="directoryPageNav(1)" ${_directoryPage === totalPages ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-40 text-sm font-medium transition">
-          Next →
-        </button>
-      </div>`;
-  }
-
   container.innerHTML = html;
 }
 
-function directoryPageNav(dir) {
-  _directoryPage += dir;
-  renderDirectory(allBusinesses);
-}
-
 function filterDirectory() {
-  _directoryPage = 1;
   const searchTerm = (document.getElementById('directorySearch')?.value || '').toLowerCase();
   const filtered = allBusinesses.filter(b =>
     b.name.toLowerCase().includes(searchTerm) ||
@@ -1484,11 +1411,9 @@ function filterDirectory() {
 }
 
 async function filterByCategory(catId) {
-  _directoryPage = 1;
   const filtered = allBusinesses.filter(b => b.category && b.category._id === catId);
   renderDirectory(filtered);
 }
-
 // ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
 async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
@@ -2504,35 +2429,6 @@ function renderShoutoutCard(s) {
               🚩 Report
             </button>
           </div>
-
-          <!-- Still There + Cleared Voting -->
-          ${!isCleared ? `
-          <div class="flex gap-2 mt-3">
-            <button id="still-there-btn-${s._id}"
-                    onclick="markStillThere('${s._id}')"
-                    onmouseenter="showVoterTooltip(this, ${JSON.stringify(stillThereVoters)})"
-                    onmouseleave="hideVoterTooltip()"
-                    class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-medium transition
-                           ${hasVotedStillThere ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/70 hover:text-emerald-400 hover:bg-white/5'}">
-              👀 Still There 
-              <span id="still-there-label-${s._id}">(${stillThereCount})</span>
-            </button>
-
-            <button id="clear-btn-${s._id}"
-                    onclick="markCleared('${s._id}')"
-                    onmouseenter="showVoterTooltip(this, ${JSON.stringify(clearedBy)})"
-                    onmouseleave="hideVoterTooltip()"
-                    class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-medium transition
-                           ${hasVotedCleared ? 'text-green-400 bg-green-500/10' : 'text-white/70 hover:text-green-400 hover:bg-white/5'}">
-              ✅ Cleared 
-              <span id="clear-label-${s._id}">(${clearCount}/8)</span>
-            </button>
-          </div>
-          ` : `
-          <div class="mt-3 flex items-center gap-2 text-green-400 text-xs bg-green-500/10 px-3 py-2 rounded-2xl">
-            ✅ <span>Community marked this alert as cleared</span>
-          </div>
-          `}
         </div>
       </div>
     </div>`;
@@ -3448,7 +3344,7 @@ const tabs = [
   ...(biz && biz.isRestaurant ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
   { id: 'deals',         label: 'Deals',          icon: '🔥' },
   { id: 'events',        label: 'Events',         icon: '📅' },
-  { id: 'homes',         label: 'My Listings',    icon: '🏠' },
+  { id: 'homes',         label: 'Homes',          icon: '🏠' },
   { id: 'notifications', label: 'Notifications',  icon: '📢' },
   { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
@@ -3467,59 +3363,36 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      <!-- 🔥 BUSINESS PRO TIER BANNER (top only — does not affect rest of panel) -->
-      <div class="mx-0 mb-4 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-6 text-white">
-        <div class="flex justify-between items-start gap-4">
-          <div class="min-w-0">
-            <div class="inline-flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full text-xs mb-3">
-              ⭐ PRO TIER
-            </div>
-            <h2 class="text-xl font-bold leading-tight">Business Pro — $29.99/mo</h2>
-            <p class="text-white/80 text-sm mt-1">Boosted visibility • 12 credits/month • Analytics</p>
-          </div>
+      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
+<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
+  <div class="flex justify-between items-start">
+    <div>
+      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
+        ⭐ PRO TIER
+      </div>
+      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
+      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
+    </div>
+          
           ${isPro ? `
-            <div class="text-right flex-shrink-0">
-              <div class="text-emerald-300 font-bold text-sm">✅ ACTIVE</div>
-              <div class="text-xs text-white/60 mt-0.5">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
+            <div class="text-right">
+              <div class="text-emerald-300 font-bold">ACTIVE</div>
+              <div class="text-xs opacity-75">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
             </div>
           ` : `
-            <button onclick="buyProTier()"
-                    class="flex-shrink-0 bg-white text-purple-700 px-5 py-2.5 rounded-2xl font-bold text-sm hover:bg-white/90 transition shadow-xl">
+            <button onclick="buyProTier()" 
+                    class="bg-white text-purple-700 px-7 py-3 rounded-3xl font-bold hover:bg-white/90 transition shadow-xl">
               Upgrade Now
             </button>
           `}
         </div>
 
-        <!-- Credit balance row inside banner -->
-        <div class="mt-4 bg-white/10 border border-white/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
+        <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
           <div>
-            <div class="text-xs text-white/60 mb-0.5">Notification Credits</div>
-            <div id="ownerCreditCount" class="text-4xl font-bold leading-none">${credits}</div>
+            <div class="text-xs opacity-75">Notification Credits</div>
+            <div class="text-4xl font-black">${credits}</div>
           </div>
-          ${credits > 0 ? `
-            <button onclick="showCreditInfo()" class="text-white/70 text-sm underline hover:text-white transition">How credits work →</button>
-          ` : isPro ? `
-            <button onclick="buyCreditsModal()" class="bg-amber-500 hover:bg-amber-600 px-5 py-2.5 rounded-2xl text-sm font-bold transition shadow">Buy More Credits</button>
-          ` : `
-            <button onclick="buyProTier()" class="bg-amber-500 hover:bg-amber-600 px-5 py-2.5 rounded-2xl text-sm font-bold transition shadow">Get Pro for Credits</button>
-          `}
-        </div>
-        ${credits === 0 && isPro ? `
-          <p class="text-amber-300 text-xs mt-3 text-center">You've used all your monthly credits. Buy a credit pack to keep sending notifications.</p>
-        ` : credits === 0 && !isPro ? `
-          <p class="text-white/70 text-xs mt-3 text-center">Your 5 free starter credits have been used. Upgrade to Pro for 12 credits/month.</p>
-        ` : ''}
-
-        <!-- Free Sponsored Post Perk -->
-        <div class="mt-4 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm">
-          <div class="flex items-center gap-2 text-emerald-300">
-            <span>📣</span>
-            <span class="font-semibold">Pro Perk:</span>
-          </div>
-          <p class="text-white/80 text-xs mt-1 leading-snug">
-            You get <span class="font-semibold text-white">1 free sponsored post per month</span> in the Milledgeville Facebook group (45k members).<br>
-            Message <span class="font-medium">@imhoggbox</span> or use the Admin panel to request it.
-          </p>
+          <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
         </div>
       </div>
 
@@ -3708,14 +3581,8 @@ const tabs = [
           ${!isPro ? `
           <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
             <div class="text-5xl mb-4">🏠</div>
-            <h3 class="text-xl font-bold mb-2">🏠 My Listings</h3>
-            <p class="text-white/60 text-sm mb-6">Post homes, apartments, rentals, or properties for sale. You can notify the community (costs credits).</p>
-            <button onclick="showPostHomeModal()" 
-                    class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold text-lg transition mb-6">
-              ➕ Post New Listing
-            </button>
-
-            <div id="ownerHomesList" class="space-y-4"></div>
+            <h3 class="text-xl font-bold mb-2">Homes for Rent / Sale</h3>
+            <p class="text-white/60 mb-6 text-sm leading-relaxed">List properties you manage directly on Milledgeville Connect's marketplace. Requires Business Pro.</p>
             <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> List homes for rent or sale</div>
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Upload up to 10 photos</div>
@@ -3750,21 +3617,6 @@ const tabs = [
             <div class="grid grid-cols-2 gap-3">
               <input id="homeBeds" type="number" min="0" placeholder="Bedrooms" class="${inputClass}">
               <input id="homeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" class="${inputClass}">
-            </div>
-
-            <!-- Sqft + Pet Friendly -->
-            <div class="grid grid-cols-2 gap-3">
-              <input id="homeSqft" type="number" min="0" placeholder="Sq Ft (optional)" class="${inputClass}">
-              <label class="flex items-center gap-3 px-4 text-sm text-white/80 bg-white/5 border border-white/20 rounded-3xl cursor-pointer select-none">
-                <input type="checkbox" id="homePetFriendly" class="w-5 h-5 accent-emerald-500 flex-shrink-0">
-                <span>🐾 Pet Friendly</span>
-              </label>
-            </div>
-
-            <!-- Available Date -->
-            <div>
-              <label class="text-xs text-white/40 uppercase tracking-widest block mb-1.5 px-1">Available Date (optional)</label>
-              <input id="homeAvailable" type="date" class="${inputClass}">
             </div>
 
             <!-- Address -->
@@ -3822,81 +3674,31 @@ const tabs = [
   </div>
   ` : `
   <div id="analyticsContent">
-    <div class="space-y-6">
-      <!-- Overview Cards -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
-          <div class="text-3xl font-bold text-emerald-400">1.2k</div>
-          <div class="text-xs text-white/60 mt-1">Total Reach (30d)</div>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
-          <div class="text-3xl font-bold text-emerald-400">47</div>
-          <div class="text-xs text-white/60 mt-1">Notifications Sent</div>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
-          <div class="text-3xl font-bold text-emerald-400">${credits}</div>
-          <div class="text-xs text-white/60 mt-1">Credits Remaining</div>
-        </div>
-        <div class="bg-white/10 border border-white/10 rounded-3xl p-4 text-center">
-          <div class="text-3xl font-bold text-emerald-400">89</div>
-          <div class="text-xs text-white/60 mt-1">Listing Views</div>
-        </div>
-      </div>
-
-      <div class="bg-white/5 border border-white/10 rounded-3xl p-5">
-        <h4 class="font-semibold mb-3 flex items-center gap-2">📈 Post &amp; Listing Performance</h4>
-        <div class="text-sm text-white/70 space-y-1">
-          <div>• Your latest home listing has <span class="text-emerald-400 font-semibold">312 views</span> and <span class="text-emerald-400 font-semibold">18 saves</span></div>
-          <div>• Best performing time to post: <span class="font-semibold">Tue–Thu 6–8pm</span></div>
-          <div class="text-xs text-white/50 mt-2">More detailed metrics coming soon with Pro analytics backend.</div>
-        </div>
-      </div>
-
-      <div class="bg-white/5 border border-white/10 rounded-3xl p-5">
-        <h4 class="font-semibold mb-3 flex items-center gap-2">🛒 Marketplace Insights</h4>
-        <div class="text-sm text-white/70">
-          <div>Homes category is performing <span class="text-emerald-400">23% above average</span> this month.</div>
-          <div class="mt-1 text-xs text-white/50">Top search terms: "downtown", "pet friendly", "utilities included"</div>
-        </div>
-      </div>
-
-      <button onclick="showProAnalytics()" class="w-full py-3 text-sm bg-white/10 hover:bg-white/20 rounded-2xl transition">View Full Analytics (Coming Soon)</button>
-    </div>
+    <div class="text-white/30 text-center py-12 text-sm">Loading analytics…</div>
   </div>
   `}
 </div>
 
 <!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
 <div id="dtabContent-notifications" class="hidden">
-  ${credits > 0 || isPro ? `
-  <div id="notificationsContent">
-    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
-  </div>
-  ` : isPro && credits === 0 ? `
-  <!-- Pro member out of credits — prompt to buy more -->
-  <div class="bg-white/5 border border-amber-500/30 rounded-3xl p-8 text-center mb-4">
+  ${!isPro ? `
+  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
     <div class="text-5xl mb-4">📢</div>
-    <h3 class="text-xl font-bold mb-2">Out of Credits</h3>
-    <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used all your monthly credits. Buy a credit pack to keep sending notifications to your customers.</p>
-    <button onclick="buyCreditsModal()" class="bg-amber-500 hover:bg-amber-600 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-      🛒 Buy More Credits
+    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
+    <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
+    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
+    </div>
+    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+      🚀 Upgrade to Business Pro
     </button>
   </div>
   ` : `
-  <!-- No credits at all — free tier with 0 credits remaining -->
-  <div class="bg-white/5 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
-    <div class="text-5xl mb-4">📢</div>
-    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
-    <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used your 5 free starter credits. Upgrade to Business Pro to keep reaching your customers every month.</p>
-    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 12 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (2 credits each)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Analytics &amp; boosted listing visibility</div>
-    </div>
-    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-      🚀 Upgrade to Business Pro — $29.99/mo
-    </button>
+  <div id="notificationsContent">
+    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
   </div>
   `}
 </div>
@@ -4007,10 +3809,10 @@ window.insertNotifEmoji = function(emoji) {
 };
 
 async function loadNotificationsTab() {
-  // The notificationsContent div only exists when credits > 0 or isPro at render time.
-  // If the owner ran out of credits between renders, we need to handle the locked-state container too.
-  const tabContainer = document.getElementById('dtabContent-notifications');
-  let el = document.getElementById('notificationsContent');
+  const el = document.getElementById('notificationsContent');
+  if (!el) return;
+
+  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
 
   let credits = 0;
   let tier = 'free';
@@ -4023,79 +3825,22 @@ async function loadNotificationsTab() {
   }
 
   const isPro   = tier === 'pro';
-  const hasAccess = credits > 0 || isPro;
-
-  // If no access (no credits, not pro), show the upsell screen instead
-  if (!hasAccess && tabContainer) {
-    tabContainer.innerHTML = `
-    <div class="bg-white/5 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
-      <div class="text-5xl mb-4">📢</div>
-      <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
-      <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used your 5 free starter credits. Upgrade to Business Pro to keep reaching your customers every month.</p>
-      <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 12 credits / month included</div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (2 credits each)</div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Analytics &amp; boosted listing visibility</div>
-      </div>
-      <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-        🚀 Upgrade to Business Pro — $29.99/mo
-      </button>
-    </div>`;
-    return;
-  }
-
-  // Pro member with 0 credits — show buy-more prompt
-  if (isPro && credits === 0 && tabContainer) {
-    tabContainer.innerHTML = `
-    <div class="bg-white/5 border border-amber-500/30 rounded-3xl p-8 text-center mb-4">
-      <div class="text-5xl mb-4">📢</div>
-      <h3 class="text-xl font-bold mb-2">Out of Credits</h3>
-      <p class="text-white/60 mb-6 text-sm leading-relaxed">You've used all your monthly credits. Buy a credit pack to keep sending notifications to your customers.</p>
-      <button onclick="buyCreditsModal()" class="bg-amber-500 hover:bg-amber-600 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-        🛒 Buy More Credits
-      </button>
-    </div>`;
-    return;
-  }
-
-  // Ensure the notificationsContent div exists (may have been replaced by upsell on a prior visit)
-  if (!el && tabContainer) {
-    tabContainer.innerHTML = `<div id="notificationsContent"><div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div></div>`;
-    el = document.getElementById('notificationsContent');
-  }
-  if (!el) return;
-
-  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
-
   const bizName = currentUser?.verifiedBusiness?.name || currentUser?.name || 'Your Business';
 
   el.innerHTML = `
     <div class="space-y-5 p-4">
 
       <!-- Credit balance -->
-      <div class="bg-white/5 border border-white/10 rounded-3xl p-6">
-        <div class="flex justify-between items-center">
-          <div>
-            <div class="text-sm text-white/60">Notification Credits</div>
-            <div id="notifCreditDisplay" class="text-5xl font-black text-white mt-1">${credits}</div>
-          </div>
-          
-          ${credits > 0 ? `
-            <button onclick="showCreditInfo()" 
-                    class="text-emerald-400 text-sm underline">How credits work →</button>
-          ` : `
-            <button onclick="buyCreditsModal()" 
-                    class="bg-amber-500 hover:bg-amber-600 px-6 py-3 rounded-2xl text-sm font-semibold">Buy More Credits</button>
-          `}
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-white/50 mb-1">Available Credits</div>
+          <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
         </div>
-
-        ${credits === 0 ? `
-          <p class="text-amber-400 text-sm mt-4 leading-snug">
-            You've used your free credits.<br>
-            Buy more or upgrade to Business Pro ($29.99/mo) for 12 monthly credits.
-          </p>
-        ` : ''}
+        <div class="text-right space-y-0.5">
+          <div class="text-xs text-white/40">Custom = 2 credits</div>
+          <div class="text-xs text-white/40">Template = 1 credit</div>
+          ${!isPro ? `<button onclick="buyProTier()" class="mt-1 text-xs text-violet-400 underline block">Upgrade for more →</button>` : ''}
+        </div>
       </div>
 
       <!-- ── Custom notification form ── -->
@@ -4829,75 +4574,6 @@ function renderOwnerPhotoGrid() {
               class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>
     </div>`).join('');
 }
-
-// ─── POST HOME / LISTING MODAL ───────────────────────────────────────────────
-window.showPostHomeModal = function() {
-  const html = `
-    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000] p-4">
-      <div class="bg-zinc-900 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-auto">
-        <div class="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-zinc-900">
-          <h2 class="text-2xl font-bold">🏠 Post New Listing</h2>
-          <button onclick="this.closest('.fixed').remove()" class="text-white/50 hover:text-white text-3xl leading-none">×</button>
-        </div>
-
-        <div class="p-6 space-y-5">
-          <input id="homeTitle" type="text" placeholder="Title (e.g. 3BR House for Rent)" 
-                 class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-
-          <div class="grid grid-cols-2 gap-4">
-            <input id="homePrice" type="number" placeholder="Price ($)" 
-                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-            <input id="homeAvailable" type="date" placeholder="Available Date" 
-                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-          </div>
-
-          <div class="grid grid-cols-3 gap-4">
-            <input id="homeBeds" type="number" placeholder="Beds" 
-                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-            <input id="homeBaths" type="number" step="0.5" placeholder="Baths" 
-                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-            <input id="homeSqft" type="number" placeholder="Sq Ft" 
-                   class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-          </div>
-
-          <div class="flex items-center gap-3">
-            <input id="homePetFriendly" type="checkbox" class="w-5 h-5 accent-emerald-500">
-            <label for="homePetFriendly" class="text-white/80">Pet Friendly</label>
-          </div>
-
-          <textarea id="homeDesc" rows="4" placeholder="Full description, amenities, etc..." 
-                    class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
-
-          <!-- Photo Upload -->
-          <div>
-            <button onclick="document.getElementById('homeImageInput').click()" 
-                    class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-5 py-3 rounded-2xl text-sm">
-              📸 Add Photos (up to 10)
-            </button>
-            <input id="homeImageInput" type="file" accept="image/*" multiple class="hidden"
-                   onchange="handleHomeImages(this)">
-            <div id="homeImagePreviews" class="flex gap-3 flex-wrap mt-4"></div>
-          </div>
-
-          <div class="flex items-center justify-between pt-4 border-t border-white/10">
-            <label class="flex items-center gap-2 text-white/70">
-              <input id="sendNotification" type="checkbox" class="accent-emerald-500">
-              Send notification to community (2 credits)
-            </label>
-          </div>
-        </div>
-
-        <div class="p-6 border-t border-white/10 flex gap-3">
-          <button onclick="this.closest('.fixed').remove()" 
-                  class="flex-1 py-4 rounded-3xl font-semibold border border-white/20">Cancel</button>
-          <button onclick="postHomeListing()" 
-                  class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold">Post Listing</button>
-        </div>
-      </div>
-    </div>`;
-
-  document.body.insertAdjacentHTML('beforeend', html);
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOST & FOUND + MARKETPLACE — FULL MODALS & DETAIL VIEWS
@@ -7424,16 +7100,16 @@ window.handleOwnerLogoUpload = async function(input) {
   }
 };
 
-// ─── CREDIT CHECK (Fixed) ───────────────────────────────────────────────────
+// Client-side credit helpers
 window.canSendNotification = async function(isCustom = false) {
-  if (!currentUser?.verifiedBusiness) return true;
-
+  if (!currentUser) return false;
   try {
-    const sub = await apiGet('/owner/subscription').catch(() => ({}));
+    const sub = await apiGet('/owner/subscription');
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    return credits > 0;
+    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
+    return credits >= cost;
   } catch (e) {
-    console.error(e);
+    console.error('Credit check failed', e);
     return false;
   }
 };
@@ -7695,17 +7371,13 @@ window.removeHomeImage = function(index) {
   renderHomeImagePreviews();
 };
 
-
-
+// ─── HOMES TAB: POST LISTING ─────────────────────────────────────────────────
 window.postHomeListing = async function() {
   const title   = document.getElementById('homeTitle')?.value.trim();
   const price   = document.getElementById('homePrice')?.value.trim();
   const type    = document.getElementById('homeType')?.value;
   const beds    = document.getElementById('homeBeds')?.value.trim();
   const baths   = document.getElementById('homeBaths')?.value.trim();
-  const sqft    = document.getElementById('homeSqft')?.value.trim();
-  const pet     = document.getElementById('homePetFriendly')?.checked;
-  const avail   = document.getElementById('homeAvailable')?.value;
   const desc    = document.getElementById('homeDesc')?.value.trim();
   const address = document.getElementById('homeAddress')?.value.trim();
   const notify  = document.getElementById('homeNotify')?.checked ?? true;
@@ -7714,13 +7386,10 @@ window.postHomeListing = async function() {
 
   if (notify && !(await checkNotificationCredits(2))) return;
 
-  // Build a rich description that includes beds/baths/sqft/pet/available if provided
+  // Build a rich description that includes beds/baths if provided
   const fullDesc = [
     beds   ? `${beds} bed${beds !== '1' ? 's' : ''}` : '',
     baths  ? `${baths} bath${baths !== '1' ? 's' : ''}` : '',
-    sqft   ? `${sqft} sqft` : '',
-    pet    ? '🐾 Pet Friendly' : '',
-    avail  ? `Available ${new Date(avail).toLocaleDateString()}` : '',
     address ? `📍 ${address}` : '',
     desc   || ''
   ].filter(Boolean).join(' · ');
@@ -7733,7 +7402,7 @@ window.postHomeListing = async function() {
       title,
       description: fullDesc,
       price:       price || '0',
-      condition:   type,
+      condition:   type,        // 'rent' or 'sale' — stored in condition field
       address:     address || '',
       images:      _pendingHomeImages,
       sendNotify:  notify
@@ -7742,14 +7411,12 @@ window.postHomeListing = async function() {
     if (res._id) {
       showToast('🏠 Home listing posted!', 'success');
       // Reset form
-      ['homeTitle','homePrice','homeBeds','homeBaths','homeSqft','homeDesc','homeAddress','homeAvailable'].forEach(id => {
+      ['homeTitle','homePrice','homeBeds','homeBaths','homeDesc','homeAddress'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
       const typeEl = document.getElementById('homeType');
       if (typeEl) typeEl.value = '';
-      const petEl = document.getElementById('homePetFriendly');
-      if (petEl) petEl.checked = false;
       _pendingHomeImages = [];
       renderHomeImagePreviews();
       loadOwnerHomes();
@@ -7914,167 +7581,6 @@ window.logout = function() {
   localStorage.removeItem('token');
   currentUser = null;
   window.location.reload();
-};
-
-window.buyCreditsModal = function() {
-  const html = `
-    <div id="buyCreditsModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000]">
-      <div class="bg-zinc-900 rounded-3xl max-w-md w-full mx-4 p-6">
-        <h2 class="text-2xl font-bold mb-6 text-center">Buy Notification Credits</h2>
-        
-        <div class="space-y-3">
-          <button onclick="purchaseCreditPack(10, 4.99)" class="w-full bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-left transition flex justify-between items-center">
-            <div>
-              <div class="font-semibold">10 Credits</div>
-              <div class="text-xs text-white/50">$4.99 • Good for ~5 posts</div>
-            </div>
-            <div class="text-emerald-400 font-bold">$4.99</div>
-          </button>
-
-          <button onclick="purchaseCreditPack(25, 9.99)" class="w-full bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-left transition flex justify-between items-center">
-            <div>
-              <div class="font-semibold">25 Credits</div>
-              <div class="text-xs text-white/50">$9.99 • Most Popular</div>
-            </div>
-            <div class="text-emerald-400 font-bold">$9.99</div>
-          </button>
-
-          <button onclick="purchaseCreditPack(50, 17.99)" class="w-full bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-left transition flex justify-between items-center">
-            <div>
-              <div class="font-semibold">50 Credits</div>
-              <div class="text-xs text-white/50">$17.99 • Best Value</div>
-            </div>
-            <div class="text-emerald-400 font-bold">$17.99</div>
-          </button>
-        </div>
-
-        <button onclick="hideBuyCreditsModal()" class="w-full mt-6 text-white/60 py-3">Cancel</button>
-      </div>
-    </div>`;
-
-  document.body.insertAdjacentHTML('beforeend', html);
-};
-
-// ─── OWNER DASHBOARD TAB SWITCHER ───────────────────────────────────────────
-window.switchOwnerTab = function(tab) {
-  // Hide all tab contents
-  document.querySelectorAll('.tab-content, [id^="ownerTabContent"], [id^="dtabContent"]').forEach(el => {
-    if (el) el.classList.add('hidden');
-  });
-
-  // Show the selected one
-  const activeContent = document.getElementById(tab === 0 ? 'ownerTabContent-0' : 
-                       tab === 1 ? 'dtabContent-homes' : 'ownerTabContent-2');
-  if (activeContent) activeContent.classList.remove('hidden');
-
-  // Update active tab styling
-  document.querySelectorAll('[id^="ownerTab"]').forEach(btn => {
-    btn.classList.remove('border-b-2', 'border-emerald-400', 'text-emerald-400');
-    btn.classList.add('text-white/70');
-  });
-
-  const activeBtn = document.getElementById(`ownerTab${tab}`);
-  if (activeBtn) {
-    activeBtn.classList.add('border-b-2', 'border-emerald-400', 'text-emerald-400');
-  }
-
-  // Refresh listings when My Listings tab is opened
-  if (tab === 1) {
-    setTimeout(loadOwnerHomes, 100);
-  }
-};
-
-window.hideBuyCreditsModal = function() {
-  const modal = document.getElementById('buyCreditsModal');
-  if (modal) modal.remove();
-};
-
-window.purchaseCreditPack = async function(amount, price) {
-  hideBuyCreditsModal();
-  showToast(`Purchasing ${amount} credits for $${price}...`, 'success');
-
-  // ─── STILL THERE — confirm a traffic alert is still active ────────────────────
-window.markStillThere = async function (shoutoutId) {
-  if (!requireAuth('Sign in to confirm alerts.')) return;
-
-  const res = await apiPost(`/shoutouts/${shoutoutId}/still-there`, {});
-
-  if (res.alreadyVoted || res.message?.toLowerCase().includes('already')) {
-    showToast('You already confirmed this alert is still active.', 'info');
-    return;
-  }
-
-  if (res.stillThereCount !== undefined) {
-    const btn = document.getElementById(`still-there-btn-${shoutoutId}`);
-    const label = document.getElementById(`still-there-label-${shoutoutId}`);
-
-    if (label) label.textContent = `Still There (${res.stillThereCount})`;
-    if (btn) {
-      btn.classList.remove('text-white/50', 'hover:text-emerald-400', 'hover:bg-white/5');
-      btn.classList.add('text-emerald-400', 'bg-emerald-500/10');
-    }
-    showToast('👀 Thanks for confirming this alert is still active!', 'success');
-  } else {
-    showToast(res.message || 'Error confirming alert', 'error');
-  }
-};
-
-// ─── CLEARED — mark a traffic alert as resolved ───────────────────────────────
-window.markCleared = async function (shoutoutId) {
-  if (!requireAuth('Sign in to mark alerts cleared.')) return;
-
-  const res = await apiPost(`/shoutouts/${shoutoutId}/clear`, {});
-
-  if (res.alreadyVoted || res.message?.toLowerCase().includes('already')) {
-    showToast(`You already marked this cleared (${res.clearCount || 0}/8 votes).`, 'info');
-    return;
-  }
-
-  if (res.clearCount !== undefined) {
-    const btn = document.getElementById(`clear-btn-${shoutoutId}`);
-    const label = document.getElementById(`clear-label-${shoutoutId}`);
-
-    if (res.cleared) {
-      if (label) label.textContent = 'Cleared';
-      if (btn) {
-        btn.classList.remove('text-white/50', 'hover:text-green-400', 'hover:bg-white/5');
-        btn.classList.add('text-green-400', 'bg-green-500/10');
-      }
-
-      const card = document.getElementById(`shoutout-${shoutoutId}`);
-      if (card) {
-        card.classList.add('opacity-60');
-        const existingBanner = card.querySelector('.cleared-banner');
-        if (!existingBanner) {
-          card.insertAdjacentHTML('afterbegin',
-            `<div class="cleared-banner flex items-center gap-1.5 bg-white/5 rounded-2xl px-3 py-1.5 mb-3 text-xs text-white/60 font-medium">
-               ✅ Community marked this alert as cleared
-             </div>`
-          );
-        }
-        const stillThereBtn = document.getElementById(`still-there-btn-${shoutoutId}`);
-        if (stillThereBtn) stillThereBtn.remove();
-      }
-      showToast('✅ Alert marked as cleared by the community!', 'success');
-    } else {
-      if (label) label.textContent = `Cleared (${res.clearCount}/8)`;
-      if (btn) {
-        btn.classList.remove('text-white/50', 'hover:text-green-400', 'hover:bg-white/5');
-        btn.classList.add('text-green-400/70', 'bg-white/5');
-      }
-      showToast(`✅ Cleared vote recorded (${res.clearCount}/8 needed).`, 'success');
-    }
-  } else {
-    showToast(res.message || 'Error marking alert cleared', 'error');
-  }
-};
-  
-  // TODO: Wire this to Google Play In-App Purchases later
-  // For now, just simulate
-  setTimeout(() => {
-    showToast(`✅ ${amount} credits added!`, 'success');
-    loadOwnerDashboard(document.getElementById('content'));
-  }, 1200);
 };
 
 // ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
