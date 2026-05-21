@@ -3387,14 +3387,30 @@ const tabs = [
           `}
         </div>
 
-        <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <div class="text-xs opacity-75">Notification Credits</div>
-            <div class="text-4xl font-black">${credits}</div>
+        <!-- Notification Credits -->
+        <div class="mt-6 bg-white/10 border border-white/20 rounded-3xl p-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <div class="text-sm text-white/60">Notification Credits</div>
+              <div id="ownerCreditCount" class="text-5xl font-bold mt-1">${sub.credits || credits || 0}</div>
+            </div>
+            
+            ${ (sub.credits || credits || 0) > 0 ? `
+              <button onclick="showCreditInfo()" 
+                      class="text-emerald-400 text-sm underline">How credits work →</button>
+            ` : `
+              <button onclick="buyCreditsModal()" 
+                      class="bg-amber-500 hover:bg-amber-600 px-6 py-3 rounded-2xl text-sm font-semibold">Buy More Credits</button>
+            `}
           </div>
-          <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
+
+          ${ (sub.credits || credits || 0) === 0 ? `
+            <p class="text-amber-400 text-sm mt-4 leading-snug">
+              You've used your free credits.<br>
+              Buy more or upgrade to Pro for 12 monthly credits.
+            </p>
+          ` : ''}
         </div>
-      </div>
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
@@ -7371,6 +7387,8 @@ window.removeHomeImage = function(index) {
   renderHomeImagePreviews();
 };
 
+
+
 // ─── HOMES TAB: POST LISTING ─────────────────────────────────────────────────
 window.postHomeListing = async function() {
   const title   = document.getElementById('homeTitle')?.value.trim();
@@ -7581,6 +7599,62 @@ window.logout = function() {
   localStorage.removeItem('token');
   currentUser = null;
   window.location.reload();
+};
+
+window.buyCreditsModal = function() {
+  const html = `
+    <div id="buyCreditsModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000]">
+      <div class="bg-zinc-900 rounded-3xl max-w-md w-full mx-4 p-6">
+        <h2 class="text-2xl font-bold mb-6 text-center">Buy Notification Credits</h2>
+        
+        <div class="space-y-3">
+          <button onclick="purchaseCreditPack(10, 4.99)" class="w-full bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-left transition flex justify-between items-center">
+            <div>
+              <div class="font-semibold">10 Credits</div>
+              <div class="text-xs text-white/50">$4.99 • Good for ~5 posts</div>
+            </div>
+            <div class="text-emerald-400 font-bold">$4.99</div>
+          </button>
+
+          <button onclick="purchaseCreditPack(25, 9.99)" class="w-full bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-left transition flex justify-between items-center">
+            <div>
+              <div class="font-semibold">25 Credits</div>
+              <div class="text-xs text-white/50">$9.99 • Most Popular</div>
+            </div>
+            <div class="text-emerald-400 font-bold">$9.99</div>
+          </button>
+
+          <button onclick="purchaseCreditPack(50, 17.99)" class="w-full bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-left transition flex justify-between items-center">
+            <div>
+              <div class="font-semibold">50 Credits</div>
+              <div class="text-xs text-white/50">$17.99 • Best Value</div>
+            </div>
+            <div class="text-emerald-400 font-bold">$17.99</div>
+          </button>
+        </div>
+
+        <button onclick="hideBuyCreditsModal()" class="w-full mt-6 text-white/60 py-3">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.hideBuyCreditsModal = function() {
+  const modal = document.getElementById('buyCreditsModal');
+  if (modal) modal.remove();
+};
+
+window.purchaseCreditPack = async function(amount, price) {
+  hideBuyCreditsModal();
+  showToast(`Purchasing ${amount} credits for $${price}...`, 'success');
+  
+  // TODO: Wire this to Google Play In-App Purchases later
+  // For now, just simulate
+  setTimeout(() => {
+    showToast(`✅ ${amount} credits added!`, 'success');
+    loadOwnerDashboard(document.getElementById('content'));
+  }, 1200);
 };
 
 // ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
