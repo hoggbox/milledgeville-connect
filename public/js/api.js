@@ -52,6 +52,18 @@ async function apiDelete(endpoint) {
   return apiRequest(endpoint, null, 'DELETE');
 }
 
+async function apiGet(endpoint) {
+  return apiRequest(endpoint, null, 'GET');
+}
+
+async function apiPost(endpoint, data, method = 'POST') {
+  return apiRequest(endpoint, data, method);
+}
+
+async function apiPatch(endpoint, data) {
+  return apiRequest(endpoint, data, 'PATCH');
+}
+
 window.apiGet    = apiGet;
 window.apiPost   = apiPost;
 window.apiPatch  = apiPatch;
