@@ -3364,15 +3364,15 @@ const tabs = [
       </div>
 
       <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
-      <div class="mx-4 mb-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-7 text-white">
-        <div class="flex justify-between items-start">
-          <div>
-            <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-3">
-              ⭐ BUSINESS PRO
-            </div>
-            <h3 class="text-2xl font-bold">$19.99 / month</h3>
-            <p class="text-white/80 text-sm mt-1">Boosted visibility • More credits • Analytics</p>
-          </div>
+<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
+  <div class="flex justify-between items-start">
+    <div>
+      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
+        ⭐ PRO TIER
+      </div>
+      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
+      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
+    </div>
           
           ${isPro ? `
             <div class="text-right">
@@ -6842,7 +6842,7 @@ window.postShoutoutWithPhoto = async function() {
     if (currentUser && currentUser.subscriptionTier !== 'pro') {
       const sub = await apiGet('/owner/subscription').catch(() => ({}));
       if ((sub.credits || 0) < 2) {
-        showToast('Not enough credits. Upgrade to Pro Tier!', 'error');
+        showToast('Not enough credits (need 12/month). Upgrade to Pro Tier!', 'error');
         return;
       }
     }

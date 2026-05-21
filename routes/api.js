@@ -2503,7 +2503,7 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
       email, 
       website, 
       description, 
-      category,     // ← This should be the category _id
+      category,     // Must be a valid Category _id
       logo 
     } = req.body;
 
@@ -2511,25 +2511,23 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Name and category are required' });
     }
 
-    // Verify the category actually exists
+    // Verify category exists
     const catExists = await Category.findById(category);
     if (!catExists) {
       return res.status(400).json({ message: 'Invalid category selected' });
     }
 
     const business = await Business.create({
-      name,
+      name: name.trim(),
       address: address || '',
       phone: phone || '',
       email: email || '',
       website: website || '',
       description: description || '',
-      category: category,           // ← Save the ObjectId reference
+      category: category,
       logo: logo || null,
-      // owner remains null for admin-added businesses
     });
 
-    // Return the newly created business with populated category
     const populated = await Business.findById(business._id)
       .populate('category', 'name icon _id');
 
@@ -2974,13 +2972,13 @@ router.post('/owner/upgrade', authenticate, async (req, res) => {
 
     user.subscriptionTier = 'pro';
     user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    user.notificationCredits = 12;        // ← 20 credits
+    user.notificationCredits = 12;        // ← Changed to 12
 
     await user.save();
 
     res.json({ 
       success: true, 
-      message: '🎉 Business Pro Activated — 12 credits/month',
+      message: '🎉 Business Pro Activated — $29.99/mo (12 credits/month)',
       credits: 12
     });
   } catch (err) {
