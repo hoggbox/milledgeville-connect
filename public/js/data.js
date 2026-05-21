@@ -1227,6 +1227,11 @@ window.loadDirectoryAndOpen = async function (businessId) {
   showBusinessDetail(businessId);
 };
 
+// Directory Pagination
+let directoryCurrentPage = 1;
+const DIRECTORY_PAGE_SIZE = 8;
+let currentDirectoryBusinesses = [];
+
 async function loadDirectoryPage(content) {
   // Paint the shell instantly — user sees the page right away
   content.innerHTML = `
@@ -1239,7 +1244,7 @@ async function loadDirectoryPage(content) {
              onkeyup="filterDirectory()">
     </div>
     <div id="dirCategoryBar" class="flex gap-2 mb-5 overflow-x-auto pb-2 hide-scrollbar" style="-webkit-overflow-scrolling:touch;width:100%;">
-      <button onclick="renderDirectory(allBusinesses)"
+      <button onclick="directoryCurrentPage=1; renderDirectory(allBusinesses)"
               class="flex-shrink-0 bg-emerald-500/30 hover:bg-emerald-500/50 px-4 py-2 rounded-3xl text-sm whitespace-nowrap transition font-semibold">All</button>
     </div>
     <div id="directoryResults" style="width:100%;min-width:0;">
@@ -1370,14 +1375,25 @@ function renderDirectory(businesses) {
   const container = document.getElementById('directoryResults');
   if (!container) return;
 
-  if (!businesses || businesses.length === 0) {
+  // Store the full list for pagination
+  currentDirectoryBusinesses = businesses || [];
+
+  if (currentDirectoryBusinesses.length === 0) {
     container.innerHTML = `<p class="text-center text-white/50 py-12">No businesses found</p>`;
     return;
   }
 
+  // Calculate pagination
+  const totalPages = Math.ceil(currentDirectoryBusinesses.length / DIRECTORY_PAGE_SIZE);
+  directoryCurrentPage = Math.min(directoryCurrentPage, totalPages); // safety
+
+  const start = (directoryCurrentPage - 1) * DIRECTORY_PAGE_SIZE;
+  const pageBusinesses = currentDirectoryBusinesses.slice(start, start + DIRECTORY_PAGE_SIZE);
+
+  // Render business cards
   let html = '<div class="space-y-4">';
-  businesses.forEach(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
+  pageBusinesses.forEach(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
@@ -1388,6 +1404,7 @@ function renderDirectory(businesses) {
         ${b.logo 
           ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
           : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+        
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
           <p class="text-white/70 text-sm">${esc(b.address || 'Milledgeville, GA')}</p>
@@ -1397,6 +1414,30 @@ function renderDirectory(businesses) {
       </div>`;
   });
   html += '</div>';
+
+  // Add pagination controls
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="goToDirectoryPage(${directoryCurrentPage - 1})" 
+                ${directoryCurrentPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+
+        <div class="text-sm text-white/60">
+          Page <span class="font-semibold text-white">${directoryCurrentPage}</span> of ${totalPages}
+        </div>
+
+        <button onclick="goToDirectoryPage(${directoryCurrentPage + 1})" 
+                ${directoryCurrentPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
+      </div>
+    `;
+  }
+
   container.innerHTML = html;
 }
 
@@ -1407,13 +1448,18 @@ function filterDirectory() {
     (b.description && b.description.toLowerCase().includes(searchTerm)) ||
     (b.keywords && b.keywords.some(k => k.toLowerCase().includes(searchTerm)))
   );
+
+  directoryCurrentPage = 1;           // ← Reset to first page
   renderDirectory(filtered);
 }
 
 async function filterByCategory(catId) {
   const filtered = allBusinesses.filter(b => b.category && b.category._id === catId);
+
+  directoryCurrentPage = 1;           // ← Reset to first page
   renderDirectory(filtered);
 }
+
 // ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
 async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
