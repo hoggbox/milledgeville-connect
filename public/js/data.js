@@ -3592,7 +3592,7 @@ const tabs = [
           ${!isPro ? `
           <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
             <div class="text-5xl mb-4">🏠</div>
-            <h3 class="text-xl font-bold mb-2">Homes for Rent / Sale</h3>
+            <h3 class="text-xl font-bold mb-2">🏠 My Listings</h3>
             <p class="text-white/60 mb-6 text-sm leading-relaxed">List properties you manage directly on Milledgeville Connect's marketplace. Requires Business Pro.</p>
             <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
               <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> List homes for rent or sale</div>
@@ -3898,16 +3898,28 @@ async function loadNotificationsTab() {
     <div class="space-y-5 p-4">
 
       <!-- Credit balance -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-        <div>
-          <div class="text-xs text-white/50 mb-1">Available Credits</div>
-          <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
+      <div class="bg-white/5 border border-white/10 rounded-3xl p-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="text-sm text-white/60">Notification Credits</div>
+            <div id="notifCreditDisplay" class="text-5xl font-black text-white mt-1">${credits}</div>
+          </div>
+          
+          ${credits > 0 ? `
+            <button onclick="showCreditInfo()" 
+                    class="text-emerald-400 text-sm underline">How credits work →</button>
+          ` : `
+            <button onclick="buyCreditsModal()" 
+                    class="bg-amber-500 hover:bg-amber-600 px-6 py-3 rounded-2xl text-sm font-semibold">Buy More Credits</button>
+          `}
         </div>
-        <div class="text-right space-y-0.5">
-          <div class="text-xs text-white/40">Custom = 2 credits</div>
-          <div class="text-xs text-white/40">Template = 1 credit</div>
-          ${!isPro ? `<button onclick="buyProTier()" class="mt-1 text-xs text-violet-400 underline block">Upgrade for more →</button>` : ''}
-        </div>
+
+        ${credits === 0 ? `
+          <p class="text-amber-400 text-sm mt-4 leading-snug">
+            You've used your free credits.<br>
+            Buy more or upgrade to Business Pro ($29.99/mo) for 12 monthly credits.
+          </p>
+        ` : ''}
       </div>
 
       <!-- ── Custom notification form ── -->
@@ -7169,16 +7181,14 @@ window.handleOwnerLogoUpload = async function(input) {
 
 // ─── CREDIT CHECK (Fixed) ───────────────────────────────────────────────────
 window.canSendNotification = async function(isCustom = false) {
-  if (!currentUser?.verifiedBusiness) return true; // normal users have no credit system
+  if (!currentUser?.verifiedBusiness) return true;
 
   try {
     const sub = await apiGet('/owner/subscription').catch(() => ({}));
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-
-    // Verified owners can use their starter 5 credits even if not Pro
     return credits > 0;
   } catch (e) {
-    console.error('Credit check failed', e);
+    console.error(e);
     return false;
   }
 };
