@@ -5639,7 +5639,7 @@ async function renderMarketplacePage() {
 
   container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
 
-  let filtered = allMarketplaceItems || [];
+  let filtered = allMarketplaceItems;
 
   if (window.currentMarketSearch) {
     filtered = filtered.filter(item => 
@@ -5648,26 +5648,16 @@ async function renderMarketplacePage() {
     );
   }
 
-  if (window.currentMarketFilter && window.currentMarketFilter !== 'all') {
+  if (window.currentMarketFilter !== 'all') {
     filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
   }
 
-  // === PAGINATION (8 per page) ===
-  const totalItems = filtered.length;
-  const totalPages = Math.ceil(totalItems / MARKETPLACE_PAGE_SIZE) || 1;
-  _marketplacePage = Math.max(1, Math.min(_marketplacePage || 1, totalPages));
-
-  const start = (_marketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
-  const pageItems = filtered.slice(start, start + MARKETPLACE_PAGE_SIZE);
-
-  if (pageItems.length === 0) {
+  if (filtered.length === 0) {
     container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
-    const pagContainer = document.getElementById('marketPagination');
-    if (pagContainer) pagContainer.innerHTML = '';
     return;
   }
 
-  let html = pageItems.map(item => `
+  let html = filtered.map(item => `
     <div onclick="showMarketplaceDetail('${item._id}')" 
          class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
       <div class="flex gap-4">
@@ -5704,15 +5694,47 @@ async function renderMarketplacePage() {
   `).join('');
 
   container.innerHTML = html;
+}
 
-  // Show pagination controls
-  const paginationData = {
-    currentPage: _marketplacePage,
-    totalPages: totalPages,
-    hasPrev: _marketplacePage > 1,
-    hasNext: _marketplacePage < totalPages
+function renderMarketPagination(p) {
+  const container = document.getElementById('marketPagination');
+  if (!p.totalPages || p.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <button onclick="changeMarketPage(${Math.max(1, window.currentMarketPage-1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
+      ← Prev
+    </button>
+    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
+    <button onclick="changeMarketPage(${Math.min(p.totalPages, window.currentMarketPage+1)})" 
+            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
+      Next →
+    </button>`;
+
+  container.innerHTML = html;
+}
+
+window.changeMarketPage = function(page) {
+  window.currentMarketPage = page;
+  renderMarketplacePage();
+};
+
+window.filterAndRenderMarketplace = function() {
+  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
+  window.currentMarketPage = 1;
+  renderMarketplacePage();
+};
+
+// Simple debounce helper
+function debounce(func, delay) {
+  let timeout;
+  return function() {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, arguments), delay);
   };
-  renderMarketPagination(paginationData);
 }
 
 // ─── SAFE LOADERS FOR ORIGINAL PANELS ─────────────────────────────────────
@@ -5798,29 +5820,6 @@ async function markMessagesAsRead(inboxMsgs = null) {
   } catch (e) {
     console.warn('⚠️ markMessagesAsRead partial failure:', e);
   }
-}
-
-function renderMarketPagination(p) {
-  const container = document.getElementById('marketPagination');
-  if (!container) return;
-
-  if (!p || !p.totalPages || p.totalPages <= 1) {
-    container.innerHTML = '';
-    return;
-  }
-
-  let html = `
-    <button onclick="changeMarketPage(${Math.max(1, p.currentPage - 1)})" 
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
-      ← Prev
-    </button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeMarketPage(${Math.min(p.totalPages, p.currentPage + 1)})" 
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
-      Next →
-    </button>`;
-
-  container.innerHTML = html;
 }
 
 async function renderMessagesList(tab) {
@@ -8018,11 +8017,6 @@ window.markStillThere = async function (shoutoutId) {
   } else {
     showToast(res.message || 'Error confirming alert', 'error');
   }
-};
-
-window.changeMarketPage = function(page) {
-  _marketplacePage = page;
-  renderMarketplacePage();
 };
 
 // ─── CLEARED — mark a traffic alert as resolved ───────────────────────────────
