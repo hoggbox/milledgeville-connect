@@ -5321,12 +5321,12 @@ window.showMarketplaceDetail = async function(id) {
       </div>
     </div>
 
-    <!-- Owner Actions -->
-    ${isOwner ? `
+    <!-- Seller Actions -->
+    ${isSeller ? `
       <div class="p-6 border-t border-white/10 flex justify-end">
-        <button onclick="resolveLostItem('${item._id}')" 
-                class="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
-          Mark as Resolved ✅
+        <button onclick="deleteMyMarketItem('${item._id}')" 
+                class="bg-red-600 hover:bg-red-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+          🗑️ Delete Listing
         </button>
       </div>` : ''}
 
@@ -5357,6 +5357,19 @@ window.showMarketplaceDetail = async function(id) {
 window.hideMarketDetailModal = function() {
   const modal = document.getElementById('marketDetailModal');
   if (modal) modal.remove();
+};
+
+window.deleteMyMarketItem = async function(id) {
+  if (!confirm('Delete this listing? This cannot be undone.')) return;
+  try {
+    await apiDelete(`/marketplace/${id}`);
+    showToast('Listing deleted');
+    hideMarketDetailModal();
+    allMarketplaceItems = allMarketplaceItems.filter(i => String(i._id) !== String(id));
+    navigate('marketplace');
+  } catch (e) {
+    showToast('Failed to delete listing', 'error');
+  }
 };
 
 function renderMarketComments(item) {
