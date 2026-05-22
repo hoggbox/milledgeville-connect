@@ -1,4 +1,4 @@
-// models/Report.js
+// ── Report.js ─────────────────────────────────────────────────────────────────
 const mongoose = require('mongoose');
 
 const reportSchema = new mongoose.Schema({

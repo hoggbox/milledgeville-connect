@@ -1,5 +1,6 @@
 // ── News.js ───────────────────────────────────────────────────────────────────
 const mongoose = require('mongoose');
+
 const newsSchema = new mongoose.Schema({
   title:      { type: String, required: true },
   summary:    { type: String, required: true },
@@ -9,11 +10,11 @@ const newsSchema = new mongoose.Schema({
   authorName: { type: String },
   createdAt:  { type: Date, default: Date.now },
   hidden:     { type: Boolean, default: false },
- 
+
   // ── AUTO-MOD ──────────────────────────────────────────────────────────────
   flaggedBy:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   autoHidden: { type: Boolean, default: false },
   // ─────────────────────────────────────────────────────────────────────────
 });
- 
+
 module.exports = mongoose.model('News', newsSchema);

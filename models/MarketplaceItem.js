@@ -1,5 +1,13 @@
 // ── MarketplaceItem.js ────────────────────────────────────────────────────────
 const mongoose = require('mongoose');
+
+const commentSchema = new mongoose.Schema({
+  text:      { type: String, required: true },
+  author:    String,
+  authorId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  createdAt: { type: Date, default: Date.now }
+});
+
 const marketplaceItemSchema = new mongoose.Schema({
   title:      { type: String, required: true },
   description:{ type: String, required: true },
@@ -12,11 +20,11 @@ const marketplaceItemSchema = new mongoose.Schema({
   status:     { type: String, enum: ['available', 'sold'], default: 'available' },
   hidden:     { type: Boolean, default: false },
   comments:   [commentSchema],
- 
+
   // ── AUTO-MOD ──────────────────────────────────────────────────────────────
   flaggedBy:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   autoHidden: { type: Boolean, default: false },
   // ─────────────────────────────────────────────────────────────────────────
 }, { timestamps: true });
- 
+
 module.exports = mongoose.model('MarketplaceItem', marketplaceItemSchema);
