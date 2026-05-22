@@ -840,13 +840,13 @@ if (sub.nativeToken) {
 //   • Users with BOTH channels only receive one notification (no duplicates)
 // ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
+// ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
-  const { type = null } = options; // type is optional for now
+  const { type = null, subCategory = null } = options;
 
-  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'}`);
+  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
   try {
-    // Get all users who can receive push
     const users = await User.find({
       $or: [
         { fcmTokens: { $exists: true, $ne: [] } },
@@ -856,15 +856,13 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
     for (const user of users) {
       const prefs = user.notificationPreferences || {};
+      let shouldSend = true;
 
-      // If no type is passed, always send (old behavior - safe)
       if (!type) {
+        // No type passed = send to everyone (old/safe behavior)
         await sendPushToUser(user._id, title, body, data);
         continue;
       }
-
-      // ── Check user preferences ────────────────────────────────────────
-      let shouldSend = true;
 
       switch (type) {
         case 'event':
@@ -883,10 +881,6 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           if (prefs.lostFound === false) shouldSend = false;
           break;
 
-        case 'marketplace':
-          if (prefs.marketplace?.all === false) shouldSend = false;
-          break;
-
         case 'message':
           if (prefs.messages === false) shouldSend = false;
           break;
@@ -895,13 +889,27 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           if (prefs.comments === false) shouldSend = false;
           break;
 
+        case 'marketplace':
+          // Master toggle
+          if (prefs.marketplace?.all === false) {
+            shouldSend = false;
+          } 
+          // Individual category toggles
+          else if (subCategory) {
+            const cat = subCategory.toLowerCase();
+            if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
+            if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
+            if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
+            if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
+          }
+          break;
+
         case 'custom':
-          // Custom business notifications always send
+          // Verified business custom notifications — always send
           shouldSend = true;
           break;
 
         default:
-          // Unknown type → send (safe)
           shouldSend = true;
       }
 
@@ -1499,12 +1507,15 @@ router.post('/marketplace', authenticate, async (req, res) => {
       condition: condition || 'used'
     });
 
-    broadcastPush(
-      '🛒 New Marketplace Listing',
-      `${user.name} listed: ${title} - $${price}`,
-      { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
-      { type: 'marketplace' }
-    );
+broadcastPush(
+  '🛒 New Marketplace Listing',
+  `${user.name} listed: ${title} - $${price}`,
+  { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
+  { 
+    type: 'marketplace', 
+    subCategory: category     // ← Add this line
+  }
+);
 
     res.json(item);
   } catch (err) {
@@ -2878,19 +2889,23 @@ router.post('/owner/homes', authenticate, async (req, res) => {
     });
 
     // Optional push notification — costs 2 credits
-    if (sendNotify === true || sendNotify === 'true') {
-      const deducted = await deductNotificationCredit(req.userId, 2, false);
-      if (deducted) {
-        const typeLabel = condition === 'rent' ? 'For Rent' : 'For Sale';
-        const priceStr  = price ? ` · $${Number(price).toLocaleString()}${condition === 'rent' ? '/mo' : ''}` : '';
-        broadcastPush(
-          `🏠 ${typeLabel}: ${title.trim()}`,
-          `${bizName}${priceStr}`,
-          { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
-          { type: 'marketplace' }
-        );
+if (sendNotify) {
+  const deducted = await deductNotificationCredit(req.userId, 2, false);
+  if (deducted) {
+    broadcastPush(
+      `🏠 New Home Listing`,
+      `${bizName} posted: ${title}`,
+      { 
+        page: 'marketplace', 
+        id: item._id.toString() 
+      },
+      { 
+        type: 'marketplace', 
+        subCategory: 'Homes'     // ← Important
       }
-    }
+    );
+  }
+}
 
     res.json(item);
   } catch (err) {
