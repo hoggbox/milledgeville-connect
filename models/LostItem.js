@@ -1,4 +1,5 @@
 // ── LostItem.js ───────────────────────────────────────────────────────────────
+const mongoose = require('mongoose');
 const lostItemSchema = new mongoose.Schema({
   type:       { type: String, enum: ['lost', 'found'], required: true },
   title:      { type: String, required: true },

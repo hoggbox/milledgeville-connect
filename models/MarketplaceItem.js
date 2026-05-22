@@ -1,4 +1,5 @@
 // ── MarketplaceItem.js ────────────────────────────────────────────────────────
+const mongoose = require('mongoose');
 const marketplaceItemSchema = new mongoose.Schema({
   title:      { type: String, required: true },
   description:{ type: String, required: true },
