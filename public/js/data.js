@@ -3403,74 +3403,86 @@ window.showResourceDetail = function (id) {
   }
 
   const modalHTML = `
-    <div onclick="if(event.target.id==='resourceModal')closeResourceDetail()" id="resourceModal"
-         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center">
-      <div onclick="event.stopImmediatePropagation()"
-           class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
-        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
-          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
-        </div>
-        <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
-        <div class="p-6">
-          <div class="flex items-start gap-4 mb-5">
-            <div class="w-14 h-14 bg-gradient-to-br from-emerald-100 to-teal-50 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
+    <div onclick="if(event.target.id==='resourceModal') closeResourceDetail()" id="resourceModal"
+         class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
+      
+      <div onclick="event.stopImmediatePropagation()" 
+           class="bg-[#0f172a] text-white w-full max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
+
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a] px-6 py-4 border-b border-white/10 flex justify-between items-center rounded-t-3xl">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
               ${icon}
             </div>
-            <div class="flex-1 min-w-0">
-              <h1 class="text-2xl font-bold leading-tight text-slate-900">${item.name}</h1>
-              <span class="inline-block mt-1 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-                ${icon} ${catName}
-              </span>
+            <div>
+              <h2 class="text-xl font-bold">${esc(item.name)}</h2>
+              <p class="text-emerald-400 text-sm">${catName}</p>
             </div>
           </div>
+          <button onclick="closeResourceDetail()" class="text-white/50 hover:text-white text-3xl leading-none">×</button>
+        </div>
 
-          <div class="space-y-3 mb-6">
-            ${item.address ? `
-              <div class="flex items-start gap-3 bg-slate-50 rounded-2xl p-4">
-                <span class="text-xl flex-shrink-0">📍</span>
-                <div>
-                  <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Address</p>
-                  <p class="text-slate-700 font-medium text-sm">${item.address}</p>
-                </div>
-              </div>` : ''}
-            ${item.phone ? `
-              <a href="tel:${item.phone}" class="flex items-start gap-3 bg-emerald-50 hover:bg-emerald-100 rounded-2xl p-4 transition">
-                <span class="text-xl flex-shrink-0">📞</span>
-                <div>
-                  <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-0.5">Phone</p>
-                  <p class="text-emerald-700 font-semibold text-sm">${item.phone}</p>
-                </div>
-              </a>` : ''}
-            ${hoursLine ? `
-              <div class="flex items-start gap-3 bg-amber-50 rounded-2xl p-4">
-                <span class="text-xl flex-shrink-0">🕒</span>
-                <div>
-                  <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Hours</p>
-                  <p class="text-amber-800 text-sm leading-relaxed">${hoursLine}</p>
-                </div>
-              </div>` : ''}
-            ${item.website ? `
-              <a href="${item.website.startsWith('http') ? item.website : 'https://'+item.website}" target="_blank"
-                 class="flex items-start gap-3 bg-blue-50 hover:bg-blue-100 rounded-2xl p-4 transition">
-                <span class="text-xl flex-shrink-0">🌐</span>
-                <div>
-                  <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Website</p>
-                  <p class="text-blue-700 font-semibold text-sm">${item.website.replace(/^https?:\/\//, '')}</p>
-                </div>
-              </a>` : ''}
-          </div>
+        <div class="p-6 space-y-5">
 
-          ${description ? `
-            <div class="mb-6">
-              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">About</p>
-              <p class="text-slate-600 leading-relaxed text-sm">${description}</p>
+          <!-- Address -->
+          ${item.address ? `
+            <div class="flex items-start gap-3 bg-white/5 rounded-2xl p-4">
+              <span class="text-xl mt-0.5">📍</span>
+              <div>
+                <p class="text-xs text-white/50 font-semibold mb-0.5">ADDRESS</p>
+                <p class="text-white">${esc(item.address)}</p>
+              </div>
             </div>` : ''}
 
-          <button onclick="closeResourceDetail()"
-                  class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">
+          <!-- Phone -->
+          ${item.phone ? `
+            <a href="tel:${item.phone}" class="flex items-center gap-3 bg-white/5 hover:bg-white/10 rounded-2xl p-4 transition">
+              <span class="text-xl">📞</span>
+              <div>
+                <p class="text-xs text-white/50 font-semibold">PHONE</p>
+                <p class="text-emerald-400 font-semibold">${item.phone}</p>
+              </div>
+            </a>` : ''}
+
+          <!-- Hours -->
+          ${hoursLine ? `
+            <div class="flex items-start gap-3 bg-white/5 rounded-2xl p-4">
+              <span class="text-xl mt-0.5">🕒</span>
+              <div>
+                <p class="text-xs text-white/50 font-semibold mb-0.5">HOURS</p>
+                <p class="text-amber-300">${hoursLine}</p>
+              </div>
+            </div>` : ''}
+
+          <!-- Website -->
+          ${item.website ? `
+            <a href="${item.website.startsWith('http') ? item.website : 'https://' + item.website}" target="_blank"
+               class="flex items-center gap-3 bg-white/5 hover:bg-white/10 rounded-2xl p-4 transition">
+              <span class="text-xl">🌐</span>
+              <div>
+                <p class="text-xs text-white/50 font-semibold">WEBSITE</p>
+                <p class="text-blue-400">${item.website.replace(/^https?:\/\//, '')}</p>
+              </div>
+            </a>` : ''}
+
+          <!-- Description -->
+          ${description ? `
+            <div>
+              <p class="text-xs font-semibold text-white/50 mb-2">ABOUT</p>
+              <p class="text-white/80 leading-relaxed">${esc(description)}</p>
+            </div>` : ''}
+
+        </div>
+
+        <!-- Footer -->
+        <div class="p-6 border-t border-white/10 flex gap-3">
+          <button onclick="closeResourceDetail()" 
+                  class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
             Close
           </button>
         </div>
+
       </div>
     </div>`;
 
