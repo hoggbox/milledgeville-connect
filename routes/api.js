@@ -416,7 +416,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
         page: 'shoutouts', 
         id: shoutout._id.toString() 
       },
-      { notifyShoutouts: true }
+      { type: 'shoutout' }
     );
 
     res.json(shoutout);
@@ -998,12 +998,16 @@ router.post('/messages', authenticate, async (req, res) => {
       text: text.trim()
     });
 
-    sendPushToUser(
-      receiverId,
-      `💬 New message from ${sender.name}`,
-      text.substring(0, 80) + (text.length > 80 ? '...' : ''),
-      { page: 'messages', id: req.userId, url: `/messages/${req.userId}` }
-    );
+    // Check receiver's messages preference before sending push
+    const receiverUser = await User.findById(receiverId).select('notificationPreferences');
+    if (!receiverUser || receiverUser.notificationPreferences?.messages !== false) {
+      sendPushToUser(
+        receiverId,
+        `💬 New message from ${sender.name}`,
+        text.substring(0, 80) + (text.length > 80 ? '...' : ''),
+        { page: 'messages', id: req.userId, url: `/messages/${req.userId}` }
+      );
+    }
 
     res.json(message);
   } catch (err) {
@@ -1373,7 +1377,7 @@ broadcastPush(
     id: item._id.toString(),
     url: `/lostfound/${item._id}`
   },
-  { notifyLostFound: true }
+  { type: 'lost' }
 );
 
     res.json(item);
@@ -1398,16 +1402,19 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
 
     if (lost.owner && lost.owner.toString() !== req.userId) {
       const commentText = (req.body.text || '').trim();
-sendPushToUser(
-  lost.owner,
-  '💬 New comment on your lost item',
-  `${user.name}: ${commentText.substring(0, 60)}`,
-  { 
-    page: 'lostfound', 
-    id: lost._id.toString(),
-    url: `/lostfound/${lost._id}`
-  }
-);
+      const itemOwner = await User.findById(lost.owner).select('notificationPreferences');
+      if (!itemOwner || itemOwner.notificationPreferences?.comments !== false) {
+        sendPushToUser(
+          lost.owner,
+          '💬 New comment on your lost item',
+          `${user.name}: ${commentText.substring(0, 60)}`,
+          { 
+            page: 'lostfound', 
+            id: lost._id.toString(),
+            url: `/lostfound/${lost._id}`
+          }
+        );
+      }
     }
     res.json(lost.comments[lost.comments.length - 1]);
   } catch (err) {
@@ -1496,7 +1503,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
       '🛒 New Marketplace Listing',
       `${user.name} listed: ${title} - $${price}`,
       { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
-      { notifyMarketplace: true }
+      { type: 'marketplace' }
     );
 
     res.json(item);
@@ -1521,16 +1528,19 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
 
     if (item.seller && item.seller.toString() !== req.userId) {
       const commentText = (req.body.text || '').trim();
-sendPushToUser(
-  item.seller,
-  '💬 New message on your listing',
-  `${user.name}: ${commentText.substring(0, 60)}`,
-  { 
-    page: 'marketplace', 
-    id: item._id.toString(),
-    url: `/marketplace/${item._id}`
-  }
-);
+      const sellerUser = await User.findById(item.seller).select('notificationPreferences');
+      if (!sellerUser || sellerUser.notificationPreferences?.comments !== false) {
+        sendPushToUser(
+          item.seller,
+          '💬 New message on your listing',
+          `${user.name}: ${commentText.substring(0, 60)}`,
+          { 
+            page: 'marketplace', 
+            id: item._id.toString(),
+            url: `/marketplace/${item._id}`
+          }
+        );
+      }
     }
     res.json(item.comments[item.comments.length - 1]);
   } catch (err) {
@@ -2082,7 +2092,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     `💬 New comment on Traffic Alert`,
     `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
       { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` },
-      { notifyShoutoutComments: true }          // filter
+      { type: 'comment' }          // filter
     );
 
     res.json(shoutout.comments[shoutout.comments.length - 1]);
@@ -2748,7 +2758,7 @@ broadcastPush(
     id: deal._id.toString(),
     url: `/deals/${deal._id}`
   },
-  { notifyDeals: true }
+  { type: 'deal' }
 );
 
     res.json(deal);
@@ -2799,7 +2809,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
     id: event._id.toString(),
     url: `/events/${event._id}`
     },
-    { notifyEvents: true }
+    { type: 'event' }
 );
 
     res.json(event);
@@ -2877,7 +2887,7 @@ router.post('/owner/homes', authenticate, async (req, res) => {
           `🏠 ${typeLabel}: ${title.trim()}`,
           `${bizName}${priceStr}`,
           { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
-          { notifyMarketplace: true }
+          { type: 'marketplace' }
         );
       }
     }

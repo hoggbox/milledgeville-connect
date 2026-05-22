@@ -8141,17 +8141,8 @@ window.showProAnalytics = function() {
   showToast("📊 Pro Analytics coming soon:\n• Notification reach\n• Profile views\n• Listing performance", "success");
 };
 
-// Marketplace category notification preferences (for users)
-window.saveMarketplacePreferences = async function() {
-  const prefs = {
-    homes: document.getElementById('prefHomes')?.checked || false,
-    cars: document.getElementById('prefCars')?.checked || false,
-    furniture: document.getElementById('prefFurniture')?.checked || false,
-  };
-
-  await apiPost('/user/marketplace-preferences', prefs);
-  showToast('Preferences saved!', 'success');
-};
+// Marketplace notification preferences are managed via the unified
+// saveNotificationPreferences() in profile.js → POST /user/notification-preferences.
 
 // ─── HOMES TAB: IMAGE STATE ──────────────────────────────────────────────────
 let _pendingHomeImages = [];
@@ -8560,7 +8551,8 @@ window.validateProSubscription = async function() {
   }
 };
 
-// ─── ACCOUNT SETTINGS MODAL (with Notification Preferences button) ───────────
+// ─── SETTINGS & PRIVACY MODAL ────────────────────────────────────────────────
+// Single authoritative definition (profile.js no longer has a copy).
 window.showAccountSettingsModal = function() {
   if (document.getElementById('accountSettingsModal')) return;
 
@@ -8575,7 +8567,7 @@ window.showAccountSettingsModal = function() {
         <!-- Header -->
         <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between">
           <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
-          <h2 class="text-lg font-bold flex items-center gap-2">⚙️ Account & Privacy</h2>
+          <h2 class="text-lg font-bold flex items-center gap-2">⚙️ Settings & Privacy</h2>
           <button onclick="hideAccountSettingsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
@@ -8584,8 +8576,10 @@ window.showAccountSettingsModal = function() {
           <!-- User Info -->
           ${user ? `
           <div class="flex items-center gap-4 bg-white/5 rounded-2xl p-4">
-            <div class="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
-              ${(user.name || '?')[0].toUpperCase()}
+            <div class="w-12 h-12 rounded-full overflow-hidden bg-emerald-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
+              ${user.avatar
+                ? `<img src="${user.avatar}" class="w-full h-full object-cover">`
+                : (user.name || '?')[0].toUpperCase()}
             </div>
             <div class="min-w-0">
               <p class="font-semibold truncate">${esc(user.name || 'Your Account')}</p>
@@ -8613,7 +8607,7 @@ window.showAccountSettingsModal = function() {
             <!-- Delete Account -->
             <div class="bg-red-500/10 border border-red-500/30 rounded-2xl overflow-hidden mt-4">
               <div class="px-5 py-4">
-                <p class="font-semibold text-red-400 text-sm flex items-center gap-2">🗑 Delete My Account</p>
+                <p class="font-semibold text-red-400 text-sm flex items-center gap-2">🗑️ Delete My Account</p>
                 <p class="text-white/50 text-xs mt-1 leading-relaxed">
                   Permanently removes your account and all your data. This cannot be undone.
                 </p>
@@ -8660,22 +8654,8 @@ window.deleteOwnerHome = async function(id) {
   }
 };
 
-// ─── SAVE MARKETPLACE NOTIFICATION PREFERENCES ─────────────────────────────
-window.saveMarketplacePreferences = async function() {
-  try {
-    const prefs = {
-      homes:     document.getElementById('prefHomes')?.checked ?? true,
-      cars:      document.getElementById('prefCars')?.checked ?? true,
-      furniture: document.getElementById('prefFurniture')?.checked ?? true,
-      other:     document.getElementById('prefOther')?.checked ?? true
-    };
-
-    await apiPost('/user/marketplace-preferences', prefs);
-    showToast('✅ Marketplace preferences saved!', 'success');
-  } catch (e) {
-    showToast('Failed to save preferences', 'error');
-  }
-};
+// NOTE: Marketplace preferences are now part of the unified notification preferences
+// system. See saveNotificationPreferences() in profile.js → POST /user/notification-preferences.
 
 // Live badge updates every 30 seconds
 setInterval(() => {
