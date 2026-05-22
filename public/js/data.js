@@ -1495,7 +1495,7 @@ async function filterByCategory(catId) {
   renderDirectory(filtered);
 }
 
-// ─── BUSINESS DETAIL MODAL — WITH FOLLOW BUTTON ───────────────────────────────
+// ─── BUSINESS DETAIL MODAL (DARK THEME) ───────────────────────────────────────
 async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
   if (!business) return;
@@ -1504,47 +1504,32 @@ async function showBusinessDetail(id) {
   const count   = business.ratings ? business.ratings.length : 0;
   const isOwned = !!business.owner;
 
-  // Fetch reviews (first 3 shown, rest behind "See all")
   const reviews = await apiGet(`/business/${id}/reviews`);
   const preview = (reviews || []).slice(0, 3);
 
   const isFollowing = currentUser && business.followers && business.followers.includes(currentUser._id);
-
-  // ── New field helpers ──────────────────────────────────────────────────────
-  const openStatus   = getOpenStatus(business.hours);
-  const tagColors = [
-    'bg-emerald-100 text-emerald-700',
-    'bg-blue-100 text-blue-700',
-    'bg-purple-100 text-purple-700',
-    'bg-amber-100 text-amber-700',
-    'bg-rose-100 text-rose-700',
-  ];
+  const openStatus  = getOpenStatus(business.hours);
 
   const enrichedInfoSection = `
-    <!-- ─── Enriched Business Profile ──────────────────────────────────── -->
-    <div class="bg-gray-50 rounded-2xl p-4 mb-4 space-y-3">
+    <div class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4 space-y-3">
 
       ${business.logo ? `
-        <div class="flex items-center gap-3 pb-3 border-b border-gray-200">
+        <div class="flex items-center gap-3 pb-3 border-b border-white/10">
           <img src="${business.logo}" alt="${business.name} logo"
-               class="w-14 h-14 rounded-2xl object-cover border border-gray-200 shadow-sm flex-shrink-0">
+               class="w-14 h-14 rounded-2xl object-cover border border-white/10 flex-shrink-0">
           <div>
-            <p class="font-bold text-slate-900 text-base leading-tight">${business.name}</p>
-            ${business.priceRange ? `<span class="text-xs font-semibold text-gray-500">${business.priceRange} · ${business.category?.name || ''}</span>` : `<span class="text-xs text-gray-500">${business.category?.name || ''}</span>`}
+            <p class="font-bold text-white text-base leading-tight">${business.name}</p>
+            ${business.priceRange ? `<span class="text-xs font-semibold text-white/60">${business.priceRange} · ${business.category?.name || ''}</span>` : `<span class="text-xs text-white/60">${business.category?.name || ''}</span>`}
           </div>
-        </div>` : (business.priceRange ? `
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-gray-700">Price Range:</span>
-          <span class="text-sm font-bold text-emerald-700">${business.priceRange}</span>
-        </div>` : '')}
+        </div>` : ''}
 
       ${business.hours ? `
         <div class="flex items-start gap-2">
           <span class="text-base flex-shrink-0 mt-0.5">🕐</span>
           <div class="flex-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm text-gray-700">${business.hours}</span>
-              ${openStatus ? `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${openStatus.open ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}">${openStatus.label}</span>` : ''}
+              <span class="text-sm text-white/80">${business.hours}</span>
+              ${openStatus ? `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${openStatus.open ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">${openStatus.label}</span>` : ''}
             </div>
           </div>
         </div>` : ''}
@@ -1565,27 +1550,28 @@ async function showBusinessDetail(id) {
 
       ${(business.tags && business.tags.length > 0) ? `
         <div class="flex flex-wrap gap-1.5">
-          ${business.tags.map((tag, i) => `<span class="text-xs font-semibold px-2.5 py-1 rounded-full ${tagColors[i % tagColors.length]}">${tag}</span>`).join('')}
+          ${business.tags.map(tag => `<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/10 text-white/80">${tag}</span>`).join('')}
         </div>` : ''}
-
     </div>`;
 
   const modalHTML = `
     <div onclick="if(event.target.id==='businessModal')hideBusinessModal()" id="businessModal"
-         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center">
+         class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center p-4">
       <div onclick="event.stopImmediatePropagation()"
-           class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
-        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
-          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+           class="bg-[#0f172a] text-white w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
+        
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 flex justify-center border-b border-white/10 rounded-t-3xl">
+          <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
         </div>
-        <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
+
         <div class="p-6">
           <div class="flex items-start justify-between mb-1">
             <h1 class="text-3xl font-bold leading-tight">${esc(business.name)}</h1>
-            ${isOwned ? `<span class="text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full mt-1">✓ Verified Owner</span>` : ''}
+            ${isOwned ? `<span class="text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full mt-1">✓ Verified Owner</span>` : ''}
           </div>
-          <p class="text-emerald-600 text-sm mb-1">${business.category?.name || ''}</p>
-          <p class="text-gray-500 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
+          <p class="text-emerald-400 text-sm mb-1">${business.category?.name || ''}</p>
+          <p class="text-white/60 mb-4 flex items-center gap-1"><span>📍</span> ${business.address || 'Milledgeville, GA'}</p>
 
           ${enrichedInfoSection}
 
@@ -1596,37 +1582,34 @@ async function showBusinessDetail(id) {
               ${isFollowing ? '❤️ Following this business' : '🔖 Follow this business'}
             </button>` : ''}
 
-          <!-- Menu button (food businesses only) -->
           ${business.menu ? `
             <button onclick="showMenuViewer('${id}')"
-                    class="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-semibold py-3 rounded-2xl mb-4 transition">
+                    class="w-full flex items-center justify-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 font-semibold py-3 rounded-2xl mb-4 transition">
               🍽️ View Menu
             </button>` : ''}
 
-         <!-- Contact -->
-<div class="space-y-3 mb-5">
-  ${business.phone ? `
-    <a href="tel:${business.phone}" class="flex items-center gap-3 bg-emerald-50 hover:bg-emerald-100 transition p-4 rounded-2xl text-emerald-700 font-semibold">
-      <span class="text-2xl">📞</span> ${business.phone}
-    </a>` : ''}
+          <!-- Contact -->
+          <div class="space-y-3 mb-5">
+            ${business.phone ? `
+              <a href="tel:${business.phone}" class="flex items-center gap-3 bg-emerald-500/10 hover:bg-emerald-500/20 transition p-4 rounded-2xl text-emerald-400 font-semibold">
+                <span class="text-2xl">📞</span> ${business.phone}
+              </a>` : ''}
 
-  ${business.website ? `
-    <a href="${business.website}" target="_blank" class="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 transition p-4 rounded-2xl text-blue-700 font-semibold">
-      <span class="text-2xl">🌐</span> Visit Website
-    </a>` : ''}
+            ${business.website ? `
+              <a href="${business.website}" target="_blank" class="flex items-center gap-3 bg-blue-500/10 hover:bg-blue-500/20 transition p-4 rounded-2xl text-blue-400 font-semibold">
+                <span class="text-2xl">🌐</span> Visit Website
+              </a>` : ''}
 
-  <!-- NEW: Get Directions button -->
-  ${business.address ? `
-    <button onclick="getDirections('${business.address}')" 
-            class="flex items-center gap-3 bg-blue-50 hover:bg-blue-100 transition p-4 rounded-2xl text-blue-700 font-semibold w-full">
-      <span class="text-2xl">🗺️</span> 
-      Get Directions
-    </button>` : ''}
-</div>
+            ${business.address ? `
+              <button onclick="getDirections('${business.address}')" 
+                      class="flex items-center gap-3 bg-blue-500/10 hover:bg-blue-500/20 transition p-4 rounded-2xl text-blue-400 font-semibold w-full text-left">
+                <span class="text-2xl">🗺️</span> Get Directions
+              </button>` : ''}
+          </div>
 
-          ${business.description ? `<p class="text-gray-600 leading-relaxed mb-5">${esc(business.description)}</p>` : ''}
+          ${business.description ? `<p class="text-white/70 leading-relaxed mb-5">${esc(business.description)}</p>` : ''}
 
-          <!-- ─── Photo Gallery ─────────────────────────────────────────── -->
+          <!-- Photo Gallery -->
           ${(() => {
             const isOwner = currentUser && currentUser.verifiedBusiness &&
               (String(currentUser.verifiedBusiness._id || currentUser.verifiedBusiness) === String(id));
@@ -1634,44 +1617,41 @@ async function showBusinessDetail(id) {
             if (!hasPhotos && !isOwner) return '';
             const canAddMore = isOwner && (business.photos || []).length < 5;
             return `
-          <div class="border-t border-gray-100 pt-5 mb-5">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="font-bold text-lg text-slate-900">📷 Photos</h3>
-              ${canAddMore ? `
-                <button onclick="document.getElementById('bizPhotoInput-${id}').click()"
-                        class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-2xl font-semibold transition">
-                  + Add Photos (${5 - (business.photos || []).length} left)
-                </button>
-                <input id="bizPhotoInput-${id}" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
-                       onchange="handleBizPhotoUpload('${id}', this)">` : ''}
-            </div>
-            ${hasPhotos ? `
-              <div class="grid grid-cols-3 gap-2">
-                ${business.photos.map((src, i) => `
-                  <div class="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 group cursor-pointer"
-                       onclick="openBizPhotoLightbox('${id}', ${i})">
-                    <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover hover:opacity-90 transition" loading="lazy">
-                    ${isOwner ? `
-                      <button onclick="event.stopPropagation(); deleteBizPhoto('${id}', ${i})"
-                              class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>` : ''}
-                  </div>`).join('')}
-              </div>` : `<p class="text-gray-400 text-sm text-center py-4">No photos yet. Add up to 5 to showcase your business.</p>`}
-          </div>`;
+              <div class="border-t border-white/10 pt-5 mb-5">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="font-bold text-lg">📷 Photos</h3>
+                  ${canAddMore ? `
+                    <button onclick="document.getElementById('bizPhotoInput-${id}').click()"
+                            class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-2xl font-semibold transition">
+                      + Add Photos
+                    </button>
+                    <input id="bizPhotoInput-${id}" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden"
+                           onchange="handleBizPhotoUpload('${id}', this)">` : ''}
+                </div>
+                ${hasPhotos ? `
+                  <div class="grid grid-cols-3 gap-2">
+                    ${business.photos.map((src, i) => `
+                      <div class="relative aspect-square rounded-2xl overflow-hidden bg-white/5 group cursor-pointer border border-white/10"
+                           onclick="openBizPhotoLightbox('${id}', ${i})">
+                        <img src="${src}" class="w-full h-full object-cover hover:opacity-90 transition" loading="lazy">
+                        ${isOwner ? `
+                          <button onclick="event.stopPropagation(); deleteBizPhoto('${id}', ${i})"
+                                  class="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs transition opacity-0 group-hover:opacity-100">✕</button>` : ''}
+                      </div>`).join('')}
+                  </div>` : `<p class="text-white/40 text-sm text-center py-4">No photos yet.</p>`}
+              </div>`;
           })()}
-          <!-- ─── Reviews Section ─────────────────────────────────────────── -->
-          <div class="border-t border-gray-100 pt-5 mb-5">
+
+          <!-- Reviews Section -->
+          <div class="border-t border-white/10 pt-5 mb-5">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold text-lg text-slate-900">⭐ Reviews
-                <span class="text-sm font-normal text-gray-400 ml-1">(${reviews.length})</span>
-              </h3>
+              <h3 class="font-bold text-lg">⭐ Reviews <span class="text-sm font-normal text-white/50">(${reviews.length})</span></h3>
               ${reviews.length > 3 ? `
-                <button onclick="showAllReviews('${id}')"
-                        class="text-xs text-emerald-600 hover:text-emerald-500 font-semibold transition">
-                  See all ${reviews.length} →
+                <button onclick="showAllReviews('${id}')" class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition">
+                  See all →
                 </button>` : ''}
             </div>
 
-            <!-- Review summary bar -->
             ${reviews.length > 0 ? renderReviewSummary(reviews) : ''}
 
             <!-- Write a review -->
@@ -1681,26 +1661,24 @@ async function showBusinessDetail(id) {
                         class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-2xl transition text-sm">
                   ✏️ Write a Review
                 </button>
-                <div id="reviewForm-${id}" class="hidden mt-3 bg-gray-50 rounded-2xl p-4 space-y-3">
+                <div id="reviewForm-${id}" class="hidden mt-3 bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
                   <div>
-                    <p class="text-xs font-semibold text-gray-500 mb-2">Your Rating *</p>
+                    <p class="text-xs font-semibold text-white/60 mb-2">Your Rating *</p>
                     <div class="flex gap-1" id="reviewStarPicker-${id}">
                       ${[1,2,3,4,5].map(s => `
                         <button onclick="setReviewStar('${id}',${s})" data-star="${s}"
-                                class="text-3xl transition hover:scale-110 review-star-btn" style="color:#d1d5db;">★</button>`).join('')}
+                                class="text-3xl transition hover:scale-110 review-star-btn" style="color:#64748b;">★</button>`).join('')}
                     </div>
                   </div>
                   <input id="reviewTitle-${id}" type="text" placeholder="Headline (optional)" maxlength="100"
-                         class="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:border-emerald-500 outline-none text-sm">
+                         class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-sm text-white placeholder:text-white/40">
                   <textarea id="reviewBody-${id}" rows="3" placeholder="Share your experience…" maxlength="1000"
-                            class="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:border-emerald-500 outline-none text-sm resize-none"></textarea>
+                            class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-sm text-white placeholder:text-white/40 resize-none"></textarea>
                   <div class="flex gap-2">
-                    <button onclick="submitReview('${id}')"
-                            class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-semibold text-sm transition">
+                    <button onclick="submitReview('${id}')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-semibold text-sm transition">
                       Submit Review
                     </button>
-                    <button onclick="toggleWriteReview('${id}')"
-                            class="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-2xl text-sm transition">
+                    <button onclick="toggleWriteReview('${id}')" class="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm transition">
                       Cancel
                     </button>
                   </div>
@@ -1708,15 +1686,15 @@ async function showBusinessDetail(id) {
               </div>` : `
               <div class="mb-4">
                 <button onclick="hideBusinessModal();showAuthModal({message:'Sign in to leave a review.'})"
-                        class="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-slate-700 font-semibold py-3 rounded-2xl transition text-sm">
+                        class="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-3 rounded-2xl transition text-sm">
                   ✏️ Sign in to Review
                 </button>
               </div>`}
 
-            <!-- Review cards (preview) -->
+            <!-- Review cards -->
             <div id="reviewCards-${id}" class="space-y-3">
               ${preview.length ? preview.map(r => renderReviewCard(r, id)).join('') : `
-                <div class="text-center py-6 text-gray-400 text-sm">
+                <div class="text-center py-6 text-white/40 text-sm">
                   <p class="text-3xl mb-2">💬</p>
                   No reviews yet — be the first!
                 </div>`}
@@ -1727,15 +1705,15 @@ async function showBusinessDetail(id) {
           <div class="space-y-3">
             ${!isOwned && currentUser ? `
               <button onclick="hideBusinessModal();showClaimModal('${business._id}')"
-                      class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition">
+                      class="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-3xl font-semibold transition">
                 🏷️ Claim This Business
               </button>` : ''}
             ${!isOwned && !currentUser ? `
               <button onclick="hideBusinessModal();showAuthModal({message:'Sign in to claim your business listing.'})"
-                      class="w-full bg-amber-500/80 hover:bg-amber-500 text-white py-4 rounded-3xl font-semibold transition">
+                      class="w-full bg-amber-600/80 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold transition">
                 🏷️ Own This Business? Sign In to Claim
               </button>` : ''}
-            <button onclick="hideBusinessModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>
+            <button onclick="hideBusinessModal()" class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold transition">Close</button>
           </div>
         </div>
       </div>
@@ -1743,7 +1721,7 @@ async function showBusinessDetail(id) {
 
   document.body.insertAdjacentHTML('beforeend', modalHTML);
   window._currentBizReviews = reviews;
-  window._currentBizId      = id;
+  window._currentBizId = id;
 }
 
 window.toggleFollow = async function (businessId) {
@@ -1763,26 +1741,26 @@ function renderReviewSummary(reviews) {
   const dist  = [5,4,3,2,1].map(s => ({ star: s, count: reviews.filter(r => r.rating === s).length }));
 
   return `
-    <div class="bg-gray-50 rounded-2xl p-4 mb-4">
+    <div class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
       <div class="flex items-center gap-5">
         <div class="text-center flex-shrink-0">
-          <div class="text-5xl font-black text-slate-900">${avgR}</div>
+          <div class="text-5xl font-black text-white">${avgR}</div>
           <div class="flex gap-0.5 justify-center mt-1">
-            ${[1,2,3,4,5].map(s => `<span style="color:${s<=Math.round(avgR)?'#f59e0b':'#d1d5db'};font-size:16px;">★</span>`).join('')}
+            ${[1,2,3,4,5].map(s => `<span style="color:${s<=Math.round(avgR)?'#f59e0b':'#64748b'};font-size:16px;">★</span>`).join('')}
           </div>
-          <div class="text-xs text-gray-400 mt-1">${reviews.length} review${reviews.length!==1?'s':''}</div>
+          <div class="text-xs text-white/50 mt-1">${reviews.length} review${reviews.length!==1?'s':''}</div>
         </div>
         <div class="flex-1 space-y-1.5">
           ${dist.map(d => {
             const pct = reviews.length ? Math.round((d.count / reviews.length) * 100) : 0;
             return `
               <div class="flex items-center gap-2 text-xs">
-                <span class="text-gray-500 w-3 text-right flex-shrink-0">${d.star}</span>
+                <span class="text-white/60 w-3 text-right flex-shrink-0">${d.star}</span>
                 <span class="text-amber-400 flex-shrink-0">★</span>
-                <div class="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                <div class="flex-1 bg-white/10 rounded-full h-1.5 overflow-hidden">
                   <div class="bg-amber-400 h-full rounded-full" style="width:${pct}%"></div>
                 </div>
-                <span class="text-gray-400 w-5 flex-shrink-0">${d.count}</span>
+                <span class="text-white/50 w-5 flex-shrink-0">${d.count}</span>
               </div>`;
           }).join('')}
         </div>
@@ -1791,27 +1769,27 @@ function renderReviewSummary(reviews) {
 }
 
 function renderReviewCard(r, bizId) {
-  const stars = [1,2,3,4,5].map(s => `<span style="color:${s<=r.rating?'#f59e0b':'#d1d5db'};font-size:13px;">★</span>`).join('');
+  const stars = [1,2,3,4,5].map(s => `<span style="color:${s<=r.rating?'#f59e0b':'#64748b'};font-size:13px;">★</span>`).join('');
   const userIsAdmin  = isAdmin();
   const isAuthor = currentUser && (r.user === currentUser._id || r.user === currentUser.id);
   return `
-    <div class="bg-gray-50 border border-gray-100 rounded-2xl p-4" id="review-card-${r._id}">
+    <div class="bg-white/5 border border-white/10 rounded-2xl p-4" id="review-card-${r._id}">
       <div class="flex items-start justify-between gap-2 mb-2">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+          <div class="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
             ${(r.authorName||'?')[0].toUpperCase()}
           </div>
           <div>
-            <p class="font-semibold text-sm text-slate-800">${esc(r.authorName || 'Anonymous')}</p>
-            <div class="flex items-center gap-1">${stars}<span class="text-xs text-gray-400 ml-1">${timeAgo(r.createdAt)}</span></div>
+            <p class="font-semibold text-sm">${esc(r.authorName || 'Anonymous')}</p>
+            <div class="flex items-center gap-1">${stars}<span class="text-xs text-white/40 ml-1">${timeAgo(r.createdAt)}</span></div>
           </div>
         </div>
         ${isAuthor || userIsAdmin ? `
           <button onclick="deleteReview('${bizId}','${r._id}')"
-                  class="text-xs text-red-400 hover:text-red-600 transition font-semibold flex-shrink-0">Delete</button>` : ''}
+                  class="text-xs text-red-400 hover:text-red-500 transition font-semibold flex-shrink-0">Delete</button>` : ''}
       </div>
-      ${r.title ? `<p class="font-semibold text-slate-800 text-sm mb-1">${esc(r.title)}</p>` : ''}
-      ${r.body  ? `<p class="text-sm text-gray-600 leading-relaxed">${esc(r.body)}</p>` : ''}
+      ${r.title ? `<p class="font-semibold text-sm mb-1">${esc(r.title)}</p>` : ''}
+      ${r.body  ? `<p class="text-sm text-white/70 leading-relaxed">${esc(r.body)}</p>` : ''}
     </div>`;
 }
 
