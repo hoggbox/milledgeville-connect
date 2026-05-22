@@ -3487,14 +3487,19 @@ router.post('/user/delete-request', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Mark for deletion (soft delete - don't delete immediately)
+    if (user.deletionRequestedAt) {
+      return res.status(400).json({ 
+        message: 'A deletion request has already been submitted for this account.' 
+      });
+    }
+
     user.deletionRequestedAt = new Date();
     user.deletionReason = req.body.reason || 'No reason provided';
     await user.save();
 
-    // TODO: Send email to admin (you) for review
-
-    res.json({ message: 'Account deletion request submitted successfully' });
+    res.json({ 
+      message: 'Your account deletion request has been received. Your account and all associated data will be permanently deleted within 30 days. You have been logged out.' 
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

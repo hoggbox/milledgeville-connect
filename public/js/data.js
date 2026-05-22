@@ -8024,37 +8024,46 @@ window.flagShoutout = async function (shoutoutId) {
 window.showDeleteAccountModal = function() {
   const html = `
     <div id="deleteAccountModal" onclick="if(event.target.id==='deleteAccountModal') hideDeleteAccountModal()" 
-         class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000]">
+         class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000] p-4">
       <div onclick="event.stopImmediatePropagation()" 
-           class="bg-zinc-900 border border-red-500/30 rounded-3xl max-w-md w-full mx-4 p-6">
+           class="bg-[#0f172a] border border-red-500/30 rounded-3xl max-w-md w-full p-8">
         
         <div class="text-center">
-          <div class="text-5xl mb-4">⚠️</div>
-          <h2 class="text-2xl font-bold text-red-400 mb-2">Delete Account?</h2>
-          <p class="text-white/70 leading-relaxed">
-            This will permanently delete your account, all posts, messages, listings, and data.<br><br>
-            <strong>This action cannot be undone.</strong>
+          <div class="text-5xl mb-4">🗑️</div>
+          <h2 class="text-2xl font-bold text-red-400 mb-2">Delete Your Account</h2>
+          <p class="text-white/70 text-sm leading-relaxed">
+            We're sorry to see you go. Deleting your account will permanently remove your profile, posts, messages, and all associated data.
           </p>
         </div>
 
-        <div class="mt-8">
-          <textarea id="deleteReason" rows="3" placeholder="Reason for deletion (optional)"
-                    class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl p-4 text-white placeholder:text-white/40 focus:outline-none"></textarea>
+        <div class="mt-6 bg-white/5 border border-white/10 rounded-2xl p-5 text-sm">
+          <p class="font-semibold text-white/90 mb-3">What will happen:</p>
+          <ul class="space-y-2 text-white/70 text-sm">
+            <li class="flex gap-2">• Your account will be <strong>scheduled for deletion</strong></li>
+            <li class="flex gap-2">• All your data will be permanently removed within <strong>30 days</strong></li>
+            <li class="flex gap-2">• This action <strong>cannot be undone</strong></li>
+          </ul>
+        </div>
+
+        <div class="mt-6">
+          <label class="block text-xs text-white/50 mb-1.5">Reason for leaving (optional)</label>
+          <textarea id="deleteReason" rows="2" placeholder="Help us improve the app"
+                    class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white placeholder:text-white/40 focus:outline-none resize-none"></textarea>
         </div>
 
         <div class="flex gap-3 mt-8">
           <button onclick="hideDeleteAccountModal()" 
-                  class="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-semibold transition">
+                  class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold transition">
             Cancel
           </button>
           <button onclick="confirmAccountDeletion()" 
-                  class="flex-1 py-4 bg-red-600 hover:bg-red-700 rounded-2xl font-semibold transition">
-            Yes, Delete My Account
+                  class="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl transition">
+            Confirm Deletion
           </button>
         </div>
       </div>
     </div>`;
-
+  
   document.body.insertAdjacentHTML('beforeend', html);
 };
 
@@ -8081,6 +8090,27 @@ window.requestAccountDeletion = async function() {
     showToast('✅ Deletion request submitted. You will be notified when processed.', 'success');
   } catch (e) {
     showToast('Failed to submit request. Please email us directly.', 'error');
+  }
+};
+
+window.confirmAccountDeletion = async function() {
+  const reason = document.getElementById('deleteReason')?.value.trim() || '';
+
+  try {
+    const res = await apiPost('/user/delete-request', { reason });
+    
+    hideDeleteAccountModal();
+    
+    showToast(res.message || 'Deletion request submitted.', 'success');
+
+    // Log the user out after showing the message
+    setTimeout(() => {
+      localStorage.removeItem('token');
+      window.location.reload();
+    }, 2500);
+
+  } catch (e) {
+    showToast('Failed to submit deletion request. Please try again.', 'error');
   }
 };
 
