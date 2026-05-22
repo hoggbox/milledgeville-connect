@@ -777,15 +777,12 @@ async function sendPushToUser(userId, title, body, data = {}) {
     return false;
   }
 
-  let sent = false;
-
-  // ── Native FCM path ───────────────────────────────────────────────────────
-if (sub.nativeToken) {
+  // Prefer native FCM (Android app) — only send one
+  if (sub.nativeToken) {
     try {
       const message = {
         token: sub.nativeToken,
         notification: { title, body },
-        // Pass data fields so the Android app can deep-link to the specific post
         data: {
           page: data.page || '',
           id:   data.id   || '',
@@ -799,19 +796,20 @@ if (sub.nativeToken) {
           }
         }
       };
-      const response = await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}:`, response);
-      sent = true;
+      await admin.messaging().send(message);
+      console.log(`✅ Native push sent to ${userId}`);
+      return true;
     } catch (err) {
       console.error(`[Push] FCM failed for ${userId}:`, err.message);
       if (err.code === 'messaging/registration-token-not-registered') {
         sub.nativeToken = null;
         await sub.save();
       }
+      return false;
     }
   }
 
-  // ── Web VAPID path ────────────────────────────────────────────────────────
+  // Fallback to Web Push only if no native token
   if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
     try {
       await webpush.sendNotification(
@@ -819,18 +817,18 @@ if (sub.nativeToken) {
         JSON.stringify({ title, body, data })
       );
       console.log(`✅ Web push sent to ${userId}`);
-      sent = true;
+      return true;
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
       if (err.statusCode === 410 || err.statusCode === 404) {
-        // Subscription expired — clear it but keep native token if present
         sub.subscription = null;
         await sub.save();
       }
+      return false;
     }
   }
 
-  return sent;
+  return false;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
