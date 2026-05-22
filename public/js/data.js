@@ -5308,16 +5308,16 @@ window.showMarketplaceDetail = async function(id) {
 
         <!-- Comment Input -->
         <div class="flex gap-2 mb-4">
-          <input id="lostCommentInput" type="text" placeholder="Write a comment..." 
+          <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
                  class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400"
-                 onkeypress="if(event.key === 'Enter') postLostComment('${item._id}')">
-          <button onclick="postLostComment('${item._id}')" 
+                 onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
+          <button onclick="postMarketplaceComment('${item._id}')" 
                   class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-2xl text-sm font-semibold transition">
             Post
           </button>
         </div>
 
-        <div id="lostCommentsContainer" class="space-y-4"></div>
+        <div id="marketCommentsContainer" class="space-y-4"></div>
       </div>
     </div>
 
@@ -5332,11 +5332,11 @@ window.showMarketplaceDetail = async function(id) {
 
     <!-- Footer -->
     <div class="p-6 border-t border-white/10 flex gap-3">
-  <button onclick="shareContent('lost', '${esc(item.title)}')" 
+  <button onclick="shareContent('market', '${esc(item.title)}')" 
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     🔗 Share
   </button>
-  <button onclick="hideLostDetailModal()" 
+  <button onclick="hideMarketDetailModal()" 
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     Close
   </button>
