@@ -5332,15 +5332,15 @@ window.showMarketplaceDetail = async function(id) {
 
     <!-- Footer -->
     <div class="p-6 border-t border-white/10 flex gap-3">
-      <button onclick="shareContent('lost', '${esc(item.title)}')" 
-              class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
-        🔗 Share
-      </button>
-      <button onclick="hideLostDetailModal()" 
-              class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
-        Close
-      </button>
-    </div>
+  <button onclick="shareContent('lost', '${esc(item.title)}')" 
+          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+    🔗 Share
+  </button>
+  <button onclick="hideLostDetailModal()" 
+          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+    Close
+  </button>
+</div>
 
   </div>
 </div>`;
@@ -6650,15 +6650,15 @@ window.showLostDetail = async function(id) {
 
     <!-- Footer -->
     <div class="p-6 border-t border-white/10 flex gap-3">
-      <button onclick="shareContent('lost', '${esc(item.title)}')" 
-              class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
-        🔗 Share
-      </button>
-      <button onclick="hideLostDetailModal()" 
-              class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
-        Close
-      </button>
-    </div>
+  <button onclick="shareContent('lost', '${esc(item.title)}')" 
+          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+    🔗 Share
+  </button>
+  <button onclick="hideLostDetailModal()" 
+          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+    Close
+  </button>
+</div>
 
   </div>
 </div>`;
