@@ -4731,54 +4731,103 @@ window.showPostLostItemModal = function() {
   }
 
   modal.innerHTML = `
-    <div onclick="if(event.target.id==='lostItemModal')hideLostItemModal()" class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl overflow-hidden">
+    <div onclick="if(event.target.id==='lostItemModal')hideLostItemModal()" 
+         class="bg-slate-900 text-white w-full max-w-lg mx-4 rounded-3xl overflow-hidden border border-white/10">
+
       <div class="px-6 pt-6 pb-2">
-        <h2 class="text-2xl font-bold mb-4">Post Lost or Found Item</h2>
+        <h2 class="text-2xl font-bold mb-5">Post Lost or Found Item</h2>
         
         <div class="space-y-4">
+
+          <!-- Lost / Found Toggle -->
           <div>
-            <label class="block text-sm font-semibold mb-1">Type</label>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Type</label>
             <div class="flex gap-3">
-              <button onclick="this.classList.add('bg-emerald-600','text-white');document.getElementById('lostType').value='lost';document.querySelectorAll('#lostItemModal button').forEach(b=>b!==this&&b.classList.remove('bg-emerald-600','text-white'))" class="flex-1 py-3 rounded-2xl border border-emerald-600">Lost</button>
-              <button onclick="this.classList.add('bg-emerald-600','text-white');document.getElementById('lostType').value='found';document.querySelectorAll('#lostItemModal button').forEach(b=>b!==this&&b.classList.remove('bg-emerald-600','text-white'))" class="flex-1 py-3 rounded-2xl border border-emerald-600">Found</button>
+              <button onclick="selectLostType(this, 'lost')" 
+                      class="flex-1 py-3.5 rounded-2xl border border-white/20 font-semibold active-type bg-emerald-600 text-white">
+                Lost
+              </button>
+              <button onclick="selectLostType(this, 'found')" 
+                      class="flex-1 py-3.5 rounded-2xl border border-white/20 font-semibold text-white/70">
+                Found
+              </button>
             </div>
             <input type="hidden" id="lostType" value="lost">
           </div>
 
-          <input id="lostTitle" type="text" placeholder="Title (e.g. Lost Black Wallet)" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
-          
-          <textarea id="lostDesc" rows="3" placeholder="Describe the item..." class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none"></textarea>
-          
+          <!-- Title -->
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Title</label>
+            <input id="lostTitle" type="text" placeholder="e.g. Lost Black Wallet or Found iPhone" 
+                   class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+          </div>
+
+          <!-- Description -->
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Description</label>
+            <textarea id="lostDesc" rows="3" placeholder="Describe the item or where you found it..." 
+                      class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none resize-none"></textarea>
+          </div>
+
+          <!-- Location + Date -->
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold mb-1">Location</label>
-              <input id="lostLocation" type="text" placeholder="Milledgeville, GA" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+              <label class="block text-xs font-semibold mb-1.5 text-white/60">Location</label>
+              <input id="lostLocation" type="text" placeholder="Milledgeville, GA" 
+                     class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
             </div>
             <div>
-              <label class="block text-sm font-semibold mb-1">Date</label>
-              <input id="lostDate" type="date" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+              <label class="block text-xs font-semibold mb-1.5 text-white/60">Date</label>
+              <input id="lostDate" type="date" 
+                     class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
             </div>
           </div>
 
-          <label class="flex items-center gap-2">
-            <input type="checkbox" id="isPet" class="w-5 h-5 accent-emerald-600">
+          <!-- Pet Checkbox -->
+          <label class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 cursor-pointer">
+            <input type="checkbox" id="isPet" class="w-5 h-5 accent-emerald-500">
             <span class="font-medium">This is a lost pet 🐾</span>
           </label>
 
+          <!-- Photos -->
           <div>
-            <label class="block text-sm font-semibold mb-2">Photos (optional)</label>
-            <input type="file" id="lostImages" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+            <label class="block text-xs font-semibold mb-2 text-white/60">Photos (optional)</label>
+            <input type="file" id="lostImages" multiple accept="image/*" 
+                   class="block w-full text-sm text-white/60 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500"
+                   onchange="handleLostImages(this)">
+            <div id="lostImagePreviews" class="flex flex-wrap gap-2 mt-3"></div>
           </div>
+
         </div>
       </div>
 
-      <div class="p-6 border-t flex gap-3">
-        <button onclick="hideLostItemModal()" class="flex-1 py-4 rounded-3xl border border-slate-300 font-semibold">Cancel</button>
-        <button onclick="postLostItem()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Post Item</button>
+      <div class="p-6 border-t border-white/10 flex gap-3">
+        <button onclick="hideLostItemModal()" 
+                class="flex-1 py-4 rounded-3xl border border-white/20 font-semibold hover:bg-white/5 transition">
+          Cancel
+        </button>
+        <button onclick="postLostItem()" 
+                class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold transition">
+          Post Item
+        </button>
       </div>
     </div>`;
-
+  
   modal.style.display = 'flex';
+};
+
+window.selectLostType = function(button, type) {
+  // Reset all buttons
+  document.querySelectorAll('#lostItemModal button').forEach(btn => {
+    btn.classList.remove('bg-emerald-600', 'text-white');
+    btn.classList.add('text-white/70');
+  });
+  
+  // Activate selected
+  button.classList.add('bg-emerald-600', 'text-white');
+  button.classList.remove('text-white/70');
+  
+  document.getElementById('lostType').value = type;
 };
 
 window.hideLostItemModal = function() {
