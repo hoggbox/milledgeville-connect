@@ -3791,25 +3791,9 @@ const tabs = [
 
 <!-- ═══ TAB: Analytics ════════════════════════════════════════════════════════ -->
 <div id="dtabContent-analytics" class="hidden">
-  ${!isPro ? `
-  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center">
-    <div class="text-5xl mb-4 opacity-50">📊</div>
-    <h3 class="text-xl font-bold mb-2">Business Analytics</h3>
-    <p class="text-white/60 mb-6 text-sm leading-relaxed">See how your listing is performing — profile views, notification reach, deal &amp; event engagement.</p>
-    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Profile view counts (30-day)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Notifications sent and credits used</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deal and event engagement</div>
-    </div>
-    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-      🚀 Upgrade to Business Pro
-    </button>
-  </div>
-  ` : `
   <div id="analyticsContent">
     <div class="text-white/30 text-center py-12 text-sm">Loading analytics…</div>
   </div>
-  `}
 </div>
 
 <!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
@@ -3864,6 +3848,7 @@ window.switchDashTab = function (tabId) {
   if (tabId === 'photos')        renderOwnerPhotoGrid();
   if (tabId === 'notifications') loadNotificationsTab();
   if (tabId === 'homes')         loadOwnerHomes();
+  if (tabId === 'analytics')     loadOwnerAnalytics();
 };
 
 // ─── NOTIFICATIONS TAB LOADER ────────────────────────────────────────────────
@@ -6656,6 +6641,67 @@ function renderUsersTable(users) {
       </div>
     </div>
   `).join('');
+}
+
+// ─── OWNER ANALYTICS ─────────────────────────────────────────────────────────
+async function loadOwnerAnalytics() {
+  const container = document.getElementById('analyticsContent');
+  if (!container) return;
+
+  container.innerHTML = `<div class="text-white/30 text-center py-8 text-sm">Loading analytics…</div>`;
+
+  try {
+    const [deals, events, homes, sub] = await Promise.all([
+      apiGet('/owner/deals').catch(() => []),
+      apiGet('/owner/events').catch(() => []),
+      apiGet('/owner/homes').catch(() => []),
+      apiGet('/owner/subscription').catch(() => ({}))
+    ]);
+
+    const totalDeals = deals.length;
+    const totalEvents = events.length;
+    const totalListings = homes.length;
+    const credits = sub.credits || 0;
+    const tier = sub.tier || 'free';
+
+    container.innerHTML = `
+      <div class="space-y-4">
+        <h3 class="font-bold text-xl px-1">Business Analytics</h3>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Deals Posted</div>
+            <div class="text-4xl font-black mt-1">${totalDeals}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Events Posted</div>
+            <div class="text-4xl font-black mt-1">${totalEvents}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Marketplace Listings</div>
+            <div class="text-4xl font-black mt-1">${totalListings}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Notification Credits</div>
+            <div class="text-4xl font-black mt-1">${credits}</div>
+            <div class="text-xs text-white/40 mt-1">${tier === 'pro' ? 'Pro Tier' : 'Free Tier'}</div>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-3xl p-5 text-sm text-white/60">
+          <p class="mb-2 font-semibold text-white/80">Coming soon:</p>
+          <ul class="list-disc pl-5 space-y-1 text-xs">
+            <li>Profile view counts</li>
+            <li>Notification open rates</li>
+            <li>Engagement on your deals &amp; events</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = `<p class="text-red-400 text-center py-8">Failed to load analytics.</p>`;
+  }
 }
 
 window.adminToggleModerator = async function(userId, currentlyMod) {
