@@ -12,9 +12,6 @@ let currentDirectoryBusinesses = [];
 let marketplaceCurrentPage = 1;
 const MARKETPLACE_PAGE_SIZE = 8;
 let currentMarketplaceItems = [];
-// ─── RESOURCES PAGINATION STATE ─────────────────────────────────────────────
-let resourcesCurrentPage = 1;
-const RESOURCES_PAGE_SIZE = 8;
 
 // ─── App-wide constants ───────────────────────────────────────────────────────
 
@@ -3256,15 +3253,12 @@ async function loadResourcesPage(content) {
 
 window.filterResources = function (categoryName) {
   window._activeResourceFilter = categoryName;
-  resourcesCurrentPage = 1; // ← Reset to first page on filter change
 
-  // Update chip styles
   document.querySelectorAll('[id^="resChip-"]').forEach(btn => {
     btn.className = btn.className
       .replace('bg-emerald-500/30 border-emerald-500/30 text-white', 'bg-white/10 border-white/10 text-white/80')
       .replace('hover:bg-emerald-500/50', 'hover:bg-white/20');
   });
-
   const activeChipId = 'resChip-' + (categoryName === 'All' ? 'All' : categoryName.replace(/\s+/g, '-').replace(/[&]/g, ''));
   const activeChip = document.getElementById(activeChipId);
   if (activeChip) {
@@ -3287,10 +3281,6 @@ window.filterResources = function (categoryName) {
   renderResourcesList(filtered);
 };
 
-// ─── RESOURCES PAGINATION STATE ─────────────────────────────────────────────
-let resourcesCurrentPage = 1;
-const RESOURCES_PAGE_SIZE = 8;
-
 function renderResourcesList(items) {
   const container = document.getElementById('resourcesResults');
   if (!container) return;
@@ -3307,23 +3297,15 @@ function renderResourcesList(items) {
     return;
   }
 
-  // Pagination
-  const totalPages = Math.ceil(items.length / RESOURCES_PAGE_SIZE);
-  resourcesCurrentPage = Math.min(resourcesCurrentPage, totalPages);
-
-  const start = (resourcesCurrentPage - 1) * RESOURCES_PAGE_SIZE;
-  const pageItems = items.slice(start, start + RESOURCES_PAGE_SIZE);
-
-  // Group current page only
   const grouped = {};
-  pageItems.forEach(item => {
+  items.forEach(item => {
     const catName = item.category?.name || 'Other';
     const catIcon = item.category?.icon || '📍';
     if (!grouped[catName]) grouped[catName] = { icon: catIcon, items: [] };
     grouped[catName].items.push(item);
   });
 
-  let html = Object.entries(grouped).map(([catName, group]) => `
+  container.innerHTML = Object.entries(grouped).map(([catName, group]) => `
     <div class="mb-7">
       <div class="flex items-center gap-3 mb-3">
         <span class="text-lg">${group.icon}</span>
@@ -3335,31 +3317,6 @@ function renderResourcesList(items) {
         ${group.items.map(item => renderResourceCard(item)).join('')}
       </div>
     </div>`).join('');
-
-  // Pagination controls
-  if (totalPages > 1) {
-    html += `
-      <div class="flex items-center justify-between mt-6 px-1">
-        <button onclick="goToResourcesPage(${resourcesCurrentPage - 1})" 
-                ${resourcesCurrentPage === 1 ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          ← Previous
-        </button>
-
-        <div class="text-sm text-white/50">
-          Page <span class="font-semibold text-white">${resourcesCurrentPage}</span> of ${totalPages}
-        </div>
-
-        <button onclick="goToResourcesPage(${resourcesCurrentPage + 1})" 
-                ${resourcesCurrentPage === totalPages ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          Next →
-        </button>
-      </div>
-    `;
-  }
-
-  container.innerHTML = html;
 }
 
 function renderResourceCard(item) {
@@ -3376,50 +3333,32 @@ function renderResourceCard(item) {
 
   return `
     <div onclick="showResourceDetail('${item._id}')"
-         class="bg-[#0f172a] border border-white/10 hover:border-emerald-500/40 rounded-3xl p-5 cursor-pointer transition-all duration-200 group">
+         class="bg-white/10 hover:bg-white/15 border border-white/10 hover:border-emerald-500/30 rounded-3xl p-5 cursor-pointer transition-all duration-200 group">
       <div class="flex gap-4">
-        <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 group-hover:scale-110 transition-transform">
+        <div class="w-12 h-12 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 group-hover:scale-110 transition-transform">
           ${icon}
         </div>
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-base leading-tight group-hover:text-emerald-300 transition-colors mb-1">${item.name}</h3>
           ${item.address ? `
-            <p class="text-emerald-400 text-xs flex items-center gap-1 mb-1">
+            <p class="text-emerald-300 text-xs flex items-center gap-1 mb-1">
               <span>📍</span><span class="truncate">${item.address}</span>
             </p>` : ''}
           ${item.phone ? `
-            <p class="text-white/60 text-xs flex items-center gap-1 mb-1">
+            <p class="text-white/50 text-xs flex items-center gap-1 mb-1">
               <span>📞</span><span>${item.phone}</span>
             </p>` : ''}
           ${hoursLine ? `
-            <p class="text-amber-400/80 text-xs flex items-start gap-1 mb-1">
+            <p class="text-amber-300/70 text-xs flex items-start gap-1 mb-1">
               <span class="flex-shrink-0">🕒</span><span>${hoursLine}</span>
             </p>` : ''}
           ${description ? `
             <p class="text-white/55 text-xs mt-2 line-clamp-2 leading-relaxed">${description}</p>` : ''}
         </div>
-        <span class="text-white/30 group-hover:text-white/60 transition flex-shrink-0 self-center text-lg">›</span>
+        <span class="text-white/20 group-hover:text-white/50 transition flex-shrink-0 self-center text-lg">›</span>
       </div>
     </div>`;
 }
-
-window.goToResourcesPage = function(page) {
-  resourcesCurrentPage = page;
-
-  const search = (document.getElementById('resourceSearch')?.value || '').toLowerCase();
-  const filter = window._activeResourceFilter || 'All';
-
-  const filtered = _allResources.filter(b => {
-    const catMatch = filter === 'All' || b.category?.name === filter;
-    const searchMatch = !search ||
-      b.name.toLowerCase().includes(search) ||
-      (b.description || '').toLowerCase().includes(search) ||
-      (b.address || '').toLowerCase().includes(search);
-    return catMatch && searchMatch;
-  });
-
-  renderResourcesList(filtered);
-};
 
 window.showResourceDetail = function (id) {
   const item = _allResources.find(b => b._id === id);
@@ -3438,23 +3377,21 @@ window.showResourceDetail = function (id) {
 
   const modalHTML = `
     <div onclick="if(event.target.id==='resourceModal')closeResourceDetail()" id="resourceModal"
-         class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center p-4">
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center">
       <div onclick="event.stopImmediatePropagation()"
-           class="bg-[#0f172a] text-white w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
-        
-        <!-- Header -->
-        <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 flex justify-center border-b border-white/10 rounded-t-3xl">
-          <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
+           class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
+        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100">
+          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
         </div>
-
+        <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
         <div class="p-6">
-          <div class="flex items-start gap-4 mb-6">
-            <div class="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
+          <div class="flex items-start gap-4 mb-5">
+            <div class="w-14 h-14 bg-gradient-to-br from-emerald-100 to-teal-50 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
               ${icon}
             </div>
             <div class="flex-1 min-w-0">
-              <h1 class="text-2xl font-bold leading-tight">${item.name}</h1>
-              <span class="inline-block mt-2 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <h1 class="text-2xl font-bold leading-tight text-slate-900">${item.name}</h1>
+              <span class="inline-block mt-1 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
                 ${icon} ${catName}
               </span>
             </div>
@@ -3462,51 +3399,48 @@ window.showResourceDetail = function (id) {
 
           <div class="space-y-3 mb-6">
             ${item.address ? `
-              <div class="flex items-start gap-3 bg-white/5 rounded-2xl p-4">
+              <div class="flex items-start gap-3 bg-slate-50 rounded-2xl p-4">
                 <span class="text-xl flex-shrink-0">📍</span>
                 <div>
-                  <p class="text-xs font-semibold text-white/50 uppercase tracking-wide mb-0.5">Address</p>
-                  <p class="text-white font-medium text-sm">${item.address}</p>
+                  <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Address</p>
+                  <p class="text-slate-700 font-medium text-sm">${item.address}</p>
                 </div>
               </div>` : ''}
-
             ${item.phone ? `
-              <a href="tel:${item.phone}" class="flex items-start gap-3 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-2xl p-4 transition">
+              <a href="tel:${item.phone}" class="flex items-start gap-3 bg-emerald-50 hover:bg-emerald-100 rounded-2xl p-4 transition">
                 <span class="text-xl flex-shrink-0">📞</span>
                 <div>
-                  <p class="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-0.5">Phone</p>
-                  <p class="text-emerald-300 font-semibold text-sm">${item.phone}</p>
+                  <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-0.5">Phone</p>
+                  <p class="text-emerald-700 font-semibold text-sm">${item.phone}</p>
                 </div>
               </a>` : ''}
-
             ${hoursLine ? `
-              <div class="flex items-start gap-3 bg-amber-500/10 rounded-2xl p-4">
+              <div class="flex items-start gap-3 bg-amber-50 rounded-2xl p-4">
                 <span class="text-xl flex-shrink-0">🕒</span>
                 <div>
-                  <p class="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-0.5">Hours</p>
-                  <p class="text-amber-300 text-sm leading-relaxed">${hoursLine}</p>
+                  <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Hours</p>
+                  <p class="text-amber-800 text-sm leading-relaxed">${hoursLine}</p>
                 </div>
               </div>` : ''}
-
             ${item.website ? `
               <a href="${item.website.startsWith('http') ? item.website : 'https://'+item.website}" target="_blank"
-                 class="flex items-start gap-3 bg-blue-500/10 hover:bg-blue-500/20 rounded-2xl p-4 transition">
+                 class="flex items-start gap-3 bg-blue-50 hover:bg-blue-100 rounded-2xl p-4 transition">
                 <span class="text-xl flex-shrink-0">🌐</span>
                 <div>
-                  <p class="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-0.5">Website</p>
-                  <p class="text-blue-300 font-semibold text-sm">${item.website.replace(/^https?:\/\//, '')}</p>
+                  <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Website</p>
+                  <p class="text-blue-700 font-semibold text-sm">${item.website.replace(/^https?:\/\//, '')}</p>
                 </div>
               </a>` : ''}
           </div>
 
           ${description ? `
             <div class="mb-6">
-              <p class="text-xs font-semibold text-white/50 uppercase tracking-wide mb-2">About</p>
-              <p class="text-white/80 leading-relaxed text-sm">${description}</p>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">About</p>
+              <p class="text-slate-600 leading-relaxed text-sm">${description}</p>
             </div>` : ''}
 
           <button onclick="closeResourceDetail()"
-                  class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold transition">
+                  class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">
             Close
           </button>
         </div>
