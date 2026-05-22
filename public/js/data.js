@@ -12,6 +12,9 @@ let currentDirectoryBusinesses = [];
 let marketplaceCurrentPage = 1;
 const MARKETPLACE_PAGE_SIZE = 8;
 let currentMarketplaceItems = [];
+// ─── RESOURCES PAGINATION STATE ─────────────────────────────────────────────
+let resourcesCurrentPage = 1;
+const RESOURCES_PAGE_SIZE = 8;
 
 // ─── App-wide constants ───────────────────────────────────────────────────────
 
@@ -3117,10 +3120,6 @@ function renderEventCard(e, now) {
     </div>`;
 }
 
-// ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
-let _allResources = [];
-let _resourceCategories = [];
-
 async function loadResourcesPage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-10">
@@ -3231,6 +3230,7 @@ async function loadResourcesPage(content) {
 
 window.filterResources = function (categoryName) {
   window._activeResourceFilter = categoryName;
+  resourcesCurrentPage = 1;
 
   document.querySelectorAll('[id^="resChip-"]').forEach(btn => {
     btn.className = btn.className
@@ -3275,15 +3275,23 @@ function renderResourcesList(items) {
     return;
   }
 
+  // === PAGINATION LOGIC ===
+  const totalPages = Math.ceil(items.length / RESOURCES_PAGE_SIZE);
+  resourcesCurrentPage = Math.min(resourcesCurrentPage, totalPages);
+
+  const start = (resourcesCurrentPage - 1) * RESOURCES_PAGE_SIZE;
+  const pageItems = items.slice(start, start + RESOURCES_PAGE_SIZE);
+
+  // Group only the current page's items
   const grouped = {};
-  items.forEach(item => {
+  pageItems.forEach(item => {
     const catName = item.category?.name || 'Other';
     const catIcon = item.category?.icon || '📍';
     if (!grouped[catName]) grouped[catName] = { icon: catIcon, items: [] };
     grouped[catName].items.push(item);
   });
 
-  container.innerHTML = Object.entries(grouped).map(([catName, group]) => `
+  let html = Object.entries(grouped).map(([catName, group]) => `
     <div class="mb-7">
       <div class="flex items-center gap-3 mb-3">
         <span class="text-lg">${group.icon}</span>
@@ -3295,6 +3303,29 @@ function renderResourcesList(items) {
         ${group.items.map(item => renderResourceCard(item)).join('')}
       </div>
     </div>`).join('');
+
+  // === PAGINATION CONTROLS ===
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="goToResourcesPage(${resourcesCurrentPage - 1})"
+                ${resourcesCurrentPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+        <div class="text-sm text-white/50">
+          Page <span class="font-semibold text-white">${resourcesCurrentPage}</span> of ${totalPages}
+        </div>
+        <button onclick="goToResourcesPage(${resourcesCurrentPage + 1})"
+                ${resourcesCurrentPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
 }
 
 function renderResourceCard(item) {
@@ -3337,6 +3368,24 @@ function renderResourceCard(item) {
       </div>
     </div>`;
 }
+
+window.goToResourcesPage = function(page) {
+  resourcesCurrentPage = page;
+
+  const search = (document.getElementById('resourceSearch')?.value || '').toLowerCase();
+  const filter = window._activeResourceFilter || 'All';
+
+  const filtered = _allResources.filter(b => {
+    const catMatch = filter === 'All' || b.category?.name === filter;
+    const searchMatch = !search ||
+      b.name.toLowerCase().includes(search) ||
+      (b.description || '').toLowerCase().includes(search) ||
+      (b.address || '').toLowerCase().includes(search);
+    return catMatch && searchMatch;
+  });
+
+  renderResourcesList(filtered);
+};
 
 window.showResourceDetail = function (id) {
   const item = _allResources.find(b => b._id === id);
