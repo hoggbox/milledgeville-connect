@@ -5207,7 +5207,7 @@ window.showMarketplaceDetail = async function(id) {
      class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
   
   <div onclick="event.stopImmediatePropagation()" 
-       class="bg-white text-slate-900 w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
+       class="bg-slate-900 text-white w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
     <!-- Header -->
     <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
@@ -5218,64 +5218,64 @@ window.showMarketplaceDetail = async function(id) {
       <button onclick="hideMarketDetailModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
     </div>
 
-    <div class="p-6">
-      <!-- Images -->
-      ${item.images && item.images.length ? `
-        <div class="grid grid-cols-2 gap-3 mb-6">
-          ${item.images.map((src, index) => `
-            <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer" 
-                 onclick="openMarketImageViewer(${index}, ${JSON.stringify(item.images)})">
-          `).join('')}
-        </div>` : ''}
+<div class="p-6">
+  <!-- Images -->
+  ${item.images && item.images.length ? `
+    <div class="grid grid-cols-2 gap-3 mb-6">
+      ${item.images.map((src, index) => `
+        <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
+             onclick="openMarketImageViewer(${index}, ${JSON.stringify(item.images)})">
+      `).join('')}
+    </div>` : ''}
 
-      <p class="text-slate-700 leading-relaxed">${esc(item.description || '')}</p>
+  <p class="text-white/90 leading-relaxed">${esc(item.description || '')}</p>
 
-      <div class="mt-6 flex items-center gap-2 text-sm text-slate-500">
-        <span class="px-3 py-1 bg-slate-100 rounded-full">${item.condition || 'Used'}</span>
-        <span>${timeAgo(item.createdAt)}</span>
-      </div>
+  <div class="mt-6 flex items-center gap-2 text-sm text-white/50">
+    <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition || 'Used'}</span>
+    <span>${timeAgo(item.createdAt)}</span>
+  </div>
 
-      <!-- Comments Section -->
-      <div class="mt-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-semibold text-lg text-slate-900">💬 Comments</h3>
-        </div>
-
-        <!-- Comment Input -->
-        <div class="flex gap-2 mb-4">
-          <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
-                 class="flex-1 bg-slate-100 border border-slate-300 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
-                 onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
-          <button onclick="postMarketplaceComment('${item._id}')" 
-                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-2xl text-sm font-semibold transition">
-            Post
-          </button>
-        </div>
-
-        <div id="marketCommentsContainer" class="space-y-4"></div>
-      </div>
+  <!-- Comments Section -->
+  <div class="mt-10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-semibold text-lg">💬 Comments</h3>
     </div>
+
+    <!-- Comment Input -->
+    <div class="flex gap-2 mb-4">
+      <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
+             class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400"
+             onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
+      <button onclick="postMarketplaceComment('${item._id}')" 
+              class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-2xl text-sm font-semibold transition">
+        Post
+      </button>
+    </div>
+
+    <div id="marketCommentsContainer" class="space-y-4"></div>
+  </div>
+</div>
 
     <!-- Seller Actions -->
-    ${isSeller ? `
-      <div class="p-6 border-t bg-amber-50 flex justify-end">
-        <button onclick="markMarketSold()" 
-                class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
-          Mark as Sold ✅
-        </button>
-      </div>` : ''}
+${isSeller ? `
+<div class="p-6 border-t border-white/10 flex justify-end">
+  <button onclick="markMarketSold()" 
+          class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+    Mark as Sold ✅
+  </button>
+</div>` : ''}
 
     <!-- Footer Buttons -->
-    <div class="p-6 border-t flex gap-3">
-      <button onclick="shareContent('market', '${esc(item.title)}', '$${item.price}')" 
-              class="flex-1 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-3xl font-semibold transition">
-        🔗 Share
-      </button>
-      <button onclick="hideMarketDetailModal()" 
-              class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-3xl font-semibold">
-        Close
-      </button>
-    </div>
+<div class="p-6 border-t border-white/10 flex gap-3">
+  <button onclick="shareContent('market', '${esc(item.title)}', '$${item.price}')" 
+          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+    🔗 Share
+  </button>
+  <button onclick="hideMarketDetailModal()" 
+          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+    Close
+  </button>
+</div>
 
   </div>
 </div>
