@@ -6566,22 +6566,161 @@ window.showLostDetail = async function(id) {
       : null;
 
     if (!item) {
-      showToast('Lost item not found', 'error');
+      showToast('Item not found', 'error');
       return;
     }
 
-    // TODO: Replace this with your real Lost & Found detail modal
-    // For now it navigates + shows a toast (you can improve later)
-    navigate('lostfound');
-    
-    setTimeout(() => {
-      showToast(`📍 Opened: ${item.title}`, 'success');
-      // Example: If you create showLostItemModal(item) later, call it here
-    }, 700);
+    const isOwner = currentUser && item.owner && 
+      String(item.owner._id || item.owner) === String(currentUser._id);
+
+    const html = `
+<div id="lostDetailModal" onclick="if(event.target.id==='lostDetailModal') hideLostDetailModal()" 
+     class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
+  
+  <div onclick="event.stopImmediatePropagation()" 
+       class="bg-slate-900 text-white w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
+
+    <!-- Header -->
+    <div class="sticky top-0 bg-slate-900 px-6 py-4 border-b border-white/10 flex justify-between items-center">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}">
+            ${item.type === 'lost' ? '🔎 LOST' : '✅ FOUND'}
+          </span>
+          ${item.isPet ? `<span class="px-3 py-1 text-xs font-bold rounded-full bg-amber-500/20 text-amber-400">🐾 PET</span>` : ''}
+        </div>
+        <h2 class="text-2xl font-bold mt-1">${esc(item.title)}</h2>
+      </div>
+      <button onclick="hideLostDetailModal()" class="text-3xl leading-none text-white/40 hover:text-white">×</button>
+    </div>
+
+    <div class="p-6">
+      <!-- Photos -->
+      ${item.images && item.images.length ? `
+        <div class="grid grid-cols-2 gap-3 mb-6">
+          ${item.images.map((src, index) => `
+            <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
+                 onclick="openMarketImageViewer(${index}, ${JSON.stringify(item.images)})">
+          `).join('')}
+        </div>` : ''}
+
+      <p class="text-white/90 leading-relaxed">${esc(item.description || '')}</p>
+
+      <div class="mt-6 grid grid-cols-2 gap-4 text-sm">
+        ${item.location ? `
+        <div class="bg-white/5 rounded-2xl p-4">
+          <div class="text-white/50 text-xs mb-1">LOCATION</div>
+          <div>${esc(item.location)}</div>
+        </div>` : ''}
+        
+        <div class="bg-white/5 rounded-2xl p-4">
+          <div class="text-white/50 text-xs mb-1">POSTED</div>
+          <div>${timeAgo(item.createdAt)}</div>
+        </div>
+      </div>
+
+      <!-- Comments Section -->
+      <div class="mt-10">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-lg">💬 Comments</h3>
+        </div>
+
+        <!-- Comment Input -->
+        <div class="flex gap-2 mb-4">
+          <input id="lostCommentInput" type="text" placeholder="Write a comment..." 
+                 class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400"
+                 onkeypress="if(event.key === 'Enter') postLostComment('${item._id}')">
+          <button onclick="postLostComment('${item._id}')" 
+                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-2xl text-sm font-semibold transition">
+            Post
+          </button>
+        </div>
+
+        <div id="lostCommentsContainer" class="space-y-4"></div>
+      </div>
+    </div>
+
+    <!-- Owner Actions -->
+    ${isOwner ? `
+      <div class="p-6 border-t border-white/10 flex justify-end">
+        <button onclick="resolveLostItem('${item._id}')" 
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+          Mark as Resolved ✅
+        </button>
+      </div>` : ''}
+
+    <!-- Footer -->
+    <div class="p-6 border-t border-white/10 flex gap-3">
+      <button onclick="shareContent('lost', '${esc(item.title)}')" 
+              class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+        🔗 Share
+      </button>
+      <button onclick="hideLostDetailModal()" 
+              class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+        Close
+      </button>
+    </div>
+
+  </div>
+</div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    // Load comments
+    const container = document.getElementById('lostCommentsContainer');
+    if (container && item.comments) {
+      renderComments(item.comments, 'lostCommentsContainer', 'lost', item._id);
+    }
 
   } catch (e) {
     console.error(e);
-    showToast('Could not open lost item', 'error');
+    showToast('Could not load item', 'error');
+  }
+};
+
+window.hideLostDetailModal = function() {
+  const modal = document.getElementById('lostDetailModal');
+  if (modal) modal.remove();
+};
+
+window.postLostComment = async function(itemId) {
+  const input = document.getElementById('lostCommentInput');
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!requireAuth('Sign in to comment')) return;
+
+  try {
+    await apiPost(`/lostitems/${itemId}/comments`, { text });
+    input.value = '';
+    showToast('Comment posted!', 'success');
+
+    // Refresh comments
+    const res = await apiGet('/lostitems');
+    const items = res.items || res;
+    const updatedItem = items.find(i => String(i._id) === String(itemId));
+    
+    const container = document.getElementById('lostCommentsContainer');
+    if (container && updatedItem?.comments) {
+      renderComments(updatedItem.comments, 'lostCommentsContainer', 'lost', itemId);
+    }
+  } catch (e) {
+    showToast('Failed to post comment', 'error');
+  }
+};
+
+window.resolveLostItem = async function(itemId) {
+  if (!confirm('Mark this item as resolved?')) return;
+
+  try {
+    await apiPost(`/lostitems/${itemId}/resolve`, {});
+    showToast('Item marked as resolved!', 'success');
+    hideLostDetailModal();
+    loadLostFoundPage(document.getElementById('content')); // refresh list
+  } catch (e) {
+    showToast('Failed to resolve item', 'error');
   }
 };
 
