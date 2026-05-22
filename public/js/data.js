@@ -1421,33 +1421,36 @@ function renderDirectory(businesses) {
   const start = (directoryCurrentPage - 1) * DIRECTORY_PAGE_SIZE;
   const pageBusinesses = currentDirectoryBusinesses.slice(start, start + DIRECTORY_PAGE_SIZE);
 
-  let html = '<div class="space-y-4">';
+  let html = '<div class="space-y-3">';
 
   pageBusinesses.forEach(b => {
     const isPro = b.owner && b.owner.subscriptionTier === 'pro';
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
+           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
         
-        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
+        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow z-10">PRO</div>` : ''}
 
         ${b.logo 
-          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0" alt="">` 
-          : `<div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+          ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/10" alt="">` 
+          : `<div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
         
         <div class="flex-1 min-w-0">
-          <h3 class="font-bold text-lg leading-tight">${esc(b.name)}</h3>
-          <p class="text-white/70 text-sm">${esc(b.address || 'Milledgeville, GA')}</p>
-          ${b.phone ? `<p class="text-emerald-400 text-xs mt-0.5">📞 ${b.phone}</p>` : ''}
-          ${b.hours ? `<p class="text-white/50 text-xs">${b.hours}</p>` : ''}
+          <div class="flex items-center gap-2">
+            <h3 class="font-bold text-lg leading-tight text-white">${esc(b.name)}</h3>
+          </div>
+          <p class="text-white/60 text-sm mt-0.5">${esc(b.address || 'Milledgeville, GA')}</p>
+          
+          ${b.phone ? `<p class="text-emerald-400 text-xs mt-1">📞 ${b.phone}</p>` : ''}
+          ${b.hours ? `<p class="text-white/40 text-xs mt-0.5">${b.hours}</p>` : ''}
         </div>
       </div>`;
   });
 
   html += '</div>';
 
-  // Pagination controls
+  // Pagination
   if (totalPages > 1) {
     html += `
       <div class="flex items-center justify-between mt-6 px-1">
@@ -1457,7 +1460,7 @@ function renderDirectory(businesses) {
           ← Previous
         </button>
 
-        <div class="text-sm text-white/60">
+        <div class="text-sm text-white/50">
           Page <span class="font-semibold text-white">${directoryCurrentPage}</span> of ${totalPages}
         </div>
 
