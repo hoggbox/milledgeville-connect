@@ -414,11 +414,6 @@ function showProfileSheet() {
       ⚙️ Settings & Privacy
       </button>
 
-      <button onclick="showDeleteAccountModal()" 
-              class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
-        🗑️ Delete My Account
-      </button>
-
       <button onclick="logout()" 
               class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
         Logout
@@ -548,42 +543,6 @@ function showEditProfileModal() {
           <div class="text-right text-xs text-slate-400 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
         </div>
 
-        <!-- Notification preferences -->
-        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-4">
-          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notification Preferences</p>
-
-          <!-- In-app toggles -->
-          ${[
-            { id: 'ep-notifyDeals',           label: '🔥 New Deals',                    checked: u.notifyDeals !== false },
-            { id: 'ep-notifyEvents',          label: '📅 Upcoming Events',               checked: u.notifyEvents !== false },
-            { id: 'ep-notifyShoutouts',       label: '🚗 New Traffic Alerts',            checked: !!u.notifyShoutouts },
-            { id: 'ep-notifyShoutoutComments',label: '💬 Comments on Traffic Alerts',    checked: !!u.notifyShoutoutComments },
-          ].map(n => `
-            <label class="flex items-center justify-between cursor-pointer select-none">
-              <span class="text-sm font-medium text-slate-700">${n.label}</span>
-              <div class="relative">
-                <input type="checkbox" id="${n.id}" ${n.checked ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
-                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
-              </div>
-            </label>`).join('')}
-
-          <!-- Push notification master toggle -->
-          <div class="border-t border-emerald-200 pt-4 mt-2">
-            <label for="ep-pushEnabled" class="flex items-start justify-between gap-3 ${pushSupported && !pushBlocked ? 'cursor-pointer' : ''} select-none">
-              <div class="flex-1">
-                <p class="text-sm font-semibold text-slate-700">🔔 Push Notifications</p>
-                <p class="text-xs text-slate-500 mt-0.5">Receive alerts even when the app is closed.</p>
-              </div>
-              <div class="relative flex-shrink-0 mt-0.5">
-                <input type="checkbox" id="ep-pushEnabled" class="sr-only peer" ${!pushSupported || pushBlocked ? 'disabled' : ''}>
-                <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${!pushSupported || pushBlocked ? 'opacity-40' : ''}"></div>
-                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
-              </div>
-            </label>
-          </div>
-        </div>
-
         <!-- Save -->
         <button onclick="saveProfile()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2" id="saveProfileBtn">
           💾 Save Changes
@@ -592,7 +551,6 @@ function showEditProfileModal() {
     </div>`;
 
   modal.classList.remove('hidden');
-  setTimeout(() => _initEditPushToggle(), 150);
 
   // Bio character counter
   const bioTextarea = document.getElementById('ep-bio');
@@ -602,64 +560,6 @@ function showEditProfileModal() {
       bioCount.textContent = bioTextarea.value.length; 
     });
   }
-}
-
-// Wire up the push toggle inside the Edit Profile modal.
-// Always reads the real browser subscription state — never trusts currentUser.pushEnabled alone.
-async function _initEditPushToggle() {
-  const pushCheckbox = document.getElementById('ep-pushEnabled');
-  const statusEl     = document.getElementById('pushStatusMsg');
-  if (!pushCheckbox || pushCheckbox.disabled) return;
-
-  // Set initial checked state from the browser, not the server flag
-  const hasSub = await _browserHasPushSubscription();
-  pushCheckbox.checked = hasSub;
-  if (currentUser) currentUser.pushEnabled = hasSub; // keep in sync
-
-  pushCheckbox.onchange = async function () {
-    const enabling = this.checked;
-
-    // Guard: browser has since denied the permission
-    if (enabling && getNotificationPermission() === 'denied') {
-      this.checked = false;
-      if (statusEl) {
-        statusEl.textContent = '⚠️ Notifications are blocked. Tap the 🔒 lock icon in the address bar → allow notifications → then toggle again.';
-        statusEl.style.color = '#d97706';
-        statusEl.classList.remove('hidden');
-      }
-      return;
-    }
-
-    this.disabled = true;
-    if (statusEl) {
-      statusEl.style.color = '';
-      statusEl.textContent = enabling ? '⏳ Requesting permission...' : '⏳ Disabling...';
-      statusEl.classList.remove('hidden');
-    }
-
-    if (enabling) {
-      const success = await requestPushPermission();
-      if (success) {
-        if (statusEl) { statusEl.textContent = '✅ Push notifications enabled!'; statusEl.style.color = '#059669'; }
-        showToast('✅ Push notifications turned on');
-      } else {
-        this.checked = false;
-        if (statusEl) {
-          statusEl.textContent = getNotificationPermission() === 'denied'
-            ? '⚠️ Blocked in browser. Allow notifications in site settings.'
-            : 'Could not enable — please try again.';
-          statusEl.style.color = '#d97706';
-        }
-      }
-    } else {
-      await disablePushNotifications();
-      if (statusEl) { statusEl.textContent = 'Push notifications disabled.'; statusEl.style.color = ''; }
-      showToast('Push notifications turned off');
-    }
-
-    this.disabled = false;
-    setTimeout(() => { if (statusEl) statusEl.classList.add('hidden'); }, 4000);
-  };
 }
 
 // ─── Hide Edit Profile Modal ──────────────────────────────────────────────────
@@ -728,26 +628,14 @@ async function saveProfile() {
   btn.disabled = true;
   btn.innerHTML = '⏳ Saving…';
 
-  const pushIsOn = await _browserHasPushSubscription();
-
   const payload = {
     name,
-    bio:                     document.getElementById('ep-bio')?.value.trim() || '',
-    neighborhood:            document.getElementById('ep-neighborhood')?.value.trim() || '',
-    phone:                   document.getElementById('ep-phone')?.value.trim() || '',
-    website:                 document.getElementById('ep-website')?.value.trim() || '',
-    instagram:               document.getElementById('ep-instagram')?.value.trim() || '',
-    facebook:                document.getElementById('ep-facebook')?.value.trim() || '',
-
-    notifyDeals:             document.getElementById('ep-notifyDeals')?.checked ?? true,
-    notifyEvents:            document.getElementById('ep-notifyEvents')?.checked ?? true,
-    notifyShoutouts:         document.getElementById('ep-notifyShoutouts')?.checked ?? false,
-    notifyShoutoutComments:  document.getElementById('ep-notifyShoutoutComments')?.checked ?? false,
-    notifyLostFound:         document.getElementById('ep-notifyLostFound')?.checked ?? true,
-    notifyMarketplace:       document.getElementById('ep-notifyMarketplace')?.checked ?? true,
-    notifyMessages:          document.getElementById('ep-notifyMessages')?.checked ?? true,
-
-    pushEnabled: pushIsOn,
+    bio:          document.getElementById('ep-bio')?.value.trim() || '',
+    neighborhood: document.getElementById('ep-neighborhood')?.value.trim() || '',
+    phone:        document.getElementById('ep-phone')?.value.trim() || '',
+    website:      document.getElementById('ep-website')?.value.trim() || '',
+    instagram:    document.getElementById('ep-instagram')?.value.trim() || '',
+    facebook:     document.getElementById('ep-facebook')?.value.trim() || '',
   };
 
   if (pendingAvatarData !== undefined) payload.avatar = pendingAvatarData;
@@ -756,7 +644,6 @@ async function saveProfile() {
 
   if (res.user) {
     currentUser = res.user;
-    currentUser.pushEnabled = pushIsOn;
     pendingAvatarData = undefined;
     updateUserUI();
     hideEditProfileModal();
@@ -783,6 +670,196 @@ if (window.Capacitor?.isNativePlatform()) {
     window.initPushAfterLogin?.();
   }, 1200);
 }
+
+// ─── NOTIFICATION SETTINGS MODAL ────────────────────────────────────────────
+// All notification categories can be toggled off EXCEPT verified business owner
+// broadcasts — those always reach users regardless of preferences.
+window.showNotificationSettingsModal = async function() {
+  if (document.getElementById('notificationSettingsModal')) return;
+
+  // Load current prefs from server
+  let prefs = {
+    trafficAlerts: true,
+    trafficComments: false,
+    deals: true,
+    events: true,
+    lostFound: true,
+    messages: true,
+    marketplace: { all: true, homes: true, cars: true, furniture: true, other: true }
+  };
+
+  try {
+    const saved = await apiGet('/user/notification-preferences');
+    if (saved && typeof saved === 'object') {
+      prefs.trafficAlerts    = saved.shoutouts   ?? prefs.trafficAlerts;
+      prefs.trafficComments  = saved.comments    ?? prefs.trafficComments;
+      prefs.deals            = saved.deals       ?? prefs.deals;
+      prefs.events           = saved.events      ?? prefs.events;
+      prefs.lostFound        = saved.lostFound   ?? prefs.lostFound;
+      prefs.messages         = saved.messages    ?? prefs.messages;
+      if (saved.marketplace) {
+        prefs.marketplace.all       = saved.marketplace.all       ?? true;
+        prefs.marketplace.homes     = saved.marketplace.homes     ?? true;
+        prefs.marketplace.cars      = saved.marketplace.cars      ?? true;
+        prefs.marketplace.furniture = saved.marketplace.furniture ?? true;
+        prefs.marketplace.other     = saved.marketplace.other     ?? true;
+      }
+    }
+  } catch (e) { /* use defaults */ }
+
+  function toggle(id, checked) {
+    return `
+      <div class="relative flex-shrink-0">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} class="sr-only peer">
+        <div class="w-11 h-6 bg-white/10 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
+        <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
+      </div>`;
+  }
+
+  function row(id, icon, label, sub, checked) {
+    return `
+      <label class="flex items-center justify-between gap-3 cursor-pointer select-none py-3.5 border-b border-white/5 last:border-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="text-lg flex-shrink-0">${icon}</span>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-white leading-tight">${label}</p>
+            ${sub ? `<p class="text-xs text-white/40 mt-0.5 leading-snug">${sub}</p>` : ''}
+          </div>
+        </div>
+        ${toggle(id, checked)}
+      </label>`;
+  }
+
+  const html = `
+    <div id="notificationSettingsModal" onclick="if(event.target.id==='notificationSettingsModal') hideNotificationSettingsModal()"
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[36000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto">
+
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <button onclick="hideNotificationSettingsModal(); setTimeout(showAccountSettingsModal, 120)" class="text-white/40 hover:text-white text-sm flex items-center gap-1.5">
+            ← Back
+          </button>
+          <h2 class="text-base font-bold absolute left-1/2 -translate-x-1/2">🔔 Notification Preferences</h2>
+          <button onclick="hideNotificationSettingsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div class="p-6 space-y-5">
+
+          <!-- Verified Business — always on -->
+          <div class="bg-emerald-900/30 border border-emerald-500/30 rounded-2xl px-5 py-4 flex items-start gap-3">
+            <span class="text-xl mt-0.5 flex-shrink-0">🏪</span>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-emerald-300">Verified Business Alerts</p>
+              <p class="text-xs text-white/50 mt-0.5 leading-snug">Announcements from verified local businesses are always delivered and cannot be disabled.</p>
+            </div>
+            <div class="flex-shrink-0 mt-0.5">
+              <div class="w-11 h-6 bg-emerald-500 rounded-full relative opacity-60">
+                <div class="absolute top-0.5 right-0.5 w-5 h-5 bg-white rounded-full shadow"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Traffic Alerts -->
+          <div class="bg-white/5 rounded-2xl px-5 py-1">
+            <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Traffic & Community</p>
+            ${row('np-trafficAlerts',   '🚗', 'New Traffic Alerts',       'Shoutouts posted by the community',        prefs.trafficAlerts)}
+            ${row('np-trafficComments', '💬', 'Comments on Traffic Posts','When someone replies to a traffic alert',  prefs.trafficComments)}
+          </div>
+
+          <!-- Deals & Events -->
+          <div class="bg-white/5 rounded-2xl px-5 py-1">
+            <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Deals & Events</p>
+            ${row('np-deals',  '🔥', 'New Deals',       'Local discounts and promotions',       prefs.deals)}
+            ${row('np-events', '📅', 'Upcoming Events',  'Community events and activities',      prefs.events)}
+          </div>
+
+          <!-- Marketplace -->
+          <div class="bg-white/5 rounded-2xl px-5 py-1">
+            <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Marketplace</p>
+            ${row('np-marketplace-all', '🛒', 'All Marketplace Items', 'Master toggle for all marketplace notifications', prefs.marketplace.all)}
+            <div id="np-marketplace-subtypes" class="${prefs.marketplace.all ? '' : 'opacity-40 pointer-events-none'}">
+              ${row('np-marketplace-homes',     '🏠', 'Homes & Real Estate', '',      prefs.marketplace.homes)}
+              ${row('np-marketplace-cars',      '🚗', 'Vehicles',            '',      prefs.marketplace.cars)}
+              ${row('np-marketplace-furniture', '🛋️',  'Furniture & Home',   '',      prefs.marketplace.furniture)}
+              ${row('np-marketplace-other',     '📦', 'Other Items',         '',      prefs.marketplace.other)}
+            </div>
+          </div>
+
+          <!-- Lost & Found + Messages -->
+          <div class="bg-white/5 rounded-2xl px-5 py-1">
+            <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Other</p>
+            ${row('np-lostFound', '🔍', 'Lost & Found',     'New lost or found pet/item posts',  prefs.lostFound)}
+            ${row('np-messages',  '✉️',  'Private Messages', 'Direct messages from other users',  prefs.messages)}
+          </div>
+
+          <!-- Save -->
+          <button onclick="saveNotificationPreferences()" id="saveNotifPrefsBtn"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-2xl transition text-sm">
+            💾 Save Preferences
+          </button>
+
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  // Wire marketplace master toggle to enable/disable subtypes
+  requestAnimationFrame(() => {
+    const masterToggle = document.getElementById('np-marketplace-all');
+    const subtypes     = document.getElementById('np-marketplace-subtypes');
+    if (masterToggle && subtypes) {
+      masterToggle.addEventListener('change', () => {
+        subtypes.classList.toggle('opacity-40',          !masterToggle.checked);
+        subtypes.classList.toggle('pointer-events-none', !masterToggle.checked);
+      });
+    }
+  });
+};
+
+window.hideNotificationSettingsModal = function() {
+  const modal = document.getElementById('notificationSettingsModal');
+  if (modal) modal.remove();
+};
+
+window.saveNotificationPreferences = async function() {
+  const btn = document.getElementById('saveNotifPrefsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+
+  const get = id => document.getElementById(id)?.checked ?? true;
+
+  const preferences = {
+    shoutouts:  get('np-trafficAlerts'),
+    comments:   get('np-trafficComments'),
+    deals:      get('np-deals'),
+    events:     get('np-events'),
+    lostFound:  get('np-lostFound'),
+    messages:   get('np-messages'),
+    marketplace: {
+      all:       get('np-marketplace-all'),
+      homes:     get('np-marketplace-homes'),
+      cars:      get('np-marketplace-cars'),
+      furniture: get('np-marketplace-furniture'),
+      other:     get('np-marketplace-other'),
+    }
+  };
+
+  try {
+    await apiPost('/user/notification-preferences', { preferences });
+    // Keep currentUser in sync
+    if (currentUser) {
+      currentUser.notificationPreferences = preferences;
+    }
+    showToast('✅ Notification preferences saved!', 'success');
+    hideNotificationSettingsModal();
+  } catch (e) {
+    showToast('Failed to save preferences', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Preferences'; }
+  }
+};
 
 // ─── ACCOUNT SETTINGS MODAL ─────────────────────────────────────────────────
 window.showAccountSettingsModal = function() {
