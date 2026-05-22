@@ -4983,15 +4983,16 @@ window.showPostMarketplaceModal = function() {
 
   modal.innerHTML = `
     <div onclick="if(event.target.id==='marketModal')hideMarketModal()" 
-         class="bg-white text-slate-900 w-full max-w-lg mx-4 rounded-3xl overflow-hidden">
+         class="bg-slate-900 text-white w-full max-w-lg mx-4 rounded-3xl overflow-hidden border border-white/10">
 
       <div class="px-6 pt-6 pb-2">
-        <h2 class="text-2xl font-bold mb-4">Post Marketplace Listing</h2>
+        <h2 class="text-2xl font-bold mb-5">Post Marketplace Listing</h2>
 
         <!-- Category -->
         <div class="mb-4">
-          <label class="block text-sm font-semibold mb-1.5 text-slate-700">Category</label>
-          <select id="marketCategory" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none"
+          <label class="block text-xs font-semibold mb-1.5 text-white/60">Category</label>
+          <select id="marketCategory" 
+                  class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none text-white"
                   onchange="toggleMarketHomeFields()">
             <option value="">Select category...</option>
             <option value="Homes">🏠 Homes (Rent / Sale)</option>
@@ -5003,19 +5004,23 @@ window.showPostMarketplaceModal = function() {
         </div>
 
         <!-- Title -->
-        <input id="marketTitle" type="text" placeholder="Item title *" 
-               class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4">
+        <div class="mb-4">
+          <label class="block text-xs font-semibold mb-1.5 text-white/60">Title</label>
+          <input id="marketTitle" type="text" placeholder="Item title *" 
+                 class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+        </div>
 
         <!-- Price + Condition -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <label class="block text-sm font-semibold mb-1">Price ($)</label>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Price ($)</label>
             <input id="marketPrice" type="number" placeholder="25" 
-                   class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+                   class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-1">Condition</label>
-            <select id="marketCondition" class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Condition</label>
+            <select id="marketCondition" 
+                    class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
               <option value="used">Used</option>
               <option value="like-new">Like New</option>
               <option value="new">New</option>
@@ -5025,52 +5030,61 @@ window.showPostMarketplaceModal = function() {
         </div>
 
         <!-- Description -->
-        <textarea id="marketDesc" rows="3" placeholder="Description" 
-                  class="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none mb-4"></textarea>
+        <div class="mb-4">
+          <label class="block text-xs font-semibold mb-1.5 text-white/60">Description</label>
+          <textarea id="marketDesc" rows="3" placeholder="Description (optional)" 
+                    class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none resize-none"></textarea>
+        </div>
 
         <!-- ═══ HOME FIELDS (only shown when Homes is selected) ═══ -->
-        <div id="marketHomeFields" class="hidden mb-4 space-y-3 border border-slate-200 rounded-2xl p-4 bg-slate-50">
-          <div class="text-xs font-semibold text-emerald-600 mb-1">Home Listing Details</div>
+        <div id="marketHomeFields" class="hidden mb-4 space-y-3 border border-white/10 rounded-2xl p-4 bg-white/5">
+          <div class="text-xs font-semibold text-emerald-400 mb-2">Home Listing Details</div>
 
           <div class="grid grid-cols-2 gap-3">
-            <select id="marketHomeType" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+            <select id="marketHomeType" class="w-full bg-white/5 border border-white/20 px-4 py-3 rounded-2xl focus:border-emerald-400 outline-none">
               <option value="">Listing Type</option>
               <option value="rent">For Rent</option>
               <option value="sale">For Sale</option>
             </select>
             <input id="marketHomeSqft" type="number" placeholder="Sq Ft" 
-                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+                   class="w-full bg-white/5 border border-white/20 px-4 py-3 rounded-2xl focus:border-emerald-400 outline-none">
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <input id="marketHomeBeds" type="number" min="0" placeholder="Bedrooms" 
-                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+                   class="w-full bg-white/5 border border-white/20 px-4 py-3 rounded-2xl focus:border-emerald-400 outline-none">
             <input id="marketHomeBaths" type="number" min="0" step="0.5" placeholder="Bathrooms" 
-                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+                   class="w-full bg-white/5 border border-white/20 px-4 py-3 rounded-2xl focus:border-emerald-400 outline-none">
           </div>
 
           <div class="flex items-center gap-3">
-            <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer flex-1">
+            <label class="flex items-center gap-2 text-sm text-white/80 cursor-pointer flex-1">
               <input type="checkbox" id="marketHomePetFriendly" class="w-5 h-5 accent-emerald-500"> Pet Friendly
             </label>
             <input id="marketHomeAddress" type="text" placeholder="Address / Neighborhood" 
-                   class="flex-1 px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none">
+                   class="flex-1 bg-white/5 border border-white/20 px-4 py-3 rounded-2xl focus:border-emerald-400 outline-none">
           </div>
         </div>
 
         <!-- Photos -->
-        <div class="mb-6">
-          <label class="block text-sm font-semibold mb-2">Photos</label>
+        <div class="mb-2">
+          <label class="block text-xs font-semibold mb-2 text-white/60">Photos</label>
           <input type="file" id="marketImages" multiple accept="image/*" 
-                 class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                 class="block w-full text-sm text-white/60 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500"
                  onchange="handleMarketImages(this)">
           <div id="marketImagePreviews" class="flex flex-wrap gap-2 mt-3"></div>
         </div>
       </div>
 
-      <div class="p-6 border-t flex gap-3">
-        <button onclick="hideMarketModal()" class="flex-1 py-4 rounded-3xl border border-slate-300 font-semibold">Cancel</button>
-        <button onclick="postMarketplaceItem()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold">Post Listing</button>
+      <div class="p-6 border-t border-white/10 flex gap-3">
+        <button onclick="hideMarketModal()" 
+                class="flex-1 py-4 rounded-3xl border border-white/20 font-semibold hover:bg-white/5 transition">
+          Cancel
+        </button>
+        <button onclick="postMarketplaceItem()" 
+                class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold transition">
+          Post Listing
+        </button>
       </div>
     </div>`;
   
