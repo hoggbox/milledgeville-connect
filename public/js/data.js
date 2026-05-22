@@ -950,11 +950,15 @@ visibleItems.forEach(item => {
 // ─── NEWS ARTICLE VIEWER ──────────────────────────────────────────────────────
 window.openNewsArticle = async function (articleId) {
   const article = await apiGet(`/news/${articleId}`);
-  if (!article || article.message) { showToast('Could not load article', 'error'); return; }
+  if (!article || article.message) { 
+    showToast('Could not load article', 'error'); 
+    return; 
+  }
 
   const userIsAdmin = isAdmin();
-  const isAuthor   = currentUser && article.author && (article.author === currentUser._id || article.author === currentUser.id);
-  const canDelete  = userIsAdmin || isAuthor;
+  const isAuthor = currentUser && article.author && 
+    (article.author === currentUser._id || article.author === currentUser.id);
+  const canDelete = userIsAdmin || isAuthor;
 
   const imagesHTML = (article.images || []).length > 0
     ? `<div class="mt-6 grid grid-cols-2 gap-3">
@@ -963,43 +967,58 @@ window.openNewsArticle = async function (articleId) {
                class="rounded-2xl overflow-hidden cursor-pointer hover:opacity-90 transition aspect-video bg-white/5">
             <img src="${src}" alt="Photo ${i+1}" class="w-full h-full object-cover" loading="lazy">
           </div>`).join('')}
-       </div>`
-    : '';
+       </div>` : '';
 
   const modalHTML = `
-    <div onclick="if(event.target.id==='newsArticleModal')closeNewsArticle()" id="newsArticleModal"
+    <div onclick="if(event.target.id==='newsArticleModal') closeNewsArticle()" id="newsArticleModal"
          class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center overflow-y-auto">
+      
       <div onclick="event.stopImmediatePropagation()"
-           class="bg-white text-slate-900 w-full md:max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
-        <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100 z-10">
-          <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
-        </div>
-        <div class="h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
-        <div class="p-6 pb-10">
-          <div class="flex items-start gap-2 mb-4 flex-wrap">
-            <span class="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">📰 News</span>
-            <span class="text-xs text-gray-400 mt-0.5">${formatDateTime(article.createdAt)}</span>
+           class="bg-[#0f172a] text-white w-full md:max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
+
+        <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 px-6 border-b border-white/10 flex justify-between items-center z-10 rounded-t-3xl">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">📰 News</span>
           </div>
-          <h1 class="text-2xl md:text-3xl font-bold leading-tight text-slate-900 mb-3">${esc(article.title)}</h1>
-          <p class="text-emerald-600 font-medium text-sm mb-6 leading-relaxed">${esc(article.summary)}</p>
-          <div class="flex items-center gap-3 mb-6 pb-6 border-b border-gray-100">
+          <button onclick="closeNewsArticle()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div class="p-6">
+          <h1 class="text-2xl md:text-3xl font-bold leading-tight mb-3">${esc(article.title)}</h1>
+          <p class="text-emerald-400 font-medium text-sm mb-6">${esc(article.summary)}</p>
+
+          <div class="flex items-center gap-3 mb-6 pb-6 border-b border-white/10">
             <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
               ${(article.authorName || 'S')[0].toUpperCase()}
             </div>
             <div>
-              <p class="text-sm font-semibold text-slate-800">${article.authorName || 'Staff'}</p>
-              <p class="text-xs text-gray-400">${formatDate(article.createdAt)}</p>
+              <p class="text-sm font-semibold">${article.authorName || 'Staff'}</p>
+              <p class="text-xs text-white/40">${formatDateTime(article.createdAt)}</p>
             </div>
           </div>
-          <div class="prose prose-slate max-w-none text-slate-700 leading-relaxed text-[15px]" style="white-space:pre-wrap;">${esc(article.content)}</div>
+
+          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px]" style="white-space:pre-wrap;">
+            ${esc(article.content)}
+          </div>
+
           ${imagesHTML}
+
           <div class="mt-8 space-y-3">
-            ${canDelete ? `<button onclick="deleteNewsArticle('${article._id}')" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-3 rounded-3xl font-semibold transition">🗑️ Delete Article</button>` : ''}
-            <button onclick="closeNewsArticle()" class="w-full bg-gray-100 hover:bg-gray-200 text-slate-900 py-4 rounded-3xl font-semibold transition">Close</button>
+            ${canDelete ? `
+              <button onclick="deleteNewsArticle('${article._id}')" 
+                      class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-3.5 rounded-3xl font-semibold transition">
+                🗑️ Delete Article
+              </button>` : ''}
+
+            <button onclick="closeNewsArticle()" 
+                    class="w-full bg-white/10 hover:bg-white/20 py-4 rounded-3xl font-semibold transition">
+              Close
+            </button>
           </div>
         </div>
       </div>
     </div>`;
+
   document.body.insertAdjacentHTML('beforeend', modalHTML);
   window._newsArticleImages = article.images || [];
 };
@@ -5246,16 +5265,12 @@ window.postMarketplaceItem = async function() {
 
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
-  currentMarketItemId = id;
-
   try {
-    let item = allMarketplaceItems.find(i => String(i._id) === String(id));
-
-    if (!item) {
-      const res = await apiGet('/marketplace');
-      allMarketplaceItems = res.items || res || [];
-      item = allMarketplaceItems.find(i => String(i._id) === String(id));
-    }
+    const res = await apiGet('/marketplace');
+    const items = res.items || res;
+    const item = Array.isArray(items) 
+      ? items.find(i => String(i._id) === String(id)) 
+      : null;
 
     if (!item) {
       showToast('Item not found', 'error');
@@ -5266,91 +5281,93 @@ window.showMarketplaceDetail = async function(id) {
       String(item.seller._id || item.seller) === String(currentUser._id);
 
     const html = `
-<div id="marketDetailModal" onclick="if(event.target.id==='marketDetailModal') hideMarketDetailModal()" 
-     class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
-  
-  <div onclick="event.stopImmediatePropagation()" 
-       class="bg-slate-900 text-white w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
+      <div id="marketDetailModal" onclick="if(event.target.id==='marketDetailModal') hideMarketDetailModal()" 
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[14000] flex items-end md:items-center justify-center p-4">
+        
+        <div onclick="event.stopImmediatePropagation()" 
+             class="bg-[#0f172a] text-white w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
-    <!-- Header -->
-    <div class="sticky top-0 bg-slate-900 px-6 py-4 border-b border-white/10 flex justify-between items-center">
-      <div>
-        <h2 class="text-2xl font-bold">${esc(item.title)}</h2>
-        <div class="inline-flex items-center bg-white/10 px-4 py-1 rounded-2xl mt-1">
-  <p class="text-3xl font-bold text-emerald-400">$${item.price}</p>
-</div>
-      </div>
-      <button onclick="hideMarketDetailModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
-    </div>
+          <!-- Header -->
+          <div class="sticky top-0 bg-[#0f172a] px-6 py-4 border-b border-white/10 flex justify-between items-center rounded-t-3xl">
+            <div>
+              <h2 class="text-2xl font-bold">${esc(item.title)}</h2>
+              <p class="text-3xl font-bold text-emerald-400 mt-1">
+                $${Number(item.price || 0).toLocaleString()}
+              </p>
+            </div>
+            <button onclick="hideMarketDetailModal()" class="text-3xl leading-none text-white/50 hover:text-white">×</button>
+          </div>
 
-<div class="p-6">
-  <!-- Images -->
-  ${item.images && item.images.length ? `
-    <div class="grid grid-cols-2 gap-3 mb-6">
-      ${item.images.map((src, index) => `
-        <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
-             onclick="openMarketImageViewer(${index}, ${JSON.stringify(item.images)})">
-      `).join('')}
-    </div>` : ''}
+          <div class="p-6">
+            <!-- Images -->
+            ${item.images && item.images.length ? `
+              <div class="grid grid-cols-2 gap-3 mb-6">
+                ${item.images.map(src => `
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
+                       onclick="openImageViewerForLost('${src}')">
+                `).join('')}
+              </div>` : ''}
 
-  <p class="text-white/90 leading-relaxed">${esc(item.description || '')}</p>
+            <!-- Description -->
+            <p class="text-white/90 leading-relaxed">${esc(item.description || '')}</p>
 
-  <div class="mt-6 flex items-center gap-2 text-sm text-white/50">
-    <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition || 'Used'}</span>
-    <span>${timeAgo(item.createdAt)}</span>
-  </div>
+            <!-- Meta -->
+            <div class="mt-6 flex items-center gap-2 text-sm">
+              <span class="px-3 py-1 bg-white/10 rounded-full text-xs">${item.condition || 'Used'}</span>
+              <span class="text-white/40">${timeAgo(item.createdAt)}</span>
+            </div>
 
-      <!-- Comments Section -->
-      <div class="mt-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-semibold text-lg">💬 Comments</h3>
+            <!-- Comments Section -->
+            <div class="mt-8">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg">💬 Comments</h3>
+              </div>
+
+              <!-- Comment Input -->
+              <div class="flex gap-2 mb-4">
+                <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
+                       class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-500"
+                       onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
+                <button onclick="postMarketplaceComment('${item._id}')" 
+                        class="bg-emerald-600 hover:bg-emerald-700 px-6 rounded-2xl text-sm font-semibold transition">
+                  Post
+                </button>
+              </div>
+
+              <div id="marketCommentsContainer" class="space-y-4"></div>
+            </div>
+          </div>
+
+          <!-- Seller Actions -->
+          ${isSeller ? `
+            <div class="p-6 border-t border-white/10 bg-white/5 flex justify-end">
+              <button onclick="markMarketSold()" 
+                      class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+                Mark as Sold ✅
+              </button>
+            </div>` : ''}
+
+          <!-- Footer Buttons -->
+          <div class="p-6 border-t border-white/10 flex gap-3">
+            <button onclick="shareContent('market', '${esc(item.title)}', '$${item.price}')" 
+                    class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+              🔗 Share
+            </button>
+            <button onclick="hideMarketDetailModal()" 
+                    class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
+              Close
+            </button>
+          </div>
+
         </div>
-
-        <!-- Comment Input -->
-        <div class="flex gap-2 mb-4">
-          <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
-                 class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400"
-                 onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
-          <button onclick="postMarketplaceComment('${item._id}')" 
-                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-2xl text-sm font-semibold transition">
-            Post
-          </button>
-        </div>
-
-        <div id="marketCommentsContainer" class="space-y-4"></div>
-      </div>
-    </div>
-
-    <!-- Seller Actions -->
-    ${isSeller ? `
-      <div class="p-6 border-t border-white/10 flex justify-end">
-        <button onclick="deleteMyMarketItem('${item._id}')" 
-                class="bg-red-600 hover:bg-red-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
-          🗑️ Delete Listing
-        </button>
-      </div>` : ''}
-
-    <!-- Footer -->
-    <div class="p-6 border-t border-white/10 flex gap-3">
-  <button onclick="shareContent('market', '${esc(item.title)}')" 
-          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
-    🔗 Share
-  </button>
-  <button onclick="hideMarketDetailModal()" 
-          class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
-    Close
-  </button>
-</div>
-
-  </div>
-</div>`;
+      </div>`;
 
     document.body.insertAdjacentHTML('beforeend', html);
     renderComments(item.comments || [], 'marketCommentsContainer', 'market', item._id);
 
   } catch (e) {
     console.error(e);
-    showToast('Failed to load listing', 'error');
+    showToast('Failed to load item', 'error');
   }
 };
 

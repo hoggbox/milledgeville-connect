@@ -532,7 +532,7 @@ function showEditProfileModal() {
 
         <!-- Name -->
         <div>
-          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Full Name</label>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Full Name *</label>
           <input id="ep-name" type="text" value="${escHtml(u.name || '')}" maxlength="60" 
                  class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
         </div>
@@ -546,9 +546,44 @@ function showEditProfileModal() {
           <div class="text-right text-xs text-white/40 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
         </div>
 
+        <!-- Neighborhood -->
+        <div>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Neighborhood</label>
+          <input id="ep-neighborhood" type="text" value="${escHtml(u.neighborhood || '')}" 
+                 class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
+        </div>
+
+        <!-- Phone -->
+        <div>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Phone Number</label>
+          <input id="ep-phone" type="tel" value="${escHtml(u.phone || '')}" 
+                 class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
+        </div>
+
+        <!-- Website -->
+        <div>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Website</label>
+          <input id="ep-website" type="text" value="${escHtml(u.website || '')}" 
+                 class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
+        </div>
+
+        <!-- Instagram -->
+        <div>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Instagram</label>
+          <input id="ep-instagram" type="text" value="${escHtml(u.instagram || '')}" placeholder="@username"
+                 class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
+        </div>
+
+        <!-- Facebook -->
+        <div>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Facebook</label>
+          <input id="ep-facebook" type="text" value="${escHtml(u.facebook || '')}" 
+                 class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
+        </div>
+
         <!-- Save Button -->
         <button onclick="saveProfile()" id="saveProfileBtn"
-                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2">
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2 mt-4">
           💾 Save Changes
         </button>
       </div>
@@ -556,7 +591,7 @@ function showEditProfileModal() {
 
   modal.classList.remove('hidden');
 
-  // Bio counter
+  // Bio character counter
   const bioTextarea = document.getElementById('ep-bio');
   const bioCount = document.getElementById('bioCount');
   if (bioTextarea && bioCount) {
