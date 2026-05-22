@@ -395,39 +395,41 @@ content.innerHTML = `
   <p class="text-white/40 text-xs mt-4">${lastLoginText}</p>
 
   <!-- Action Buttons -->
-  <div class="mt-8 space-y-3">
-    ${isAdmin ? `
-    <button onclick="navigate('admin'); hideProfileSheet();" 
-            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
-      🔧 Admin Panel
-    </button>` : ''}
+<!-- Action Buttons -->
+<!-- Action Buttons -->
+<div class="mt-8 space-y-2.5">
+  ${isAdmin ? `
+  <button onclick="navigate('admin'); hideProfileSheet()" 
+          class="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+    🔧 Admin Panel
+  </button>` : ''}
 
-    ${isVerified ? `
-    <button onclick="navigate('owner-dashboard'); hideProfileSheet();" 
-            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
-      🏪 My Business Dashboard
-    </button>` : ''}
+  ${isVerified ? `
+  <button onclick="navigate('owner-dashboard'); hideProfileSheet()" 
+          class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-4 rounded-3xl font-semibold text-lg transition">
+    🏪 My Business Dashboard
+  </button>` : ''}
 
-    <button onclick="showEditProfileModal()" 
-            class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
-      ✏️ Edit Profile
-    </button>
+  <button onclick="showEditProfileModal()" 
+          class="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-white py-4 rounded-3xl font-semibold text-lg transition">
+    ✏️ Edit Profile
+  </button>
 
-    <button onclick="showAccountSettingsModal()" 
-            class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
-      ⚙️ Settings & Privacy
-    </button>
+  <button onclick="showAccountSettingsModal()" 
+          class="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-white py-4 rounded-3xl font-semibold text-lg transition">
+    ⚙️ Settings & Privacy
+  </button>
 
-    <button onclick="logout()" 
-            class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
-      Logout
-    </button>
+  <button onclick="logout()" 
+          class="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
+    Logout
+  </button>
 
-    <button onclick="hideProfileSheet()" 
-            class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
-      Close
-    </button>
-  </div>
+  <button onclick="hideProfileSheet()" 
+          class="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-white py-4 rounded-3xl font-semibold text-lg transition mt-1">
+    Close
+  </button>
+</div>
 `;
 
   sheet.classList.remove('hidden');

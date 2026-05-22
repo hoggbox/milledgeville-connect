@@ -57,20 +57,23 @@
     </div>
   </div>
 
-  <!-- PROFILE SLIDE-UP SHEET -->
-  <div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet"
-       class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
-    <div id="profileSheetPanel"
-         onclick="event.stopImmediatePropagation()"
-         class="bg-white text-slate-900 w-full rounded-t-3xl max-h-[90vh] overflow-auto transition-transform duration-300 translate-y-full">
-      <div class="sticky top-0 bg-white pt-4 pb-2 flex justify-center z-10">
-        <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
-      </div>
-      <div class="px-6 pb-10">
-        <div id="sheet-content" class="text-center"></div>
-      </div>
+<!-- PROFILE SLIDE-UP SHEET -->
+<div onclick="if(event.target.id==='profileSheet')hideProfileSheet()" id="profileSheet"
+     class="hidden fixed inset-0 bg-black/60 z-[11000] flex items-end">
+  <div id="profileSheetPanel"
+       onclick="event.stopImmediatePropagation()"
+       class="bg-[#0f172a] text-white border-t border-white/10 rounded-t-3xl max-h-[92vh] overflow-auto transition-transform duration-300 translate-y-full">
+    
+    <!-- Drag handle -->
+    <div class="sticky top-0 bg-[#0f172a] pt-4 pb-2 flex justify-center z-10 rounded-t-3xl">
+      <div class="w-12 h-1.5 bg-white/30 rounded-full"></div>
+    </div>
+
+    <div class="px-6 pb-10">
+      <div id="sheet-content"></div>
     </div>
   </div>
+</div>
 
   <!-- AUTH MODAL — must be in DOM before scripts run -->
   <div id="authModal" onclick="if(event.target.id==='authModal')hideAuthModal()"
