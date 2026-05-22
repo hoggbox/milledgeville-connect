@@ -43,79 +43,211 @@ const Report = require('../models/Report');
 // ─── SPAM DETECTION CONSTANTS ─────────────────────────────────────────────────
 const SPAM_WINDOW_MS    = 5 * 60 * 1000; // 5-minute rolling window
 const SPAM_POST_LIMIT   = 5;             // 5 posts inside that window → muted
-const FLAG_THRESHOLD    = 8;             // 8 unique flaggers → post removed + timeout
+const FLAG_THRESHOLD    = 8;             // 8 unique flaggers → post soft-hidden + timeout
 const TIMEOUT_DURATION  = 24 * 60 * 60 * 1000; // 24-hour posting ban
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 1.  FLAG A SHOUTOUT / TRAFFIC ALERT
-//     POST /api/shoutouts/:id/flag
-//
-//     • Each user can flag a given post exactly once (enforced by DB index on Report)
-//     • When the total unique flaggers reaches FLAG_THRESHOLD (8):
-//       - The shoutout is deleted
-//       - The author receives a 24-hour posting ban (postTimeoutUntil)
-//       - An admin Report record is created for audit trail
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
-  try {
-    const shoutout = await Shoutout.findById(req.params.id);
-    if (!shoutout) return res.status(404).json({ message: 'Post not found' });
+// =============================================================================
+// AUTO-MODERATION — UNIVERSAL FLAG SYSTEM
+// =============================================================================
 
-    // Prevent self-flagging
-    if (shoutout.authorId && shoutout.authorId.toString() === req.userId) {
+// ─── CONTENT-TYPE MAP ─────────────────────────────────────────────────────────
+// Maps the `type` string from the client to:
+//   model        — Mongoose model to query
+//   reportField  — which Report field to store the content ID in
+//   ownerField   — which field on the doc holds the author/owner user ID
+function contentTypeMap(type) {
+  const map = {
+    shoutout: { model: Shoutout,        reportField: 'reportedShoutout',   ownerField: 'authorId' },
+    lost:     { model: LostItem,        reportField: 'reportedLostItem',   ownerField: 'owner'    },
+    market:   { model: MarketplaceItem, reportField: 'reportedMarketItem', ownerField: 'seller'   },
+    event:    { model: Event,           reportField: 'reportedEvent',      ownerField: 'owner'    },
+    deal:     { model: Deal,            reportField: 'reportedDeal',       ownerField: 'owner'    },
+    news:     { model: News,            reportField: 'reportedNews',       ownerField: 'author'   },
+  };
+  return map[type] || null;
+}
+
+// ─── HELPER: short text snapshot for the report panel ────────────────────────
+function getSnapshotText(doc, type) {
+  if (type === 'shoutout') return (doc.text || '').substring(0, 300);
+  if (type === 'news')     return `${doc.title || ''} — ${(doc.summary || '').substring(0, 200)}`;
+  return `${doc.title || doc.text || ''}`.substring(0, 300);
+}
+
+// =============================================================================
+// 1.  UNIVERSAL FLAG ENDPOINT
+//     POST /api/flag
+//
+//     Body: { type, contentId, reason? }
+//     • Each user can flag a given post exactly once (enforced by flaggedBy array)
+//     • At FLAG_THRESHOLD (8) unique flags:
+//         - Post is soft-hidden (autoHidden = true) — NOT hard-deleted
+//         - Author gets a 24-hour posting timeout
+//         - A consolidated auto-mod Report is upserted for the admin panel
+// =============================================================================
+router.post('/flag', authenticate, async (req, res) => {
+  try {
+    const { type, contentId, reason } = req.body;
+
+    if (!type || !contentId) {
+      return res.status(400).json({ message: 'type and contentId are required' });
+    }
+
+    const entry = contentTypeMap(type);
+    if (!entry) {
+      return res.status(400).json({ message: `Unknown content type: ${type}` });
+    }
+
+    const { model, reportField, ownerField } = entry;
+
+    // ── Load the document ────────────────────────────────────────────────────
+    const doc = await model.findById(contentId);
+    if (!doc) return res.status(404).json({ message: 'Content not found' });
+
+    // ── Block self-flagging ──────────────────────────────────────────────────
+    const ownerId = doc[ownerField];
+    if (ownerId && ownerId.toString() === req.userId) {
       return res.status(400).json({ message: 'You cannot flag your own post' });
     }
 
-    // Check for duplicate flag from this user
-    const existing = await Report.findOne({
-      reporter: req.userId,
-      reportedShoutout: shoutout._id
-    });
-    if (existing) {
+    // ── Block double-flagging (flaggedBy is the source of truth) ─────────────
+    const alreadyFlagged = doc.flaggedBy.some(id => id.toString() === req.userId);
+    if (alreadyFlagged) {
       return res.status(409).json({ message: 'You have already flagged this post' });
     }
 
-    // Create the flag/report record
-    await Report.create({
-      type: 'shoutout',
-      reporter: req.userId,
-      reportedUser: shoutout.authorId || null,
-      reportedShoutout: shoutout._id,
-      snapshotText: shoutout.text,
-      reason: req.body.reason || 'Flagged by user',
-      status: 'pending'
-    });
+    // ── Block flagging an already-hidden post ────────────────────────────────
+    if (doc.autoHidden) {
+      return res.status(409).json({ message: 'This post has already been removed for review' });
+    }
 
-    // Count total unique flags on this shoutout
-    const flagCount = await Report.countDocuments({
-      type: 'shoutout',
-      reportedShoutout: shoutout._id
-    });
+    // ── Record the flag on the document ─────────────────────────────────────
+    doc.flaggedBy.push(req.userId);
+    const flagCount = doc.flaggedBy.length;
 
+    // ── Store an individual Report for the audit trail ───────────────────────
+    try {
+      await Report.create({
+        type,
+        reporter: req.userId,
+        [reportField]: doc._id,
+        reportedUser: ownerId || null,
+        snapshotText: getSnapshotText(doc, type),
+        reason: (reason || 'Flagged by user').trim(),
+        status: 'pending'
+      });
+    } catch (dupErr) {
+      // Unique index violation = race-condition double-flag; ignore silently
+      if (dupErr.code !== 11000) throw dupErr;
+    }
+
+    // ── Threshold reached → soft-hide ────────────────────────────────────────
     if (flagCount >= FLAG_THRESHOLD) {
-      // ── Auto-remove the post ───────────────────────────────────────────────
-      await Shoutout.findByIdAndDelete(shoutout._id);
+      doc.autoHidden = true;
+      await doc.save();
 
-      // ── Apply 24-hour posting ban to the author ────────────────────────────
-      if (shoutout.authorId) {
-        await User.findByIdAndUpdate(shoutout.authorId, {
+      // Apply 24-hour posting timeout to the author
+      if (ownerId) {
+        await User.findByIdAndUpdate(ownerId, {
           postTimeoutUntil: new Date(Date.now() + TIMEOUT_DURATION)
         });
       }
 
+      // Upsert a single consolidated auto-mod Report for the admin panel
+      const consolidatedFilter  = { autoFlagged: true, [reportField]: doc._id };
+      const consolidatedData    = {
+        type,
+        reporter: req.userId,
+        [reportField]: doc._id,
+        reportedUser: ownerId || null,
+        snapshotText: getSnapshotText(doc, type),
+        reason: `Auto-removed: reached ${flagCount} unique community flags`,
+        autoFlagged: true,
+        flagCount,
+        status: 'pending'
+      };
+
+      await Report.findOneAndUpdate(
+        consolidatedFilter,
+        { $set: consolidatedData },
+        { upsert: true, new: true }
+      );
+
       return res.json({
-        message: 'Post removed by community flags',
+        flagCount,
         removed: true,
-        flagCount
+        message: 'Post removed by community flags and sent for admin review'
       });
     }
 
-    res.json({ message: 'Post flagged', removed: false, flagCount });
+    // ── Threshold not reached — save and return current count ─────────────────
+    await doc.save();
+    res.json({ flagCount, removed: false, message: `Post flagged (${flagCount}/${FLAG_THRESHOLD})` });
+
   } catch (err) {
-    // Duplicate key on the unique index means a race-condition double-flag
     if (err.code === 11000) {
       return res.status(409).json({ message: 'You have already flagged this post' });
     }
+    console.error('Flag error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY SHOUTOUT FLAG REDIRECT — keeps old deep-links working
+// POST /api/shoutouts/:id/flag  →  delegates to the universal handler
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
+  req.body.type      = 'shoutout';
+  req.body.contentId = req.params.id;
+  // Re-dispatch through the universal handler by hand (avoids a full redirect round-trip)
+  const entry = contentTypeMap('shoutout');
+  const { model, reportField, ownerField } = entry;
+  try {
+    const doc = await model.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Post not found' });
+    if (doc.authorId && doc.authorId.toString() === req.userId)
+      return res.status(400).json({ message: 'You cannot flag your own post' });
+    if (doc.flaggedBy.some(id => id.toString() === req.userId))
+      return res.status(409).json({ message: 'You have already flagged this post' });
+    if (doc.autoHidden)
+      return res.status(409).json({ message: 'This post has already been removed for review' });
+
+    doc.flaggedBy.push(req.userId);
+    const flagCount = doc.flaggedBy.length;
+
+    try {
+      await Report.create({
+        type: 'shoutout', reporter: req.userId,
+        reportedShoutout: doc._id, reportedUser: doc.authorId || null,
+        snapshotText: getSnapshotText(doc, 'shoutout'),
+        reason: (req.body.reason || 'Flagged by user').trim(), status: 'pending'
+      });
+    } catch (dupErr) { if (dupErr.code !== 11000) throw dupErr; }
+
+    if (flagCount >= FLAG_THRESHOLD) {
+      doc.autoHidden = true;
+      await doc.save();
+      if (doc.authorId) {
+        await User.findByIdAndUpdate(doc.authorId, {
+          postTimeoutUntil: new Date(Date.now() + TIMEOUT_DURATION)
+        });
+      }
+      await Report.findOneAndUpdate(
+        { autoFlagged: true, reportedShoutout: doc._id },
+        { $set: { type: 'shoutout', reporter: req.userId, reportedShoutout: doc._id,
+            reportedUser: doc.authorId || null, snapshotText: getSnapshotText(doc, 'shoutout'),
+            reason: `Auto-removed: reached ${flagCount} unique community flags`,
+            autoFlagged: true, flagCount, status: 'pending' } },
+        { upsert: true, new: true }
+      );
+      return res.json({ message: 'Post removed by community flags', removed: true, flagCount });
+    }
+
+    await doc.save();
+    res.json({ message: 'Post flagged', removed: false, flagCount });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'You have already flagged this post' });
     console.error('Flag error:', err);
     res.status(500).json({ message: err.message });
   }
@@ -290,6 +422,128 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     res.json(shoutout);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// =============================================================================
+// ADMIN AUTO-MOD ROUTES
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/flagged
+// Returns only consolidated auto-mod reports (autoFlagged: true).
+// Query: ?status=pending|reviewed|dismissed|all  (default: pending)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/admin/flagged', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { status = 'pending' } = req.query;
+    const filter = { autoFlagged: true };
+    if (status !== 'all') filter.status = status;
+
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('reportedUser',      'name email')
+      .populate('reportedShoutout',  'text author authorId autoHidden hidden flaggedBy')
+      .populate('reportedLostItem',  'title description authorName autoHidden hidden flaggedBy')
+      .populate('reportedMarketItem','title description authorName autoHidden hidden flaggedBy')
+      .populate('reportedEvent',     'title description owner autoHidden hidden flaggedBy')
+      .populate('reportedDeal',      'title description owner autoHidden hidden flaggedBy')
+      .populate('reportedNews',      'title summary authorName autoHidden hidden flaggedBy');
+
+    res.json(reports);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/flagged/:reportId/restore
+// • Clears autoHidden + flaggedBy on the content doc
+// • Removes the author's 24-hour timeout
+// • Marks all individual flag reports for this content as dismissed
+// • Marks the consolidated auto-mod report as reviewed
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/admin/flagged/:reportId/restore', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.reportId);
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    const entry = contentTypeMap(report.type);
+    if (!entry) return res.status(400).json({ message: 'Unknown content type' });
+
+    const { model, reportField } = entry;
+    const contentId = report[reportField];
+    if (!contentId) return res.status(400).json({ message: 'No content reference on report' });
+
+    const doc = await model.findByIdAndUpdate(
+      contentId,
+      { $set: { autoHidden: false, flaggedBy: [] } },
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: 'Content not found — may have been hard-deleted already' });
+
+    // Lift posting timeout from the author
+    const ownerId = doc[entry.ownerField];
+    if (ownerId) {
+      await User.findByIdAndUpdate(ownerId, { $unset: { postTimeoutUntil: '' } });
+    }
+
+    const adminNote = (req.body.adminNote || 'Restored by admin — post reviewed and approved').trim();
+
+    report.status    = 'reviewed';
+    report.adminNote = adminNote;
+    await report.save();
+
+    // Dismiss all individual flag reports for this content
+    await Report.updateMany(
+      { [reportField]: contentId, autoFlagged: { $ne: true }, status: 'pending' },
+      { $set: { status: 'dismissed', adminNote } }
+    );
+
+    res.json({ message: 'Post restored and author timeout lifted', docId: contentId });
+  } catch (err) {
+    console.error('Restore error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/admin/flagged/:reportId
+// • Hard-deletes the content document
+// • Marks the consolidated report and all individual flag reports as reviewed
+// • Leaves the 24-hour author timeout in place
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/admin/flagged/:reportId', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.reportId);
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    const entry = contentTypeMap(report.type);
+    if (!entry) return res.status(400).json({ message: 'Unknown content type' });
+
+    const { model, reportField } = entry;
+    const contentId = report[reportField];
+
+    if (contentId) await model.findByIdAndDelete(contentId);
+
+    const adminNote = (req.body.adminNote || 'Permanently deleted by admin after review').trim();
+
+    report.status    = 'reviewed';
+    report.adminNote = adminNote;
+    await report.save();
+
+    if (contentId) {
+      await Report.updateMany(
+        { [reportField]: contentId, autoFlagged: { $ne: true } },
+        { $set: { status: 'reviewed', adminNote } }
+      );
+    }
+
+    res.json({ message: 'Post permanently deleted' });
+  } catch (err) {
+    console.error('Delete error:', err);
     res.status(500).json({ message: err.message });
   }
 });

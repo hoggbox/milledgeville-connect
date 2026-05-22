@@ -27,6 +27,15 @@ const reportSchema = new mongoose.Schema({
   snapshotText: { type: String, default: '' },
   reason:       { type: String, required: true },
 
+  // ─── AUTO-MODERATION FIELDS ────────────────────────────────────────────────
+  // True when this report was the one that pushed the post over the flag threshold
+  // and triggered auto-hiding. The admin sees a clear "Auto-removed" badge.
+  autoFlagged:  { type: Boolean, default: false },
+
+  // Total unique flags at the moment of auto-removal (convenience for the admin UI)
+  flagCount:    { type: Number, default: 0 },
+  // ──────────────────────────────────────────────────────────────────────────
+
   status: {
     type: String,
     enum: ['pending', 'reviewed', 'dismissed'],
@@ -45,5 +54,8 @@ reportSchema.index({ reporter: 1, reportedUser:       1 }, { sparse: true });
 reportSchema.index({ reporter: 1, reportedEvent:      1 }, { sparse: true });
 reportSchema.index({ reporter: 1, reportedDeal:       1 }, { sparse: true });
 reportSchema.index({ reporter: 1, reportedNews:       1 }, { sparse: true });
+
+// Fast lookup of all auto-flagged items still pending admin review
+reportSchema.index({ autoFlagged: 1, status: 1 });
 
 module.exports = mongoose.model('Report', reportSchema);
