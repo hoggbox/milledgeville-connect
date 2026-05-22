@@ -5210,10 +5210,12 @@ window.showMarketplaceDetail = async function(id) {
        class="bg-slate-900 text-white w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
     <!-- Header -->
-    <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+    <div class="sticky top-0 bg-slate-900 px-6 py-4 border-b border-white/10 flex justify-between items-center">
       <div>
         <h2 class="text-2xl font-bold">${esc(item.title)}</h2>
-        <p class="text-3xl font-bold text-emerald-600">$${item.price}</p>
+        <div class="inline-flex items-center bg-white/10 px-4 py-1 rounded-2xl mt-1">
+  <p class="text-3xl font-bold text-emerald-400">$${item.price}</p>
+</div>
       </div>
       <button onclick="hideMarketDetailModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
     </div>
@@ -6384,7 +6386,7 @@ window.showEventDetail = async function(eventId) {
       <div onclick="event.stopImmediatePropagation()" 
            class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
         
-        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+        <div class="sticky top-0 bg-slate-900 px-6 py-4 border-b border-white/10 flex justify-between items-center">
           <h2 class="text-2xl font-bold">${event.title}</h2>
           <button onclick="document.getElementById('eventDetailModal').remove()" class="text-3xl text-gray-400 hover:text-gray-600">×</button>
         </div>
@@ -6455,7 +6457,7 @@ window.showDealDetail = async function(dealId) {
       <div onclick="event.stopImmediatePropagation()" 
            class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-auto shadow-2xl">
         
-        <div class="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
+        <div class="sticky top-0 bg-slate-900 px-6 py-4 border-b border-white/10 flex justify-between items-center">
           <h2 class="text-2xl font-bold">${deal.title}</h2>
           <button onclick="document.getElementById('dealDetailModal').remove()" class="text-3xl text-gray-400 hover:text-gray-600">×</button>
         </div>
@@ -7272,7 +7274,7 @@ function renderComments(comments = [], containerId, contentType, contentId) {
   if (!container) return;
 
   if (!comments || comments.length === 0) {
-    container.innerHTML = `<p class="text-slate-400 text-center py-6">No comments yet — be the first!</p>`;
+    container.innerHTML = `<p class="text-white/40 text-center py-6">No comments yet — be the first!</p>`;
     return;
   }
 
@@ -7283,10 +7285,10 @@ function renderComments(comments = [], containerId, contentType, contentId) {
     const authorName = c.author || c.authorName || 'Anonymous';
 
     html += `
-      <div class="bg-slate-100 rounded-2xl p-4">
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
         <div class="flex justify-between items-center">
           <div onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
-               class="font-medium cursor-pointer hover:underline text-emerald-600">
+               class="font-medium cursor-pointer hover:underline text-emerald-400">
             ${esc(authorName)}
           </div>
           <button onclick="event.stopImmediatePropagation(); reportContent('comment', '${c._id}')" 
@@ -7294,8 +7296,8 @@ function renderComments(comments = [], containerId, contentType, contentId) {
             🚩
           </button>
         </div>
-        <p class="text-slate-800 mt-1.5">${esc(c.text)}</p>
-        <span class="text-[10px] text-slate-400">${timeAgo(c.createdAt)}</span>
+        <p class="text-white/90 mt-1.5">${esc(c.text)}</p>
+        <span class="text-[10px] text-white/40">${timeAgo(c.createdAt)}</span>
       </div>`;
   });
 
