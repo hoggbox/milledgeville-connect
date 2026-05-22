@@ -497,54 +497,58 @@ function showEditProfileModal() {
   }
 
   const u = currentUser;
-  const isNative = isNativePlatform();
-  const pushSupported = isNative || (('serviceWorker' in navigator) && ('PushManager' in window));
-  const pushBlocked = !isNative && getNotificationPermission() === 'denied';
 
   modal.innerHTML = `
-    <div onclick="event.stopPropagation()" class="bg-white text-slate-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
+    <div onclick="event.stopPropagation()" 
+         class="bg-[#0f172a] text-white w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto shadow-2xl border border-white/10">
 
-      <div class="sticky top-0 bg-white z-10 pt-4 pb-3 px-6 border-b border-slate-100 flex items-center justify-between">
+      <!-- Header -->
+      <div class="sticky top-0 bg-[#0f172a] z-10 pt-4 pb-3 px-6 border-b border-white/10 flex items-center justify-between rounded-t-3xl">
         <h2 class="text-xl font-bold">Edit Profile</h2>
-        <button onclick="hideEditProfileModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">✕</button>
+        <button onclick="hideEditProfileModal()" class="text-white/50 hover:text-white text-2xl leading-none">✕</button>
       </div>
 
       <div class="p-6 space-y-6">
 
-        <!-- Avatar upload -->
+        <!-- Avatar -->
         <div class="flex flex-col items-center gap-3">
           <div id="avatarPreview"
-               class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-emerald-200 shadow-lg flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white cursor-pointer relative group"
+               class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white/10 shadow-lg flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white cursor-pointer relative group"
                onclick="document.getElementById('avatarFileInput').click()">
-            ${u.avatar ? `<img src="${u.avatar}" class="w-full h-full object-cover" id="avatarImg">` : `<span id="avatarLetter">${(u.name||'?')[0].toUpperCase()}</span>`}
+            ${u.avatar 
+              ? `<img src="${u.avatar}" class="w-full h-full object-cover" id="avatarImg">` 
+              : `<span id="avatarLetter">${(u.name||'?')[0].toUpperCase()}</span>`}
             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-3xl">
               <span class="text-white text-3xl">📷</span>
             </div>
           </div>
-          <div class="text-center">
-            <button onclick="document.getElementById('avatarFileInput').click()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-semibold px-5 py-2 rounded-full transition">📷 Change Photo</button>
-            ${u.avatar ? `<button onclick="removeAvatar()" class="ml-2 text-red-500 hover:text-red-700 text-sm font-medium transition">Remove</button>` : ''}
-          </div>
+          <button onclick="document.getElementById('avatarFileInput').click()" 
+                  class="bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-5 py-2 rounded-full transition">
+            📷 Change Photo
+          </button>
           <input id="avatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="handleAvatarSelect(this)">
-          <p class="text-xs text-slate-400">JPG, PNG or WebP · Max 2 MB</p>
-          <div id="avatarError" class="hidden text-xs text-red-500 font-medium text-center"></div>
+          <p class="text-xs text-white/40">JPG, PNG or WebP · Max 2 MB</p>
         </div>
 
         <!-- Name -->
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Full Name *</label>
-          <input id="ep-name" type="text" value="${escHtml(u.name || '')}" maxlength="60" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-base">
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Full Name</label>
+          <input id="ep-name" type="text" value="${escHtml(u.name || '')}" maxlength="60" 
+                 class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white">
         </div>
 
         <!-- Bio -->
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Bio <span class="normal-case font-normal text-slate-400">(max 280 chars)</span></label>
-          <textarea id="ep-bio" maxlength="280" rows="3" class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 outline-none text-sm resize-none" placeholder="Tell the community a little about yourself…">${escHtml(u.bio || '')}</textarea>
-          <div class="text-right text-xs text-slate-400 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
+          <label class="block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5">Bio <span class="normal-case font-normal text-white/40">(max 280 chars)</span></label>
+          <textarea id="ep-bio" maxlength="280" rows="3" 
+                    class="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:border-emerald-500 outline-none text-white resize-none"
+                    placeholder="Tell the community a little about yourself…">${escHtml(u.bio || '')}</textarea>
+          <div class="text-right text-xs text-white/40 mt-1"><span id="bioCount">${(u.bio||'').length}</span>/280</div>
         </div>
 
-        <!-- Save -->
-        <button onclick="saveProfile()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2" id="saveProfileBtn">
+        <!-- Save Button -->
+        <button onclick="saveProfile()" id="saveProfileBtn"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2">
           💾 Save Changes
         </button>
       </div>
@@ -552,12 +556,12 @@ function showEditProfileModal() {
 
   modal.classList.remove('hidden');
 
-  // Bio character counter
+  // Bio counter
   const bioTextarea = document.getElementById('ep-bio');
-  const bioCount    = document.getElementById('bioCount');
+  const bioCount = document.getElementById('bioCount');
   if (bioTextarea && bioCount) {
-    bioTextarea.addEventListener('input', () => { 
-      bioCount.textContent = bioTextarea.value.length; 
+    bioTextarea.addEventListener('input', () => {
+      bioCount.textContent = bioTextarea.value.length;
     });
   }
 }
@@ -878,27 +882,28 @@ window.showUserProfileModal = async function (userId) {
     const isOwnProfile = String(currentUser._id) === String(user._id);
 
     const html = `
-      <div onclick="if(event.target.id==='userProfileModal')hideUserProfileModal()" 
+      <div onclick="if(event.target.id==='userProfileModal') hideUserProfileModal()" 
            id="userProfileModal"
            class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[13000] flex items-end md:items-center md:justify-center overflow-y-auto">
+        
         <div onclick="event.stopImmediatePropagation()" 
-             class="bg-white text-slate-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
+             class="bg-[#0f172a] text-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
-          <div class="sticky top-0 bg-white pt-4 pb-3 flex justify-center border-b border-gray-100 z-10">
-            <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+          <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 flex justify-center border-b border-white/10 z-10">
+            <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
           </div>
 
           <div class="p-6">
             <!-- Avatar -->
             <div class="flex justify-center mb-4">
-              <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-emerald-200 shadow-xl flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
+              <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white/10 shadow-xl flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
                 ${user.avatar 
                   ? `<img src="${user.avatar}" class="w-full h-full object-cover">` 
                   : (user.name || '?')[0].toUpperCase()}
               </div>
             </div>
 
-            <h2 class="text-3xl font-bold text-center mb-1">${user.name}</h2>
+            <h2 class="text-3xl font-bold text-center mb-1">${esc(user.name)}</h2>
 
             <!-- Beta Tester Badge -->
             ${user.isBetaTester ? `
@@ -907,7 +912,7 @@ window.showUserProfileModal = async function (userId) {
                 🚀 MVP Beta Tester
               </div>
             </div>` : ''}
-            
+
             <!-- Reputation -->
             <div class="flex justify-center mb-6">
               <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
@@ -916,29 +921,29 @@ window.showUserProfileModal = async function (userId) {
               </div>
             </div>
 
-            ${user.bio ? `<p class="text-center text-slate-600 italic mb-6">"${escHtml(user.bio)}"</p>` : ''}
+            ${user.bio ? `<p class="text-center text-white/70 italic mb-6">"${esc(user.bio)}"</p>` : ''}
 
             ${user.neighborhood ? `
-            <div class="text-center text-slate-500 mb-6">
+            <div class="text-center text-white/50 mb-6">
               📍 ${user.neighborhood}
             </div>` : ''}
 
             <!-- Action Buttons -->
             <div class="flex gap-3 mt-8">
               <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
-                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg">
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
                 ✉️ Message
               </button>
               
               ${!isOwnProfile ? `
               <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
-                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg">
+                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
                 🚩 Report User
               </button>` : ''}
             </div>
 
             <button onclick="hideUserProfileModal()" 
-                    class="w-full mt-4 text-slate-400 py-3 text-sm">
+                    class="w-full mt-4 text-white/40 py-3 text-sm hover:text-white/70 transition">
               Close
             </button>
           </div>
