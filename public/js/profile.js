@@ -318,113 +318,117 @@ function showProfileSheet() {
   const pushSupported = isNative || (('serviceWorker' in navigator) && ('PushManager' in window));
   const pushBlocked   = !isNative && getNotificationPermission() === 'denied';
 
-  content.innerHTML = `
-    <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
-         style="background: linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%);">
-      <div class="absolute inset-0 opacity-10" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,.15) 20px,rgba(255,255,255,.15) 21px);"></div>
-      <button id="profileEditBtn" class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">✏️ Edit Profile</button>
+content.innerHTML = `
+  <div class="relative -mx-6 -mt-2 mb-6 px-6 pt-10 pb-20 rounded-t-3xl overflow-hidden"
+       style="background: linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%);">
+    <div class="absolute inset-0 opacity-10" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,.15) 20px,rgba(255,255,255,.15) 21px);"></div>
+    <button id="profileEditBtn" class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition flex items-center gap-1.5">✏️ Edit Profile</button>
+  </div>
+
+  <div class="flex justify-center -mt-20 mb-4 relative z-10">
+    <div class="relative inline-block">
+      <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white shadow-2xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white">
+        ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()}
+      </div>
+      ${isVerified ? `<div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1 border border-white">✓ Verified</div>` : ''}
     </div>
+  </div>
 
-    <div class="flex justify-center -mt-20 mb-4 relative z-10">
-      <div class="relative inline-block">
-        <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white shadow-2xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-7xl font-bold text-white">
-          ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar">` : (currentUser.name||'?')[0].toUpperCase()}
-        </div>
-        ${isVerified ? `<div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1 border border-white">✓ Verified</div>` : ''}
-      </div>
+  <h2 class="text-3xl font-bold text-white mt-2">${currentUser.name}</h2>
+  <p class="text-emerald-400 text-base mb-1">${currentUser.email}</p>
+  ${currentUser.neighborhood ? `<p class="text-white/60 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+
+  <div class="flex justify-center mt-3 mb-6">
+    <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
+      ⭐ ${currentUser.reputation || 0}
+      <span class="text-base opacity-75">Reputation</span>
     </div>
+  </div>
 
-    <h2 class="text-3xl font-bold text-slate-900 mt-2">${currentUser.name}</h2>
-    <p class="text-emerald-600 text-base mb-1">${currentUser.email}</p>
-    ${currentUser.neighborhood ? `<p class="text-slate-500 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+  ${currentUser.bio ? `<p class="text-white/80 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
+  ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
 
-    <div class="flex justify-center mt-3 mb-6">
-      <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
-        ⭐ ${currentUser.reputation || 0}
-        <span class="text-base opacity-75">Reputation</span>
-      </div>
+  <!-- Stats Cards -->
+  <div class="mt-6 grid grid-cols-3 gap-3">
+    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+      <span class="text-xl font-bold text-white">🗓️</span>
+      <span class="text-xs text-white/50 mt-1">Joined</span>
+      <span class="text-xs font-semibold text-white">${joinedStr}</span>
     </div>
-
-    ${currentUser.bio ? `<p class="text-slate-600 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
-    ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
-
-    <div class="mt-6 grid grid-cols-3 gap-3">
-      <div class="bg-slate-50 border border-slate-100 rounded-2xl py-3 flex flex-col items-center">
-        <span class="text-xl font-bold text-slate-800">🗓️</span>
-        <span class="text-xs text-slate-500 mt-1">Joined</span>
-        <span class="text-xs font-semibold text-slate-700">${joinedStr}</span>
-      </div>
-      <div class="bg-slate-50 border border-slate-100 rounded-2xl py-3 flex flex-col items-center">
-        <span class="text-lg font-bold text-slate-800">${isVerified ? '🏪' : '🌱'}</span>
-        <span class="text-xs text-slate-500 mt-1">Status</span>
-        <span class="text-xs font-semibold text-slate-700">${isVerified ? 'Owner' : 'Member'}</span>
-      </div>
-      <div class="bg-slate-50 border border-slate-100 rounded-2xl py-3 flex flex-col items-center">
-        <span class="text-lg font-bold text-slate-800">${isAdmin ? '🔧' : '⭐'}</span>
-        <span class="text-xs text-slate-500 mt-1">Role</span>
-        <span class="text-xs font-semibold text-slate-700">${isAdmin ? 'Admin' : 'User'}</span>
-      </div>
+    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+      <span class="text-lg font-bold text-white">${isVerified ? '🏪' : '🌱'}</span>
+      <span class="text-xs text-white/50 mt-1">Status</span>
+      <span class="text-xs font-semibold text-white">${isVerified ? 'Owner' : 'Member'}</span>
     </div>
+    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+      <span class="text-lg font-bold text-white">${isAdmin ? '🔧' : '⭐'}</span>
+      <span class="text-xs text-white/50 mt-1">Role</span>
+      <span class="text-xs font-semibold text-white">${isAdmin ? 'Admin' : 'User'}</span>
+    </div>
+  </div>
 
-    ${(currentUser.phone || socials) ? `
-    <div class="mt-5 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left space-y-2">
-      ${currentUser.phone ? `<div class="flex items-center gap-2 text-slate-600 text-sm"><span>📞</span><span>${currentUser.phone}</span></div>` : ''}
-      ${socials}
-    </div>` : ''}
+  <!-- Contact / Socials -->
+  ${(currentUser.phone || socials) ? `
+  <div class="mt-5 bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-2">
+    ${currentUser.phone ? `<div class="flex items-center gap-2 text-white/80 text-sm"><span>📞</span><span>${currentUser.phone}</span></div>` : ''}
+    ${socials}
+  </div>` : ''}
 
-    ${pushSupported ? `
-    <div class="mt-5 bg-slate-50 border border-slate-100 rounded-2xl p-4">
-      <label for="sheetPushToggle" class="flex items-center justify-between gap-3 cursor-pointer select-none">
-        <div class="text-left">
-          <p class="text-sm font-semibold text-slate-800">🔔 Push Notifications</p>
-          <p id="sheetPushStatus" class="text-xs text-slate-500 mt-0.5">
-            ${pushBlocked ? '⚠️ Blocked in browser settings' : isNative ? 'Loading...' : 'Receive alerts when the app is closed'}
-          </p>
-        </div>
-        <div class="relative flex-shrink-0">
-          <input type="checkbox" id="sheetPushToggle" class="sr-only peer" ${pushBlocked ? 'disabled' : ''}>
-          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${pushBlocked ? 'opacity-40' : ''}"></div>
-          <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
-        </div>
-      </label>
-    </div>` : ''}
+  <!-- Push Notifications Toggle -->
+  ${pushSupported ? `
+  <div class="mt-5 bg-white/5 border border-white/10 rounded-2xl p-4">
+    <label for="sheetPushToggle" class="flex items-center justify-between gap-3 cursor-pointer select-none">
+      <div class="text-left">
+        <p class="text-sm font-semibold text-white">🔔 Push Notifications</p>
+        <p id="sheetPushStatus" class="text-xs text-white/50 mt-0.5">
+          ${pushBlocked ? '⚠️ Blocked in browser settings' : isNative ? 'Loading...' : 'Receive alerts when the app is closed'}
+        </p>
+      </div>
+      <div class="relative flex-shrink-0">
+        <input type="checkbox" id="sheetPushToggle" class="sr-only peer" ${pushBlocked ? 'disabled' : ''}>
+        <div class="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-emerald-500 transition-colors ${pushBlocked ? 'opacity-40' : ''}"></div>
+        <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></div>
+      </div>
+    </label>
+  </div>` : ''}
 
-    <p class="text-slate-400 text-xs mt-4">${lastLoginText}</p>
+  <p class="text-white/40 text-xs mt-4">${lastLoginText}</p>
 
-    <div class="mt-8 space-y-3">
-      ${isAdmin ? `
-      <button onclick="navigate('admin'); hideProfileSheet();" 
-              class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
-        🔧 Admin Panel
-      </button>` : ''}
+  <!-- Action Buttons -->
+  <div class="mt-8 space-y-3">
+    ${isAdmin ? `
+    <button onclick="navigate('admin'); hideProfileSheet();" 
+            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
+      🔧 Admin Panel
+    </button>` : ''}
 
-      ${isVerified ? `
-      <button onclick="navigate('owner-dashboard'); hideProfileSheet();" 
-              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
-        🏪 My Business Dashboard
-      </button>` : ''}
+    ${isVerified ? `
+    <button onclick="navigate('owner-dashboard'); hideProfileSheet();" 
+            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+      🏪 My Business Dashboard
+    </button>` : ''}
 
-      <button onclick="showEditProfileModal()" 
-              class="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
-        ✏️ Edit Profile
-      </button>
+    <button onclick="showEditProfileModal()" 
+            class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
+      ✏️ Edit Profile
+    </button>
 
-      <button onclick="showAccountSettingsModal()" 
-        class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
+    <button onclick="showAccountSettingsModal()" 
+            class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
       ⚙️ Settings & Privacy
-      </button>
+    </button>
 
-      <button onclick="logout()" 
-              class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
-        Logout
-      </button>
+    <button onclick="logout()" 
+            class="w-full bg-red-500 hover:bg-red-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
+      Logout
+    </button>
 
-      <button onclick="hideProfileSheet()" 
-              class="w-full bg-gray-100 hover:bg-gray-200 text-slate-800 py-4 rounded-3xl font-semibold text-lg transition">
-        Close
-      </button>
-    </div>
-  `;
+    <button onclick="hideProfileSheet()" 
+            class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
+      Close
+    </button>
+  </div>
+`;
 
   sheet.classList.remove('hidden');
 
