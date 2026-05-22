@@ -409,6 +409,11 @@ function showProfileSheet() {
         ✏️ Edit Profile
       </button>
 
+      <button onclick="showAccountSettingsModal()" 
+        class="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-3xl font-semibold text-lg transition">
+      ⚙️ Settings & Privacy
+      </button>
+
       <button onclick="showDeleteAccountModal()" 
               class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
         🗑️ Delete My Account
@@ -778,6 +783,78 @@ if (window.Capacitor?.isNativePlatform()) {
     window.initPushAfterLogin?.();
   }, 1200);
 }
+
+// ─── ACCOUNT SETTINGS MODAL ─────────────────────────────────────────────────
+window.showAccountSettingsModal = function() {
+  if (document.getElementById('accountSettingsModal')) return;
+
+  const user = currentUser;
+
+  const html = `
+    <div id="accountSettingsModal" onclick="if(event.target.id==='accountSettingsModal') hideAccountSettingsModal()" 
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[35000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()" 
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <h2 class="text-lg font-bold flex items-center gap-2">⚙️ Settings & Privacy</h2>
+          <button onclick="hideAccountSettingsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div class="p-6 space-y-5">
+
+          <!-- User Info -->
+          ${user ? `
+          <div class="flex items-center gap-4 bg-white/5 rounded-2xl p-4">
+            <div class="w-11 h-11 rounded-2xl overflow-hidden bg-emerald-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
+              ${user.avatar 
+                ? `<img src="${user.avatar}" class="w-full h-full object-cover">` 
+                : (user.name || '?')[0].toUpperCase()}
+            </div>
+            <div class="min-w-0">
+              <p class="font-semibold truncate">${esc(user.name || 'Your Account')}</p>
+              <p class="text-white/40 text-sm truncate">${esc(user.email || '')}</p>
+            </div>
+          </div>` : ''}
+
+          <!-- Menu Items -->
+          <div class="space-y-2">
+
+            <!-- Notification Preferences -->
+            <button onclick="hideAccountSettingsModal(); setTimeout(showNotificationSettingsModal, 120)" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">🔔</span>
+              <span class="font-semibold text-sm">Notification Preferences</span>
+            </button>
+
+            <!-- Privacy Policy -->
+            <button onclick="window.open('https://www.milledgevilleconnect.com/privacy.html', '_blank')" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">🔏</span>
+              <span class="font-semibold text-sm">Privacy Policy</span>
+            </button>
+
+            <!-- Delete Account -->
+            <button onclick="hideAccountSettingsModal(); setTimeout(showDeleteAccountModal, 150)" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-2xl transition text-left mt-3">
+              <span class="text-xl">🗑️</span>
+              <span class="font-semibold text-sm text-red-400">Delete My Account</span>
+            </button>
+
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.hideAccountSettingsModal = function() {
+  const modal = document.getElementById('accountSettingsModal');
+  if (modal) modal.remove();
+};
 
 // ─── OTHER USER PROFILE MODAL ───────────────────────────────────────────────
 window.showUserProfileModal = async function (userId) {

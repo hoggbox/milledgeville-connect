@@ -9,14 +9,6 @@ const userSchema = new mongoose.Schema({
   lastLogin:{ type: Date, default: Date.now },
   verifiedBusiness: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', default: null },
 
-  // Marketplace notification preferences
-  marketplacePreferences: {
-    homes:     { type: Boolean, default: true },
-    cars:      { type: Boolean, default: true },
-    furniture: { type: Boolean, default: true },
-    other:     { type: Boolean, default: true }
-  },
-
   bio:          { type: String, default: '', maxlength: 280 },
   phone:        { type: String, default: '' },
   neighborhood: { type: String, default: '' },
@@ -27,14 +19,28 @@ const userSchema = new mongoose.Schema({
   instagram: { type: String, default: '' },
   facebook:  { type: String, default: '' },
 
-  // Notification Preferences
-  notifyDeals:             { type: Boolean, default: true },
-  notifyEvents:            { type: Boolean, default: true },
-  notifyShoutouts:         { type: Boolean, default: false },
-  notifyShoutoutComments:  { type: Boolean, default: false },
-  notifyLostFound:         { type: Boolean, default: true },
-  notifyMarketplace:       { type: Boolean, default: true },
-  notifyMessages:          { type: Boolean, default: true },
+  // ─────────────────────────────────────────────────────────────
+  // NOTIFICATION PREFERENCES
+  // Users can toggle these. Custom business notifications are excluded.
+  // ─────────────────────────────────────────────────────────────
+  notificationPreferences: {
+    // Main notification categories
+    events:     { type: Boolean, default: true },
+    deals:      { type: Boolean, default: true },
+    shoutouts:  { type: Boolean, default: true },
+    lostFound:  { type: Boolean, default: true },
+    messages:   { type: Boolean, default: true },
+    comments:   { type: Boolean, default: true },
+
+    // Marketplace has its own sub-preferences
+    marketplace: {
+      all:       { type: Boolean, default: true },
+      homes:     { type: Boolean, default: true },
+      cars:      { type: Boolean, default: true },
+      furniture: { type: Boolean, default: true },
+      other:     { type: Boolean, default: true }
+    }
+  },
 
   pushEnabled: { type: Boolean, default: false },
 
@@ -89,7 +95,11 @@ const userSchema = new mongoose.Schema({
   blockedUsers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }]
+  }],
+
+  // Account Deletion
+  deletionRequestedAt: { type: Date, default: null },
+  deletionReason:      { type: String, default: '' }
 });
 
 userSchema.pre('save', async function (next) {

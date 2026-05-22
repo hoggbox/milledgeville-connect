@@ -1038,6 +1038,35 @@ router.delete('/messages/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── PERMANENT ACCOUNT DELETION (Hard Delete) ───────────────────────────────
+router.delete('/user/delete-account', authenticate, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Delete all content created by this user
+    await Promise.all([
+      Shoutout.deleteMany({ authorId: userId }),
+      LostItem.deleteMany({ owner: userId }),
+      MarketplaceItem.deleteMany({ seller: userId }),
+      Deal.deleteMany({ owner: userId }),
+      Event.deleteMany({ owner: userId }),
+      News.deleteMany({ author: userId }),
+      Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] }),
+      ClaimRequest.deleteMany({ user: userId }),
+      Review.deleteMany({ user: userId }),
+      Report.deleteMany({ $or: [{ reporter: userId }, { reportedUser: userId }] }),
+    ]);
+
+    // Finally delete the user
+    await User.findByIdAndDelete(userId);
+
+    res.json({ success: true, message: 'Account permanently deleted' });
+  } catch (err) {
+    console.error('Hard delete account error:', err);
+    res.status(500).json({ message: 'Failed to delete account' });
+  }
+});
+
 // DELETE /api/messages/conversation/:otherId
 // Deletes all messages between the current user and another user
 router.delete('/messages/conversation/:otherId', authenticate, async (req, res) => {
@@ -1092,6 +1121,60 @@ router.post('/users/:id/block', authenticate, async (req, res) => {
     res.json({ blocked: idx === -1 });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── SAVE NOTIFICATION PREFERENCES ───────────────────────────────────────────
+router.post('/user/notification-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const incoming = req.body.preferences || req.body;
+
+    if (!incoming || typeof incoming !== 'object') {
+      return res.status(400).json({ message: 'Invalid preferences data' });
+    }
+
+    // Update the notificationPreferences field
+    user.notificationPreferences = {
+      events:     incoming.events     ?? true,
+      deals:      incoming.deals      ?? true,
+      shoutouts:  incoming.shoutouts  ?? true,
+      lostFound:  incoming.lostFound  ?? true,
+      messages:   incoming.messages   ?? true,
+      comments:   incoming.comments   ?? true,
+      marketplace: {
+        all:       incoming.marketplace?.all       ?? true,
+        homes:     incoming.marketplace?.homes     ?? true,
+        cars:      incoming.marketplace?.cars      ?? true,
+        furniture: incoming.marketplace?.furniture ?? true,
+        other:     incoming.marketplace?.other     ?? true
+      }
+    };
+
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Notification preferences saved',
+      preferences: user.notificationPreferences 
+    });
+  } catch (err) {
+    console.error('Save notification preferences error:', err);
+    res.status(500).json({ message: 'Failed to save preferences' });
+  }
+});
+
+// ─── GET NOTIFICATION PREFERENCES ────────────────────────────────────────────
+router.get('/user/notification-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('notificationPreferences');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json(user.notificationPreferences || {});
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load preferences' });
   }
 });
 

@@ -8096,21 +8096,23 @@ window.requestAccountDeletion = async function() {
 window.confirmAccountDeletion = async function() {
   const reason = document.getElementById('deleteReason')?.value.trim() || '';
 
-  try {
-    const res = await apiPost('/user/delete-request', { reason });
-    
-    hideDeleteAccountModal();
-    
-    showToast(res.message || 'Deletion request submitted.', 'success');
+  const confirmed = confirm(
+    'FINAL WARNING\n\nThis will permanently delete your account and ALL your data (posts, messages, listings, etc.).\n\nThis cannot be undone.\n\nDo you want to continue?'
+  );
+  if (!confirmed) return;
 
-    // Log the user out after showing the message
+  try {
+    await apiDelete('/user/delete-account'); // New hard delete route
+
+    hideDeleteAccountModal();
+    showToast('Your account has been permanently deleted.', 'success');
+
     setTimeout(() => {
       localStorage.removeItem('token');
       window.location.reload();
-    }, 2500);
-
+    }, 1200);
   } catch (e) {
-    showToast('Failed to submit deletion request. Please try again.', 'error');
+    showToast('Failed to delete account. Please try again.', 'error');
   }
 };
 
@@ -8134,6 +8136,8 @@ window.confirmAccountDeletion = async function() {
     showToast('Failed to submit deletion request', 'error');
   }
 };
+
+
 
 // ─── PRO USER ANALYTICS STUB (expand later) ───────────────────────────────
 window.showProAnalytics = function() {
@@ -8178,6 +8182,208 @@ window.handleHomeImages = async function(input) {
     } catch (e) { console.error(e); }
   }
   input.value = '';
+};
+
+// ─── NOTIFICATION PREFERENCES MODAL ─────────────────────────────────────────
+window.showNotificationSettingsModal = async function() {
+  if (document.getElementById('notificationSettingsModal')) return;
+
+  // Load current preferences from user
+  const prefs = currentUser?.notificationPreferences || {
+    events: true,
+    deals: true,
+    shoutouts: true,
+    lostFound: true,
+    messages: true,
+    comments: true,
+    marketplace: {
+      all: true,
+      homes: true,
+      cars: true,
+      furniture: true,
+      other: true
+    }
+  };
+
+  const html = `
+    <div id="notificationSettingsModal" onclick="if(event.target.id==='notificationSettingsModal') hideNotificationSettingsModal()" 
+         class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-[35000] p-0 md:p-4">
+      <div onclick="event.stopImmediatePropagation()" 
+           class="bg-[#0f172a] border border-white/10 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a] border-b border-white/10 px-6 py-4 flex items-center justify-between rounded-t-3xl">
+          <h2 class="text-lg font-bold">🔔 Notification Settings</h2>
+          <button onclick="hideNotificationSettingsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div class="p-6 space-y-6">
+
+          <!-- Info -->
+          <p class="text-white/60 text-sm">
+            Choose which notifications you want to receive. Custom notifications from verified businesses cannot be turned off.
+          </p>
+
+          <!-- Toggles -->
+          <div class="space-y-4">
+
+            <!-- Events -->
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div>
+                <div class="font-semibold">📅 Events</div>
+                <div class="text-xs text-white/50">New events in your area</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="pref-events" ${prefs.events ? 'checked' : ''} class="sr-only peer">
+                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <!-- Deals -->
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div>
+                <div class="font-semibold">🔥 Deals</div>
+                <div class="text-xs text-white/50">New deals from local businesses</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="pref-deals" ${prefs.deals ? 'checked' : ''} class="sr-only peer">
+                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <!-- Shoutouts / Traffic -->
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div>
+                <div class="font-semibold">🚦 Traffic Alerts</div>
+                <div class="text-xs text-white/50">Community shoutouts and road updates</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="pref-shoutouts" ${prefs.shoutouts ? 'checked' : ''} class="sr-only peer">
+                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <!-- Lost & Found -->
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div>
+                <div class="font-semibold">🔎 Lost & Found</div>
+                <div class="text-xs text-white/50">Lost pets and items posted nearby</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="pref-lostfound" ${prefs.lostFound ? 'checked' : ''} class="sr-only peer">
+                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <!-- Messages -->
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div>
+                <div class="font-semibold">💬 Private Messages</div>
+                <div class="text-xs text-white/50">Direct messages from other users</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="pref-messages" ${prefs.messages ? 'checked' : ''} class="sr-only peer">
+                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <!-- Comments -->
+            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div>
+                <div class="font-semibold">💬 Comments</div>
+                <div class="text-xs text-white/50">Comments on your posts and listings</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="pref-comments" ${prefs.comments ? 'checked' : ''} class="sr-only peer">
+                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <!-- Marketplace Section -->
+            <div class="pt-2">
+              <div class="font-semibold mb-3 px-1">🛒 Marketplace</div>
+              
+              <!-- Marketplace All -->
+              <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4 mb-2">
+                <div class="font-medium">All Marketplace Items</div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="pref-market-all" ${prefs.marketplace?.all ? 'checked' : ''} class="sr-only peer">
+                  <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              <!-- Sub categories -->
+              <div class="pl-4 space-y-2">
+                ${['homes', 'cars', 'furniture', 'other'].map(cat => `
+                  <div class="flex items-center justify-between bg-white/5 rounded-2xl px-4 py-3">
+                    <div class="text-sm capitalize">${cat}</div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="pref-market-${cat}" ${prefs.marketplace?.[cat] ? 'checked' : ''} class="sr-only peer">
+                      <div class="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="sticky bottom-0 bg-[#0f172a] border-t border-white/10 p-6 flex gap-3">
+          <button onclick="hideNotificationSettingsModal()" 
+                  class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold transition">
+            Cancel
+          </button>
+          <button onclick="saveNotificationPreferences()" 
+                  class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-semibold transition">
+            Save Preferences
+          </button>
+        </div>
+
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.hideNotificationSettingsModal = function() {
+  const modal = document.getElementById('notificationSettingsModal');
+  if (modal) modal.remove();
+};
+
+window.saveNotificationPreferences = async function() {
+  const prefs = {
+    events: document.getElementById('pref-events')?.checked ?? true,
+    deals: document.getElementById('pref-deals')?.checked ?? true,
+    shoutouts: document.getElementById('pref-shoutouts')?.checked ?? true,
+    lostFound: document.getElementById('pref-lostfound')?.checked ?? true,
+    messages: document.getElementById('pref-messages')?.checked ?? true,
+    comments: document.getElementById('pref-comments')?.checked ?? true,
+    marketplace: {
+      all: document.getElementById('pref-market-all')?.checked ?? true,
+      homes: document.getElementById('pref-market-homes')?.checked ?? true,
+      cars: document.getElementById('pref-market-cars')?.checked ?? true,
+      furniture: document.getElementById('pref-market-furniture')?.checked ?? true,
+      other: document.getElementById('pref-market-other')?.checked ?? true
+    }
+  };
+
+  try {
+    const res = await apiPost('/user/notification-preferences', { preferences: prefs });
+    
+    if (res.success) {
+      // Update local user object
+      if (currentUser) currentUser.notificationPreferences = prefs;
+      showToast('✅ Notification preferences saved!', 'success');
+      hideNotificationSettingsModal();
+    } else {
+      showToast('Failed to save preferences', 'error');
+    }
+  } catch (e) {
+    showToast('Failed to save preferences', 'error');
+  }
 };
 
 function renderHomeImagePreviews() {
@@ -8406,6 +8612,84 @@ window.validateProSubscription = async function() {
   } catch (e) {
     console.error('Subscription validation failed', e);
   }
+};
+
+// ─── ACCOUNT SETTINGS MODAL (with Notification Preferences button) ───────────
+window.showAccountSettingsModal = function() {
+  if (document.getElementById('accountSettingsModal')) return;
+
+  const user = currentUser;
+
+  const html = `
+    <div id="accountSettingsModal" onclick="if(event.target.id==='accountSettingsModal') hideAccountSettingsModal()" 
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[35000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()" 
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <h2 class="text-lg font-bold flex items-center gap-2">⚙️ Account & Privacy</h2>
+          <button onclick="hideAccountSettingsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div class="p-6 space-y-6">
+
+          <!-- User Info -->
+          ${user ? `
+          <div class="flex items-center gap-4 bg-white/5 rounded-2xl p-4">
+            <div class="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
+              ${(user.name || '?')[0].toUpperCase()}
+            </div>
+            <div class="min-w-0">
+              <p class="font-semibold truncate">${esc(user.name || 'Your Account')}</p>
+              <p class="text-white/40 text-sm truncate">${esc(user.email || '')}</p>
+            </div>
+          </div>` : ''}
+
+          <!-- Settings Buttons -->
+          <div class="space-y-3">
+
+            <!-- Notification Preferences -->
+            <button onclick="hideAccountSettingsModal(); setTimeout(showNotificationSettingsModal, 150)" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">🔔</span>
+              <span class="font-semibold text-sm">Notification Preferences</span>
+            </button>
+
+            <!-- Privacy Policy -->
+            <button onclick="window.open('https://www.milledgevilleconnect.com/privacy.html', '_blank')" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">🔏</span>
+              <span class="font-semibold text-sm">Privacy Policy</span>
+            </button>
+
+            <!-- Delete Account -->
+            <div class="bg-red-500/10 border border-red-500/30 rounded-2xl overflow-hidden mt-4">
+              <div class="px-5 py-4">
+                <p class="font-semibold text-red-400 text-sm flex items-center gap-2">🗑 Delete My Account</p>
+                <p class="text-white/50 text-xs mt-1 leading-relaxed">
+                  Permanently removes your account and all your data. This cannot be undone.
+                </p>
+              </div>
+              <button onclick="hideAccountSettingsModal(); setTimeout(showDeleteAccountModal, 200)" 
+                      class="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition border-t border-red-500/30">
+                Delete My Account Permanently
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.hideAccountSettingsModal = function() {
+  const modal = document.getElementById('accountSettingsModal');
+  if (modal) modal.remove();
 };
 
 window.homesPageNav = function(dir) {
