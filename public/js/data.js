@@ -8022,6 +8022,7 @@ window.flagShoutout = async function (shoutoutId) {
 
 // ─── DELETE ACCOUNT FEATURE ─────────────────────────────────────────────────
 window.showDeleteAccountModal = function() {
+  if (document.getElementById('deleteAccountModal')) return;
   const html = `
     <div id="deleteAccountModal" onclick="if(event.target.id==='deleteAccountModal') hideDeleteAccountModal()" 
          class="fixed inset-0 bg-black/80 flex items-center justify-center z-[30000] p-4">
@@ -8032,23 +8033,29 @@ window.showDeleteAccountModal = function() {
           <div class="text-5xl mb-4">🗑️</div>
           <h2 class="text-2xl font-bold text-red-400 mb-2">Delete Your Account</h2>
           <p class="text-white/70 text-sm leading-relaxed">
-            We're sorry to see you go. Deleting your account will permanently remove your profile, posts, messages, and all associated data.
+            This will <strong>immediately and permanently</strong> delete your profile, posts, messages, and all associated data. There is no waiting period and no undo.
           </p>
         </div>
 
-        <div class="mt-6 bg-white/5 border border-white/10 rounded-2xl p-5 text-sm">
-          <p class="font-semibold text-white/90 mb-3">What will happen:</p>
-          <ul class="space-y-2 text-white/70 text-sm">
-            <li class="flex gap-2">• Your account will be <strong>scheduled for deletion</strong></li>
-            <li class="flex gap-2">• All your data will be permanently removed within <strong>30 days</strong></li>
-            <li class="flex gap-2">• This action <strong>cannot be undone</strong></li>
-          </ul>
+        <div class="mt-6 bg-red-500/10 border border-red-500/20 rounded-2xl p-5 text-sm space-y-2">
+          <p class="font-semibold text-red-300 mb-1">What gets deleted immediately:</p>
+          <p class="text-white/60">• Your profile and account</p>
+          <p class="text-white/60">• All your posts, shoutouts, and listings</p>
+          <p class="text-white/60">• All your messages and conversations</p>
+          <p class="text-white/60">• Your reviews, reputation, and history</p>
         </div>
 
-        <div class="mt-6">
-          <label class="block text-xs text-white/50 mb-1.5">Reason for leaving (optional)</label>
-          <textarea id="deleteReason" rows="2" placeholder="Help us improve the app"
-                    class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white placeholder:text-white/40 focus:outline-none resize-none"></textarea>
+        <div class="mt-5 space-y-4">
+          <div>
+            <label class="block text-xs text-white/50 mb-1.5">Reason for leaving (optional)</label>
+            <textarea id="deleteReason" rows="2" placeholder="Help us improve the app"
+                      class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white placeholder:text-white/40 focus:outline-none resize-none"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs text-white/50 mb-1.5">Enter your password to confirm <span class="text-red-400">*</span></label>
+            <input id="deletePassword" type="password" placeholder="Your current password"
+                   class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-red-500/50">
+          </div>
         </div>
 
         <div class="flex gap-3 mt-8">
@@ -8056,9 +8063,9 @@ window.showDeleteAccountModal = function() {
                   class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold transition">
             Cancel
           </button>
-          <button onclick="confirmAccountDeletion()" 
+          <button id="confirmDeleteBtn" onclick="confirmAccountDeletion()" 
                   class="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl transition">
-            Confirm Deletion
+            Confirm Permanent Deletion
           </button>
         </div>
       </div>
@@ -8094,46 +8101,36 @@ window.requestAccountDeletion = async function() {
 };
 
 window.confirmAccountDeletion = async function() {
-  const reason = document.getElementById('deleteReason')?.value.trim() || '';
+  const reason   = document.getElementById('deleteReason')?.value.trim() || 'No reason provided';
+  const password = document.getElementById('deletePassword')?.value || '';
+
+  if (!password) {
+    showToast('Please enter your password to confirm deletion.', 'error');
+    return;
+  }
 
   const confirmed = confirm(
-    'FINAL WARNING\n\nThis will permanently delete your account and ALL your data (posts, messages, listings, etc.).\n\nThis cannot be undone.\n\nDo you want to continue?'
+    'FINAL WARNING\n\nThis will PERMANENTLY and IMMEDIATELY delete your account and ALL your data (posts, messages, listings, etc.).\n\nThis CANNOT be undone.\n\nDo you want to continue?'
   );
   if (!confirmed) return;
 
+  const btn = document.getElementById('confirmDeleteBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Deleting…'; }
+
   try {
-    await apiDelete('/user/delete-account'); // New hard delete route
+    await apiDelete('/user/delete-account', { password, reason });
 
     hideDeleteAccountModal();
     showToast('Your account has been permanently deleted.', 'success');
 
     setTimeout(() => {
       localStorage.removeItem('token');
+      currentUser = null;
       window.location.reload();
     }, 1200);
   } catch (e) {
-    showToast('Failed to delete account. Please try again.', 'error');
-  }
-};
-
-window.confirmAccountDeletion = async function() {
-  const reason = document.getElementById('deleteReason')?.value.trim() || 'No reason provided';
-
-  try {
-    const res = await apiPost('/user/delete-request', { reason });
-    
-    if (res.message) {
-      showToast('🗑️ Account deletion requested. You will receive an email confirmation.', 'success');
-      hideDeleteAccountModal();
-      
-      // Optional: Log user out after request
-      setTimeout(() => {
-        localStorage.removeItem('token');
-        window.location.reload();
-      }, 2000);
-    }
-  } catch (e) {
-    showToast('Failed to submit deletion request', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirm Permanent Deletion'; }
+    showToast(e?.message || 'Failed to delete account. Please check your password and try again.', 'error');
   }
 };
 
@@ -8188,22 +8185,43 @@ window.handleHomeImages = async function(input) {
 window.showNotificationSettingsModal = async function() {
   if (document.getElementById('notificationSettingsModal')) return;
 
-  // Load current preferences from user
-  const prefs = currentUser?.notificationPreferences || {
-    events: true,
-    deals: true,
-    shoutouts: true,
-    lostFound: true,
-    messages: true,
-    comments: true,
+  // Load current preferences from user object (set at login)
+  const prefs = currentUser?.notificationPreferences || {};
+  const p = {
+    events:    prefs.events    !== false,
+    deals:     prefs.deals     !== false,
+    shoutouts: prefs.shoutouts !== false,
+    lostFound: prefs.lostFound !== false,
+    messages:  prefs.messages  !== false,
+    comments:  prefs.comments  !== false,
     marketplace: {
-      all: true,
-      homes: true,
-      cars: true,
-      furniture: true,
-      other: true
+      all:       prefs.marketplace?.all       !== false,
+      homes:     prefs.marketplace?.homes     !== false,
+      cars:      prefs.marketplace?.cars      !== false,
+      furniture: prefs.marketplace?.furniture !== false,
+      other:     prefs.marketplace?.other     !== false,
     }
   };
+
+  const toggle = (id, checked, label, sub = '') => `
+    <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4 ${sub}">
+      <div>
+        <div class="font-semibold text-sm">${label}</div>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} class="sr-only peer">
+        <div class="w-11 h-6 bg-white/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+      </label>
+    </div>`;
+
+  const subToggle = (id, checked, label) => `
+    <div class="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3">
+      <div class="text-sm text-white/80">${label}</div>
+      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} class="sr-only peer market-sub">
+        <div class="w-9 h-5 bg-white/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+      </label>
+    </div>`;
 
   const html = `
     <div id="notificationSettingsModal" onclick="if(event.target.id==='notificationSettingsModal') hideNotificationSettingsModal()" 
@@ -8211,134 +8229,47 @@ window.showNotificationSettingsModal = async function() {
       <div onclick="event.stopImmediatePropagation()" 
            class="bg-[#0f172a] border border-white/10 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-y-auto">
         
-        <!-- Header -->
         <div class="sticky top-0 bg-[#0f172a] border-b border-white/10 px-6 py-4 flex items-center justify-between rounded-t-3xl">
-          <h2 class="text-lg font-bold">🔔 Notification Settings</h2>
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 md:hidden"></div>
+          <h2 class="text-lg font-bold">🔔 Notification Preferences</h2>
           <button onclick="hideNotificationSettingsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
-        <div class="p-6 space-y-6">
+        <div class="p-6 space-y-3">
 
-          <!-- Info -->
-          <p class="text-white/60 text-sm">
-            Choose which notifications you want to receive. Custom notifications from verified businesses cannot be turned off.
+          <p class="text-white/50 text-xs leading-relaxed pb-1">
+            Choose what you get notified about. Custom notifications from verified local businesses cannot be turned off.
           </p>
 
-          <!-- Toggles -->
-          <div class="space-y-4">
+          ${toggle('pref-events',    p.events,    '📅 Events — new events in your area')}
+          ${toggle('pref-deals',     p.deals,     '🔥 Deals — new deals from local businesses')}
+          ${toggle('pref-shoutouts', p.shoutouts, '🚦 Traffic Alerts — community shoutouts & road updates')}
+          ${toggle('pref-lostfound', p.lostFound, '🔎 Lost & Found — lost pets and items nearby')}
+          ${toggle('pref-messages',  p.messages,  '✉️ Direct Messages — messages from other users')}
+          ${toggle('pref-comments',  p.comments,  '💬 Comments — replies on your posts and listings')}
 
-            <!-- Events -->
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-              <div>
-                <div class="font-semibold">📅 Events</div>
-                <div class="text-xs text-white/50">New events in your area</div>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="pref-events" ${prefs.events ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
+          <!-- Marketplace section -->
+          <div class="pt-2">
+            <p class="text-xs font-semibold text-white/40 uppercase tracking-wider px-1 mb-2">Marketplace</p>
+            ${toggle('pref-market-all', p.marketplace.all, '🛒 All Marketplace Items')}
+            <div id="marketSubToggles" class="pl-3 space-y-2 mt-2 ${!p.marketplace.all ? 'opacity-40 pointer-events-none' : ''}">
+              ${subToggle('pref-market-homes',     p.marketplace.homes,     '🏠 Homes & Real Estate')}
+              ${subToggle('pref-market-cars',      p.marketplace.cars,      '🚗 Cars & Vehicles')}
+              ${subToggle('pref-market-furniture', p.marketplace.furniture, '🪑 Furniture & Appliances')}
+              ${subToggle('pref-market-other',     p.marketplace.other,     '📦 Other Items')}
             </div>
-
-            <!-- Deals -->
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-              <div>
-                <div class="font-semibold">🔥 Deals</div>
-                <div class="text-xs text-white/50">New deals from local businesses</div>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="pref-deals" ${prefs.deals ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            <!-- Shoutouts / Traffic -->
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-              <div>
-                <div class="font-semibold">🚦 Traffic Alerts</div>
-                <div class="text-xs text-white/50">Community shoutouts and road updates</div>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="pref-shoutouts" ${prefs.shoutouts ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            <!-- Lost & Found -->
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-              <div>
-                <div class="font-semibold">🔎 Lost & Found</div>
-                <div class="text-xs text-white/50">Lost pets and items posted nearby</div>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="pref-lostfound" ${prefs.lostFound ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            <!-- Messages -->
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-              <div>
-                <div class="font-semibold">💬 Private Messages</div>
-                <div class="text-xs text-white/50">Direct messages from other users</div>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="pref-messages" ${prefs.messages ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            <!-- Comments -->
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-              <div>
-                <div class="font-semibold">💬 Comments</div>
-                <div class="text-xs text-white/50">Comments on your posts and listings</div>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="pref-comments" ${prefs.comments ? 'checked' : ''} class="sr-only peer">
-                <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            <!-- Marketplace Section -->
-            <div class="pt-2">
-              <div class="font-semibold mb-3 px-1">🛒 Marketplace</div>
-              
-              <!-- Marketplace All -->
-              <div class="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4 mb-2">
-                <div class="font-medium">All Marketplace Items</div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" id="pref-market-all" ${prefs.marketplace?.all ? 'checked' : ''} class="sr-only peer">
-                  <div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                </label>
-              </div>
-
-              <!-- Sub categories -->
-              <div class="pl-4 space-y-2">
-                ${['homes', 'cars', 'furniture', 'other'].map(cat => `
-                  <div class="flex items-center justify-between bg-white/5 rounded-2xl px-4 py-3">
-                    <div class="text-sm capitalize">${cat}</div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" id="pref-market-${cat}" ${prefs.marketplace?.[cat] ? 'checked' : ''} class="sr-only peer">
-                      <div class="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-                    </label>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
           </div>
 
         </div>
 
-        <!-- Footer -->
         <div class="sticky bottom-0 bg-[#0f172a] border-t border-white/10 p-6 flex gap-3">
           <button onclick="hideNotificationSettingsModal()" 
                   class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold transition">
             Cancel
           </button>
           <button onclick="saveNotificationPreferences()" 
-                  class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-semibold transition">
-            Save Preferences
+                  class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-bold transition">
+            Save
           </button>
         </div>
 
@@ -8346,6 +8277,21 @@ window.showNotificationSettingsModal = async function() {
     </div>`;
 
   document.body.insertAdjacentHTML('beforeend', html);
+
+  // ── Wire up marketplace "All" master toggle cascade ─────────────────────
+  requestAnimationFrame(() => {
+    const masterToggle = document.getElementById('pref-market-all');
+    const subContainer = document.getElementById('marketSubToggles');
+    if (masterToggle && subContainer) {
+      masterToggle.addEventListener('change', () => {
+        const enabled = masterToggle.checked;
+        subContainer.classList.toggle('opacity-40', !enabled);
+        subContainer.classList.toggle('pointer-events-none', !enabled);
+        // Cascade: when master is turned off, uncheck all subs; when turned on, check all subs
+        subContainer.querySelectorAll('.market-sub').forEach(cb => { cb.checked = enabled; });
+      });
+    }
+  });
 };
 
 window.hideNotificationSettingsModal = function() {

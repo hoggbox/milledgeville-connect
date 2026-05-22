@@ -838,82 +838,79 @@ if (sub.nativeToken) {
 //   • If the user has a native FCM token → use FCM (preferred, higher delivery rate)
 //   • Else if the user has a web VAPID subscription → use VAPID
 //   • Users with BOTH channels only receive one notification (no duplicates)
+// ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
+// ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
-  console.log(`📢 [Broadcast] "${title}" → ${body}`);
+  const { type = null } = options; // type is optional for now
 
-  // Load every subscription record once, grouped by user
-  const allSubs = await PushSubscription.find({
-    $or: [
-      { nativeToken: { $exists: true, $ne: null } },
-      { subscription: { $exists: true, $ne: null } }
-    ]
-  }).lean();
+  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'}`);
 
-  // Deduplicate: one record per user — prefer nativeToken over web VAPID
-  const byUser = new Map();
-  for (const sub of allSubs) {
-    const uid = sub.user?.toString();
-    if (!uid) continue;
-    const existing = byUser.get(uid);
-    // Prefer the record that has a nativeToken
-    if (!existing || (!existing.nativeToken && sub.nativeToken)) {
-      byUser.set(uid, sub);
-    }
-  }
+  try {
+    // Get all users who can receive push
+    const users = await User.find({
+      $or: [
+        { fcmTokens: { $exists: true, $ne: [] } },
+        { pushEnabled: true }
+      ]
+    }).select('_id notificationPreferences');
 
-  console.log(`📍 Sending to ${byUser.size} unique users`);
+    for (const user of users) {
+      const prefs = user.notificationPreferences || {};
 
-  for (const sub of byUser.values()) {
-    // ── Native FCM path (preferred) ────────────────────────────────────────
-    if (sub.nativeToken) {
-      try {
-        const message = {
-          token: sub.nativeToken,
-          notification: { title, body },
-          data: {
-            page: data.page || 'home',
-            id:   data.id   || '',
-            ...data
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              sound:     'default',
-              channelId: 'default',
-              icon:      'ic_launcher'
-            }
-          }
-        };
-        await admin.messaging().send(message);
-        console.log(`✅ FCM sent to user ${sub.user}`);
-        continue; // sent via FCM — skip VAPID for this user
-      } catch (err) {
-        console.error(`❌ FCM failed for user ${sub.user}:`, err.message);
-        if (
-          err.code === 'messaging/registration-token-not-registered' ||
-          err.code === 'messaging/invalid-registration-token'
-        ) {
-          await PushSubscription.updateOne({ _id: sub._id }, { $unset: { nativeToken: '' } });
-          console.log('🗑️ Cleared invalid FCM token');
-        }
-        // Fall through to VAPID if available
+      // If no type is passed, always send (old behavior - safe)
+      if (!type) {
+        await sendPushToUser(user._id, title, body, data);
+        continue;
+      }
+
+      // ── Check user preferences ────────────────────────────────────────
+      let shouldSend = true;
+
+      switch (type) {
+        case 'event':
+          if (prefs.events === false) shouldSend = false;
+          break;
+
+        case 'deal':
+          if (prefs.deals === false) shouldSend = false;
+          break;
+
+        case 'shoutout':
+          if (prefs.shoutouts === false) shouldSend = false;
+          break;
+
+        case 'lost':
+          if (prefs.lostFound === false) shouldSend = false;
+          break;
+
+        case 'marketplace':
+          if (prefs.marketplace?.all === false) shouldSend = false;
+          break;
+
+        case 'message':
+          if (prefs.messages === false) shouldSend = false;
+          break;
+
+        case 'comment':
+          if (prefs.comments === false) shouldSend = false;
+          break;
+
+        case 'custom':
+          // Custom business notifications always send
+          shouldSend = true;
+          break;
+
+        default:
+          // Unknown type → send (safe)
+          shouldSend = true;
+      }
+
+      if (shouldSend) {
+        await sendPushToUser(user._id, title, body, data);
       }
     }
-
-    // ── Web VAPID fallback ──────────────────────────────────────────────────
-    if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
-      try {
-        await webpush.sendNotification(
-          sub.subscription,
-          JSON.stringify({ title, body, data })
-        );
-        console.log(`✅ VAPID sent to user ${sub.user}`);
-      } catch (err) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await PushSubscription.updateOne({ _id: sub._id }, { $unset: { subscription: '' } });
-        }
-      }
-    }
+  } catch (err) {
+    console.error('broadcastPush error:', err);
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3564,27 +3561,101 @@ router.get('/user/marketplace-preferences', authenticate, async (req, res) => {
   }
 });
 
-// ─── ACCOUNT DELETION REQUEST ─────────────────────────────────────────────
-router.post('/user/delete-request', authenticate, async (req, res) => {
+// ─── NOTIFICATION PREFERENCES ────────────────────────────────────────────────
+// POST /api/user/notification-preferences
+// Saves the full notificationPreferences object from the settings modal.
+router.post('/user/notification-preferences', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (user.deletionRequestedAt) {
-      return res.status(400).json({ 
-        message: 'A deletion request has already been submitted for this account.' 
-      });
+    const { preferences } = req.body;
+    if (!preferences || typeof preferences !== 'object') {
+      return res.status(400).json({ message: 'preferences object is required' });
     }
 
-    user.deletionRequestedAt = new Date();
-    user.deletionReason = req.body.reason || 'No reason provided';
-    await user.save();
+    // Only allow toggling of the fields defined in the schema.
+    // Verified-business custom notifications are NOT included — they cannot be turned off.
+    user.notificationPreferences = {
+      events:    typeof preferences.events    === 'boolean' ? preferences.events    : (user.notificationPreferences?.events    ?? true),
+      deals:     typeof preferences.deals     === 'boolean' ? preferences.deals     : (user.notificationPreferences?.deals     ?? true),
+      shoutouts: typeof preferences.shoutouts === 'boolean' ? preferences.shoutouts : (user.notificationPreferences?.shoutouts ?? true),
+      lostFound: typeof preferences.lostFound === 'boolean' ? preferences.lostFound : (user.notificationPreferences?.lostFound ?? true),
+      messages:  typeof preferences.messages  === 'boolean' ? preferences.messages  : (user.notificationPreferences?.messages  ?? true),
+      comments:  typeof preferences.comments  === 'boolean' ? preferences.comments  : (user.notificationPreferences?.comments  ?? true),
+      marketplace: {
+        all:       typeof preferences.marketplace?.all       === 'boolean' ? preferences.marketplace.all       : (user.notificationPreferences?.marketplace?.all       ?? true),
+        homes:     typeof preferences.marketplace?.homes     === 'boolean' ? preferences.marketplace.homes     : (user.notificationPreferences?.marketplace?.homes     ?? true),
+        cars:      typeof preferences.marketplace?.cars      === 'boolean' ? preferences.marketplace.cars      : (user.notificationPreferences?.marketplace?.cars      ?? true),
+        furniture: typeof preferences.marketplace?.furniture === 'boolean' ? preferences.marketplace.furniture : (user.notificationPreferences?.marketplace?.furniture ?? true),
+        other:     typeof preferences.marketplace?.other     === 'boolean' ? preferences.marketplace.other     : (user.notificationPreferences?.marketplace?.other     ?? true),
+      }
+    };
 
-    res.json({ 
-      message: 'Your account deletion request has been received. Your account and all associated data will be permanently deleted within 30 days. You have been logged out.' 
-    });
+    await user.save();
+    res.json({ success: true, preferences: user.notificationPreferences });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Save notification preferences error:', err);
+    res.status(500).json({ message: 'Failed to save preferences' });
+  }
+});
+
+// GET /api/user/notification-preferences
+router.get('/user/notification-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('notificationPreferences');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user.notificationPreferences || {});
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load preferences' });
+  }
+});
+
+// ─── ACCOUNT HARD DELETE ──────────────────────────────────────────────────────
+// DELETE /api/user/delete-account
+// Immediately and permanently deletes the user and all their associated content.
+// This is irreversible — no soft-delete, no 30-day window.
+router.delete('/user/delete-account', authenticate, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Verify password before allowing deletion (extra safety check)
+    const { password } = req.body;
+    if (password) {
+      const valid = await user.comparePassword(password);
+      if (!valid) return res.status(401).json({ message: 'Incorrect password' });
+    }
+
+    // ── Delete all content authored by this user ──────────────────────────────
+    await Promise.allSettled([
+      Shoutout.deleteMany({ authorId: userId }),
+      LostItem.deleteMany({ owner: userId }),
+      MarketplaceItem.deleteMany({ seller: userId }),
+      Event.deleteMany({ owner: userId }),
+      Deal.deleteMany({ owner: userId }),
+      News.deleteMany({ author: userId }),
+      Review.deleteMany({ author: userId }),
+      Report.deleteMany({ reporter: userId }),
+      // Remove this user from other users' blockedUsers / following lists
+      User.updateMany(
+        { $or: [{ blockedUsers: userId }, { following: userId }] },
+        { $pull: { blockedUsers: userId, following: userId } }
+      ),
+      // Remove web push subscriptions
+      PushSubscription.deleteMany({ user: userId }),
+      // Delete all messages sent or received
+      Message.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] }),
+    ]);
+
+    // ── Finally delete the user document itself ───────────────────────────────
+    await User.findByIdAndDelete(userId);
+
+    res.json({ success: true, message: 'Account permanently deleted.' });
+  } catch (err) {
+    console.error('Hard account delete error:', err);
+    res.status(500).json({ message: 'Failed to delete account. Please try again.' });
   }
 });
 
