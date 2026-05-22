@@ -5548,7 +5548,7 @@ function renderLostItemsPage() {
     html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
   } else {
     html = paginated.map(item => `
-      <div id="lost-${item._id}" onclick="showLostItemDetail('${item._id}')" 
+      <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
           ${item.images?.[0] ? 
