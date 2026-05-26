@@ -4080,23 +4080,17 @@ window.deleteBizPost = async function(id) {
 
 // ─── BUSINESS POST DETAIL MODAL (deep-link target) ───────────────────────────
 window.showBusinessPostModal = async function(postId) {
-  // Remove any existing instance
   const existing = document.getElementById('bizPostDetailModal');
   if (existing) existing.remove();
 
-  // Show a quick loading shell
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="bizPostDetailModal"
-         onclick="if(event.target.id==='bizPostDetailModal') document.getElementById('bizPostDetailModal').remove()"
-         class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
-      <div onclick="event.stopPropagation()"
-           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[95vh] flex flex-col">
-        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
-          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
-          <span class="text-sm font-semibold text-white/70">Business Update</span>
-          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+    <div id="bizPostDetailModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-[30000]">
+      <div class="bg-[#0f172a] w-full max-w-lg rounded-3xl overflow-hidden">
+        <div class="flex justify-between items-center px-5 py-4 border-b border-white/10">
+          <span class="font-semibold">Business Update</span>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-2xl">×</button>
         </div>
-        <div id="bizPostDetailBody" class="flex-1 overflow-y-auto flex items-center justify-center py-16">
+        <div id="bizPostDetailBody" class="p-6 flex justify-center items-center min-h-[300px]">
           <div class="w-8 h-8 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
         </div>
       </div>
@@ -4104,47 +4098,35 @@ window.showBusinessPostModal = async function(postId) {
 
   try {
     const post = await apiGet(`/business-posts/post/${postId}`);
+    if (!post) throw new Error('Post not found');
 
-    document.getElementById('bizPostDetailBody').innerHTML = `
-      <!-- Full image -->
-      <div class="w-full bg-black flex items-center justify-center">
-        <img src="${post.image}" class="w-full max-h-[60vh] object-contain" alt="Business photo update">
-      </div>
-
-      <!-- Meta -->
-      <div class="p-5 space-y-3">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">📸</div>
-          <div>
-            <p class="font-bold text-white leading-tight">${esc(post.bizName)}</p>
-            <p class="text-xs text-white/40">${timeAgo(post.createdAt)}</p>
+    const body = document.getElementById('bizPostDetailBody');
+    body.innerHTML = `
+      <div class="w-full">
+        <img src="${post.image}" class="w-full max-h-[55vh] object-contain bg-black" 
+             onerror="this.src='/icon-192.png'; this.style.objectFit='contain'">
+        
+        <div class="p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="font-bold">${esc(post.bizName)}</div>
+            <div class="text-xs text-white/40">${timeAgo(post.createdAt)}</div>
           </div>
-        </div>
-
-        ${post.caption ? `
-        <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
-
-        <div class="flex gap-3 pt-2">
-          <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
-                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
-            🏪 View ${esc(post.bizName)}
-          </button>
-          <button onclick="shareContent('business-post', '${esc(post.bizName)}', '${esc(post.caption || '')}')"
-                  class="py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
-            🔗
-          </button>
-          <button onclick="document.getElementById('bizPostDetailModal').remove()"
-                  class="py-3 px-4 bg-white/5 hover:bg-white/10 text-white/60 rounded-2xl text-sm font-semibold transition">
-            ✕
-          </button>
+          
+          ${post.caption ? `<p class="text-sm text-white/90 mb-4">${esc(post.caption)}</p>` : ''}
+          
+          <div class="flex gap-3">
+            <button onclick="document.getElementById('bizPostDetailModal').remove(); loadDirectoryAndOpen('${post.business}')"
+                    class="flex-1 py-3 bg-emerald-600 rounded-2xl font-semibold">
+              🏪 View Business
+            </button>
+            <button onclick="document.getElementById('bizPostDetailModal').remove()"
+                    class="px-6 py-3 bg-white/10 rounded-2xl">Close</button>
+          </div>
         </div>
       </div>`;
   } catch (e) {
-    document.getElementById('bizPostDetailBody').innerHTML = `
-      <div class="p-8 text-center text-white/40">
-        <p class="text-4xl mb-3">😕</p>
-        <p class="text-sm">This post could not be loaded.</p>
-      </div>`;
+    document.getElementById('bizPostDetailBody').innerHTML = 
+      `<p class="text-red-400 p-8 text-center">Failed to load post</p>`;
   }
 };
 

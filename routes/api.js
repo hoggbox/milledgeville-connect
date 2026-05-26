@@ -878,13 +878,10 @@ function requireAdminOrModerator(req, res, next) {
 // AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
-  if (!sub) {
-    console.log(`[Push] No subscription record for user ${userId}`);
-    return false;
-  }
+  if (!sub) return false;
 
-  const APP_ICON  = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const notifImage = imageUrl || APP_ICON;   // ← use post thumbnail when provided
+  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
+  const thumb = imageUrl || APP_ICON;
 
   if (sub.nativeToken) {
     try {
@@ -893,56 +890,45 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         notification: { 
           title, 
           body,
-          imageUrl: notifImage        // ← real photo or fallback
+          imageUrl: thumb
         },
         data: {
           page: data.page || '',
-          id:   data.id   || '',
-          url:  data.url  || ''
+          id:   data.id   || ''
         },
-        android: { 
+        android: {
           priority: 'high',
           notification: {
             sound: 'default',
             channelId: 'default',
-            imageUrl: notifImage      // ← real photo or fallback
+            imageUrl: thumb
           }
         }
       };
       await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}`);
       return true;
     } catch (err) {
-      console.error(`[Push] FCM failed for ${userId}:`, err.message);
-      if (err.code === 'messaging/registration-token-not-registered') {
-        sub.nativeToken = null;
-        await sub.save();
-      }
+      console.error('FCM error:', err.message);
       return false;
     }
   }
 
-  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+  // Web Push
+  if (sub.subscription?.endpoint) {
     try {
       await webpush.sendNotification(
         sub.subscription,
-        JSON.stringify({ 
-          title, 
-          body, 
-          data,
-          icon:  APP_ICON,
-          image: notifImage,          // ← web push large image
-          badge: APP_ICON
+        JSON.stringify({
+          title,
+          body,
+          data: { page: data.page || '', id: data.id || '' },
+          icon: thumb,
+          image: thumb
         })
       );
-      console.log(`✅ Web push sent to ${userId}`);
       return true;
     } catch (err) {
-      console.error(`[Push] Web push failed for ${userId}:`, err.message);
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        sub.subscription = null;
-        await sub.save();
-      }
+      console.error('Web push error:', err.message);
       return false;
     }
   }
