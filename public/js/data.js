@@ -5186,6 +5186,19 @@ window.showPostMarketplaceModal = function() {
                  onchange="handleMarketImages(this)">
           <div id="marketImagePreviews" class="flex flex-wrap gap-2 mt-3"></div>
         </div>
+
+        ${currentUser && currentUser.verifiedBusiness ? `
+        <!-- Notify community — verified business owners only -->
+        <div class="mt-4 bg-emerald-900/30 border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-start gap-3">
+          <input type="checkbox" id="marketNotifyCommunity" checked
+                 class="w-5 h-5 mt-0.5 accent-emerald-500 flex-shrink-0 cursor-pointer">
+          <div>
+            <label for="marketNotifyCommunity" class="text-sm font-semibold text-emerald-300 cursor-pointer">
+              📲 Notify the community about this listing
+            </label>
+            <p class="text-xs text-white/40 mt-0.5">Uses 1 notification credit. Sends a push to all subscribers.</p>
+          </div>
+        </div>` : ''}
       </div>
 
       <div class="p-6 border-t border-white/10 flex gap-3">
@@ -5276,13 +5289,28 @@ window.postMarketplaceItem = async function() {
 
     const images = window._marketImages || [];
 
+    // Notify checkbox — only rendered for verified business owners
+    const notifyChecked = document.getElementById('marketNotifyCommunity')?.checked ?? false;
+
+    // Build rich home details for the notification body if this is a Homes listing
+    let homeNotifDetails = null;
+    if (category === 'Homes') {
+      const type    = document.getElementById('marketHomeType')?.value;
+      const beds    = document.getElementById('marketHomeBeds')?.value.trim();
+      const baths   = document.getElementById('marketHomeBaths')?.value.trim();
+      const address = document.getElementById('marketHomeAddress')?.value.trim();
+      homeNotifDetails = { type, beds, baths, address };
+    }
+
     const res = await apiPost('/marketplace', {
       title,
       description: finalDescription,
       price: isNaN(price) ? 0 : price,
       images,
       category,
-      condition
+      condition,
+      notifyCommunity: notifyChecked,
+      homeNotifDetails
     });
 
     if (res && res._id) {

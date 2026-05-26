@@ -1407,7 +1407,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, price, images, category, condition } = clean;
+    const { title, description, price, images, category, condition, notifyCommunity, homeNotifDetails } = clean;
 
     const item = await MarketplaceItem.create({
       title,
@@ -1420,15 +1420,38 @@ router.post('/marketplace', authenticate, async (req, res) => {
       condition: condition || 'used'
     });
 
-broadcastPush(
-  '🛒 New Marketplace Listing',
-  `${user.name} listed: ${title} - $${price}`,
-  { page: 'marketplace', id: item._id.toString(), url: `/marketplace/${item._id}` },
-  { 
-    type: 'marketplace', 
-    subCategory: category     // ← Add this line
-  }
-);
+    // ── Community notification — only if verified business owner checked the box ──
+    if (notifyCommunity && user.verifiedBusiness) {
+      // Build a rich, listing-specific notification body
+      let notifBody = '';
+
+      if (category === 'Homes' && homeNotifDetails) {
+        const { type, beds, baths, address } = homeNotifDetails;
+        const parts = [];
+        if (type) parts.push(type === 'rent' ? 'For Rent' : 'For Sale');
+        if (beds)  parts.push(`${beds}bd`);
+        if (baths) parts.push(`${baths}ba`);
+        if (price && Number(price) > 0) parts.push(`$${Number(price).toLocaleString()}${type === 'rent' ? '/mo' : ''}`);
+        if (address) parts.push(address);
+        notifBody = parts.join(' · ');
+      } else {
+        // Non-home listing — simpler body
+        notifBody = price && Number(price) > 0
+          ? `${title} — $${Number(price).toLocaleString()}`
+          : title;
+      }
+
+      const notifTitle = category === 'Homes'
+        ? `🏠 New Listing from ${user.verifiedBusiness.name || user.name}`
+        : `🛒 New from ${user.verifiedBusiness.name || user.name}`;
+
+      broadcastPush(
+        notifTitle,
+        notifBody,
+        { page: 'marketplace', id: item._id.toString() },
+        { type: 'marketplace', subCategory: category }
+      );
+    }
 
     res.json(item);
   } catch (err) {
