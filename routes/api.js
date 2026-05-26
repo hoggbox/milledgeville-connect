@@ -885,22 +885,19 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 
   if (sub.nativeToken) {
     try {
-      await admin.messaging().send({
-        token: sub.nativeToken,
-        notification: { title, body, imageUrl: thumb },
-        data: {
-          page: data.page || '',
-          id: data.id || ''
-        },
-        android: {
-          priority: 'high',
-          notification: {
-            sound: 'default',
-            channelId: 'default',
-            imageUrl: thumb
-          }
-        }
-      });
+await admin.messaging().send({
+  token: sub.nativeToken,
+  notification: { title, body, imageUrl: thumb },
+  data: { page: data.page || '', id: data.id || '' },
+  android: {
+    priority: 'high',
+    notification: { sound: 'default', channelId: 'default', imageUrl: thumb }
+  },
+  apns: {
+    payload: { aps: { sound: 'default', 'mutable-content': 1 } },
+    fcmOptions: { imageUrl: thumb }
+  }
+});
       return true;
     } catch (e) {
       console.error('FCM error:', e.message);
@@ -3807,12 +3804,12 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       const deducted = await deductNotificationCredit(req.userId);
       if (deducted) {
         const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-        await broadcastPush(
-          pushTitle,
-          caption?.trim() || 'Posted a new photo update — tap to see it!',
-          { page: 'business-post', id: post._id.toString() },
-          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
-        );
+await broadcastPush(
+  pushTitle,
+  caption?.trim() || 'Posted a new photo update — tap to see it!',
+  { page: 'business-post', id: post._id.toString(), bizId: user.verifiedBusiness._id.toString() },
+  { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
+);
       }
     }
 
@@ -3838,11 +3835,12 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
-    res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
-    });
+res.set({
+  'Content-Type': mimeType,
+  'Cache-Control': 'public, max-age=86400',
+  'Content-Length': buffer.length,
+  'Access-Control-Allow-Origin': '*',
+});
     res.send(buffer);
   } catch (err) {
     console.error('Thumb fetch error:', err);
