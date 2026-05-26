@@ -4243,63 +4243,12 @@ async function loadNotificationsTab() {
         <p class="text-[10px] text-white/40 mt-2 text-center">One-time credit packs never expire. Pro members get 12 fresh credits every month.</p>
       </div>
 
-      <!-- ── Photo Post form ── -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
-        <h4 class="font-bold text-white">📸 Photo Update</h4>
-        <p class="text-xs text-white/50">Post a photo with a caption — great for before/after shots, new arrivals, or anything visual. Users can tap the notification to see the full image.</p>
-
-        <!-- From badge -->
-        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-          <span class="text-xs text-white/40">From:</span>
-          <span class="text-sm font-semibold text-emerald-400">${bizName}</span>
+      <!-- ── Unified notification form ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+        <div>
+          <h4 class="font-bold text-white">📢 Send Notification</h4>
+          <p class="text-xs text-white/50 mt-0.5">Broadcast to all users — 2 credits. Add a photo to make it visual.</p>
         </div>
-
-        <!-- Image picker -->
-        <div id="bizPostImageWrap" class="relative">
-          <div id="bizPostImagePreview" 
-               class="w-full aspect-video bg-white/5 border-2 border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400/50 hover:bg-white/10 transition-all overflow-hidden"
-               onclick="document.getElementById('bizPostImageInput').click()">
-            <span class="text-3xl">📷</span>
-            <span class="text-sm text-white/50">Tap to add photo</span>
-            <span class="text-xs text-white/30">JPEG · PNG · WebP · max 4 MB</span>
-          </div>
-          <input id="bizPostImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
-                 onchange="handleBizPostImageSelect(this)">
-          <button id="bizPostImageClear" onclick="clearBizPostImage()" 
-                  class="hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center hover:bg-red-600 transition">×</button>
-        </div>
-
-        <!-- Caption -->
-        <textarea id="bizPostCaption" rows="3"
-                  placeholder="Caption — describe what's in the photo (e.g. Before &amp; after carpet clean today!)"
-                  class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none"></textarea>
-
-        <!-- Notify toggle -->
-        <div class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
-          <input type="checkbox" id="bizPostNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-          <label for="bizPostNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-            📢 Send push notification to all users <span class="text-amber-400 font-semibold">(2 credits)</span>
-          </label>
-        </div>
-
-        <button onclick="submitBizPhotoPost()"
-                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all shadow-lg">
-          📸 Post Photo Update
-        </button>
-      </div>
-
-      <!-- ── Past photo posts ── -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
-        <h4 class="font-bold text-white text-sm">Your Photo Posts</h4>
-        <div id="bizPostHistory" class="space-y-3">
-          <div class="text-white/30 text-xs text-center py-4">Loading…</div>
-        </div>
-      </div>
-
-      <!-- ── Custom notification form ── -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
-        <h4 class="font-bold text-white">📢 Send Custom Notification</h4>
-        <p class="text-xs text-white/50">Text-only broadcast to all users. Costs 2 credits.</p>
 
         <!-- From badge -->
         <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
@@ -4313,35 +4262,55 @@ async function loadNotificationsTab() {
                placeholder="Notification title (e.g. Big Sale Today!)"
                class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500" />
 
-        <!-- ── Mini rich-text toolbar ── -->
+        <!-- ── Mini rich-text toolbar + body ── -->
         <div>
           <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-t-xl px-3 py-2 border-b-0">
             <span class="text-xs text-white/30 mr-1">Format:</span>
-
             <button onclick="applyNotifFormat('bold')" title="Bold — select text first"
-                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm transition flex items-center justify-center">
-              B
-            </button>
+                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm transition flex items-center justify-center">B</button>
             <button onclick="applyNotifFormat('italic')" title="Italic — select text first"
-                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white italic font-semibold text-sm transition flex items-center justify-center">
-              I
-            </button>
-
+                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white italic font-semibold text-sm transition flex items-center justify-center">I</button>
             <div class="w-px h-5 bg-white/10 mx-1"></div>
-
             <span class="text-xs text-white/30 mr-1">Add:</span>
             ${['🔥','🎉','⏰','🏷️','📍','✅','💥','👋'].map(e =>
               `<button onclick="insertNotifEmoji('${e}')"
                       class="w-8 h-8 rounded-lg hover:bg-white/10 text-base transition flex items-center justify-center">${e}</button>`
             ).join('')}
-
             <div class="ml-auto text-xs text-white/20 hidden sm:block">Select text → tap B or I</div>
           </div>
-
-          <!-- Body textarea — directly below toolbar, top corners flat -->
           <textarea id="customBody" rows="3"
                     placeholder="Message body — select any text then tap B or I to style it…"
                     class="w-full bg-white/10 border border-white/10 rounded-b-xl rounded-t-none px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none font-mono"></textarea>
+        </div>
+
+        <!-- ── Optional photo add-on (collapsed) ── -->
+        <div>
+          <button onclick="toggleUnifiedPhotoPanel()"
+                  id="unifiedPhotoToggle"
+                  class="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition text-sm">
+            <span class="flex items-center gap-2 text-white/70">
+              <span>📷</span>
+              <span>Add a photo <span class="text-white/30 font-normal">(optional)</span></span>
+            </span>
+            <span id="unifiedPhotoChevron" class="text-white/30 text-xs">▼ expand</span>
+          </button>
+
+          <div id="unifiedPhotoPanel" class="hidden mt-3 space-y-3">
+            <div id="bizPostImageWrap" class="relative">
+              <div id="bizPostImagePreview"
+                   class="w-full aspect-video bg-white/5 border-2 border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400/50 hover:bg-white/10 transition-all overflow-hidden"
+                   onclick="document.getElementById('bizPostImageInput').click()">
+                <span class="text-3xl">📷</span>
+                <span class="text-sm text-white/50">Tap to add photo</span>
+                <span class="text-xs text-white/30">JPEG · PNG · WebP · max 4 MB</span>
+              </div>
+              <input id="bizPostImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+                     onchange="handleBizPostImageSelect(this)">
+              <button id="bizPostImageClear" onclick="clearBizPostImage()"
+                      class="hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center hover:bg-red-600 transition">×</button>
+            </div>
+            <p class="text-[11px] text-white/30 text-center">When a photo is attached the notification opens a full-image view, then links to your directory card.</p>
+          </div>
         </div>
 
         <!-- Live device preview -->
@@ -4356,10 +4325,26 @@ async function loadNotificationsTab() {
           </div>
         </div>
 
-        <button onclick="sendCustomNotification()"
-                class="w-full bg-white/10 hover:bg-white/20 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all border border-white/10">
-          📢 Send Text-Only to All Users <span class="opacity-60 font-normal">(2 credits)</span>
+        <!-- Cost badge + send button -->
+        <div class="flex items-center gap-2 text-xs text-white/30 justify-center">
+          <span>💳 2 credits</span>
+          <span>·</span>
+          <span id="unifiedCostNote">text-only broadcast</span>
+        </div>
+
+        <button onclick="sendUnifiedNotification()"
+                id="unifiedSendBtn"
+                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg">
+          📢 Send to All Users
         </button>
+      </div>
+
+      <!-- ── Past photo posts ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+        <h4 class="font-bold text-white text-sm">Your Photo Posts</h4>
+        <div id="bizPostHistory" class="space-y-3">
+          <div class="text-white/30 text-xs text-center py-4">Loading…</div>
+        </div>
       </div>
 
     </div>`;
@@ -4381,6 +4366,101 @@ async function loadNotificationsTab() {
   // Load past photo posts
   loadBizPostHistory();
 }
+
+// ── Toggle the optional photo panel ──────────────────────────────────────────
+window.toggleUnifiedPhotoPanel = function() {
+  const panel   = document.getElementById('unifiedPhotoPanel');
+  const chevron = document.getElementById('unifiedPhotoChevron');
+  const note    = document.getElementById('unifiedCostNote');
+  if (!panel) return;
+  const nowHidden = panel.classList.toggle('hidden');
+  if (chevron) chevron.textContent = nowHidden ? '▼ expand' : '▲ collapse';
+  if (note)    note.textContent    = nowHidden ? 'text-only broadcast' : 'photo + text broadcast';
+};
+
+// ── Unified send: handles both text-only and photo+text in one call ───────────
+window.sendUnifiedNotification = async function() {
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  const hasPhoto = !!_bizPostPendingImage;
+
+  // Credit pre-check (2 credits either way)
+  const canSend = await window.canSendNotification(true);
+  if (!canSend) {
+    showToast('Not enough credits. Buy more or upgrade to Pro!', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('unifiedSendBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+
+  try {
+    let res;
+
+    if (hasPhoto) {
+      // Photo path — POST /owner/business-posts with sendNotify: true
+      res = await apiPost('/owner/business-posts', {
+        image:      _bizPostPendingImage,
+        caption:    body,
+        notifTitle: title,
+        sendNotify: true,
+      });
+
+      if (res._id) {
+        showToast('\uD83D\uDCF8 Photo posted & notification sent!', 'success');
+        clearBizPostImage();
+        // Collapse photo panel
+        const panel   = document.getElementById('unifiedPhotoPanel');
+        const chevron = document.getElementById('unifiedPhotoChevron');
+        const note    = document.getElementById('unifiedCostNote');
+        if (panel && !panel.classList.contains('hidden')) {
+          panel.classList.add('hidden');
+          if (chevron) chevron.textContent = '\u25BC expand';
+          if (note)    note.textContent    = 'text-only broadcast';
+        }
+        loadBizPostHistory();
+      } else {
+        showToast(res.message || 'Failed to post', 'error');
+        return;
+      }
+    } else {
+      // Text-only path — POST /owner/custom-notification
+      res = await apiPost('/owner/custom-notification', { title, body });
+
+      if (res.success) {
+        showToast('\u2705 Notification sent to all users!', 'success');
+      } else {
+        showToast(res.message || 'Failed to send notification', 'error');
+        return;
+      }
+    }
+
+    // Clear text fields
+    const titleEl = document.getElementById('customTitle');
+    const bodyEl  = document.getElementById('customBody');
+    if (titleEl) { titleEl.value = ''; titleEl.dispatchEvent(new Event('input')); }
+    if (bodyEl)  { bodyEl.value  = ''; bodyEl.dispatchEvent(new Event('input')); }
+
+    // Refresh credit counter
+    const newCredits = res.credits ?? res.notificationCredits;
+    if (newCredits !== undefined) {
+      const creditEl = document.getElementById('notifCreditDisplay');
+      if (creditEl) creditEl.textContent = newCredits;
+    }
+
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to send \u2014 please try again', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCE2 Send to All Users'; }
+  }
+};
 
 window.saveOwnerBusinessChanges = async function () {
   const name        = document.getElementById('ownerBizName')?.value.trim()        || '';

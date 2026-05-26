@@ -3785,7 +3785,7 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
     if (!user)                  return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) return res.status(403).json({ message: 'Only verified business owners can post updates' });
 
-    const { caption, image, sendNotify } = req.body;
+    const { caption, image, sendNotify, notifTitle } = req.body;
 
     if (!image?.trim()) return res.status(400).json({ message: 'An image is required' });
 
@@ -3813,8 +3813,9 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
     if (sendNotify) {
       const deducted = await deductNotificationCredit(req.userId);
       if (deducted) {
+        const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
         await broadcastPush(
-          `📸 ${bizName}`,
+          pushTitle,
           caption?.trim() || 'Posted a new photo update — tap to see it!',
           { page: 'business-post', id: post._id.toString() },
           { type: 'business-post' }
