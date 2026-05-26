@@ -427,6 +427,8 @@ async function loadPage(page) {
   if (page === 'resources')       { await loadResourcesPage(content);     return; }
 }
 
+window.navigate = loadPage;
+
 // ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
 let searchTimeout = null;
 
@@ -5422,7 +5424,7 @@ window.deleteMyMarketItem = async function(id) {
   if (!confirm('Delete this listing? This cannot be undone.')) return;
   try {
     await apiDelete(`/marketplace/${id}`);
-    showToast('Listing deleted');
+    showToast('Listing deleted', 'success');
     hideMarketDetailModal();
     allMarketplaceItems = allMarketplaceItems.filter(i => String(i._id) !== String(id));
     navigate('marketplace');
@@ -8702,7 +8704,7 @@ window.deleteOwnerHome = async function(id) {
   if (!confirm('Delete this home listing?')) return;
   try {
     await apiDelete(`/owner/homes/${id}`);
-    showToast('Listing deleted');
+    showToast('Listing deleted', 'success');
     _homesAll = _homesAll.filter(h => h._id !== id);
     // Adjust page if we deleted the last item on a non-first page
     const totalPages = Math.ceil(_homesAll.length / HOMES_PAGE_SIZE);
@@ -8722,13 +8724,6 @@ setInterval(() => {
     updateMessageBadge();
   }
 }, 30000);
-
-window.logout = function() {
-  if (!confirm('Are you sure you want to log out?')) return;
-  localStorage.removeItem('token');
-  currentUser = null;
-  window.location.reload();
-};
 
 window.toggleHomeExtraFields = function() {
   const cat = document.getElementById('homeCategory')?.value;

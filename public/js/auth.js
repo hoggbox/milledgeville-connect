@@ -68,12 +68,17 @@ function requireAuth(msg) {
 }
 
 async function handleRegister() {
-  const name     = document.getElementById('regName').value.trim();
-  const email    = document.getElementById('regEmail').value.trim();
-  const password = document.getElementById('regPassword').value;
+  const name            = document.getElementById('regName').value.trim();
+  const email           = document.getElementById('regEmail').value.trim();
+  const password        = document.getElementById('regPassword').value;
+  const confirmPassword = document.getElementById('regConfirmPassword').value;
 
-  if (!name || !email || !password) {
+  if (!name || !email || !password || !confirmPassword) {
     return showToast('All fields are required', 'error');
+  }
+
+  if (password !== confirmPassword) {
+    return showToast('Passwords do not match', 'error');
   }
 
   const result = await apiPost('/auth/register', { name, email, password });
@@ -204,7 +209,7 @@ function showVerifiedNotification(bizName) {
 }
 
 function showToast(message, type = 'info') {
-  const color = type === 'error' ? 'bg-red-500' : 'bg-slate-800';
+  const color = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-800';
   const el    = document.createElement('div');
   el.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[99999] ${color} text-white px-8 py-4 rounded-3xl shadow-2xl text-center font-semibold text-base`;
   el.textContent = message;
