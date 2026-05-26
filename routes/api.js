@@ -875,14 +875,16 @@ function requireAdminOrModerator(req, res, next) {
 }
 
 // Send push to a single user (supports both native FCM and web VAPID)
-async function sendPushToUser(userId, title, body, data = {}) {
+// AFTER — add imageUrl param with fallback to APP_ICON:
+async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
   if (!sub) {
     console.log(`[Push] No subscription record for user ${userId}`);
     return false;
   }
 
-  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
+  const APP_ICON  = 'https://www.milledgevilleconnect.com/icon-192.png';
+  const notifImage = imageUrl || APP_ICON;   // ← use post thumbnail when provided
 
   if (sub.nativeToken) {
     try {
@@ -891,7 +893,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
         notification: { 
           title, 
           body,
-          imageUrl: APP_ICON
+          imageUrl: notifImage        // ← real photo or fallback
         },
         data: {
           page: data.page || '',
@@ -903,7 +905,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            imageUrl: APP_ICON
+            imageUrl: notifImage      // ← real photo or fallback
           }
         }
       };
@@ -928,7 +930,8 @@ async function sendPushToUser(userId, title, body, data = {}) {
           title, 
           body, 
           data,
-          icon: APP_ICON,
+          icon:  APP_ICON,
+          image: notifImage,          // ← web push large image
           badge: APP_ICON
         })
       );
@@ -956,7 +959,7 @@ async function sendPushToUser(userId, title, body, data = {}) {
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 // ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
-  const { type = null, subCategory = null } = options;
+  const { type = null, subCategory = null, imageUrl = null } = options;
 
   console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
@@ -974,7 +977,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
       if (!type) {
         // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data);
+        await sendPushToUser(user._id, title, body, data, imageUrl);
         continue;
       }
 
@@ -1028,7 +1031,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
       }
 
       if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data);
+        await sendPushToUser(user._id, title, body, data, imageUrl);
       }
     }
   } catch (err) {
@@ -3829,7 +3832,7 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
           pushTitle,
           caption?.trim() || 'Posted a new photo update — tap to see it!',
           { page: 'business-post', id: post._id.toString() },
-          { type: 'business-post' }
+          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
         );
       }
     }
@@ -3839,6 +3842,32 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Business post create error:', err);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business-post-thumb/:postId — serves the stored base64 image as a real HTTP response
+// Used so FCM/VAPID push notifications can show a thumbnail via a public URL instead of raw base64
+router.get('/business-post-thumb/:postId', async (req, res) => {
+  try {
+    const post = await BusinessPost.findById(req.params.postId).select('image');
+    if (!post?.image) return res.status(404).send('Not found');
+
+    // Parse the data URL: data:image/jpeg;base64,<data>
+    const match = post.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Thumb fetch error:', err);
+    res.status(500).send('Error');
   }
 });
 

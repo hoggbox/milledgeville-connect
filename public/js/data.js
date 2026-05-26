@@ -171,7 +171,7 @@ if ('serviceWorker' in navigator) {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 1400);
+      }, 2200);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
@@ -4125,7 +4125,7 @@ window.showBusinessPostModal = async function(postId) {
         <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
 
         <div class="flex gap-3 pt-2">
-          <button onclick="document.getElementById('bizPostDetailModal').remove(); loadDirectoryAndOpen('${post.business}')"
+          <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
                   class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
             🏪 View ${esc(post.bizName)}
           </button>
