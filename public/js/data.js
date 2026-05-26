@@ -4102,13 +4102,17 @@ window.showBusinessPostModal = async function(postId) {
         <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
 
         <div class="flex gap-3 pt-2">
+          <button onclick="document.getElementById('bizPostDetailModal').remove(); loadDirectoryAndOpen('${post.business}')"
+                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
+            🏪 View ${esc(post.bizName)}
+          </button>
           <button onclick="shareContent('business-post', '${esc(post.bizName)}', '${esc(post.caption || '')}')"
-                  class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
-            🔗 Share
+                  class="py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
+            🔗
           </button>
           <button onclick="document.getElementById('bizPostDetailModal').remove()"
-                  class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white/70 rounded-2xl text-sm font-semibold transition">
-            Close
+                  class="py-3 px-4 bg-white/5 hover:bg-white/10 text-white/60 rounded-2xl text-sm font-semibold transition">
+            ✕
           </button>
         </div>
       </div>`;
