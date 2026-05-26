@@ -3733,6 +3733,12 @@ const tabs = [
             ${dealAutoHint}
             <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
             <input id="dealExpires" type="date" class="${inputClass}">
+            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
+              <input type="checkbox" id="dealNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="dealNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(2 credits)</span>
+              </label>
+            </div>
             <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Active Deals</p>
@@ -3752,6 +3758,12 @@ const tabs = [
               ${eventCatOptions}
             </select>
             <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
+            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
+              <input type="checkbox" id="eventNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="eventNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(2 credits)</span>
+              </label>
+            </div>
             <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Events</p>
@@ -3868,8 +3880,8 @@ const tabs = [
     <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
     <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom notification to all users (2 credits)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Notify on Events & Deals you post (2 credits each)</div>
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
     </div>
     <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
@@ -3915,15 +3927,6 @@ window.switchDashTab = function (tabId) {
 };
 
 // ─── NOTIFICATIONS TAB LOADER ────────────────────────────────────────────────
-
-// Templates stored in JS so onclick never needs JSON.stringify inside attributes
-const NOTIF_TEMPLATES = [
-  { label: '🔥 Daily Special',   title: 'Daily Special!',           body: "Don't miss today's special — come see us!" },
-  { label: '🎉 New Arrivals',    title: 'New Arrivals In Stock!',    body: 'Fresh inventory just arrived. Come check it out!' },
-  { label: '⏰ Closing Soon',    title: 'Closing Soon!',             body: "We close in 1 hour — stop by before we're done for the day." },
-  { label: '🏷️ Sale On Now',    title: 'Sale On Now!',              body: 'Big savings happening right now. Visit us today!' },
-  { label: '📅 Special Event',   title: 'Special Event This Week!',  body: 'Join us for a special event — details inside!' },
-];
 
 // ── Unicode bold/italic helpers (push notifications are plain text,
 //    so we use Unicode Mathematical Sans-Serif chars for styling) ──────────────
@@ -4019,8 +4022,8 @@ async function loadNotificationsTab() {
             <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
           </div>
           <div class="text-right">
-            <div class="text-xs text-white/40">Custom = 2 credits</div>
-            <div class="text-xs text-white/40">Template = 1 credit</div>
+            <div class="text-xs text-white/40">Custom notification = 2 credits</div>
+            <div class="text-xs text-white/40">Event / Deal notify = 2 credits</div>
           </div>
         </div>
 
@@ -4107,17 +4110,6 @@ async function loadNotificationsTab() {
         </button>
       </div>
 
-      <!-- ── Quick templates ── -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2">
-        <h4 class="font-bold text-white">⚡ Quick Templates <span class="text-xs font-normal text-white/40">(1 credit each)</span></h4>
-        <p class="text-xs text-white/50 mb-1">Tap to pre-fill the form above, then customise and send.</p>
-        ${NOTIF_TEMPLATES.map((t, i) => `
-          <button onclick="applyNotifTemplate(${i})"
-                  class="w-full text-left bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 transition-all">
-            ${t.label}
-          </button>`).join('')}
-      </div>
-
     </div>`;
 
   // Wire up live preview
@@ -4134,19 +4126,6 @@ async function loadNotificationsTab() {
   titleInput?.addEventListener('input', updatePreview);
   bodyInput?.addEventListener('input',  updatePreview);
 }
-
-window.applyNotifTemplate = function(index) {
-  const t = NOTIF_TEMPLATES[index];
-  if (!t) return;
-  const titleEl = document.getElementById('customTitle');
-  const bodyEl  = document.getElementById('customBody');
-  if (titleEl) { titleEl.value = t.title; titleEl.dispatchEvent(new Event('input')); }
-  if (bodyEl)  { bodyEl.value  = t.body;  bodyEl.dispatchEvent(new Event('input'));  }
-  // Scroll form into view and focus body so they can customise immediately
-  bodyEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  bodyEl?.focus();
-  showToast('Template applied — customise then send!', 'success');
-};
 
 window.saveOwnerBusinessChanges = async function () {
   const name        = document.getElementById('ownerBizName')?.value.trim()        || '';
@@ -4229,25 +4208,28 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
-
   const title = document.getElementById('dealTitle').value.trim();
   const desc = document.getElementById('dealDesc').value.trim();
   const expires = document.getElementById('dealExpires').value;
   const category = document.getElementById('dealCategory').value;
+  const sendNotify = document.getElementById('dealNotify')?.checked || false;
 
   if (!title) return showToast('Deal title required', 'error');
 
+  // Only check credits if they want to send a notification
+  if (sendNotify && !(await checkNotificationCredits(2))) return;
+
   try {
     const res = await apiPost('/owner/deals', { 
-      title, description: desc, expires, category 
+      title, description: desc, expires, category, sendNotify
     });
 
     if (res._id) {
-      showToast('🔥 Deal posted!', 'success');
+      showToast(sendNotify ? '🔥 Deal posted & notification sent!' : '🔥 Deal posted!', 'success');
       // Clear fields
       document.getElementById('dealTitle').value = '';
       document.getElementById('dealDesc').value = '';
+      if (document.getElementById('dealNotify')) document.getElementById('dealNotify').checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -4263,27 +4245,30 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
-
   const title = document.getElementById('eventTitle').value.trim();
   const date = document.getElementById('eventDate').value;
   const location = document.getElementById('eventLocation').value.trim();
   const desc = document.getElementById('eventDesc').value.trim();
   const category = document.getElementById('eventCategory').value;
+  const sendNotify = document.getElementById('eventNotify')?.checked || false;
 
   if (!title || !date) return showToast('Title and date required', 'error');
 
+  // Only check credits if they want to send a notification
+  if (sendNotify && !(await checkNotificationCredits(2))) return;
+
   try {
     const res = await apiPost('/owner/events', { 
-      title, date, location, description: desc, category 
+      title, date, location, description: desc, category, sendNotify
     });
 
     if (res._id) {
-      showToast('📅 Event posted!', 'success');
+      showToast(sendNotify ? '📅 Event posted & notification sent!' : '📅 Event posted!', 'success');
       // Clear fields
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';
+      if (document.getElementById('eventNotify')) document.getElementById('eventNotify').checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -8061,7 +8046,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
+  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nEvent / Deal Notify = 2 credits`, 'success');
 };
 
 window.saveOwnerBusinessLogo = async function() {

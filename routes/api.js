@@ -2767,7 +2767,7 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category } = req.body;
+    const { title, description, expires, category, sendNotify } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2781,16 +2781,26 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-broadcastPush(
-  '🔥 New Deal Available!',
-  title,
-  { 
-    page: 'deals', 
-    id: deal._id.toString(),
-    url: `/deals/${deal._id}`
-  },
-  { type: 'deal' }
-);
+    // Only broadcast & deduct credits if the owner opted in
+    if (sendNotify) {
+      const bizName = user.verifiedBusiness?.name || user.name;
+      const deducted = await deductNotificationCredit(req.userId);
+      if (deducted) {
+        broadcastPush(
+          `🔥 New Deal — ${bizName}`,
+          title,
+          {
+            page: 'deals',
+            id: deal._id.toString(),
+            url: `/deals/${deal._id}`
+          },
+          { type: 'deal' }
+        );
+      }
+      // Return updated credit balance alongside the deal
+      const updated = await User.findById(req.userId).select('notificationCredits');
+      return res.json({ ...deal.toObject(), credits: updated.notificationCredits ?? 0 });
+    }
 
     res.json(deal);
   } catch (err) {
@@ -2819,7 +2829,7 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category } = req.body;
+    const { title, date, location, description, category, sendNotify } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2832,16 +2842,26 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    broadcastPush(
-    '📅 New Event Posted!',
-    title + (location ? ` · ${location}` : ''),
-    { 
-    page: 'events', 
-    id: event._id.toString(),
-    url: `/events/${event._id}`
-    },
-    { type: 'event' }
-);
+    // Only broadcast & deduct credits if the owner opted in
+    if (sendNotify) {
+      const bizName = user.verifiedBusiness?.name || user.name;
+      const deducted = await deductNotificationCredit(req.userId);
+      if (deducted) {
+        broadcastPush(
+          `📅 New Event — ${bizName}`,
+          title + (location ? ` · ${location}` : ''),
+          {
+            page: 'events',
+            id: event._id.toString(),
+            url: `/events/${event._id}`
+          },
+          { type: 'event' }
+        );
+      }
+      // Return updated credit balance alongside the event
+      const updated = await User.findById(req.userId).select('notificationCredits');
+      return res.json({ ...event.toObject(), credits: updated.notificationCredits ?? 0 });
+    }
 
     res.json(event);
   } catch (err) {
