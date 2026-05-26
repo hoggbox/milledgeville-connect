@@ -884,7 +884,6 @@ async function sendPushToUser(userId, title, body, data = {}) {
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
 
-  // Prefer native FCM (Android app)
   if (sub.nativeToken) {
     try {
       const message = {
@@ -921,7 +920,6 @@ async function sendPushToUser(userId, title, body, data = {}) {
     }
   }
 
-  // Web Push fallback
   if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
     try {
       await webpush.sendNotification(

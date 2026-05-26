@@ -1,4 +1,4 @@
-// public/sw.js — improved deep-link + thumbnail support
+// public/sw.js — fixed deep link + thumbnail support
 self.addEventListener('push', event => {
   const payload = event.data?.json() || {};
   const options = {
@@ -47,7 +47,7 @@ self.addEventListener('notificationclick', event => {
         return;
       }
 
-      // Case 3: App is completely closed — open with query params
+      // Case 3: App was completely closed → open with query params
       const url = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}`;
       return self.clients.openWindow(url);
     })
