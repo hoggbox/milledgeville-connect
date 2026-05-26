@@ -3804,12 +3804,24 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       const deducted = await deductNotificationCredit(req.userId);
       if (deducted) {
         const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-await broadcastPush(
-  pushTitle,
-  caption?.trim() || 'Posted a new photo update — tap to see it!',
-  { page: 'business-post', id: post._id.toString(), bizId: user.verifiedBusiness._id.toString() },
-  { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
-);
+        const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
+
+        const subs = await PushSubscription.find({
+          $or: [
+            { nativeToken: { $exists: true, $ne: null } },
+            { 'subscription.endpoint': { $exists: true, $ne: null } }
+          ]
+        });
+
+        for (const sub of subs) {
+          await sendPushToUser(
+            sub.user,
+            pushTitle,
+            caption?.trim() || 'Posted a new photo update — tap to see it!',
+            { page: 'business-post', id: post._id.toString() },
+            thumbUrl
+          );
+        }
       }
     }
 

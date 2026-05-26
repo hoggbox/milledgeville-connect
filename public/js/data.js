@@ -135,13 +135,14 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-  else if (page === 'business-post') {
-    if (id) showBusinessPostModal(id);
-    else navigate('home');
+else if (page === 'business-post') {
+  if (id) {
+    navigate('directory');
+    setTimeout(() => showBusinessPostModal(id), 800);
+  } else {
+    navigate('home');
   }
-  else {
-    navigate(page);
-  }
+}
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -163,16 +164,15 @@ if ('serviceWorker' in navigator) {
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
-    const page = params.get('notif_page');
-    const id   = params.get('notif_id');
-    if (page) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setTimeout(() => {
-        if (typeof window.handlePushNotificationClick === 'function') {
-          window.handlePushNotificationClick({ page, id });
-        }
-      }, 2200);
-    }
+const page  = params.get('notif_page');
+const id    = params.get('notif_id');
+const bizId = params.get('notif_bizId') || '';
+if (page) {
+  window.history.replaceState({}, document.title, window.location.pathname);
+  setTimeout(() => {
+    window.handlePushNotificationClick({ page, id, bizId });
+  }, 2200);
+}
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
   }
