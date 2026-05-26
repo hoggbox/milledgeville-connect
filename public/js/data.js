@@ -135,6 +135,10 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
+  else if (page === 'business-post') {
+    if (id) showBusinessPostModal(id);
+    else navigate('home');
+  }
   else {
     navigate(page);
   }
@@ -3733,12 +3737,6 @@ const tabs = [
             ${dealAutoHint}
             <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
             <input id="dealExpires" type="date" class="${inputClass}">
-            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
-              <input type="checkbox" id="dealNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="dealNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(2 credits)</span>
-              </label>
-            </div>
             <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Active Deals</p>
@@ -3758,12 +3756,6 @@ const tabs = [
               ${eventCatOptions}
             </select>
             <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
-            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
-              <input type="checkbox" id="eventNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="eventNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(2 credits)</span>
-              </label>
-            </div>
             <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Events</p>
@@ -3880,8 +3872,8 @@ const tabs = [
     <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
     <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom notification to all users (2 credits)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Notify on Events & Deals you post (2 credits each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
     </div>
     <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
@@ -3927,6 +3919,209 @@ window.switchDashTab = function (tabId) {
 };
 
 // ─── NOTIFICATIONS TAB LOADER ────────────────────────────────────────────────
+
+// Templates stored in JS so onclick never needs JSON.stringify inside attributes
+// ─── BUSINESS PHOTO POST HELPERS ─────────────────────────────────────────────
+
+let _bizPostPendingImage = null; // base64 data URL
+
+window.handleBizPostImageSelect = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 4 * 1024 * 1024) {
+    showToast('Image must be under 4 MB', 'error');
+    input.value = '';
+    return;
+  }
+
+  try {
+    const compressed = await compressImage(file, 1200, 0.80);
+    const reader = new FileReader();
+    reader.onload = e => {
+      _bizPostPendingImage = e.target.result;
+      const preview = document.getElementById('bizPostImagePreview');
+      const clearBtn = document.getElementById('bizPostImageClear');
+      if (preview) {
+        preview.innerHTML = `<img src="${_bizPostPendingImage}" class="w-full h-full object-cover rounded-2xl">`;
+        preview.classList.remove('border-dashed', 'border-white/20');
+        preview.classList.add('border-emerald-400/40');
+        preview.onclick = null; // disable re-pick tap on the preview image itself
+      }
+      if (clearBtn) clearBtn.classList.remove('hidden');
+    };
+    reader.readAsDataURL(compressed);
+  } catch (e) {
+    showToast('Failed to process image', 'error');
+  }
+};
+
+window.clearBizPostImage = function() {
+  _bizPostPendingImage = null;
+  const preview  = document.getElementById('bizPostImagePreview');
+  const clearBtn = document.getElementById('bizPostImageClear');
+  const input    = document.getElementById('bizPostImageInput');
+  if (input)    input.value = '';
+  if (clearBtn) clearBtn.classList.add('hidden');
+  if (preview) {
+    preview.innerHTML = `
+      <span class="text-3xl">📷</span>
+      <span class="text-sm text-white/50">Tap to add photo</span>
+      <span class="text-xs text-white/30">JPEG · PNG · WebP · max 4 MB</span>`;
+    preview.classList.add('border-dashed', 'border-white/20');
+    preview.classList.remove('border-emerald-400/40');
+    preview.onclick = () => document.getElementById('bizPostImageInput').click();
+  }
+};
+
+window.submitBizPhotoPost = async function() {
+  if (!_bizPostPendingImage) {
+    showToast('Please select a photo first', 'error');
+    return;
+  }
+
+  const caption    = document.getElementById('bizPostCaption')?.value.trim() || '';
+  const sendNotify = document.getElementById('bizPostNotify')?.checked ?? true;
+
+  if (sendNotify && !(await checkNotificationCredits(2))) return;
+
+  const btn = document.querySelector('#notificationsContent button[onclick="submitBizPhotoPost()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+
+  try {
+    const res = await apiPost('/owner/business-posts', {
+      image: _bizPostPendingImage,
+      caption,
+      sendNotify
+    });
+
+    if (res._id) {
+      showToast(sendNotify ? '📸 Photo posted & notification sent!' : '📸 Photo posted!', 'success');
+      // Reset form
+      clearBizPostImage();
+      const captionEl = document.getElementById('bizPostCaption');
+      if (captionEl) captionEl.value = '';
+      // Refresh credit display
+      if (res.credits !== undefined) {
+        const creditEl = document.getElementById('notifCreditDisplay');
+        if (creditEl) creditEl.textContent = res.credits;
+      }
+      // Refresh post history
+      loadBizPostHistory();
+    } else {
+      showToast(res.message || 'Failed to post', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to post photo update', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📸 Post Photo Update'; }
+  }
+};
+
+async function loadBizPostHistory() {
+  const el = document.getElementById('bizPostHistory');
+  if (!el) return;
+
+  try {
+    const posts = await apiGet('/owner/business-posts');
+    if (!posts.length) {
+      el.innerHTML = `<p class="text-white/30 text-xs text-center py-3">No photo posts yet.</p>`;
+      return;
+    }
+    el.innerHTML = posts.map(p => `
+      <div class="flex gap-3 items-start bg-white/5 border border-white/10 rounded-2xl p-3">
+        <img src="${p.image}" class="w-16 h-16 object-cover rounded-xl flex-shrink-0 cursor-pointer"
+             onclick="showBusinessPostModal('${p._id}')">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-white/80 leading-snug line-clamp-2">${esc(p.caption) || '<span class="text-white/30 italic">No caption</span>'}</p>
+          <p class="text-[10px] text-white/30 mt-1">${timeAgo(p.createdAt)}</p>
+        </div>
+        <button onclick="deleteBizPost('${p._id}')" class="text-red-400 hover:text-red-300 text-lg flex-shrink-0 ml-1">🗑️</button>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<p class="text-red-400 text-xs text-center py-3">Failed to load posts</p>`;
+  }
+}
+
+window.deleteBizPost = async function(id) {
+  if (!confirm('Delete this photo post?')) return;
+  try {
+    await apiDelete(`/owner/business-posts/${id}`);
+    showToast('Post deleted', 'success');
+    loadBizPostHistory();
+  } catch (e) {
+    showToast('Failed to delete post', 'error');
+  }
+};
+
+// ─── BUSINESS POST DETAIL MODAL (deep-link target) ───────────────────────────
+window.showBusinessPostModal = async function(postId) {
+  // Remove any existing instance
+  const existing = document.getElementById('bizPostDetailModal');
+  if (existing) existing.remove();
+
+  // Show a quick loading shell
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="bizPostDetailModal"
+         onclick="if(event.target.id==='bizPostDetailModal') document.getElementById('bizPostDetailModal').remove()"
+         class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <span class="text-sm font-semibold text-white/70">Business Update</span>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+        <div id="bizPostDetailBody" class="flex-1 overflow-y-auto flex items-center justify-center py-16">
+          <div class="w-8 h-8 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
+        </div>
+      </div>
+    </div>`);
+
+  try {
+    const post = await apiGet(`/business-posts/post/${postId}`);
+
+    document.getElementById('bizPostDetailBody').innerHTML = `
+      <!-- Full image -->
+      <div class="w-full bg-black flex items-center justify-center">
+        <img src="${post.image}" class="w-full max-h-[60vh] object-contain" alt="Business photo update">
+      </div>
+
+      <!-- Meta -->
+      <div class="p-5 space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">📸</div>
+          <div>
+            <p class="font-bold text-white leading-tight">${esc(post.bizName)}</p>
+            <p class="text-xs text-white/40">${timeAgo(post.createdAt)}</p>
+          </div>
+        </div>
+
+        ${post.caption ? `
+        <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
+
+        <div class="flex gap-3 pt-2">
+          <button onclick="shareContent('business-post', '${esc(post.bizName)}', '${esc(post.caption || '')}')"
+                  class="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
+            🔗 Share
+          </button>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()"
+                  class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white/70 rounded-2xl text-sm font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>`;
+  } catch (e) {
+    document.getElementById('bizPostDetailBody').innerHTML = `
+      <div class="p-8 text-center text-white/40">
+        <p class="text-4xl mb-3">😕</p>
+        <p class="text-sm">This post could not be loaded.</p>
+      </div>`;
+  }
+};
+
+window.applyNotifTemplate = function() {}; // no-op stub — templates removed
 
 // ── Unicode bold/italic helpers (push notifications are plain text,
 //    so we use Unicode Mathematical Sans-Serif chars for styling) ──────────────
@@ -4022,8 +4217,8 @@ async function loadNotificationsTab() {
             <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
           </div>
           <div class="text-right">
+            <div class="text-xs text-white/40">Photo post notify = 2 credits</div>
             <div class="text-xs text-white/40">Custom notification = 2 credits</div>
-            <div class="text-xs text-white/40">Event / Deal notify = 2 credits</div>
           </div>
         </div>
 
@@ -4044,10 +4239,63 @@ async function loadNotificationsTab() {
         <p class="text-[10px] text-white/40 mt-2 text-center">One-time credit packs never expire. Pro members get 12 fresh credits every month.</p>
       </div>
 
+      <!-- ── Photo Post form ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+        <h4 class="font-bold text-white">📸 Photo Update</h4>
+        <p class="text-xs text-white/50">Post a photo with a caption — great for before/after shots, new arrivals, or anything visual. Users can tap the notification to see the full image.</p>
+
+        <!-- From badge -->
+        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+          <span class="text-xs text-white/40">From:</span>
+          <span class="text-sm font-semibold text-emerald-400">${bizName}</span>
+        </div>
+
+        <!-- Image picker -->
+        <div id="bizPostImageWrap" class="relative">
+          <div id="bizPostImagePreview" 
+               class="w-full aspect-video bg-white/5 border-2 border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400/50 hover:bg-white/10 transition-all overflow-hidden"
+               onclick="document.getElementById('bizPostImageInput').click()">
+            <span class="text-3xl">📷</span>
+            <span class="text-sm text-white/50">Tap to add photo</span>
+            <span class="text-xs text-white/30">JPEG · PNG · WebP · max 4 MB</span>
+          </div>
+          <input id="bizPostImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+                 onchange="handleBizPostImageSelect(this)">
+          <button id="bizPostImageClear" onclick="clearBizPostImage()" 
+                  class="hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center hover:bg-red-600 transition">×</button>
+        </div>
+
+        <!-- Caption -->
+        <textarea id="bizPostCaption" rows="3"
+                  placeholder="Caption — describe what's in the photo (e.g. Before &amp; after carpet clean today!)"
+                  class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+
+        <!-- Notify toggle -->
+        <div class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
+          <input type="checkbox" id="bizPostNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+          <label for="bizPostNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+            📢 Send push notification to all users <span class="text-amber-400 font-semibold">(2 credits)</span>
+          </label>
+        </div>
+
+        <button onclick="submitBizPhotoPost()"
+                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all shadow-lg">
+          📸 Post Photo Update
+        </button>
+      </div>
+
+      <!-- ── Past photo posts ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+        <h4 class="font-bold text-white text-sm">Your Photo Posts</h4>
+        <div id="bizPostHistory" class="space-y-3">
+          <div class="text-white/30 text-xs text-center py-4">Loading…</div>
+        </div>
+      </div>
+
       <!-- ── Custom notification form ── -->
       <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
         <h4 class="font-bold text-white">📢 Send Custom Notification</h4>
-        <p class="text-xs text-white/50">Broadcasts a push to all users. Costs 2 credits.</p>
+        <p class="text-xs text-white/50">Text-only broadcast to all users. Costs 2 credits.</p>
 
         <!-- From badge -->
         <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
@@ -4087,7 +4335,7 @@ async function loadNotificationsTab() {
           </div>
 
           <!-- Body textarea — directly below toolbar, top corners flat -->
-          <textarea id="customBody" rows="4"
+          <textarea id="customBody" rows="3"
                     placeholder="Message body — select any text then tap B or I to style it…"
                     class="w-full bg-white/10 border border-white/10 rounded-b-xl rounded-t-none px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none font-mono"></textarea>
         </div>
@@ -4105,8 +4353,8 @@ async function loadNotificationsTab() {
         </div>
 
         <button onclick="sendCustomNotification()"
-                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all shadow-lg">
-          📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>
+                class="w-full bg-white/10 hover:bg-white/20 active:scale-95 text-white py-3 rounded-2xl font-bold text-sm transition-all border border-white/10">
+          📢 Send Text-Only to All Users <span class="opacity-60 font-normal">(2 credits)</span>
         </button>
       </div>
 
@@ -4125,6 +4373,9 @@ async function loadNotificationsTab() {
 
   titleInput?.addEventListener('input', updatePreview);
   bodyInput?.addEventListener('input',  updatePreview);
+
+  // Load past photo posts
+  loadBizPostHistory();
 }
 
 window.saveOwnerBusinessChanges = async function () {
@@ -4208,28 +4459,25 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
+
   const title = document.getElementById('dealTitle').value.trim();
   const desc = document.getElementById('dealDesc').value.trim();
   const expires = document.getElementById('dealExpires').value;
   const category = document.getElementById('dealCategory').value;
-  const sendNotify = document.getElementById('dealNotify')?.checked || false;
 
   if (!title) return showToast('Deal title required', 'error');
 
-  // Only check credits if they want to send a notification
-  if (sendNotify && !(await checkNotificationCredits(2))) return;
-
   try {
     const res = await apiPost('/owner/deals', { 
-      title, description: desc, expires, category, sendNotify
+      title, description: desc, expires, category 
     });
 
     if (res._id) {
-      showToast(sendNotify ? '🔥 Deal posted & notification sent!' : '🔥 Deal posted!', 'success');
+      showToast('🔥 Deal posted!', 'success');
       // Clear fields
       document.getElementById('dealTitle').value = '';
       document.getElementById('dealDesc').value = '';
-      if (document.getElementById('dealNotify')) document.getElementById('dealNotify').checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -4245,30 +4493,27 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
+
   const title = document.getElementById('eventTitle').value.trim();
   const date = document.getElementById('eventDate').value;
   const location = document.getElementById('eventLocation').value.trim();
   const desc = document.getElementById('eventDesc').value.trim();
   const category = document.getElementById('eventCategory').value;
-  const sendNotify = document.getElementById('eventNotify')?.checked || false;
 
   if (!title || !date) return showToast('Title and date required', 'error');
 
-  // Only check credits if they want to send a notification
-  if (sendNotify && !(await checkNotificationCredits(2))) return;
-
   try {
     const res = await apiPost('/owner/events', { 
-      title, date, location, description: desc, category, sendNotify
+      title, date, location, description: desc, category 
     });
 
     if (res._id) {
-      showToast(sendNotify ? '📅 Event posted & notification sent!' : '📅 Event posted!', 'success');
+      showToast('📅 Event posted!', 'success');
       // Clear fields
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';
-      if (document.getElementById('eventNotify')) document.getElementById('eventNotify').checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -8046,7 +8291,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nEvent / Deal Notify = 2 credits`, 'success');
+  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
 };
 
 window.saveOwnerBusinessLogo = async function() {

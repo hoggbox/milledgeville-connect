@@ -28,7 +28,8 @@ const PushSubscription = require('../models/PushSubscription');
 const LostItem        = require('../models/LostItem');
 const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
-const Report = require('../models/Report');
+const Report          = require('../models/Report');
+const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
@@ -2767,7 +2768,7 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category, sendNotify } = req.body;
+    const { title, description, expires, category } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2781,26 +2782,16 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-    // Only broadcast & deduct credits if the owner opted in
-    if (sendNotify) {
-      const bizName = user.verifiedBusiness?.name || user.name;
-      const deducted = await deductNotificationCredit(req.userId);
-      if (deducted) {
-        broadcastPush(
-          `🔥 New Deal — ${bizName}`,
-          title,
-          {
-            page: 'deals',
-            id: deal._id.toString(),
-            url: `/deals/${deal._id}`
-          },
-          { type: 'deal' }
-        );
-      }
-      // Return updated credit balance alongside the deal
-      const updated = await User.findById(req.userId).select('notificationCredits');
-      return res.json({ ...deal.toObject(), credits: updated.notificationCredits ?? 0 });
-    }
+broadcastPush(
+  '🔥 New Deal Available!',
+  title,
+  { 
+    page: 'deals', 
+    id: deal._id.toString(),
+    url: `/deals/${deal._id}`
+  },
+  { type: 'deal' }
+);
 
     res.json(deal);
   } catch (err) {
@@ -2829,7 +2820,7 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category, sendNotify } = req.body;
+    const { title, date, location, description, category } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2842,26 +2833,16 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    // Only broadcast & deduct credits if the owner opted in
-    if (sendNotify) {
-      const bizName = user.verifiedBusiness?.name || user.name;
-      const deducted = await deductNotificationCredit(req.userId);
-      if (deducted) {
-        broadcastPush(
-          `📅 New Event — ${bizName}`,
-          title + (location ? ` · ${location}` : ''),
-          {
-            page: 'events',
-            id: event._id.toString(),
-            url: `/events/${event._id}`
-          },
-          { type: 'event' }
-        );
-      }
-      // Return updated credit balance alongside the event
-      const updated = await User.findById(req.userId).select('notificationCredits');
-      return res.json({ ...event.toObject(), credits: updated.notificationCredits ?? 0 });
-    }
+    broadcastPush(
+    '📅 New Event Posted!',
+    title + (location ? ` · ${location}` : ''),
+    { 
+    page: 'events', 
+    id: event._id.toString(),
+    url: `/events/${event._id}`
+    },
+    { type: 'event' }
+);
 
     res.json(event);
   } catch (err) {
@@ -3792,6 +3773,123 @@ router.get('/app/version', (req, res) => {
 // Check daily whether any billing cycles have rolled over
 setInterval(resetProCredits, 24 * 60 * 60 * 1000); // every 24 hours
 resetProCredits(); // run once on server start
+
+// ─── BUSINESS POSTS (Photo Updates) ──────────────────────────────────────────
+// Verified business owners can create a photo post with a caption.
+// The notification deep-links directly to the individual post.
+
+// POST /api/owner/business-posts — create a new photo post
+router.post('/owner/business-posts', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name');
+    if (!user)                  return res.status(404).json({ message: 'User not found' });
+    if (!user.verifiedBusiness) return res.status(403).json({ message: 'Only verified business owners can post updates' });
+
+    const { caption, image, sendNotify } = req.body;
+
+    if (!image?.trim()) return res.status(400).json({ message: 'An image is required' });
+
+    // Validate it's a real base64 data URL (jpeg/png/webp only)
+    if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) {
+      return res.status(400).json({ message: 'Image must be a valid JPEG, PNG, or WebP' });
+    }
+
+    // Enforce a ~4 MB base64 limit (4 MB raw ≈ 5.5 MB base64)
+    if (image.length > 5_600_000) {
+      return res.status(400).json({ message: 'Image is too large (max 4 MB)' });
+    }
+
+    const bizName = user.verifiedBusiness.name || user.name;
+
+    const post = await BusinessPost.create({
+      business:   user.verifiedBusiness._id,
+      owner:      user._id,
+      bizName,
+      caption:    (caption || '').trim().substring(0, 500),
+      image,
+    });
+
+    // Optional push notification — costs 2 credits
+    if (sendNotify) {
+      const deducted = await deductNotificationCredit(req.userId);
+      if (deducted) {
+        await broadcastPush(
+          `📸 ${bizName}`,
+          caption?.trim() || 'Posted a new photo update — tap to see it!',
+          { page: 'business-post', id: post._id.toString() },
+          { type: 'business-post' }
+        );
+      }
+    }
+
+    const updated = await User.findById(req.userId).select('notificationCredits');
+    res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
+  } catch (err) {
+    console.error('Business post create error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business-posts/:businessId — fetch all posts for one business (public)
+router.get('/business-posts/:businessId', async (req, res) => {
+  try {
+    const posts = await BusinessPost
+      .find({ business: req.params.businessId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
+router.get('/business-posts/post/:postId', async (req, res) => {
+  try {
+    const post = await BusinessPost.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business-posts — recent posts from all businesses (public feed)
+router.get('/business-posts', async (req, res) => {
+  try {
+    const posts = await BusinessPost
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(30);
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/owner/business-posts — owner's own posts
+router.get('/owner/business-posts', authenticate, async (req, res) => {
+  try {
+    const posts = await BusinessPost
+      .find({ owner: req.userId })
+      .sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/owner/business-posts/:id — owner deletes their own post
+router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
+  try {
+    const post = await BusinessPost.findOne({ _id: req.params.id, owner: req.userId });
+    if (!post) return res.status(404).json({ message: 'Post not found or not yours' });
+    await post.deleteOne();
+    res.json({ message: 'Post deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
