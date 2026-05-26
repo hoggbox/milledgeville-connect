@@ -49,6 +49,10 @@ function deepSanitize(obj, depth = 0) {
   }
 
   if (typeof obj === 'string') {
+    // Don't truncate base64 image data URLs (they are often 100k+ chars)
+    if (obj.startsWith('data:image/')) {
+      return obj.replace(/\0/g, '');
+    }
     return obj.replace(/\0/g, '').substring(0, 10000);
   }
   return obj;
