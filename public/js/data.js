@@ -147,6 +147,9 @@ window.handlePushNotificationClick = function(data) {
 // ─── Service Worker → App message bridge ────────────────────────────────────
 // When the SW receives a notification click and the app is already open,
 // it posts a message instead of doing a hard navigate so we can deep-link in-place.
+// ─── Service Worker → App message bridge ────────────────────────────────────
+// When the SW receives a notification click and the app is already open,
+// it posts a message instead of doing a hard navigate so we can deep-link in-place.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PUSH_NOTIFICATION_CLICK') {
@@ -154,6 +157,26 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// ─── COLD LAUNCH DEEP LINK HANDLER ──────────────────────────────────────────
+// Handles when app is opened from a closed state via notification
+(function handleColdLaunchDeepLink() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const page = params.get('notif_page');
+    const id   = params.get('notif_id');
+    if (page) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => {
+        if (typeof window.handlePushNotificationClick === 'function') {
+          window.handlePushNotificationClick({ page, id });
+        }
+      }, 1400);
+    }
+  } catch (e) {
+    console.warn('Cold launch deep-link handler failed:', e);
+  }
+})();
 
 // ─── Guest auth nudge banner ──────────────────────────────────────────────────
 function guestBanner(action) {

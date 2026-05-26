@@ -1,35 +1,55 @@
-// public/sw.js
+// public/sw.js — improved deep-link + thumbnail support
 self.addEventListener('push', event => {
-  const data = event.data.json();
+  const payload = event.data?.json() || {};
   const options = {
-    body: data.body || '',
-    icon: '/icon-192.png',
-    badge: '/badge.png',
-    data: data.data || {},
-    tag: data.tag || 'default'
+    body:  payload.body  || '',
+    icon:  payload.icon  || '/icon-192.png',
+    badge: payload.badge || '/icon-192.png',
+    data:  payload.data  || {},
+    tag:   payload.tag   || 'default'
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Milledgeville Connect', options)
+    self.registration.showNotification(payload.title || 'Milledgeville Connect', options)
   );
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
 
-  const data = event.notification.data || {};
-  if (data.page) {
-    // Send to main app
-    self.clients.matchAll({ type: 'window' }).then(clients => {
-      if (clients.length) {
-        clients[0].focus();
-        clients[0].postMessage({
+  const data   = event.notification.data || {};
+  const page   = data.page || 'home';
+  const id     = data.id   || '';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      // Case 1: App is already open and visible
+      const visibleClient = windowClients.find(c => c.visibilityState === 'visible');
+      if (visibleClient) {
+        visibleClient.focus();
+        visibleClient.postMessage({
           type: 'PUSH_NOTIFICATION_CLICK',
-          data: data
+          data: { page, id }
         });
-      } else {
-        self.clients.openWindow('/app.html');
+        return;
       }
-    });
-  }
+
+      // Case 2: App is open but in background
+      const backgroundClient = windowClients.find(c => c.url.includes(self.location.origin));
+      if (backgroundClient) {
+        backgroundClient.focus();
+        setTimeout(() => {
+          backgroundClient.postMessage({
+            type: 'PUSH_NOTIFICATION_CLICK',
+            data: { page, id }
+          });
+        }, 300);
+        return;
+      }
+
+      // Case 3: App is completely closed — open with query params
+      const url = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}`;
+      return self.clients.openWindow(url);
+    })
+  );
 });

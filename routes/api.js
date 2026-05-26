@@ -882,12 +882,18 @@ async function sendPushToUser(userId, title, body, data = {}) {
     return false;
   }
 
-  // Prefer native FCM (Android app) — only send one
+  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
+
+  // Prefer native FCM (Android app)
   if (sub.nativeToken) {
     try {
       const message = {
         token: sub.nativeToken,
-        notification: { title, body },
+        notification: { 
+          title, 
+          body,
+          imageUrl: APP_ICON
+        },
         data: {
           page: data.page || '',
           id:   data.id   || '',
@@ -897,7 +903,8 @@ async function sendPushToUser(userId, title, body, data = {}) {
           priority: 'high',
           notification: {
             sound: 'default',
-            channelId: 'default'
+            channelId: 'default',
+            imageUrl: APP_ICON
           }
         }
       };
@@ -914,12 +921,18 @@ async function sendPushToUser(userId, title, body, data = {}) {
     }
   }
 
-  // Fallback to Web Push only if no native token
+  // Web Push fallback
   if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
     try {
       await webpush.sendNotification(
         sub.subscription,
-        JSON.stringify({ title, body, data })
+        JSON.stringify({ 
+          title, 
+          body, 
+          data,
+          icon: APP_ICON,
+          badge: APP_ICON
+        })
       );
       console.log(`✅ Web push sent to ${userId}`);
       return true;
@@ -3831,6 +3844,18 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
+// MUST come BEFORE the generic /:businessId route
+router.get('/business-posts/post/:postId', async (req, res) => {
+  try {
+    const post = await BusinessPost.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /api/business-posts/:businessId — fetch all posts for one business (public)
 router.get('/business-posts/:businessId', async (req, res) => {
   try {
@@ -3839,17 +3864,6 @@ router.get('/business-posts/:businessId', async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50);
     res.json(posts);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
-router.get('/business-posts/post/:postId', async (req, res) => {
-  try {
-    const post = await BusinessPost.findById(req.params.postId);
-    if (!post) return res.status(404).json({ message: 'Post not found' });
-    res.json(post);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
