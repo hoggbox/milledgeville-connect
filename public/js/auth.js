@@ -41,23 +41,27 @@ function hideAuthModal() {
 }
 
 function switchToLogin() {
-  const loginForm = document.getElementById('loginForm');
-  const registerForm = document.getElementById('registerForm');
-  const modalTitle = document.getElementById('modalTitle');
+  const loginForm       = document.getElementById('loginForm');
+  const registerForm    = document.getElementById('registerForm');
+  const forgotForm      = document.getElementById('forgotPasswordForm');
+  const modalTitle      = document.getElementById('modalTitle');
 
-  if (loginForm) loginForm.classList.remove('hidden');
+  if (loginForm)    loginForm.classList.remove('hidden');
   if (registerForm) registerForm.classList.add('hidden');
-  if (modalTitle) modalTitle.textContent = 'Welcome back';
+  if (forgotForm)   forgotForm.classList.add('hidden');
+  if (modalTitle)   modalTitle.textContent = 'Welcome back';
 }
 
 function switchToRegister() {
-  const loginForm = document.getElementById('loginForm');
+  const loginForm    = document.getElementById('loginForm');
   const registerForm = document.getElementById('registerForm');
-  const modalTitle = document.getElementById('modalTitle');
+  const forgotForm   = document.getElementById('forgotPasswordForm');
+  const modalTitle   = document.getElementById('modalTitle');
 
-  if (loginForm) loginForm.classList.add('hidden');
+  if (loginForm)    loginForm.classList.add('hidden');
   if (registerForm) registerForm.classList.remove('hidden');
-  if (modalTitle) modalTitle.textContent = 'Create account';
+  if (forgotForm)   forgotForm.classList.add('hidden');
+  if (modalTitle)   modalTitle.textContent = 'Create account';
 }
 
 // ─── Prompt guests to sign in for gated actions ───────────────────────────────
@@ -68,10 +72,12 @@ function requireAuth(msg) {
 }
 
 async function handleRegister() {
-  const name            = document.getElementById('regName').value.trim();
-  const email           = document.getElementById('regEmail').value.trim();
-  const password        = document.getElementById('regPassword').value;
-  const confirmPassword = document.getElementById('regConfirmPassword').value;
+  const name             = document.getElementById('regName').value.trim();
+  const email            = document.getElementById('regEmail').value.trim();
+  const password         = document.getElementById('regPassword').value;
+  const confirmPassword  = document.getElementById('regConfirmPassword').value;
+  const securityQuestion = document.getElementById('regSecurityQuestion').value;
+  const securityAnswer   = document.getElementById('regSecurityAnswer').value.trim();
 
   if (!name || !email || !password || !confirmPassword) {
     return showToast('All fields are required', 'error');
@@ -81,7 +87,15 @@ async function handleRegister() {
     return showToast('Passwords do not match', 'error');
   }
 
-  const result = await apiPost('/auth/register', { name, email, password });
+  if (!securityQuestion) {
+    return showToast('Please select a security question', 'error');
+  }
+
+  if (!securityAnswer) {
+    return showToast('Please provide a security answer', 'error');
+  }
+
+  const result = await apiPost('/auth/register', { name, email, password, securityQuestion, securityAnswer });
 
   if (result.token) {
     const modalTitle = document.getElementById('modalTitle');
@@ -217,6 +231,80 @@ function showToast(message, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
+// ─── Forgot Password ─────────────────────────────────────────────────────────
+function switchToForgotPassword() {
+  const loginForm    = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  const forgotForm   = document.getElementById('forgotPasswordForm');
+  const modalTitle   = document.getElementById('modalTitle');
+  const step1        = document.getElementById('forgotStep1');
+  const step2        = document.getElementById('forgotStep2');
+
+  if (loginForm)    loginForm.classList.add('hidden');
+  if (registerForm) registerForm.classList.add('hidden');
+  if (forgotForm)   forgotForm.classList.remove('hidden');
+  if (step1)        step1.classList.remove('hidden');
+  if (step2)        step2.classList.add('hidden');
+  if (modalTitle)   modalTitle.textContent = 'Reset Password';
+}
+
+async function handleForgotStep1() {
+  const email = document.getElementById('forgotEmail').value.trim();
+  if (!email) return showToast('Please enter your email', 'error');
+
+  const res = await apiPost('/auth/forgot-password/question', { email });
+
+  if (res.question) {
+    const questionLabels = {
+      street:  'What street did you grow up on?',
+      pet:     "What was your first pet's name?",
+      maiden:  "What is your mother's maiden name?",
+      city:    'What city were you born in?',
+      school:  'What elementary school did you attend?',
+      car:     'What was the make of your first car?'
+    };
+
+    const step1 = document.getElementById('forgotStep1');
+    const step2 = document.getElementById('forgotStep2');
+    const questionText = document.getElementById('forgotQuestionText');
+
+    if (questionText) questionText.textContent = questionLabels[res.question] || res.question;
+    if (step1) step1.classList.add('hidden');
+    if (step2) step2.classList.remove('hidden');
+  } else {
+    showToast(res.message || 'Email not found', 'error');
+  }
+}
+
+async function handleForgotStep2() {
+  const email          = document.getElementById('forgotEmail').value.trim();
+  const answer         = document.getElementById('forgotAnswer').value.trim();
+  const newPassword    = document.getElementById('forgotNewPassword').value;
+  const confirmNew     = document.getElementById('forgotConfirmNewPassword').value;
+
+  if (!answer)       return showToast('Please enter your security answer', 'error');
+  if (!newPassword)  return showToast('Please enter a new password', 'error');
+  if (newPassword !== confirmNew) return showToast('Passwords do not match', 'error');
+  if (newPassword.length < 6)    return showToast('Password must be at least 6 characters', 'error');
+
+  const res = await apiPost('/auth/forgot-password/reset', { email, answer, newPassword });
+
+  if (res.success) {
+    const modalTitle = document.getElementById('modalTitle');
+    if (modalTitle) {
+      modalTitle.innerHTML = `
+        <div class="text-emerald-600 text-5xl mb-4">✅</div>
+        Password Reset!<br>
+        <span class="text-xl text-slate-600">You can now log in.</span>`;
+    }
+    const forgotForm = document.getElementById('forgotPasswordForm');
+    if (forgotForm) forgotForm.classList.add('hidden');
+    setTimeout(() => switchToLogin(), 2000);
+  } else {
+    showToast(res.message || 'Incorrect answer', 'error');
+  }
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 window.showAuthModal           = showAuthModal;
 window.hideAuthModal           = hideAuthModal;
@@ -230,3 +318,6 @@ window.requireAuth             = requireAuth;
 window.startVerificationPoll   = startVerificationPoll;
 window.stopVerificationPoll    = stopVerificationPoll;
 window.showToast               = showToast;
+window.switchToForgotPassword  = switchToForgotPassword;
+window.handleForgotStep1       = handleForgotStep1;
+window.handleForgotStep2       = handleForgotStep2;

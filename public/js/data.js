@@ -8693,6 +8693,13 @@ window.showAccountSettingsModal = function() {
               <span class="font-semibold text-sm">Privacy Policy</span>
             </button>
 
+            <!-- Change Password -->
+            <button onclick="hideAccountSettingsModal(); setTimeout(showChangePasswordModal, 150)" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">🔑</span>
+              <span class="font-semibold text-sm">Change Password</span>
+            </button>
+
             <!-- Delete Account -->
             <div class="bg-red-500/10 border border-red-500/30 rounded-2xl overflow-hidden mt-4">
               <div class="px-5 py-4">
@@ -8719,6 +8726,94 @@ window.showAccountSettingsModal = function() {
 window.hideAccountSettingsModal = function() {
   const modal = document.getElementById('accountSettingsModal');
   if (modal) modal.remove();
+};
+
+// ─── CHANGE PASSWORD MODAL ────────────────────────────────────────────────────
+window.showChangePasswordModal = function() {
+  if (document.getElementById('changePasswordModal')) return;
+
+  const html = `
+    <div id="changePasswordModal"
+         onclick="if(event.target.id==='changePasswordModal') hideChangePasswordModal()"
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[36000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden">
+
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <h2 class="text-lg font-bold flex items-center gap-2">🔑 Change Password</h2>
+          <button onclick="hideChangePasswordModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div class="p-6 space-y-3">
+          <input id="cpCurrentPassword" type="password" placeholder="Current password"
+                 class="w-full bg-white/5 border border-white/10 px-5 py-4 rounded-2xl focus:border-emerald-400 outline-none text-white placeholder:text-white/30">
+          <input id="cpNewPassword" type="password" placeholder="New password"
+                 class="w-full bg-white/5 border border-white/10 px-5 py-4 rounded-2xl focus:border-emerald-400 outline-none text-white placeholder:text-white/30">
+          <input id="cpConfirmPassword" type="password" placeholder="Confirm new password"
+                 class="w-full bg-white/5 border border-white/10 px-5 py-4 rounded-2xl focus:border-emerald-400 outline-none text-white placeholder:text-white/30">
+
+          <div class="flex gap-3 pt-2">
+            <button onclick="hideChangePasswordModal()"
+                    class="flex-1 py-4 rounded-2xl border border-white/20 text-sm font-semibold hover:bg-white/5 transition">
+              Cancel
+            </button>
+            <button onclick="submitChangePassword()"
+                    class="flex-1 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition">
+              Update Password
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.hideChangePasswordModal = function() {
+  const modal = document.getElementById('changePasswordModal');
+  if (modal) modal.remove();
+};
+
+window.submitChangePassword = async function() {
+  const current = document.getElementById('cpCurrentPassword').value;
+  const newPass  = document.getElementById('cpNewPassword').value;
+  const confirm  = document.getElementById('cpConfirmPassword').value;
+
+  if (!current || !newPass || !confirm) {
+    return showToast('All fields are required', 'error');
+  }
+  if (newPass !== confirm) {
+    return showToast('New passwords do not match', 'error');
+  }
+  if (newPass.length < 6) {
+    return showToast('Password must be at least 6 characters', 'error');
+  }
+  if (newPass === current) {
+    return showToast('New password must be different from current', 'error');
+  }
+
+  const btn = document.querySelector('#changePasswordModal button[onclick="submitChangePassword()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+
+  try {
+    const res = await apiPost('/auth/change-password', {
+      currentPassword: current,
+      newPassword: newPass
+    });
+
+    if (res.success) {
+      hideChangePasswordModal();
+      showToast('✅ Password updated successfully!', 'success');
+    } else {
+      showToast(res.message || 'Failed to update password', 'error');
+    }
+  } catch (e) {
+    showToast('Network error — try again', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Update Password'; }
+  }
 };
 
 window.homesPageNav = function(dir) {
