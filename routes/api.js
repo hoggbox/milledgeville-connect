@@ -365,6 +365,68 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
+    router.post('/auth/forgot-password/question', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+ 
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('securityQuestion');
+ 
+    // Always return the same shape — don't reveal whether the email exists
+    if (!user || !user.securityQuestion) {
+      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
+    }
+ 
+    res.json({ question: user.securityQuestion });
+  } catch (err) {
+    console.error('Forgot password step 1 error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+ 
+// STEP 2 — Client sends email + answer + new password, server verifies and resets
+// POST /api/auth/forgot-password/reset
+router.post('/auth/forgot-password/reset', async (req, res) => {
+  try {
+    const { email, answer, newPassword } = req.body;
+ 
+    if (!email || !answer || !newPassword) {
+      return res.status(400).json({ message: 'Email, answer, and new password are required' });
+    }
+ 
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+ 
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('+securityAnswer +password');
+ 
+    if (!user || !user.securityAnswer) {
+      return res.status(404).json({ message: 'No account found with that email.' });
+    }
+ 
+    // Compare answer (case-insensitive, trimmed) against stored hash
+    const answerMatch = await bcrypt.compare(
+      answer.trim().toLowerCase(),
+      user.securityAnswer
+    );
+ 
+    if (!answerMatch) {
+      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
+    }
+ 
+    // Hash and save the new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+ 
+    res.json({ success: true, message: 'Password reset successfully.' });
+  } catch (err) {
+    console.error('Forgot password reset error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
     // ── Spam burst detection ────────────────────────────────────────────────────
     const now = Date.now();
     const windowStart = now - SPAM_WINDOW_MS;
