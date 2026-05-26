@@ -885,16 +885,12 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 
   if (sub.nativeToken) {
     try {
-      const message = {
+      await admin.messaging().send({
         token: sub.nativeToken,
-        notification: { 
-          title, 
-          body,
-          imageUrl: thumb
-        },
+        notification: { title, body, imageUrl: thumb },
         data: {
           page: data.page || '',
-          id:   data.id   || ''
+          id: data.id || ''
         },
         android: {
           priority: 'high',
@@ -904,16 +900,14 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
             imageUrl: thumb
           }
         }
-      };
-      await admin.messaging().send(message);
+      });
       return true;
-    } catch (err) {
-      console.error('FCM error:', err.message);
+    } catch (e) {
+      console.error('FCM error:', e.message);
       return false;
     }
   }
 
-  // Web Push
   if (sub.subscription?.endpoint) {
     try {
       await webpush.sendNotification(
@@ -927,12 +921,11 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         })
       );
       return true;
-    } catch (err) {
-      console.error('Web push error:', err.message);
+    } catch (e) {
+      console.error('Web push error:', e.message);
       return false;
     }
   }
-
   return false;
 }
 

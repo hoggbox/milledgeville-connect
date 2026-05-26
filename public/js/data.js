@@ -4098,17 +4098,18 @@ window.showBusinessPostModal = async function(postId) {
 
   try {
     const post = await apiGet(`/business-posts/post/${postId}`);
-    if (!post) throw new Error('Post not found');
+    if (!post || !post.image) throw new Error('Post not found');
 
     const body = document.getElementById('bizPostDetailBody');
     body.innerHTML = `
       <div class="w-full">
-        <img src="${post.image}" class="w-full max-h-[55vh] object-contain bg-black" 
-             onerror="this.src='/icon-192.png'; this.style.objectFit='contain'">
+        <img src="${post.image}" 
+             class="w-full max-h-[55vh] object-contain bg-black"
+             onerror="this.src='/icon-192.png'">
         
         <div class="p-5">
           <div class="flex items-center gap-3 mb-3">
-            <div class="font-bold">${esc(post.bizName)}</div>
+            <div class="font-bold">${esc(post.bizName || '')}</div>
             <div class="text-xs text-white/40">${timeAgo(post.createdAt)}</div>
           </div>
           
