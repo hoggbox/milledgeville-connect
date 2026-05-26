@@ -330,8 +330,6 @@ router.post('/reports', authenticate, async (req, res) => {
 //       • Mute check                  (isMuted)
 //       • Spam burst detection        (recentPostTimes rolling window)
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTE: Remove / comment-out your existing `router.post('/shoutouts', ...)` handler
-// and paste this one in its place.
 
 router.post('/shoutouts', authenticate, async (req, res) => {
   try {
@@ -1536,28 +1534,6 @@ router.delete('/admin/marketplace/:id', authenticate, requireAdminOrModerator, a
     res.json({ message: 'Marketplace item deleted by admin' });
   } catch (err) {
     res.status(500).json({ message: err.message });
-  }
-});
-
-// Admin — Edit Business
-router.put('/admin/business/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { name, address, phone, email, description } = req.body;
-
-    const business = await Business.findByIdAndUpdate(
-      req.params.id,
-      { name, address, phone, email, description },
-      { new: true, runValidators: true }
-    );
-
-    if (!business) {
-      return res.status(404).json({ message: 'Business not found' });
-    }
-
-    res.json({ message: 'Business updated successfully', business });
-  } catch (e) {
-    console.error('Edit business error:', e);
-    res.status(500).json({ message: 'Server error' });
   }
 });
 
