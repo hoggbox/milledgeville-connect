@@ -324,6 +324,112 @@ router.post('/reports', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PASSWORD RESET & CHANGE ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
+
+// STEP 1 — Client sends email, server returns the security question
+// POST /api/auth/forgot-password/question
+router.post('/auth/forgot-password/question', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('securityQuestion');
+
+    // Always return the same shape — don't reveal whether the email exists
+    if (!user || !user.securityQuestion) {
+      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
+    }
+
+    res.json({ question: user.securityQuestion });
+  } catch (err) {
+    console.error('Forgot password step 1 error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// STEP 2 — Client sends email + answer + new password, server verifies and resets
+// POST /api/auth/forgot-password/reset
+router.post('/auth/forgot-password/reset', async (req, res) => {
+  try {
+    const { email, answer, newPassword } = req.body;
+
+    if (!email || !answer || !newPassword) {
+      return res.status(400).json({ message: 'Email, answer, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('+securityAnswer +password');
+
+    if (!user || !user.securityAnswer) {
+      return res.status(404).json({ message: 'No account found with that email.' });
+    }
+
+    // Compare answer (case-insensitive, trimmed) against stored hash
+    const answerMatch = await bcrypt.compare(
+      answer.trim().toLowerCase(),
+      user.securityAnswer
+    );
+
+    if (!answerMatch) {
+      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
+    }
+
+    // Hash and save the new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ success: true, message: 'Password reset successfully.' });
+  } catch (err) {
+    console.error('Forgot password reset error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/auth/change-password
+router.post('/auth/change-password', authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'New password must be different from current password' });
+    }
+
+    // Fetch user with password field (select: false on password means we must request it)
+    const user = await User.findById(req.userId).select('+password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash and save new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 3.  UPDATED  POST /api/shoutouts  (replace your existing handler)
 //
 //     Adds:
@@ -365,112 +471,6 @@ router.post('/shoutouts', authenticate, async (req, res) => {
         muted: true
       });
     }
-
-    router.post('/auth/forgot-password/question', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required' });
- 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-                           .select('securityQuestion');
- 
-    // Always return the same shape — don't reveal whether the email exists
-    if (!user || !user.securityQuestion) {
-      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
-    }
- 
-    res.json({ question: user.securityQuestion });
-  } catch (err) {
-    console.error('Forgot password step 1 error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
- 
-// STEP 2 — Client sends email + answer + new password, server verifies and resets
-// POST /api/auth/forgot-password/reset
-router.post('/auth/forgot-password/reset', async (req, res) => {
-  try {
-    const { email, answer, newPassword } = req.body;
- 
-    if (!email || !answer || !newPassword) {
-      return res.status(400).json({ message: 'Email, answer, and new password are required' });
-    }
- 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
- 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-                           .select('+securityAnswer +password');
- 
-    if (!user || !user.securityAnswer) {
-      return res.status(404).json({ message: 'No account found with that email.' });
-    }
- 
-    // Compare answer (case-insensitive, trimmed) against stored hash
-    const answerMatch = await bcrypt.compare(
-      answer.trim().toLowerCase(),
-      user.securityAnswer
-    );
- 
-    if (!answerMatch) {
-      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
-    }
- 
-    // Hash and save the new password
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
- 
-    res.json({ success: true, message: 'Password reset successfully.' });
-  } catch (err) {
-    console.error('Forgot password reset error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGE PASSWORD ROUTE
-// Paste this into your server api.js above module.exports = router
-// Requires: authenticate middleware, bcrypt, User model (all already imported)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// POST /api/auth/change-password
-router.post('/auth/change-password', authenticate, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
-    if (currentPassword === newPassword) {
-      return res.status(400).json({ message: 'New password must be different from current password' });
-    }
-
-    // Fetch user with password field (select: false on password means we must request it)
-    const user = await User.findById(req.userId).select('+password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
-    }
-
-    // Hash and save new password
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
-
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (err) {
-    console.error('Change password error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
     // ── Spam burst detection ────────────────────────────────────────────────────
     const now = Date.now();
