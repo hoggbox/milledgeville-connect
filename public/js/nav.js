@@ -14,15 +14,17 @@ function renderNav() {
   const isAdmin = currentUser && currentUser.email === 'imhoggbox@gmail.com';
   const canNews = currentUser && (currentUser.canPostNews || isAdmin);
 
-  const navPages = [...pages];
+  // Verified business owners see My Biz first
+  const navPages = isOwner
+    ? [{ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' }, ...pages]
+    : [...pages];
 
   // Only show Messages button if logged in
   if (currentUser) {
     navPages.push({ id: 'messages', icon: '✉️', label: 'Messages' });
   }
 
-  if (isOwner) navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
-  if (canNews) navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
+  if (canNews) navPages.push({ id: 'post-news', icon: '📰', label: 'Post News' });
 
   // Desktop sidebar nav
   let desktopHTML = '';

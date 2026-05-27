@@ -3554,8 +3554,10 @@ router.post('/owner/buy-credits', authenticate, async (req, res) => {
     res.json({ 
       success: true, 
       credits: user.notificationCredits,
+      added: credits,
       message: `${credits} credits added successfully`
     });
+
   } catch (err) {
     console.error('Buy credits error:', err);
     res.status(500).json({ message: 'Failed to add credits' });

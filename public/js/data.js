@@ -3097,56 +3097,35 @@ let events = allEvents.filter(e => {
   }
 }
 
-function renderEventCard(e, now) {
-  const eDate   = new Date(e.date);
-  const isPast  = eDate < now;
-  const icon    = catIcon(e.category);
-  const label   = e.category || 'General';
+/// Helper to check if user can send notifications
+window.canSendNotification = function(requireVerified = true) {
+  if (!currentUser) {
+    showToast('Please sign in to send notifications', 'error');
+    return false;
+  }
 
-  const rsvpCount = e.rsvps ? e.rsvps.length : 0;
+  // Only verified business owners can send notifications
+  if (requireVerified && !currentUser.verifiedBusiness) {
+    showToast('Only verified business owners can send notifications', 'error');
+    return false;
+  }
 
-  // Gray out + Past badge for events that have already happened
-  const pastStyles = isPast 
-    ? 'opacity-60 grayscale-[0.3] border border-white/10' 
-    : 'border border-white/10 hover:border-emerald-500/30';
+  const credits = currentUser.notificationCredits || 0;
+  const isPro = currentUser.subscriptionTier === 'pro';
 
-  const pastBadge = isPast 
-    ? `<span class="text-[10px] bg-gray-500/30 text-gray-300 px-2 py-0.5 rounded-full">Past Event</span>` 
-    : '';
+  if (credits > 0) {
+    return true; // Has credits → allowed to send
+  }
 
-  const rsvpHTML = currentUser && !isPast ? `
-    <button onclick="toggleRSVP('${e._id}'); event.stopImmediatePropagation()" 
-            class="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2 rounded-2xl text-sm font-semibold transition">
-      ${e.rsvps && e.rsvps.includes(currentUser._id) ? '✅ Going' : '🎟️ RSVP'}
-    </button>` : '';
+  // No credits left
+  if (isPro) {
+    showToast('You are out of credits. Buy more credits to continue sending notifications.', 'error');
+  } else {
+    showToast('You have used your free credits. Upgrade to Pro to get 12 monthly credits.', 'error');
+  }
 
-  return `
-    <div onclick="showEventDetail('${e._id}')" 
-         class="bg-white/10 ${pastStyles} rounded-3xl p-5 cursor-pointer transition">
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
-            ${pastBadge}
-          </div>
-          <h3 class="font-bold text-lg leading-snug">${e.title}</h3>
-          <p class="text-white/70 text-sm mt-1 line-clamp-2">${e.description || ''}</p>
-          
-          <div class="flex items-center gap-2 text-xs text-white/50 mt-3">
-            <span>📅 ${formatDate(e.date)}</span>
-            ${e.location ? `<span>· 📍 ${e.location}</span>` : ''}
-          </div>
-        </div>
-      </div>
-      
-      ${rsvpHTML}
-      
-      ${rsvpCount > 0 ? `
-        <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
-          <span>🎟️</span> <span>${rsvpCount} going</span>
-        </div>` : ''}
-    </div>`;
-}
+  return false;
+};
 
 async function loadResourcesPage(content) {
   content.innerHTML = `
@@ -3562,6 +3541,9 @@ const tabs = [
   const isPro = sub.tier === 'pro';
   const credits = sub.credits || 0;
 
+  // Keep currentUser in sync so other parts of the app know the real credit count
+  if (currentUser) currentUser.notificationCredits = credits;
+
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
 
@@ -3571,16 +3553,16 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
-<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
-  <div class="flex justify-between items-start">
-    <div>
-      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
-        ⭐ PRO TIER
-      </div>
-      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
-      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
-    </div>
+      <!-- 🔥 BUSINESS PRO TIER CARD -->
+      <div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
+              ⭐ PRO TIER
+            </div>
+            <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
+            <p class="text-white/80 mt-2">12 credits per month • Full business tools • Boosted visibility</p>
+          </div>
           
           ${isPro ? `
             <div class="text-right">
@@ -3595,6 +3577,7 @@ const tabs = [
           `}
         </div>
 
+        <!-- Credit Counter -->
         <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <div class="text-xs opacity-75">Notification Credits</div>
@@ -3893,8 +3876,8 @@ const tabs = [
     <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
     <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
     <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 12 credits / month included (can add more credits if needed)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Optional photo attachment to notifications</div>
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
     </div>
@@ -8103,46 +8086,53 @@ window.postShoutoutWithPhoto = async function() {
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
 window.sendCustomNotification = async function() {
-  const title = document.getElementById('customTitle')?.value.trim();
-  const body  = document.getElementById('customBody')?.value.trim();
+  // Check if user can send (handles credits + Pro status)
+  if (!window.canSendNotification()) return;
+
+  const titleEl = document.getElementById('customTitle');
+  const bodyEl  = document.getElementById('customBody');
+
+  const title = titleEl?.value.trim();
+  const body  = bodyEl?.value.trim();
 
   if (!title || !body) {
     showToast('Title and message are required', 'error');
     return;
   }
 
-  // Client-side credit pre-check (2 credits for custom)
-  const canSend = await window.canSendNotification(true);
-  if (!canSend) {
-    showToast('Not enough credits. Upgrade to Pro!', 'error');
-    return;
-  }
-
-  const btn = document.querySelector('#notificationsContent button[onclick="sendCustomNotification()"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const btn = event.currentTarget; // optional: disable button while sending
+  if (btn) btn.disabled = true;
 
   try {
+    showToast('Sending notification...', 'success');
+
     const res = await apiPost('/owner/custom-notification', { title, body });
 
     if (res.success) {
-      showToast('✅ Custom notification sent to all users!', 'success');
-      document.getElementById('customTitle').value = '';
-      document.getElementById('customBody').value  = '';
-      document.getElementById('customTitle').dispatchEvent(new Event('input'));
-      document.getElementById('customBody').dispatchEvent(new Event('input'));
-      // Refresh the credit counter in the tab
-      if (res.credits !== undefined) {
-        const creditEl = document.getElementById('notifCreditDisplay');
-        if (creditEl) creditEl.textContent = res.credits;
+      showToast('✅ Notification sent successfully!', 'success');
+
+      // Clear the form
+      if (titleEl) titleEl.value = '';
+      if (bodyEl) bodyEl.value = '';
+
+      // Update local credits
+      if (res.credits !== undefined && currentUser) {
+        currentUser.notificationCredits = res.credits;
+
+        // Refresh the credit number shown on screen (if visible)
+        const creditDisplay = document.getElementById('notifCreditDisplay');
+        if (creditDisplay) creditDisplay.textContent = res.credits;
       }
+
     } else {
       showToast(res.message || 'Failed to send notification', 'error');
     }
-  } catch (e) {
-    console.error(e);
+
+  } catch (err) {
+    console.error(err);
     showToast('Failed to send notification', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>'; }
+    if (btn) btn.disabled = false;
   }
 };
 
@@ -8413,7 +8403,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
+  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits`, 'success');
 };
 
 window.saveOwnerBusinessLogo = async function() {
@@ -8791,6 +8781,22 @@ window.toggleHomeExtraFields = function() {
     extra.classList.remove('hidden');
   } else {
     extra.classList.add('hidden');
+  }
+};
+
+// ─── REFRESH USER AFTER BUSINESS VERIFICATION ───────────────────────────────
+window.refreshUserAfterVerification = function(businessId) {
+  if (!currentUser) return;
+
+  currentUser.verifiedBusiness = businessId;
+  currentUser.notificationCredits = 5; // grant 5 free credits locally
+
+  // Re-render nav + profile so "My Business Dashboard" button appears immediately
+  if (typeof renderNav === 'function') renderNav();
+  
+  // If user is currently on profile or owner dashboard, refresh it
+  if (currentPage === 'profile' || currentPage === 'owner-dashboard') {
+    loadPage(currentPage);
   }
 };
 
