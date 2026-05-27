@@ -1779,23 +1779,20 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body } = req.body;
+    const { title, body, postId } = req.body;  // ← accept postId
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
     }
 
-    // Must have a verified business
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) {
       return res.status(403).json({ message: 'Only verified business owners can send notifications' });
     }
 
-    // Fetch business name to stamp on the notification
     const business = await Business.findById(user.verifiedBusiness).select('name');
     const bizName  = business?.name || user.name;
 
-    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
     const deducted = await deductNotificationCredit(req.userId);
     if (!deducted) {
       return res.status(403).json({
@@ -1804,11 +1801,31 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       });
     }
 
-    // Prepend business name to the body so recipients always know who sent it
     const stampedBody = `${bizName} · ${body.trim()}`;
-    await broadcastPush(title.trim(), stampedBody, { page: 'home' });
 
-    // Return updated credit balance so the frontend can refresh the display
+    // ✅ FIX: if a postId was attached, deep-link to the business-post screen
+    //         otherwise fall back to home (for generic announcements)
+    let deepLink;
+    if (postId) {
+      // Verify the post exists and belongs to this owner before using it
+      const post = await BusinessPost.findOne({ _id: postId, owner: req.userId });
+      if (!post) {
+        return res.status(404).json({ message: 'Post not found or not yours' });
+      }
+      deepLink = {
+        page: 'business-post',
+        id: postId,
+        businessId: user.verifiedBusiness.toString()  // so the app can show the directory button
+      };
+} else {
+  deepLink = {
+    page: 'directory-business',
+    id: user.verifiedBusiness.toString()
+  };
+}
+
+    await broadcastPush(title.trim(), stampedBody, deepLink);
+
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
   } catch (err) {
@@ -1983,6 +2000,27 @@ router.get('/resources', async (req, res) => {
       return b;
     });
     res.json({ businesses, categories: resourceCats });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business/:id — fetch a single business by ID (public)
+router.get('/business/:id', optionalAuth, async (req, res) => {
+  try {
+    const business = await Business.findById(req.params.id)
+      .select('name address phone email website description hours priceRange tags logo photos category owner ratings isPremium')
+      .populate('category', 'name icon _id')
+      .lean();
+
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+
+    const count = (business.ratings || []).length;
+    business.avgRating = count > 0
+      ? Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / count) * 10) / 10
+      : 0;
+
+    res.json(business);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

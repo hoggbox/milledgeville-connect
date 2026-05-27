@@ -157,6 +157,14 @@ else if (page === 'business-post') {
     }
   }
 }
+else if (page === 'directory-business') {
+  if (id) {
+    navigate('directory');
+    setTimeout(() => showBusinessDetail(id), 900);
+  } else {
+    navigate('directory');
+  }
+}
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -173,25 +181,41 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ─── COLD LAUNCH DEEP LINK HANDLER ──────────────────────────────────────────
-// Handles when app is opened from a closed state via notification
+// ─── COLD LAUNCH DEEP LINK HANDLER (Improved) ───────────────────────────────
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
     const page = params.get('notif_page');
     const id = params.get('notif_id');
 
-    if (page) {
-      window.history.replaceState({}, document.title, window.location.pathname);
+    if (!page) return;
 
-      setTimeout(() => {
-        if (typeof window.handlePushNotificationClick === 'function') {
-          window.handlePushNotificationClick({ page, id });
-        }
-      }, 2500);
-    }
+    // Clean the URL immediately
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    let attempts = 0;
+    const maxAttempts = 8;
+
+    const tryOpen = () => {
+      attempts++;
+
+      if (typeof window.handlePushNotificationClick === 'function') {
+        window.handlePushNotificationClick({ page, id });
+        return;
+      }
+
+      if (attempts < maxAttempts) {
+        setTimeout(tryOpen, 700);
+      } else {
+        console.warn('Deep link handler never became available');
+      }
+    };
+
+    // Start trying after a short delay
+    setTimeout(tryOpen, 1800);
+
   } catch (e) {
-    console.warn('Cold launch handler error:', e);
+    console.warn('Cold launch deep-link error:', e);
   }
 })();
 
@@ -4071,18 +4095,22 @@ window.showBusinessPostModal = async function(postId) {
       </div>
     </div>`);
 
+  const body = document.getElementById('bizPostDetailBody');
+
   try {
     const post = await apiGet(`/business-posts/post/${postId}`);
-    if (!post) throw new Error('Post not found');
-
-    const body = document.getElementById('bizPostDetailBody');
+    
+    if (!post || post.message) {
+      body.innerHTML = `<p class="text-red-400 text-center py-8">Post not found or has been removed.</p>`;
+      return;
+    }
 
     // Fetch business info if available
     let businessHTML = '';
     if (post.business) {
       try {
         const biz = await apiGet(`/business/${post.business}`);
-        if (biz) {
+        if (biz && biz._id) {
           businessHTML = `
             <div class="flex items-center gap-3 mt-4 p-3 bg-white/5 rounded-2xl">
               <div class="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0">
@@ -4130,8 +4158,13 @@ window.showBusinessPostModal = async function(postId) {
         </div>
       </div>`;
   } catch (e) {
-    document.getElementById('bizPostDetailBody').innerHTML = 
-      `<p class="text-red-400 p-8 text-center">Failed to load post</p>`;
+    console.error('Business post modal error:', e);
+    body.innerHTML = `
+      <div class="text-center py-8">
+        <p class="text-red-400 mb-2">Failed to load post</p>
+        <button onclick="document.getElementById('bizPostDetailModal').remove()" 
+                class="text-sm text-white/60 underline">Close</button>
+      </div>`;
   }
 };
 
