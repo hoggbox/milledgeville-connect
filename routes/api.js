@@ -2005,27 +2005,6 @@ router.get('/resources', async (req, res) => {
   }
 });
 
-// GET /api/business/:id — fetch a single business by ID (public)
-router.get('/business/:id', optionalAuth, async (req, res) => {
-  try {
-    const business = await Business.findById(req.params.id)
-      .select('name address phone email website description hours priceRange tags logo photos category owner ratings isPremium')
-      .populate('category', 'name icon _id')
-      .lean();
-
-    if (!business) return res.status(404).json({ message: 'Business not found' });
-
-    const count = (business.ratings || []).length;
-    business.avgRating = count > 0
-      ? Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / count) * 10) / 10
-      : 0;
-
-    res.json(business);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 router.get('/popular', optionalAuth, async (req, res) => {
   try {
     const raw = await Business.find()
@@ -2048,6 +2027,27 @@ router.get('/popular', optionalAuth, async (req, res) => {
       .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
       .slice(0, 5);
     res.json(sorted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business/:id — single business by ID (used by business post modal)
+router.get('/business/:id', optionalAuth, async (req, res) => {
+  try {
+    const business = await Business.findById(req.params.id)
+      .select('name address phone email website description hours priceRange tags logo photos category ratings isPremium')
+      .populate('category', 'name icon _id')
+      .lean();
+
+    if (!business) return res.status(404).json({ message: 'Business not found' });
+
+    const count = (business.ratings || []).length;
+    business.avgRating = count > 0
+      ? Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / count) * 10) / 10
+      : 0;
+
+    res.json(business);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

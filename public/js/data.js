@@ -135,36 +135,38 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-else if (page === 'business-post') {
-  if (id) {
-    // Try immediately
-    if (typeof window.showBusinessPostModal === 'function') {
-      window.showBusinessPostModal(id);
-    } else {
-      // Retry a couple times if the function isn't loaded yet
-      let attempts = 0;
-      const retry = setInterval(() => {
-        attempts++;
+  else if (page === 'business-post') {
+    navigate('home');
+    if (id) {
+      setTimeout(() => {
         if (typeof window.showBusinessPostModal === 'function') {
-          clearInterval(retry);
           window.showBusinessPostModal(id);
-        } else if (attempts > 6) {
-          clearInterval(retry);
-          // Only as last resort — still don't go to home
-          console.warn('showBusinessPostModal not available after retries');
+        } else {
+          let attempts = 0;
+          const retry = setInterval(() => {
+            attempts++;
+            if (typeof window.showBusinessPostModal === 'function') {
+              clearInterval(retry);
+              window.showBusinessPostModal(id);
+            } else if (attempts > 6) {
+              clearInterval(retry);
+              console.warn('showBusinessPostModal not available after retries');
+            }
+          }, 600);
         }
-      }, 600);
+      }, 800);
     }
   }
-}
-else if (page === 'directory-business') {
-  if (id) {
-    navigate('directory');
-    setTimeout(() => showBusinessDetail(id), 900);
-  } else {
-    navigate('directory');
+  else if (page === 'directory-business') {
+    if (id) {
+      loadDirectoryAndOpen(id);
+    } else {
+      navigate('directory');
+    }
   }
-}
+  else {
+    navigate('home');
+  }
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
