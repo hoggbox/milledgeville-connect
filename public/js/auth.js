@@ -1,6 +1,12 @@
 let currentUser = null;
 let verificationPollInterval = null;
 
+// ─── App-ready signal ─────────────────────────────────────────────────────────
+// Resolved once checkAuth() finishes and the first page is rendered.
+// The cold-launch deep-link handler in data.js waits on this before navigating.
+let _resolveAppReady;
+window._appReadyPromise = new Promise(resolve => { _resolveAppReady = resolve; });
+
 // ─── Auth Modal ───────────────────────────────────────────────────────────────
 function showAuthModal(opts = {}) {
   const modal = document.getElementById('authModal');
@@ -164,6 +170,8 @@ async function checkAuth() {
   const storedToken = localStorage.getItem('token');
   if (!storedToken) {
     updateUserUI();
+    await loadPage('home');
+    _resolveAppReady();
     return;
   }
   try {
@@ -171,10 +179,10 @@ async function checkAuth() {
     if (result.user) {
       currentUser = result.user;
       updateUserUI();
-      
+
       // ─── Re-wire native push for returning logged-in users ──────────────────
       if (typeof window.initPushAfterLogin === 'function') {
-        setTimeout(() => window.initPushAfterLogin(), 1200);  // Slightly longer delay
+        setTimeout(() => window.initPushAfterLogin(), 1200);
       }
     } else {
       localStorage.removeItem('token');
@@ -184,6 +192,9 @@ async function checkAuth() {
     console.warn('Auth check failed:', e);
     updateUserUI();
   }
+  // Always load home and mark ready, whether logged in or not
+  await loadPage('home');
+  _resolveAppReady();
 }
 
 // ─── Verification polling ─────────────────────────────────────────────────────

@@ -183,7 +183,9 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ─── COLD LAUNCH DEEP LINK HANDLER (Improved) ───────────────────────────────
+// ─── COLD LAUNCH DEEP LINK HANDLER ──────────────────────────────────────────
+// Waits for checkAuth() to finish and the home page to render before
+// navigating, so the spinner never gets stuck.
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -195,26 +197,10 @@ if ('serviceWorker' in navigator) {
     // Clean the URL immediately
     window.history.replaceState({}, document.title, window.location.pathname);
 
-    let attempts = 0;
-    const maxAttempts = 8;
-
-    const tryOpen = () => {
-      attempts++;
-
-      if (typeof window.handlePushNotificationClick === 'function') {
-        window.handlePushNotificationClick({ page, id });
-        return;
-      }
-
-      if (attempts < maxAttempts) {
-        setTimeout(tryOpen, 700);
-      } else {
-        console.warn('Deep link handler never became available');
-      }
-    };
-
-    // Start trying after a short delay
-    setTimeout(tryOpen, 1800);
+    // Wait until auth + initial page render are done, then deep-link
+    window._appReadyPromise.then(() => {
+      window.handlePushNotificationClick({ page, id });
+    });
 
   } catch (e) {
     console.warn('Cold launch deep-link error:', e);
