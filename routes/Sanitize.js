@@ -58,12 +58,23 @@ function deepSanitize(obj, depth = 0) {
   return obj;
 }
 
-// ─── Special sanitiser for AUTH routes (login/register) ───────────────────────
+// ─── Special sanitiser for AUTH routes (login / register) ────────────────────
 function sanitizeAuth(body) {
   const safe = {};
   if (body.name)     safe.name = htmlStrip(body.name).substring(0, 80);
   if (body.email)    safe.email = htmlStrip(body.email).substring(0, 200).toLowerCase();
-  if (body.password) safe.password = body.password;        // ← DO NOT strip password
+  if (body.password) safe.password = body.password;   // ← DO NOT strip password
+  return safe;
+}
+
+// ─── Special sanitiser for password-change / reset routes ────────────────────
+// These carry currentPassword / newPassword / answer — none must be touched.
+function sanitizePasswordRoute(body) {
+  const safe = {};
+  if (body.email)           safe.email = (body.email || '').toLowerCase().trim();
+  if (body.answer)          safe.answer = body.answer;           // compared via bcrypt
+  if (body.currentPassword) safe.currentPassword = body.currentPassword;
+  if (body.newPassword)     safe.newPassword = body.newPassword;
   return safe;
 }
 
@@ -72,9 +83,15 @@ function sanitizeBody(req, res, next) {
   if (req.body && typeof req.body === 'object') {
     const path = req.path.toLowerCase();
 
-    // Special handling for login / register
     if (path.includes('/auth/login') || path.includes('/auth/register')) {
+      // login / register — preserve password as-is, light clean on name/email
       req.body = sanitizeAuth(req.body);
+    } else if (
+      path.includes('/auth/forgot-password') ||
+      path.includes('/auth/change-password')
+    ) {
+      // password reset / change — never mutate password or security-answer fields
+      req.body = sanitizePasswordRoute(req.body);
     } else {
       req.body = deepSanitize(req.body);
     }
@@ -103,5 +120,6 @@ module.exports = {
   securityHeaders,
   htmlStrip,
   deepSanitize,
-  sanitizeAuth   // optional, if you want to call it manually
+  sanitizeAuth,
+  sanitizePasswordRoute
 };
