@@ -6,7 +6,11 @@ const mongoose = require('mongoose');
 const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
 router.use(securityHeaders);   // CSP + security headers
-router.use(sanitizeBody);      // Deep sanitization on every req.body
+router.use((req, res, next) => {
+  // Skip auth routes — sanitizing passwords mutates them before bcrypt sees them
+  if (req.path.startsWith("/auth/")) return next();
+  return sanitizeBody(req, res, next);
+});
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
@@ -380,8 +384,8 @@ router.post('/auth/forgot-password/reset', async (req, res) => {
       return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
     }
 
-    // Hash and save the new password
-    user.password = await bcrypt.hash(newPassword, 10);
+    // Assign plain-text — the User pre('save') hook hashes it once
+    user.password = newPassword;
     await user.save();
 
     res.json({ success: true, message: 'Password reset successfully.' });
@@ -418,8 +422,8 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    // Hash and save new password
-    user.password = await bcrypt.hash(newPassword, 10);
+    // Assign plain-text — the User pre('save') hook hashes it once
+    user.password = newPassword;
     await user.save();
 
     res.json({ success: true, message: 'Password updated successfully' });
@@ -1825,12 +1829,10 @@ router.post('/auth/register', async (req, res) => {
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) return res.status(409).json({ message: 'Email already in use' });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const newUser = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password: hashedPassword,
+      password,           // plain-text — the User pre('save') hook hashes it once
       notificationCredits: 0,        // ← Normal users start with 0
       subscriptionTier: 'free'
     });
