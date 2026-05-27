@@ -313,6 +313,7 @@ function showUpdateBanner(newVersion) {
   document.body.insertAdjacentHTML('beforeend', bannerHTML);
 }
 
+
 window.dismissUpdateBanner = function() {
   const banner = document.getElementById('updateBanner');
   if (banner) banner.remove();
@@ -3097,36 +3098,6 @@ let events = allEvents.filter(e => {
   }
 }
 
-/// Helper to check if user can send notifications
-window.canSendNotification = function(requireVerified = true) {
-  if (!currentUser) {
-    showToast('Please sign in to send notifications', 'error');
-    return false;
-  }
-
-  // Only verified business owners can send notifications
-  if (requireVerified && !currentUser.verifiedBusiness) {
-    showToast('Only verified business owners can send notifications', 'error');
-    return false;
-  }
-
-  const credits = currentUser.notificationCredits || 0;
-  const isPro = currentUser.subscriptionTier === 'pro';
-
-  if (credits > 0) {
-    return true; // Has credits → allowed to send
-  }
-
-  // No credits left
-  if (isPro) {
-    showToast('You are out of credits. Buy more credits to continue sending notifications.', 'error');
-  } else {
-    showToast('You have used your free credits. Upgrade to Pro to get 12 monthly credits.', 'error');
-  }
-
-  return false;
-};
-
 async function loadResourcesPage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-10">
@@ -3870,7 +3841,7 @@ const tabs = [
 
 <!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
 <div id="dtabContent-notifications" class="hidden">
-  ${!isPro ? `
+  ${(!isPro && credits === 0) ? `
   <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
     <div class="text-5xl mb-4">📢</div>
     <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
@@ -4413,10 +4384,7 @@ window.sendUnifiedNotification = async function() {
 
   // Credit pre-check (2 credits either way)
   const canSend = await window.canSendNotification(true);
-  if (!canSend) {
-    showToast('Not enough credits. Buy more or upgrade to Pro!', 'error');
-    return;
-  }
+  if (!canSend) return; // message already shown inside canSendNotification
 
   const btn = document.getElementById('unifiedSendBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
@@ -8243,16 +8211,20 @@ window.viewReportedContent = async function (type, id) {
 
 // Credit check helper for other posting functions
 async function checkNotificationCredits(required = 2) {
-  // Only verified business owners have a credit system at all
   if (!currentUser || !currentUser.verifiedBusiness) return true;
-  if (currentUser.subscriptionTier === 'pro') return true;
 
   const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  if ((sub.credits || 0) < required) {
-    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
-    return false;
+  const isPro = (sub.tier || currentUser.subscriptionTier) === 'pro';
+  const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
+
+  if (credits >= required) return true;
+
+  if (isPro) {
+    showToast('You\'re out of credits — purchase more to keep sending notifications.', 'error');
+  } else {
+    showToast('You\'ve used your 5 free credits. Upgrade to Pro for 12 monthly credits!', 'error');
   }
-  return true;
+  return false;
 }
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
@@ -8287,8 +8259,17 @@ window.canSendNotification = async function(isCustom = false) {
   try {
     const sub = await apiGet('/owner/subscription');
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
-    return credits >= cost;
+    const isPro = (sub.tier || currentUser.subscriptionTier) === 'pro';
+    const cost = 2;
+
+    if (credits >= cost) return true;
+
+    if (isPro) {
+      showToast('You\'re out of credits. Buy a credit pack to keep sending notifications.', 'error');
+    } else {
+      showToast('You\'ve used your 5 free credits. Upgrade to Pro for 12 monthly credits!', 'error');
+    }
+    return false;
   } catch (e) {
     console.error('Credit check failed', e);
     return false;
