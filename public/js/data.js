@@ -135,13 +135,13 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-else if (page === 'business-post') {
-  if (id) {
-    showBusinessPostModal(id);
-  } else {
-    navigate('home');
+  else if (page === 'business-post') {
+    if (id) {
+      showBusinessPostModal(id);
+    } else {
+      navigate('home');
+    }
   }
-}
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────

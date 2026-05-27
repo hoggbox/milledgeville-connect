@@ -3809,21 +3809,28 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       image,
     });
 
-    // Optional push notification — costs 2 credits
-    if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId);
-      if (deducted) {
-        const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-        const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
+// Optional push notification with thumbnail
+if (sendNotify) {
+  const deducted = await deductNotificationCredit(req.userId);
+  if (deducted) {
+    const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
+    const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
 
-        await broadcastPush(
-          pushTitle,
-          caption?.trim() || 'Posted a new photo update — tap to see it!',
-          { page: 'business-post', id: post._id.toString() },
-          { imageUrl: thumbUrl, type: 'custom' }
-        );
+    // Send with image + correct deep link data
+    await broadcastPush(
+      pushTitle,
+      caption?.trim() || 'Posted a new photo update — tap to see it!',
+      { 
+        page: 'business-post', 
+        id: post._id.toString() 
+      },
+      { 
+        imageUrl: thumbUrl,
+        type: 'custom' 
       }
-    }
+    );
+  }
+}
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
