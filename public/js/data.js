@@ -8310,6 +8310,13 @@ window.buyCreditPack = async function() {
     return;
   }
 
+  // Only Pro members can buy credit packs
+  const isPro = currentUser?.subscriptionTier === 'pro';
+  if (!isPro) {
+    showToast('You need Business Pro to purchase credit packs. Upgrade first!', 'error');
+    return;
+  }
+
   try {
     showToast('Opening Google Play...', 'success');
 
