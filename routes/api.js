@@ -1820,10 +1820,14 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
 // ─── REGISTER ───────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, securityQuestion, securityAnswer } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (!securityQuestion?.trim() || !securityAnswer?.trim()) {
+      return res.status(400).json({ message: 'A security question and answer are required' });
     }
 
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
@@ -1833,6 +1837,8 @@ router.post('/auth/register', async (req, res) => {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password,           // plain-text — the User pre('save') hook hashes it once
+      securityQuestion: securityQuestion.trim(),
+      securityAnswer: securityAnswer.trim().toLowerCase(), // hashed by pre('save') hook
       notificationCredits: 0,        // ← Normal users start with 0
       subscriptionTier: 'free'
     });
