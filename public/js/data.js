@@ -135,13 +135,28 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-  else if (page === 'business-post') {
-    if (id) {
-      showBusinessPostModal(id);
+else if (page === 'business-post') {
+  if (id) {
+    // Try immediately
+    if (typeof window.showBusinessPostModal === 'function') {
+      window.showBusinessPostModal(id);
     } else {
-      navigate('home');
+      // Retry a couple times if the function isn't loaded yet
+      let attempts = 0;
+      const retry = setInterval(() => {
+        attempts++;
+        if (typeof window.showBusinessPostModal === 'function') {
+          clearInterval(retry);
+          window.showBusinessPostModal(id);
+        } else if (attempts > 6) {
+          clearInterval(retry);
+          // Only as last resort — still don't go to home
+          console.warn('showBusinessPostModal not available after retries');
+        }
+      }, 600);
     }
   }
+}
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -163,17 +178,20 @@ if ('serviceWorker' in navigator) {
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
-const page  = params.get('notif_page');
-const id    = params.get('notif_id');
-const bizId = params.get('notif_bizId') || '';
-if (page) {
-  window.history.replaceState({}, document.title, window.location.pathname);
-  setTimeout(() => {
-    window.handlePushNotificationClick({ page, id, bizId });
-  }, 2200);
-}
+    const page = params.get('notif_page');
+    const id = params.get('notif_id');
+
+    if (page) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      setTimeout(() => {
+        if (typeof window.handlePushNotificationClick === 'function') {
+          window.handlePushNotificationClick({ page, id });
+        }
+      }, 2500);
+    }
   } catch (e) {
-    console.warn('Cold launch deep-link handler failed:', e);
+    console.warn('Cold launch handler error:', e);
   }
 })();
 
