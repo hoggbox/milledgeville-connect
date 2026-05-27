@@ -136,25 +136,25 @@ window.handlePushNotificationClick = function(data) {
     if (id) setTimeout(() => openConversation(id), 800);
   } 
   else if (page === 'business-post') {
-    navigate('home');
+    // Open the photo modal directly — no navigate('home') needed.
+    // showBusinessPostModal is self-contained and works from any page.
     if (id) {
-      setTimeout(() => {
-        if (typeof window.showBusinessPostModal === 'function') {
-          window.showBusinessPostModal(id);
-        } else {
-          let attempts = 0;
-          const retry = setInterval(() => {
-            attempts++;
-            if (typeof window.showBusinessPostModal === 'function') {
-              clearInterval(retry);
-              window.showBusinessPostModal(id);
-            } else if (attempts > 6) {
-              clearInterval(retry);
-              console.warn('showBusinessPostModal not available after retries');
-            }
-          }, 600);
-        }
-      }, 800);
+      if (typeof window.showBusinessPostModal === 'function') {
+        window.showBusinessPostModal(id);
+      } else {
+        // Function not yet defined — wait for it (e.g. cold launch race)
+        let attempts = 0;
+        const retry = setInterval(() => {
+          attempts++;
+          if (typeof window.showBusinessPostModal === 'function') {
+            clearInterval(retry);
+            window.showBusinessPostModal(id);
+          } else if (attempts > 6) {
+            clearInterval(retry);
+            console.warn('showBusinessPostModal not available after retries');
+          }
+        }, 600);
+      }
     }
   }
   else if (page === 'directory-business') {

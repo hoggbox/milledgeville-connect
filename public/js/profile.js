@@ -188,32 +188,12 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
     console.log('🔔 Notification tapped:', action);
 
     const data = action?.notification?.data || {};
-    const page = data.page;
-    const id   = data.id;
+    if (!data.page) return;
 
-    if (!page) return;
-
-    // Navigate to the right page, then scroll to/highlight the specific post
-    if (typeof loadPage === 'function') {
-      loadPage(page).then(() => {
-        if (id && page === 'shoutouts') {
-          // Increased delay for better reliability after page load
-          setTimeout(() => {
-            const el = document.getElementById('shoutout-' + id);
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el.classList.add('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
-              
-              // Remove highlight after 4 seconds
-              setTimeout(() => {
-                el.classList.remove('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
-              }, 4000);
-            } else {
-              console.warn(`Could not find shoutout-${id} element`);
-            }
-          }, 800);
-        }
-      });
+    // Delegate to the centralized handler so every page (including
+    // business-post) is handled correctly without unknown-page spinners.
+    if (typeof window.handlePushNotificationClick === 'function') {
+      window.handlePushNotificationClick(data);
     }
   });
 }
