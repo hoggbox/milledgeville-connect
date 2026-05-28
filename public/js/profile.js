@@ -901,6 +901,7 @@ window.showUserProfileModal = async function (userId) {
 
     const rep = user.reputation || 0;
     const isOwnProfile = String(currentUser._id) === String(user._id);
+    const isDev = !!user.isDeveloper;
 
     const html = `
       <div onclick="if(event.target.id==='userProfileModal') hideUserProfileModal()" 
@@ -924,25 +925,38 @@ window.showUserProfileModal = async function (userId) {
               </div>
             </div>
 
-            <h2 class="text-3xl font-bold text-center mb-1">${esc(user.name)}</h2>
+            <div class="text-center">
+              <h2 class="text-3xl font-bold mb-1">${esc(user.name)}</h2>
+              
+              <!-- Developer Badge -->
+              ${isDev ? `
+              <div class="flex justify-center mb-2">
+                <div class="inline-flex items-center gap-1.5 px-4 py-1 rounded-full 
+                            bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 
+                            text-white text-xs font-bold tracking-[1px] shadow-lg shadow-violet-500/30">
+                  <span class="font-mono">&lt;/&gt;</span>
+                  <span>DEVELOPER</span>
+                </div>
+              </div>` : ''}
 
-            <!-- Beta Tester Badge -->
-            ${user.isBetaTester ? `
-            <div class="flex justify-center mb-2">
-              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow">
-                🚀 MVP Beta Tester
-              </div>
-            </div>` : ''}
+              <!-- Beta Tester Badge -->
+              ${user.isBetaTester ? `
+              <div class="flex justify-center mb-2">
+                <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1 rounded-full shadow">
+                  🚀 MVP Beta Tester
+                </div>
+              </div>` : ''}
+            </div>
 
             <!-- Reputation -->
-            <div class="flex justify-center mb-6">
+            <div class="flex justify-center my-5">
               <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
                 ⭐ ${rep}
                 <span class="text-base font-normal opacity-75">Reputation</span>
               </div>
             </div>
 
-            ${user.bio ? `<p class="text-center text-white/70 italic mb-6">"${esc(user.bio)}"</p>` : ''}
+            ${user.bio ? `<p class="text-center text-white/70 italic mb-5">"${esc(user.bio)}"</p>` : ''}
 
             ${user.neighborhood ? `
             <div class="text-center text-white/50 mb-6">
@@ -950,7 +964,7 @@ window.showUserProfileModal = async function (userId) {
             </div>` : ''}
 
             <!-- Action Buttons -->
-            <div class="flex gap-3 mt-8">
+            <div class="flex gap-3 mt-6">
               <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
                       class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
                 ✉️ Message
