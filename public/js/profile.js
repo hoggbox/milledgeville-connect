@@ -903,14 +903,20 @@ window.showUserProfileModal = async function (userId) {
     const isOwnProfile = String(currentUser._id) === String(user._id);
     const isDev = !!user.isDeveloper;
 
+    // Format joined date
+    const joined = user.joinedAt 
+      ? new Date(user.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) 
+      : 'Recently';
+
     const html = `
       <div onclick="if(event.target.id==='userProfileModal') hideUserProfileModal()" 
            id="userProfileModal"
-           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[13000] flex items-end md:items-center md:justify-center overflow-y-auto">
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[30000] flex items-end md:items-center md:justify-center overflow-y-auto">
         
         <div onclick="event.stopImmediatePropagation()" 
              class="bg-[#0f172a] text-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
+          <!-- Header bar -->
           <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 flex justify-center border-b border-white/10 z-10">
             <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
           </div>
@@ -925,55 +931,66 @@ window.showUserProfileModal = async function (userId) {
               </div>
             </div>
 
-            <div class="text-center">
-              <h2 class="text-3xl font-bold mb-1">${esc(user.name)}</h2>
+            <!-- Name + Badges -->
+            <div class="text-center mb-4">
+              <h2 class="text-3xl font-bold">${esc(user.name)}</h2>
               
-              <!-- Developer Badge -->
               ${isDev ? `
-              <div class="flex justify-center mb-2">
+              <div class="flex justify-center mt-2 mb-1">
                 <div class="inline-flex items-center gap-1.5 px-4 py-1 rounded-full 
                             bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 
-                            text-white text-xs font-bold tracking-[1px] shadow-lg shadow-violet-500/30">
-                  <span class="font-mono">&lt;/&gt;</span>
+                            text-white text-xs font-bold tracking-[1.5px] shadow-lg shadow-violet-500/40">
+                  <span class="font-mono text-sm">&lt;/&gt;</span>
                   <span>DEVELOPER</span>
                 </div>
               </div>` : ''}
 
-              <!-- Beta Tester Badge -->
               ${user.isBetaTester ? `
-              <div class="flex justify-center mb-2">
-                <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1 rounded-full shadow">
+              <div class="flex justify-center mt-1">
+                <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold">
                   🚀 MVP Beta Tester
                 </div>
               </div>` : ''}
             </div>
 
             <!-- Reputation -->
-            <div class="flex justify-center my-5">
+            <div class="flex justify-center mb-5">
               <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
                 ⭐ ${rep}
-                <span class="text-base font-normal opacity-75">Reputation</span>
               </div>
             </div>
 
-            ${user.bio ? `<p class="text-center text-white/70 italic mb-5">"${esc(user.bio)}"</p>` : ''}
-
-            ${user.neighborhood ? `
-            <div class="text-center text-white/50 mb-6">
-              📍 ${user.neighborhood}
+            <!-- Bio -->
+            ${user.bio ? `
+            <div class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
+              <p class="text-white/80 italic text-center">"${esc(user.bio)}"</p>
             </div>` : ''}
 
+            <!-- Info Grid -->
+            <div class="grid grid-cols-2 gap-3 mb-6">
+              ${user.neighborhood ? `
+              <div class="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
+                <div class="text-xs text-white/50">NEIGHBORHOOD</div>
+                <div class="font-semibold mt-0.5">${user.neighborhood}</div>
+              </div>` : ''}
+
+              <div class="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
+                <div class="text-xs text-white/50">JOINED</div>
+                <div class="font-semibold mt-0.5">${joined}</div>
+              </div>
+            </div>
+
             <!-- Action Buttons -->
-            <div class="flex gap-3 mt-6">
+            <div class="flex gap-3">
               <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
-                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition active:scale-[0.985]">
                 ✉️ Message
               </button>
               
               ${!isOwnProfile ? `
               <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
-                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
-                🚩 Report User
+                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg transition active:scale-[0.985]">
+                🚩 Report
               </button>` : ''}
             </div>
 
@@ -984,6 +1001,10 @@ window.showUserProfileModal = async function (userId) {
           </div>
         </div>
       </div>`;
+
+    // Remove any existing profile modal first
+    const existing = document.getElementById('userProfileModal');
+    if (existing) existing.remove();
 
     document.body.insertAdjacentHTML('beforeend', html);
 
