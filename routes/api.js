@@ -1882,8 +1882,10 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     }
 
     const business = await Business.findById(user.verifiedBusiness).select('name logo');
-    const bizName  = business?.name || user.name;
-    const bizLogoUrl = business?.logo ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness}` : null;
+    const bizName    = business?.name || user.name;
+    const bizLogoUrl = business?.logo
+      ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness}`
+      : null;
 
     const deducted = await deductNotificationCredit(req.userId, 2);
     if (!deducted) {
@@ -2127,8 +2129,12 @@ router.get('/popular', optionalAuth, async (req, res) => {
 // GET /api/business/:id — single business by ID (used by business post modal)
 router.get('/business/:id', optionalAuth, async (req, res) => {
   try {
-    const business = await Business.findById(req.params.id)
-      .select('name address phone email website description hours priceRange tags logo photos category ratings isPremium')
+    const business = await Business.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { profileViews: 1 } },
+      { new: true }
+    )
+      .select('name address phone email website description hours priceRange tags logo photos category ratings isPremium profileViews')
       .populate('category', 'name icon _id')
       .lean();
 
@@ -4090,7 +4096,7 @@ router.get('/lostitem-thumb/:id',     (req, res) => serveImageThumb(req, res, Lo
 router.get('/marketplace-thumb/:id',  (req, res) => serveImageThumb(req, res, MarketplaceItem));
 router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, News));
 
-// GET /api/biz-logo-thumb/:bizId — serves a business logo as a real HTTP image URL for push notifications
+// GET /api/biz-logo-thumb/:bizId — serves a business logo as a real HTTP image for push notification icons
 router.get('/biz-logo-thumb/:bizId', async (req, res) => {
   try {
     const biz = await Business.findById(req.params.bizId).select('logo');
@@ -4176,5 +4182,52 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
+
+// ─── OWNER ANALYTICS ─────────────────────────────────────────────────────────────
+router.get('/owner/analytics', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user?.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
+
+    const bizId = user.verifiedBusiness;
+
+    const [biz, deals, events] = await Promise.all([
+      Business.findById(bizId).select('profileViews ratings name'),
+      Deal.find({ owner: req.userId }).select('title createdAt'),
+      Event.find({ owner: req.userId }).select('title date rsvps createdAt'),
+    ]);
+
+    // Notifications sent = starting credits (12 pro / 5 free) minus current, plus resets
+    // Best proxy: credits spent = max possible - current (not perfect but useful)
+    const sub = user.subscriptionTier === 'pro' ? 'pro' : 'free';
+    const maxCredits = sub === 'pro' ? 12 : 5;
+    const creditsUsedThisCycle = Math.max(0, maxCredits - (user.notificationCredits || 0));
+
+    // Event RSVP totals
+    const eventStats = events.map(e => ({
+      title: e.title,
+      date: e.date,
+      rsvpCount: e.rsvps ? e.rsvps.length : 0,
+    })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+
+    res.json({
+      profileViews:       biz?.profileViews || 0,
+      totalDeals:         deals.length,
+      totalEvents:        events.length,
+      totalRsvps:         events.reduce((s, e) => s + (e.rsvps?.length || 0), 0),
+      avgRating:          biz?.ratings?.length
+                            ? Math.round((biz.ratings.reduce((s,r) => s + r.score, 0) / biz.ratings.length) * 10) / 10
+                            : null,
+      reviewCount:        biz?.ratings?.length || 0,
+      creditsRemaining:   user.notificationCredits || 0,
+      creditsUsedThisCycle,
+      subscriptionTier:   sub,
+      eventStats,
+    });
+  } catch (err) {
+    console.error('Owner analytics error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;

@@ -7469,51 +7469,97 @@ async function loadOwnerAnalytics() {
   container.innerHTML = `<div class="text-white/30 text-center py-8 text-sm">Loading analytics…</div>`;
 
   try {
-    const [deals, events, homes, sub] = await Promise.all([
-      apiGet('/owner/deals').catch(() => []),
-      apiGet('/owner/events').catch(() => []),
+    const [data, homes] = await Promise.all([
+      apiGet('/owner/analytics').catch(() => null),
       apiGet('/owner/homes').catch(() => []),
-      apiGet('/owner/subscription').catch(() => ({}))
     ]);
 
-    const totalDeals = deals.length;
-    const totalEvents = events.length;
+    if (!data) throw new Error('No data');
+
+    const {
+      profileViews = 0, totalDeals = 0, totalEvents = 0, totalRsvps = 0,
+      avgRating = null, reviewCount = 0,
+      creditsRemaining = 0, creditsUsedThisCycle = 0, subscriptionTier = 'free',
+      eventStats = []
+    } = data;
     const totalListings = homes.length;
-    const credits = sub.credits || 0;
-    const tier = sub.tier || 'free';
+    const isPro = subscriptionTier === 'pro';
+
+    const starBar = avgRating
+      ? `<div class="flex items-center gap-1.5 mt-1">
+           ${'<span class=\'text-yellow-400 text-sm\'>\u2605</span>'.repeat(Math.round(avgRating))}
+           ${'<span class=\'text-white/20 text-sm\'>\u2605</span>'.repeat(5 - Math.round(avgRating))}
+           <span class="text-xs text-white/50 ml-1">${avgRating} (${reviewCount})</span>
+         </div>`
+      : `<div class="text-xs text-white/30 mt-1">No reviews yet</div>`;
+
+    const eventRows = eventStats.length
+      ? eventStats.map(e => `
+          <div class="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+            <div class="text-sm text-white/80 truncate pr-3">${esc(e.title)}</div>
+            <div class="flex-shrink-0 text-xs font-semibold ${e.rsvpCount > 0 ? 'text-emerald-400' : 'text-white/30'}">
+              🎟️ ${e.rsvpCount} going
+            </div>
+          </div>`).join('')
+      : `<div class="text-xs text-white/30 py-2">No events posted yet</div>`;
 
     container.innerHTML = `
       <div class="space-y-4">
         <h3 class="font-bold text-xl px-1">Business Analytics</h3>
 
+        <!-- Row 1: Profile Views + Rating -->
         <div class="grid grid-cols-2 gap-3">
           <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50">Deals Posted</div>
-            <div class="text-4xl font-black mt-1">${totalDeals}</div>
+            <div class="text-xs text-white/50 mb-1">👁️ Profile Views</div>
+            <div class="text-4xl font-black">${profileViews.toLocaleString()}</div>
+            <div class="text-xs text-white/30 mt-1">All time</div>
           </div>
           <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50">Events Posted</div>
-            <div class="text-4xl font-black mt-1">${totalEvents}</div>
-          </div>
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50">Marketplace Listings</div>
-            <div class="text-4xl font-black mt-1">${totalListings}</div>
-          </div>
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50">Notification Credits</div>
-            <div class="text-4xl font-black mt-1">${credits}</div>
-            <div class="text-xs text-white/40 mt-1">${tier === 'pro' ? 'Pro Tier' : 'Free Tier'}</div>
+            <div class="text-xs text-white/50 mb-1">⭐ Rating</div>
+            <div class="text-4xl font-black">${avgRating ?? '—'}</div>
+            ${starBar}
           </div>
         </div>
 
-        <div class="bg-white/5 rounded-3xl p-5 text-sm text-white/60">
-          <p class="mb-2 font-semibold text-white/80">Coming soon:</p>
-          <ul class="list-disc pl-5 space-y-1 text-xs">
-            <li>Profile view counts</li>
-            <li>Notification open rates</li>
-            <li>Engagement on your deals &amp; events</li>
-          </ul>
+        <!-- Row 2: Deals + Events -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50 mb-1">🔥 Deals Posted</div>
+            <div class="text-4xl font-black">${totalDeals}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50 mb-1">📅 Events Posted</div>
+            <div class="text-4xl font-black">${totalEvents}</div>
+            ${totalRsvps > 0 ? `<div class="text-xs text-emerald-400 mt-1">${totalRsvps} total RSVPs</div>` : ''}
+          </div>
         </div>
+
+        <!-- Row 3: Notifications + Listings -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50 mb-1">🔔 Notifications Sent</div>
+            <div class="text-4xl font-black">${creditsUsedThisCycle}</div>
+            <div class="text-xs text-white/40 mt-1">${creditsRemaining} credits left • ${isPro ? 'Pro' : 'Free'}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50 mb-1">🏠 Marketplace</div>
+            <div class="text-4xl font-black">${totalListings}</div>
+            <div class="text-xs text-white/30 mt-1">Active listings</div>
+          </div>
+        </div>
+
+        <!-- Event RSVP breakdown -->
+        ${eventStats.length ? `
+        <div class="bg-white/10 rounded-3xl p-5">
+          <div class="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">Event RSVPs</div>
+          ${eventRows}
+        </div>` : ''}
+
+        ${!isPro ? `
+        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-5 text-sm">
+          <p class="font-semibold text-emerald-300 mb-1">📈 Upgrade to Pro</p>
+          <p class="text-white/50 text-xs">Get 12 notification credits/month and priority listing placement.</p>
+        </div>` : ''}
       </div>
     `;
   } catch (e) {
