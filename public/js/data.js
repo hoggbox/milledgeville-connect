@@ -3128,6 +3128,45 @@ async function loadEventsPage(content) {
   renderEventsFiltered();
 }
 
+function renderEventCard(e, now) {
+  const isPast     = new Date(e.date) < now;
+  const rsvpCount  = e.rsvps ? e.rsvps.length : 0;
+  const isGoing    = currentUser && e.rsvps && e.rsvps.includes(currentUser._id);
+  const catMap     = Object.fromEntries((window._eventCategories || EVENT_CATEGORIES || []).map(c => [c.name, c.icon]));
+  const catIcon    = e.category ? (catMap[e.category] || '📅') : '📅';
+
+  const dateStr    = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeStr    = new Date(e.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  return `
+    <div onclick="showEventDetail('${e._id}')"
+         class="bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            ${e.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catIcon} ${e.category}</span>` : ''}
+            ${isPast ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-white/40">Past</span>` : ''}
+          </div>
+          <div class="font-bold text-base leading-snug">${esc(e.title)}</div>
+          ${e.location ? `<div class="text-xs text-emerald-300 mt-1">📍 ${esc(e.location)}</div>` : ''}
+          ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${esc(e.description)}</div>` : ''}
+        </div>
+        <div class="flex-shrink-0 text-right">
+          <div class="text-xs font-semibold text-white/70">${dateStr}</div>
+          <div class="text-xs text-white/40">${timeStr}</div>
+          ${rsvpCount > 0 ? `<div class="text-xs text-emerald-400 mt-1">🎟️ ${rsvpCount} going</div>` : ''}
+        </div>
+      </div>
+      ${!isPast && currentUser ? `
+        <div class="mt-3 pt-3 border-t border-white/10 flex justify-end">
+          <button onclick="event.stopPropagation(); toggleRSVP('${e._id}')"
+                  class="px-4 py-1.5 rounded-2xl text-xs font-semibold transition ${isGoing ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+            ${isGoing ? '✅ Going' : '🎟️ RSVP'}
+          </button>
+        </div>` : ''}
+    </div>`;
+}
+
 window.renderEventsFiltered = function () {
   const search    = (window._eventSearch || '').toLowerCase();
   const filter    = window._eventFilter  || 'All';
@@ -7469,97 +7508,51 @@ async function loadOwnerAnalytics() {
   container.innerHTML = `<div class="text-white/30 text-center py-8 text-sm">Loading analytics…</div>`;
 
   try {
-    const [data, homes] = await Promise.all([
-      apiGet('/owner/analytics').catch(() => null),
+    const [deals, events, homes, sub] = await Promise.all([
+      apiGet('/owner/deals').catch(() => []),
+      apiGet('/owner/events').catch(() => []),
       apiGet('/owner/homes').catch(() => []),
+      apiGet('/owner/subscription').catch(() => ({}))
     ]);
 
-    if (!data) throw new Error('No data');
-
-    const {
-      profileViews = 0, totalDeals = 0, totalEvents = 0, totalRsvps = 0,
-      avgRating = null, reviewCount = 0,
-      creditsRemaining = 0, creditsUsedThisCycle = 0, subscriptionTier = 'free',
-      eventStats = []
-    } = data;
+    const totalDeals = deals.length;
+    const totalEvents = events.length;
     const totalListings = homes.length;
-    const isPro = subscriptionTier === 'pro';
-
-    const starBar = avgRating
-      ? `<div class="flex items-center gap-1.5 mt-1">
-           ${'<span class=\'text-yellow-400 text-sm\'>\u2605</span>'.repeat(Math.round(avgRating))}
-           ${'<span class=\'text-white/20 text-sm\'>\u2605</span>'.repeat(5 - Math.round(avgRating))}
-           <span class="text-xs text-white/50 ml-1">${avgRating} (${reviewCount})</span>
-         </div>`
-      : `<div class="text-xs text-white/30 mt-1">No reviews yet</div>`;
-
-    const eventRows = eventStats.length
-      ? eventStats.map(e => `
-          <div class="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
-            <div class="text-sm text-white/80 truncate pr-3">${esc(e.title)}</div>
-            <div class="flex-shrink-0 text-xs font-semibold ${e.rsvpCount > 0 ? 'text-emerald-400' : 'text-white/30'}">
-              🎟️ ${e.rsvpCount} going
-            </div>
-          </div>`).join('')
-      : `<div class="text-xs text-white/30 py-2">No events posted yet</div>`;
+    const credits = sub.credits || 0;
+    const tier = sub.tier || 'free';
 
     container.innerHTML = `
       <div class="space-y-4">
         <h3 class="font-bold text-xl px-1">Business Analytics</h3>
 
-        <!-- Row 1: Profile Views + Rating -->
         <div class="grid grid-cols-2 gap-3">
           <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50 mb-1">👁️ Profile Views</div>
-            <div class="text-4xl font-black">${profileViews.toLocaleString()}</div>
-            <div class="text-xs text-white/30 mt-1">All time</div>
+            <div class="text-xs text-white/50">Deals Posted</div>
+            <div class="text-4xl font-black mt-1">${totalDeals}</div>
           </div>
           <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50 mb-1">⭐ Rating</div>
-            <div class="text-4xl font-black">${avgRating ?? '—'}</div>
-            ${starBar}
+            <div class="text-xs text-white/50">Events Posted</div>
+            <div class="text-4xl font-black mt-1">${totalEvents}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Marketplace Listings</div>
+            <div class="text-4xl font-black mt-1">${totalListings}</div>
+          </div>
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Notification Credits</div>
+            <div class="text-4xl font-black mt-1">${credits}</div>
+            <div class="text-xs text-white/40 mt-1">${tier === 'pro' ? 'Pro Tier' : 'Free Tier'}</div>
           </div>
         </div>
 
-        <!-- Row 2: Deals + Events -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50 mb-1">🔥 Deals Posted</div>
-            <div class="text-4xl font-black">${totalDeals}</div>
-          </div>
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50 mb-1">📅 Events Posted</div>
-            <div class="text-4xl font-black">${totalEvents}</div>
-            ${totalRsvps > 0 ? `<div class="text-xs text-emerald-400 mt-1">${totalRsvps} total RSVPs</div>` : ''}
-          </div>
+        <div class="bg-white/5 rounded-3xl p-5 text-sm text-white/60">
+          <p class="mb-2 font-semibold text-white/80">Coming soon:</p>
+          <ul class="list-disc pl-5 space-y-1 text-xs">
+            <li>Profile view counts</li>
+            <li>Notification open rates</li>
+            <li>Engagement on your deals &amp; events</li>
+          </ul>
         </div>
-
-        <!-- Row 3: Notifications + Listings -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50 mb-1">🔔 Notifications Sent</div>
-            <div class="text-4xl font-black">${creditsUsedThisCycle}</div>
-            <div class="text-xs text-white/40 mt-1">${creditsRemaining} credits left • ${isPro ? 'Pro' : 'Free'}</div>
-          </div>
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50 mb-1">🏠 Marketplace</div>
-            <div class="text-4xl font-black">${totalListings}</div>
-            <div class="text-xs text-white/30 mt-1">Active listings</div>
-          </div>
-        </div>
-
-        <!-- Event RSVP breakdown -->
-        ${eventStats.length ? `
-        <div class="bg-white/10 rounded-3xl p-5">
-          <div class="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">Event RSVPs</div>
-          ${eventRows}
-        </div>` : ''}
-
-        ${!isPro ? `
-        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-5 text-sm">
-          <p class="font-semibold text-emerald-300 mb-1">📈 Upgrade to Pro</p>
-          <p class="text-white/50 text-xs">Get 12 notification credits/month and priority listing placement.</p>
-        </div>` : ''}
       </div>
     `;
   } catch (e) {
@@ -8214,47 +8207,48 @@ window.showOnboardingTour = function() {
   // Don't show again if already completed
   if (localStorage.getItem('onboardingCompleted') === 'true') return;
 
+  // backdrop-blur removed — causes GPU freeze on older Android (Pixel 6 etc.)
   const tourHTML = `
-    <div id="onboardingTour" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
-      <div class="bg-zinc-900 border border-white/10 rounded-3xl max-w-md w-full overflow-hidden">
+    <div id="onboardingTour" style="position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-overflow-scrolling:touch;overflow-y:auto;">
+      <div style="background:#18181b;border:1px solid rgba(255,255,255,0.1);border-radius:24px;max-width:448px;width:100%;overflow:hidden;">
         
         <!-- Progress dots -->
-        <div class="flex justify-center gap-2 pt-6">
+        <div style="display:flex;justify-content:center;gap:8px;padding-top:24px;">
           <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
           <div class="w-2 h-2 bg-white/30 rounded-full"></div>
           <div class="w-2 h-2 bg-white/30 rounded-full"></div>
         </div>
 
-        <div id="tourSlide" class="p-8 text-center min-h-[380px] flex flex-col">
+        <div id="tourSlide" style="padding:32px;text-align:center;">
           <!-- Slide 1 -->
           <div id="slide1">
-            <div class="text-6xl mb-6">🚦</div>
-            <h2 class="text-3xl font-bold mb-3">Welcome to Milledgeville Connect</h2>
-            <p class="text-zinc-400 text-lg leading-relaxed">Your local community app for real-time traffic alerts, buying & selling, lost pets, events, and more.</p>
+            <div style="font-size:3.5rem;margin-bottom:20px;">🚦</div>
+            <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:12px;color:#fff;">Welcome to Milledgeville Connect</h2>
+            <p style="color:#a1a1aa;font-size:1rem;line-height:1.6;">Your local community app for real-time traffic alerts, buying & selling, lost pets, events, and more.</p>
           </div>
 
           <!-- Slide 2 (hidden by default) -->
-          <div id="slide2" class="hidden">
-            <div class="text-6xl mb-6">🛒</div>
-            <h2 class="text-3xl font-bold mb-3">Marketplace & Lost & Found</h2>
-            <p class="text-zinc-400 text-lg leading-relaxed">Buy, sell, trade locally and help neighbors find lost items and pets.</p>
+          <div id="slide2" style="display:none;">
+            <div style="font-size:3.5rem;margin-bottom:20px;">🛒</div>
+            <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:12px;color:#fff;">Marketplace & Lost & Found</h2>
+            <p style="color:#a1a1aa;font-size:1rem;line-height:1.6;">Buy, sell, trade locally and help neighbors find lost items and pets.</p>
           </div>
 
           <!-- Slide 3 -->
-          <div id="slide3" class="hidden">
-            <div class="text-6xl mb-6">📅</div>
-            <h2 class="text-3xl font-bold mb-3">Stay Connected</h2>
-            <p class="text-zinc-400 text-lg leading-relaxed">Events, deals, news, and live community shoutouts — all in one place.</p>
+          <div id="slide3" style="display:none;">
+            <div style="font-size:3.5rem;margin-bottom:20px;">📅</div>
+            <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:12px;color:#fff;">Stay Connected</h2>
+            <p style="color:#a1a1aa;font-size:1rem;line-height:1.6;">Events, deals, news, and live community shoutouts — all in one place.</p>
           </div>
         </div>
 
-        <div class="p-6 border-t border-white/10 flex items-center gap-4">
+        <div style="padding:20px 24px 24px;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:12px;">
           <button onclick="skipOnboarding()" 
-                  class="flex-1 py-4 text-white/70 hover:text-white font-medium transition">
+                  style="flex:1;padding:16px;color:rgba(255,255,255,0.7);font-weight:500;background:none;border:none;cursor:pointer;font-size:0.95rem;touch-action:manipulation;">
             Skip
           </button>
           <button onclick="nextOnboardingSlide()" id="tourNextBtn"
-                  class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-2xl font-semibold transition">
+                  style="flex:1;background:#059669;color:#fff;border:none;padding:16px;border-radius:16px;font-weight:600;cursor:pointer;font-size:0.95rem;touch-action:manipulation;">
             Next
           </button>
         </div>
@@ -8375,13 +8369,13 @@ window.nextOnboardingSlide = function() {
   }
 
   if (window.currentTourSlide === 1) {
-    slide1.classList.add('hidden');
-    slide2.classList.remove('hidden');
+    slide1.style.display = 'none';
+    slide2.style.display = 'block';
     setDot(1);
     window.currentTourSlide = 2;
   } else if (window.currentTourSlide === 2) {
-    slide2.classList.add('hidden');
-    slide3.classList.remove('hidden');
+    slide2.style.display = 'none';
+    slide3.style.display = 'block';
     setDot(2);
     nextBtn.textContent = "Get Started";
     window.currentTourSlide = 3;
