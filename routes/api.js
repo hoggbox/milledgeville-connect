@@ -681,6 +681,40 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// ─── ONE-TIME: Activate Developer Badge for imhoggbox ────────────────────────
+router.post('/admin/activate-developer-badge', authenticate, requireAdmin, async (req, res) => {
+  try {
+    // Extra safety: only allow imhoggbox@gmail.com to run this
+    if (req.user.email !== 'imhoggbox@gmail.com') {
+      return res.status(403).json({ message: 'This route is only for the developer account.' });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.isDeveloper) {
+      return res.json({ 
+        success: true, 
+        message: 'Developer badge is already active on your account.' 
+      });
+    }
+
+    user.isDeveloper = true;
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: '✅ Developer badge activated! Refresh the app to see it.' 
+    });
+
+  } catch (err) {
+    console.error('Activate developer badge error:', err);
+    res.status(500).json({ message: 'Failed to activate badge' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 5.  ADMIN — UPDATE REPORT STATUS
 //     PATCH /api/admin/reports/:id
