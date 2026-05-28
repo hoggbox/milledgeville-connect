@@ -678,16 +678,16 @@ function _renderHomeShell(content) {
 
         <!-- Filter buttons -->
         <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
-          <button onclick="hotFeed.setFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
-          <button onclick="hotFeed.setFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
-          <button onclick="hotFeed.setFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
-          <button onclick="hotFeed.setFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
-          <button onclick="hotFeed.setFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
+          <button onclick="setHotFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+          <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
+          <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
+          <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
         </div>
 
         <div id="hotFeed" class="space-y-3"></div>
         <div id="hotLoadMoreWrapper" class="mt-4 hidden">
-          <button id="hotLoadMoreBtn" onclick="hotFeed.loadMore()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
+          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
         </div>
       </div>
 
@@ -898,13 +898,15 @@ function _initHotFeed(allHotItems) {
     renderHotFeed(filter);
   }
 
-  function loadMore() {
+  function loadMoreHotItems() {
     _hotState.page++;
     renderHotFeed(_hotState.filter);
   }
 
-  // Single namespace — no loose globals
-  window.hotFeed = { render: renderHotFeed, setFilter, loadMore };
+  // Expose only what the HTML onclick attributes need
+  window.renderHotFeed  = renderHotFeed;
+  window.setHotFilter   = setHotFilter;
+  window.loadMoreHotItems = loadMoreHotItems;
 
   renderHotFeed('all');
 }
