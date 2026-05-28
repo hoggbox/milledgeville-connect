@@ -678,16 +678,16 @@ function _renderHomeShell(content) {
 
         <!-- Filter buttons -->
         <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
-          <button onclick="setHotFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
-          <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
-          <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
-          <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
-          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
+          <button onclick="hotFeed.setFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+          <button onclick="hotFeed.setFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
+          <button onclick="hotFeed.setFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
+          <button onclick="hotFeed.setFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
+          <button onclick="hotFeed.setFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
         </div>
 
         <div id="hotFeed" class="space-y-3"></div>
         <div id="hotLoadMoreWrapper" class="mt-4 hidden">
-          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
+          <button id="hotLoadMoreBtn" onclick="hotFeed.loadMore()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
         </div>
       </div>
 
@@ -759,6 +759,9 @@ async function _loadHomeWeather() {
 }
 
 function _renderHomeDigest(eventsData, dealsData) {
+  const digestEl = document.getElementById('todayDigest');
+  if (!digestEl) return;
+
   const evClick = eventsData[0]
     ? `showEventDetail('${eventsData[0]._id}'); navigate('events')`
     : `navigate('events')`;
@@ -766,8 +769,6 @@ function _renderHomeDigest(eventsData, dealsData) {
     ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')`
     : `navigate('deals')`;
 
-  const digestEl = document.getElementById('todayDigest');
-  if (!digestEl) return;
   digestEl.innerHTML = `
     <div class="grid grid-cols-2 gap-3">
       <div onclick="${evClick}" class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
@@ -819,7 +820,7 @@ function _initHotFeed(allHotItems) {
   // Module-level state — no window pollution
   const _hotState = { items: allHotItems, filter: 'all', page: 0 };
 
-  window.renderHotFeed = function (filter = _hotState.filter) {
+  function renderHotFeed(filter = _hotState.filter) {
     const container = document.getElementById('hotFeed');
     if (!container) return;
 
@@ -882,9 +883,9 @@ function _initHotFeed(allHotItems) {
 
     const moreWrapper = document.getElementById('hotLoadMoreWrapper');
     if (moreWrapper) moreWrapper.classList.toggle('hidden', filtered.length <= visibleCount);
-  };
+  }
 
-  window.setHotFilter = function (filter) {
+  function setHotFilter(filter) {
     _hotState.filter = filter;
     _hotState.page = 0;
     document.querySelectorAll('[id^="hotFilter-"]').forEach(btn => {
@@ -894,15 +895,18 @@ function _initHotFeed(allHotItems) {
       btn.classList.toggle('bg-white/10', !isActive);
       btn.classList.toggle('text-white/80', !isActive);
     });
-    window.renderHotFeed(filter);
-  };
+    renderHotFeed(filter);
+  }
 
-  window.loadMoreHotItems = function () {
+  function loadMore() {
     _hotState.page++;
-    window.renderHotFeed(_hotState.filter);
-  };
+    renderHotFeed(_hotState.filter);
+  }
 
-  window.renderHotFeed('all');
+  // Single namespace — no loose globals
+  window.hotFeed = { render: renderHotFeed, setFilter, loadMore };
+
+  renderHotFeed('all');
 }
 
 function _renderCommunityStats(eventsData, dealsData, shoutoutsData) {
@@ -945,6 +949,24 @@ function _renderCommunityStats(eventsData, dealsData, shoutoutsData) {
 }
 
 // ─── SPOTLIGHT (Home Page) ────────────────────────────────────────────────────
+function _loadAndRenderSpotlight() {
+  if (allBusinesses.length === 0) {
+    apiGet('/directory').then(d => {
+      if (d && d.businesses) {
+        allBusinesses = d.businesses.map(b => {
+          if (b.hours && b._openStatus === undefined) {
+            b._openStatus = getOpenStatus(b.hours);
+          }
+          return b;
+        });
+        _renderSpotlight(allBusinesses);
+      }
+    }).catch(() => _renderSpotlight([]));
+  } else {
+    _renderSpotlight(allBusinesses);
+  }
+}
+
 function _renderSpotlight(businesses) {
   const spotEl = document.getElementById('spotlightScroll');
   if (!spotEl) return;
@@ -988,21 +1010,7 @@ async function loadHomePage(content) {
   _loadHomeWeather();
 
   // 3. Spotlight — fire directory fetch in background; don't block home feed on it
-  if (allBusinesses.length === 0) {
-    apiGet('/directory').then(d => {
-      if (d && d.businesses) {
-        allBusinesses = d.businesses.map(b => {
-          if (b.hours && b._openStatus === undefined) {
-            b._openStatus = getOpenStatus(b.hours);
-          }
-          return b;
-        });
-        _renderSpotlight(allBusinesses);
-      }
-    }).catch(() => _renderSpotlight([]));
-  } else {
-    _renderSpotlight(allBusinesses);
-  }
+  _loadAndRenderSpotlight();
 
   // 4. Fetch feed data in parallel
   const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
