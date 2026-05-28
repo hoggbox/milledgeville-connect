@@ -7236,6 +7236,11 @@ async function renderAdminDashboard() {
 }
 
 // ─── USERS MANAGEMENT (Tab 1) ────────────────────────────────────────────────
+// ─── ADMIN USERS PAGINATION STATE ────────────────────────────────────────────
+const ADMIN_USERS_PAGE_SIZE = 15;
+let _adminUsersPage = 1;
+let _adminUsersFiltered = [];
+
 async function renderAdminUsers() {
   const container = document.getElementById('adminMainContent');
   
@@ -7246,22 +7251,27 @@ async function renderAdminUsers() {
       throw new Error('Invalid users data');
     }
 
+    _adminUsersPage = 1;
+    _adminUsersFiltered = window._adminUsersData;
+
     container.innerHTML = `
       <div class="mb-4">
         <input type="text" id="userSearch" placeholder="🔍 Search by name or email…" 
                class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 text-base">
       </div>
-      <div id="usersCardList" class="space-y-3"></div>`;
+      <div id="usersCardList" class="space-y-3"></div>
+      <div id="usersPagination" class="mt-4 flex items-center justify-between gap-3"></div>`;
 
-    renderUsersTable(window._adminUsersData);
+    renderUsersTable(_adminUsersFiltered);
 
     document.getElementById('userSearch').addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase();
-      const filtered = window._adminUsersData.filter(u => 
+      _adminUsersFiltered = window._adminUsersData.filter(u => 
         (u.name || '').toLowerCase().includes(term) || 
         (u.email || '').toLowerCase().includes(term)
       );
-      renderUsersTable(filtered);
+      _adminUsersPage = 1;
+      renderUsersTable(_adminUsersFiltered);
     });
   } catch (err) {
     console.error(err);
@@ -7272,7 +7282,14 @@ async function renderAdminUsers() {
 function renderUsersTable(users) {
   const list = document.getElementById('usersCardList');
   if (!list) return;
-  list.innerHTML = users.map(u => `
+
+  const totalPages = Math.max(1, Math.ceil(users.length / ADMIN_USERS_PAGE_SIZE));
+  if (_adminUsersPage > totalPages) _adminUsersPage = totalPages;
+
+  const start = (_adminUsersPage - 1) * ADMIN_USERS_PAGE_SIZE;
+  const pageUsers = users.slice(start, start + ADMIN_USERS_PAGE_SIZE);
+
+  list.innerHTML = pageUsers.map(u => `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
@@ -7300,7 +7317,7 @@ function renderUsersTable(users) {
         ${u.isIpBanned ? `<div class="text-red-400 text-xs font-semibold">🚫 IP Banned</div>` : ''}
       </div>` : ``}
       <div class="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-2">
-        <button onclick="adminEditReputation('${u._id}')" 
+        <button onclick="adminEditReputation('${u._id}', ${u.reputation || 0})" 
                 class="flex-1 min-w-[80px] px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition">
           ⭐ Edit Rep
         </button>
@@ -7319,7 +7336,55 @@ function renderUsersTable(users) {
       </div>
     </div>
   `).join('');
+
+  // ── Pagination controls ──────────────────────────────────────────────────────
+  const pager = document.getElementById('usersPagination');
+  if (!pager) return;
+
+  if (totalPages <= 1) {
+    pager.innerHTML = `<span class="text-white/40 text-xs">${users.length} user${users.length !== 1 ? 's' : ''}</span>`;
+    return;
+  }
+
+  pager.innerHTML = `
+    <button onclick="adminUsersPageNav(-1)"
+            class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition disabled:opacity-30"
+            ${_adminUsersPage <= 1 ? 'disabled' : ''}>← Prev</button>
+    <span class="text-white/60 text-sm">Page ${_adminUsersPage} of ${totalPages} <span class="text-white/30">(${users.length} users)</span></span>
+    <button onclick="adminUsersPageNav(1)"
+            class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition disabled:opacity-30"
+            ${_adminUsersPage >= totalPages ? 'disabled' : ''}>Next →</button>`;
 }
+
+window.adminUsersPageNav = function(dir) {
+  const totalPages = Math.ceil(_adminUsersFiltered.length / ADMIN_USERS_PAGE_SIZE);
+  _adminUsersPage = Math.max(1, Math.min(totalPages, _adminUsersPage + dir));
+  renderUsersTable(_adminUsersFiltered);
+  document.getElementById('usersCardList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.adminEditReputation = async function(userId, currentRep) {
+  const input = prompt(`Set new reputation score for this user:`, currentRep ?? 0);
+  if (input === null) return; // cancelled
+  const val = parseInt(input, 10);
+  if (isNaN(val) || val < 0) {
+    return showToast('Please enter a valid number (0 or higher)', 'error');
+  }
+  try {
+    const res = await apiPost(`/admin/users/${userId}/reputation`, { reputation: val });
+    if (res.success) {
+      showToast(`⭐ Reputation updated to ${res.reputation}`, 'success');
+      // Update in-memory data so the card re-renders correctly without a full reload
+      const user = (window._adminUsersData || []).find(u => u._id === userId);
+      if (user) user.reputation = res.reputation;
+      renderUsersTable(_adminUsersFiltered);
+    } else {
+      showToast(res.message || 'Failed to update reputation', 'error');
+    }
+  } catch (e) {
+    showToast('Network error — try again', 'error');
+  }
+};
 
 // ─── OWNER ANALYTICS ─────────────────────────────────────────────────────────
 async function loadOwnerAnalytics() {
