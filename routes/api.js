@@ -947,8 +947,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
             notification: {
               sound:     'default',
               channelId: 'default',
-              ...(hasPhoto && { imageUrl }), // android big-picture image (only actual uploaded photo)
-              ...(iconUrl  && { icon: iconUrl }) // small icon: biz logo or MC default
+              ...(hasPhoto && { imageUrl }), // android big-picture image
+              ...(logoUrl && !hasPhoto && { imageUrl: logoUrl }) // biz logo as large icon when no big photo
             }
           },
           apns: {
@@ -1870,7 +1870,7 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body, postId, imageUrl } = req.body;  // ← accept postId and optional photo
+    const { title, body, postId } = req.body;  // ← accept postId
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
     }
@@ -1895,7 +1895,8 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       });
     }
 
-    const stampedBody = `${bizName} · ${body.trim()}`;
+    // title = Business Name, body = notification title + newline + message
+    const pushBody = `${title.trim()}\n${body.trim()}`;
 
     // ✅ FIX: if a postId was attached, deep-link to the business-post screen
     //         otherwise fall back to home (for generic announcements)
@@ -1918,7 +1919,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
   };
 }
 
-    await broadcastPush(title.trim(), stampedBody, deepLink, { type: 'custom', imageUrl: imageUrl || null, logoUrl: bizLogoUrl });
+    await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', logoUrl: bizLogoUrl });
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
@@ -2941,9 +2942,10 @@ router.post('/owner/deals', authenticate, async (req, res) => {
         const dealLogoUrl = user.verifiedBusiness?.logo
           ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
           : null;
+        const dealBizName = user.verifiedBusiness?.name || user.name;
         broadcastPush(
-          '🔥 New Deal Available!',
-          title,
+          dealBizName,
+          `🔥 New Deal Available!\n${title}`,
           {
             page: 'deals',
             id: deal._id.toString(),
@@ -3001,9 +3003,10 @@ router.post('/owner/events', authenticate, async (req, res) => {
         const eventLogoUrl = user.verifiedBusiness?.logo
           ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
           : null;
+        const eventBizName = user.verifiedBusiness?.name || user.name;
         broadcastPush(
-          '📅 New Event Posted!',
-          title + (location ? ` · ${location}` : ''),
+          eventBizName,
+          `📅 New Event!\n${title}${location ? ' · ' + location : ''}`,
           {
             page: 'events',
             id: event._id.toString(),
@@ -4001,16 +4004,17 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
 if (sendNotify) {
   const deducted = await deductNotificationCredit(req.userId, 1);
   if (deducted) {
-    const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
+    const postNotifTitle = (notifTitle || '').trim() || '📸 New Photo Post';
+    const postBody = caption?.trim() || 'Tap to see the latest update.';
     const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
 
-    // Send with image + correct deep link data
+    // Business name as title, owner's custom title + caption as body
     const postLogoUrl = user.verifiedBusiness?.logo
       ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
       : null;
     await broadcastPush(
-      pushTitle,
-      caption?.trim() || 'Posted a new photo update — tap to see it!',
+      bizName,
+      `${postNotifTitle}\n${postBody}`,
       { 
         page: 'business-post', 
         id: post._id.toString() 
