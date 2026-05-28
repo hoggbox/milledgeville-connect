@@ -156,28 +156,31 @@
   <script src="/js/auth.js"></script>
   <script src="/js/main.js"></script>
 
-<!-- ===================================================== -->
-  <!-- IMPROVED PWA INSTALL BANNER (Mobile) -->
+  <!-- ===================================================== -->
+  <!-- PWA INSTALL - ONLY SHOWS WHEN NATIVE PROMPT IS READY -->
   <!-- ===================================================== -->
   <script>
     (function() {
-      // Don't show if already installed as PWA
+      // Don't show if already installed
       if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) return;
 
-      // Only show on mobile
+      // Only target mobile
       if (window.innerWidth > 900) return;
 
-      // Don't show if dismissed in last 7 days
+      // Don't show if dismissed recently
       const dismissed = parseInt(localStorage.getItem('mcInstallDismissed') || '0', 10);
       if (Date.now() - dismissed < 7 * 24 * 60 * 60 * 1000) return;
 
       let deferredPrompt = null;
       const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-      // Capture native install prompt when available
+      // Capture the native install prompt
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
+
+        // Only show banner when we actually have the prompt ready
+        showInstallBanner();
       });
 
       window.addEventListener('appinstalled', () => {
@@ -210,41 +213,52 @@
 
         document.body.appendChild(banner);
 
-        // Dismiss button
+        // Dismiss
         document.getElementById('mcDismissBtn').onclick = () => {
           localStorage.setItem('mcInstallDismissed', Date.now());
           banner.remove();
         };
 
-        // Install button
+        // Install button - this will now actually work
         document.getElementById('mcInstallBtn').onclick = () => {
-          const btn = document.getElementById('mcInstallBtn');
-          
           if (deferredPrompt) {
-            // Native prompt available — trigger it
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(() => {
               deferredPrompt = null;
               banner.remove();
             });
-          } else {
-            // No native prompt available — show helpful instructions
-            btn.style.display = 'none';
-            const text = banner.querySelector('p:last-of-type');
-            if (text) {
-              text.innerHTML = isIOS 
-                ? 'Tap <b>Share ↑</b> → <b>"Add to Home Screen"</b>' 
-                : 'Tap the browser menu <b>⋮</b> → <b>"Add to Home Screen"</b> or <b>"Install app"</b>';
-            }
           }
         };
       }
 
-      // Show banner after page loads
-      window.addEventListener('load', () => {
-        setTimeout(showInstallBanner, 1800);
-      });
+      // Also add an install button inside the profile sheet
+      const originalShowProfileSheet = window.showProfileSheet;
+      if (originalShowProfileSheet) {
+        window.showProfileSheet = function(...args) {
+          originalShowProfileSheet.apply(this, args);
+
+          setTimeout(() => {
+            const content = document.getElementById('sheet-content');
+            if (!content || document.getElementById('profileInstallBtn')) return;
+
+            if (deferredPrompt) {
+              const btn = document.createElement('button');
+              btn.id = 'profileInstallBtn';
+              btn.className = 'w-full mt-4 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-3xl font-semibold flex items-center justify-center gap-2';
+              btn.innerHTML = '📲 Install App to Home Screen';
+              btn.onclick = () => {
+                if (deferredPrompt) {
+                  deferredPrompt.prompt();
+                  deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                    btn.remove();
+                  });
+                }
+              };
+              content.appendChild(btn);
+            }
+          }, 400);
+        };
+      }
     })();
   </script>
-</body>
-</html>
