@@ -5974,15 +5974,17 @@ async function loadLostFoundPage(content) {
 </select>
       </div>
 
-      <div id="lostItemsList" class="space-y-4">
-        ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
-      </div>
+      <div id="lostItemsList" class="space-y-4"></div>
       <div id="lostPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
   window.currentLostPage = 1;
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
+
+  // Show skeleton immediately while data loads
+  document.getElementById('lostItemsList').innerHTML =
+    [1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('');
 
   // Fetch all items once and cache them — search/filter then runs instantly in-memory
   _allLostItems = [];
@@ -6167,7 +6169,9 @@ async function loadMarketplacePage(content) {
         <button onclick="setMarketCategoryFilter('General')" id="cat-General"
                 class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📦 General</button>
       </div>
-      <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
+      <div id="marketItemsList" class="space-y-4 min-h-[400px]">
+        ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
+      </div>
     </div>`;
 
   // Load data once and cache it
@@ -6235,11 +6239,9 @@ window.setMarketCategoryFilter = function(category) {
   renderMarketplacePage();
 };
 
-async function renderMarketplacePage() {
+function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
   if (!container) return;
-
-  container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
 
   let filtered = allMarketplaceItems || [];
 
