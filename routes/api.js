@@ -2936,7 +2936,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
             id: deal._id.toString(),
             url: `/deals/${deal._id}`
           },
-          { type: 'custom' }
+          { type: 'custom', imageUrl: null }
         );
       }
     }
@@ -2993,7 +2993,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
             id: event._id.toString(),
             url: `/events/${event._id}`
           },
-          { type: 'custom' }
+          { type: 'custom', imageUrl: null }
         );
       }
     }
