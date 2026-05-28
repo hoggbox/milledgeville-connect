@@ -1584,7 +1584,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
-        { type: 'marketplace', subCategory: category }
+        { type: 'custom' }
       );
     }
 
@@ -2863,7 +2863,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
             id: deal._id.toString(),
             url: `/deals/${deal._id}`
           },
-          { type: 'deal' }
+          { type: 'custom' }
         );
       }
     }
@@ -2920,7 +2920,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
             id: event._id.toString(),
             url: `/events/${event._id}`
           },
-          { type: 'event' }
+          { type: 'custom' }
         );
       }
     }
@@ -3003,8 +3003,7 @@ if (sendNotify) {
         id: item._id.toString() 
       },
       { 
-        type: 'marketplace', 
-        subCategory: 'Homes'     // ← Important
+        type: 'custom'
       }
     );
   }
