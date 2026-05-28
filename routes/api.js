@@ -2804,7 +2804,7 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category } = req.body;
+    const { title, description, expires, category, sendNotify } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2818,18 +2818,24 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-broadcastPush(
-  '🔥 New Deal Available!',
-  title,
-  { 
-    page: 'deals', 
-    id: deal._id.toString(),
-    url: `/deals/${deal._id}`
-  },
-  { type: 'deal' }
-);
+    if (sendNotify) {
+      const deducted = await deductNotificationCredit(req.userId, 1, false);
+      if (deducted) {
+        broadcastPush(
+          '🔥 New Deal Available!',
+          title,
+          {
+            page: 'deals',
+            id: deal._id.toString(),
+            url: `/deals/${deal._id}`
+          },
+          { type: 'deal' }
+        );
+      }
+    }
 
-    res.json(deal);
+    const updated = await User.findById(req.userId).select('notificationCredits');
+    res.json({ ...deal.toObject(), credits: updated.notificationCredits ?? 0 });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2856,7 +2862,7 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category } = req.body;
+    const { title, date, location, description, category, sendNotify } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2869,18 +2875,24 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    broadcastPush(
-    '📅 New Event Posted!',
-    title + (location ? ` · ${location}` : ''),
-    { 
-    page: 'events', 
-    id: event._id.toString(),
-    url: `/events/${event._id}`
-    },
-    { type: 'event' }
-);
+    if (sendNotify) {
+      const deducted = await deductNotificationCredit(req.userId, 1, false);
+      if (deducted) {
+        broadcastPush(
+          '📅 New Event Posted!',
+          title + (location ? ` · ${location}` : ''),
+          {
+            page: 'events',
+            id: event._id.toString(),
+            url: `/events/${event._id}`
+          },
+          { type: 'event' }
+        );
+      }
+    }
 
-    res.json(event);
+    const updated = await User.findById(req.userId).select('notificationCredits');
+    res.json({ ...event.toObject(), credits: updated.notificationCredits ?? 0 });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

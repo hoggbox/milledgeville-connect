@@ -297,11 +297,13 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
   let userId = null;
   let displayName = fallbackName;
   let reputation = 0;
+  let isDeveloper = false;
 
   if (typeof userData === 'object' && userData !== null) {
     userId = userData._id || userData.id;
     displayName = userData.name || userData.authorName || userData.author || fallbackName;
     reputation = userData.reputation || 0;
+    isDeveloper = !!userData.isDeveloper;
   } else if (typeof userData === 'string' && userData.length > 10) {
     userId = userData;
   }
@@ -312,9 +314,18 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
     ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">⭐${reputation}</span>`
     : '';
 
+  // === COOL DEVELOPER BADGE ===
+  const devBadge = isDeveloper 
+    ? `<span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full 
+               bg-gradient-to-br from-violet-600 via-fuchsia-600 to-indigo-600 
+               text-white text-[9px] font-black shadow-md shadow-violet-500/40 ring-1 ring-white/30"> 
+         &lt;/&gt;
+       </span>` 
+    : '';
+
   return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
                 class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
-            ${displayName}${repHTML}
+            ${displayName}${devBadge}${repHTML}
           </span>`;
 }
 
@@ -3743,6 +3754,12 @@ const tabs = [
             ${dealAutoHint}
             <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
             <input id="dealExpires" type="date" class="${inputClass}">
+            <div class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 mt-1">
+              <input type="checkbox" id="dealNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="dealNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(1 credit)</span>
+              </label>
+            </div>
             <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Active Deals</p>
@@ -3762,6 +3779,12 @@ const tabs = [
               ${eventCatOptions}
             </select>
             <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
+            <div class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 mt-1">
+              <input type="checkbox" id="eventNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="eventNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(1 credit)</span>
+              </label>
+            </div>
             <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Events</p>
@@ -4571,25 +4594,29 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
-
-  const title = document.getElementById('dealTitle').value.trim();
-  const desc = document.getElementById('dealDesc').value.trim();
-  const expires = document.getElementById('dealExpires').value;
+  const title    = document.getElementById('dealTitle').value.trim();
+  const desc     = document.getElementById('dealDesc').value.trim();
+  const expires  = document.getElementById('dealExpires').value;
   const category = document.getElementById('dealCategory').value;
+  const sendNotify = document.getElementById('dealNotify')?.checked ?? false;
 
   if (!title) return showToast('Deal title required', 'error');
 
+  // Only gate on credits if the owner opted in to notify
+  if (sendNotify && !(await checkNotificationCredits(1))) return;
+
   try {
-    const res = await apiPost('/owner/deals', { 
-      title, description: desc, expires, category 
+    const res = await apiPost('/owner/deals', {
+      title, description: desc, expires, category, sendNotify
     });
 
     if (res._id) {
-      showToast('🔥 Deal posted!', 'success');
-      // Clear fields
+      showToast(sendNotify ? '🔥 Deal posted & notification sent!' : '🔥 Deal posted!', 'success');
       document.getElementById('dealTitle').value = '';
       document.getElementById('dealDesc').value = '';
+      // Uncheck the box for next time
+      const notifyEl = document.getElementById('dealNotify');
+      if (notifyEl) notifyEl.checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -4605,27 +4632,31 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
-
-  const title = document.getElementById('eventTitle').value.trim();
-  const date = document.getElementById('eventDate').value;
-  const location = document.getElementById('eventLocation').value.trim();
-  const desc = document.getElementById('eventDesc').value.trim();
-  const category = document.getElementById('eventCategory').value;
+  const title      = document.getElementById('eventTitle').value.trim();
+  const date       = document.getElementById('eventDate').value;
+  const location   = document.getElementById('eventLocation').value.trim();
+  const desc       = document.getElementById('eventDesc').value.trim();
+  const category   = document.getElementById('eventCategory').value;
+  const sendNotify = document.getElementById('eventNotify')?.checked ?? false;
 
   if (!title || !date) return showToast('Title and date required', 'error');
 
+  // Only gate on credits if the owner opted in to notify
+  if (sendNotify && !(await checkNotificationCredits(1))) return;
+
   try {
-    const res = await apiPost('/owner/events', { 
-      title, date, location, description: desc, category 
+    const res = await apiPost('/owner/events', {
+      title, date, location, description: desc, category, sendNotify
     });
 
     if (res._id) {
-      showToast('📅 Event posted!', 'success');
-      // Clear fields
+      showToast(sendNotify ? '📅 Event posted & notification sent!' : '📅 Event posted!', 'success');
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';
+      // Uncheck the box for next time
+      const notifyEl = document.getElementById('eventNotify');
+      if (notifyEl) notifyEl.checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {

@@ -58,6 +58,7 @@ const userSchema = new mongoose.Schema({
   isBetaTester: { type: Boolean, default: false },
   isModerator:  { type: Boolean, default: false },
   canPostNews:  { type: Boolean, default: false },
+  isDeveloper: { type: Boolean, default: false },
 
   // Reputation
   reputation: { type: Number, default: 0 },

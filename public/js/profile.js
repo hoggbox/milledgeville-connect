@@ -318,6 +318,7 @@ content.innerHTML = `
   <p class="text-emerald-400 text-base mb-1">${currentUser.email}</p>
   ${currentUser.neighborhood ? `<p class="text-white/60 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
 
+  <!-- Reputation + Developer Badge -->
   <div class="flex justify-center mt-3 mb-6">
     <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
       ⭐ ${currentUser.reputation || 0}
@@ -325,25 +326,24 @@ content.innerHTML = `
     </div>
   </div>
 
-  ${currentUser.bio ? `<p class="text-white/80 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
-  ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
+  ${currentUser.isDeveloper ? `
+  <div class="flex justify-center mb-4">
+    <div class="inline-flex items-center gap-2 px-5 py-1.5 rounded-3xl 
+                bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 
+                text-white font-bold text-sm tracking-[1.5px] shadow-lg shadow-violet-500/30
+                border border-white/20">
+      <span class="font-mono text-base">&lt;/&gt;</span>
+      <span>DEVELOPER</span>
+    </div>
+  </div>` : ''}
 
-  <!-- Stats Cards -->
-  <div class="mt-6 grid grid-cols-3 gap-3">
-    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
-      <span class="text-xl font-bold text-white">🗓️</span>
-      <span class="text-xs text-white/50 mt-1">Joined</span>
-      <span class="text-xs font-semibold text-white">${joinedStr}</span>
-    </div>
-    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
-      <span class="text-lg font-bold text-white">${isVerified ? '🏪' : '🌱'}</span>
-      <span class="text-xs text-white/50 mt-1">Status</span>
-      <span class="text-xs font-semibold text-white">${isVerified ? 'Owner' : 'Member'}</span>
-    </div>
-    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
-      <span class="text-lg font-bold text-white">${isAdmin ? '🔧' : '⭐'}</span>
-      <span class="text-xs text-white/50 mt-1">Role</span>
-      <span class="text-xs font-semibold text-white">${isAdmin ? 'Admin' : 'User'}</span>
+  <!-- Role -->
+  <div class="flex justify-center mb-6">
+    <div class="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-5 py-2 rounded-3xl text-sm">
+      <span class="text-lg">${currentUser.isDeveloper ? '🧠' : (isAdmin ? '🔧' : '⭐')}</span>
+      <span class="font-semibold text-white/90">
+        ${currentUser.isDeveloper ? 'Creator & Developer' : (isAdmin ? 'Admin' : 'Member')}
+      </span>
     </div>
   </div>
 
