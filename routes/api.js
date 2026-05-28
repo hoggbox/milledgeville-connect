@@ -947,8 +947,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
             notification: {
               sound:     'default',
               channelId: 'default',
-              ...(hasPhoto && { imageUrl }), // android big-picture image
-              ...(logoUrl && !hasPhoto && { imageUrl: logoUrl }) // biz logo as large icon when no big photo
+              ...(hasPhoto && { imageUrl }), // android big-picture image (only actual uploaded photo)
+              ...(iconUrl  && { icon: iconUrl }) // small icon: biz logo or MC default
             }
           },
           apns: {
@@ -1870,7 +1870,7 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body, postId } = req.body;  // ← accept postId
+    const { title, body, postId, imageUrl } = req.body;  // ← accept postId and optional photo
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
     }
@@ -1918,7 +1918,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
   };
 }
 
-    await broadcastPush(title.trim(), stampedBody, deepLink, { type: 'custom', logoUrl: bizLogoUrl });
+    await broadcastPush(title.trim(), stampedBody, deepLink, { type: 'custom', imageUrl: imageUrl || null, logoUrl: bizLogoUrl });
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
