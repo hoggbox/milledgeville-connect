@@ -916,69 +916,93 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// Send push to a single user (supports both native FCM and web VAPID)
-// AFTER — add imageUrl param with fallback to APP_ICON:
-// Send push to a single user (supports both native FCM and web VAPID)
-// Icon is ALWAYS the app icon. Big picture (image) only appears when a photo is provided.
-// Send push to a single user (supports both native FCM and web VAPID)
-// Icon is ALWAYS the app icon. Big picture only appears when a photo is provided.
+// ─── SEND PUSH TO A SINGLE USER ────────────────────────────────────────────
+// Reads fcmTokens (FCM/APK) and webPushSubscriptions (web VAPID) directly from
+// the User document. Stale / expired tokens are pruned automatically on failure.
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  const sub = await PushSubscription.findOne({ user: userId });
-  if (!sub) return false;
+  const user = await User.findById(userId).select('fcmTokens webPushSubscriptions');
+  if (!user) return false;
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const hasPhoto = !!imageUrl;
+  const hasPhoto  = !!imageUrl;
+  const msgData   = { page: data.page || '', id: data.id || '' };
+  let   sent      = false;
 
-  if (sub.nativeToken) {
-    try {
-      await admin.messaging().send({
-        token: sub.nativeToken,
-        notification: {
-          title,
-          body,
-          icon: APP_ICON,
-          ...(hasPhoto && { imageUrl })
-        },
-        data: { page: data.page || '', id: data.id || '' },
-        android: {
-          priority: 'high',
+  // ── FCM (Android APK) ──────────────────────────────────────────────────────
+  if (user.fcmTokens?.length) {
+    const keepTokens = [];
+    for (const token of user.fcmTokens) {
+      try {
+        await admin.messaging().send({
+          token,
           notification: {
-            sound: 'default',
-            channelId: 'default',
-            ...(hasPhoto && { imageUrl })
+            title,
+            body,
+            ...(hasPhoto && { imageUrl })   // top-level image for rich notifications
+          },
+          data: msgData,
+          android: {
+            priority: 'high',
+            notification: {
+              sound:     'default',
+              channelId: 'default',
+              ...(hasPhoto && { imageUrl }) // android big-picture image
+            }
+          },
+          apns: {
+            payload:    { aps: { sound: 'default', 'mutable-content': 1 } },
+            fcmOptions: hasPhoto ? { imageUrl } : {}
           }
-        },
-        apns: {
-          payload: { aps: { sound: 'default', 'mutable-content': 1 } },
-          fcmOptions: hasPhoto ? { imageUrl } : {}
-        }
-      });
-      return true;
-    } catch (e) {
-      console.error('FCM error:', e.message);
-      return false;
+        });
+        keepTokens.push(token);
+        sent = true;
+      } catch (e) {
+        // Permanently invalid tokens get pruned; transient errors keep the token
+        const stale = [
+          'messaging/registration-token-not-registered',
+          'messaging/invalid-registration-token',
+          'messaging/invalid-argument'
+        ];
+        if (!stale.includes(e.code)) keepTokens.push(token);
+        console.error('FCM send error:', e.code || e.message);
+      }
+    }
+    // Only write back if we actually pruned something
+    if (keepTokens.length !== user.fcmTokens.length) {
+      await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
     }
   }
 
-  if (sub.subscription?.endpoint) {
-    try {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data: { page: data.page || '', id: data.id || '' },
-          icon: APP_ICON,
-          ...(hasPhoto && { image: imageUrl })
-        })
-      );
-      return true;
-    } catch (e) {
-      console.error('Web push error:', e.message);
-      return false;
+  // ── Web VAPID ──────────────────────────────────────────────────────────────
+  if (user.webPushSubscriptions?.length) {
+    const keepSubs = [];
+    for (const sub of user.webPushSubscriptions) {
+      if (!sub?.endpoint) continue;
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, expirationTime: sub.expirationTime, keys: sub.keys },
+          JSON.stringify({
+            title,
+            body,
+            data:  msgData,
+            icon:  APP_ICON,
+            ...(hasPhoto && { image: imageUrl })
+          })
+        );
+        keepSubs.push(sub);
+        sent = true;
+      } catch (e) {
+        // 410 Gone / 404 Not Found = subscription permanently expired
+        if (e.statusCode !== 410 && e.statusCode !== 404) keepSubs.push(sub);
+        console.error('Web push send error:', e.statusCode || e.message);
+      }
+    }
+    if (keepSubs.length !== user.webPushSubscriptions.length) {
+      await User.findByIdAndUpdate(userId, { $set: { webPushSubscriptions: keepSubs } });
     }
   }
-  return false;
+
+  return sent;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -995,12 +1019,13 @@ async function broadcastPush(title, body, data = {}, options = {}) {
   console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
   try {
+    // Find anyone who has at least one FCM token OR one web VAPID subscription
     const users = await User.find({
       $or: [
-        { fcmTokens: { $exists: true, $ne: [] } },
-        { pushEnabled: true }
+        { fcmTokens:            { $exists: true, $ne: [] } },
+        { 'webPushSubscriptions.0': { $exists: true } }
       ]
-    }).select('_id notificationPreferences');
+    }).select('_id notificationPreferences fcmTokens webPushSubscriptions');
 
     for (const user of users) {
       const prefs = user.notificationPreferences || {};
@@ -1279,26 +1304,25 @@ router.get('/push/vapid-public-key', (req, res) => {
 router.post('/push/subscribe', authenticate, async (req, res) => {
   try {
     const { subscription } = req.body;
-    if (!subscription) {
-      return res.status(400).json({ message: 'Subscription object required' });
+    if (!subscription?.endpoint) {
+      return res.status(400).json({ message: 'Subscription object with endpoint required' });
     }
 
-    // ── IMPORTANT: use findOneAndUpdate + upsert so we never wipe a nativeToken ──
-    // Deleting + recreating would erase the FCM token for users who have both.
-    await PushSubscription.findOneAndUpdate(
-      { user: req.userId },
-      {
-        $set: {
-          user: req.userId,
-          subscription: subscription,
-          platform: 'web',
-          updatedAt: new Date()
-        }
-      },
-      { upsert: true, new: true }
-    );
+    // Avoid duplicates — check by endpoint before pushing
+    const user = await User.findById(req.userId).select('webPushSubscriptions');
+    const alreadyStored = user?.webPushSubscriptions?.some(s => s.endpoint === subscription.endpoint);
 
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+    if (!alreadyStored) {
+      await User.findByIdAndUpdate(req.userId, {
+        $push:  { webPushSubscriptions: {
+          endpoint:       subscription.endpoint,
+          expirationTime: subscription.expirationTime ?? null,
+          keys:           subscription.keys
+        }},
+        $set:   { pushEnabled: true }
+      });
+    }
+
     res.json({ message: 'Web push subscription saved' });
   } catch (err) {
     console.error('Push subscribe error:', err);
@@ -1308,8 +1332,9 @@ router.post('/push/subscribe', authenticate, async (req, res) => {
 
 router.post('/push/unsubscribe', authenticate, async (req, res) => {
   try {
-    await PushSubscription.deleteOne({ user: req.userId });
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: false });
+    await User.findByIdAndUpdate(req.userId, {
+      $set: { fcmTokens: [], webPushSubscriptions: [], pushEnabled: false }
+    });
     res.json({ message: 'Unsubscribed' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3417,27 +3442,18 @@ function sanitizeUser(user) {
 
 router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
-    const { token, platform = 'android' } = req.body;
+    const { token } = req.body;
     if (!token || token.length < 100) {
       return res.status(400).json({ message: 'Invalid token' });
     }
 
-    const sub = await PushSubscription.findOneAndUpdate(
-      { user: req.userId },
-      { 
-        $set: {
-          user: req.userId,
-          nativeToken: token,
-          platform: platform,
-          updatedAt: new Date()
-        }
-      },
-      { upsert: true, new: true }
-    );
+    // $addToSet prevents duplicate tokens if the APK calls this more than once
+    await User.findByIdAndUpdate(req.userId, {
+      $addToSet: { fcmTokens: token },
+      $set:      { pushEnabled: true }
+    });
 
-    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
-
-    console.log(`✅ Native token saved for user ${req.userId}`);
+    console.log(`✅ FCM token stored on User for ${req.userId}`);
     res.json({ message: 'Token saved', success: true });
 
   } catch (err) {
