@@ -1827,7 +1827,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     const business = await Business.findById(user.verifiedBusiness).select('name');
     const bizName  = business?.name || user.name;
 
-    const deducted = await deductNotificationCredit(req.userId);
+    const deducted = await deductNotificationCredit(req.userId, 2);
     if (!deducted) {
       return res.status(403).json({
         message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
@@ -2853,7 +2853,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
     });
 
     if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId, 1, false);
+      const deducted = await deductNotificationCredit(req.userId, 1);
       if (deducted) {
         broadcastPush(
           '🔥 New Deal Available!',
@@ -2910,7 +2910,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
     });
 
     if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId, 1, false);
+      const deducted = await deductNotificationCredit(req.userId, 1);
       if (deducted) {
         broadcastPush(
           '📅 New Event Posted!',
@@ -2991,9 +2991,9 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       address:     address || ''
     });
 
-    // Optional push notification — costs 2 credits
+    // Optional push notification — costs 1 credit
 if (sendNotify) {
-  const deducted = await deductNotificationCredit(req.userId, 2, false);
+  const deducted = await deductNotificationCredit(req.userId, 1);
   if (deducted) {
     broadcastPush(
       `🏠 New Home Listing`,
@@ -3629,6 +3629,14 @@ router.post('/owner/buy-credits', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can buy credits' });
     }
 
+    // Credit purchasing requires an active Pro subscription
+    if (user.subscriptionTier !== 'pro' || !user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
+      return res.status(403).json({
+        message: 'Buying credits requires an active Business Pro subscription ($29.99/mo).',
+        requiresPro: true
+      });
+    }
+
     const { credits = 10 } = req.body;
 
     user.notificationCredits = (user.notificationCredits || 0) + Number(credits);
@@ -3793,14 +3801,12 @@ router.delete('/user/delete-account', authenticate, async (req, res) => {
 // Pro users have their 12 monthly credits refreshed each billing cycle.
 // Normal users (no verifiedBusiness) should never reach this function,
 // but we guard against it anyway.
-async function deductNotificationCredit(userId) {
+async function deductNotificationCredit(userId, cost = 1) {
   const user = await User.findById(userId);
   if (!user) return false;
 
   // Non-owners cannot use notification credits at all
   if (!user.verifiedBusiness) return false;
-
-  const cost = 2;
 
   if ((user.notificationCredits || 0) < cost) {
     return false; // Out of credits — blocked for both free and pro owners
@@ -3894,7 +3900,7 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
 
 // Optional push notification with thumbnail
 if (sendNotify) {
-  const deducted = await deductNotificationCredit(req.userId);
+  const deducted = await deductNotificationCredit(req.userId, 1);
   if (deducted) {
     const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
     const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
