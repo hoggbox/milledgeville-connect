@@ -1079,8 +1079,9 @@ window.openNewsArticle = async function (articleId) {
             </div>
           </div>
 
-          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px]" style="white-space:pre-wrap;">
-            ${esc(article.content)}
+          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px]"
+               ${!article.contentHtml ? 'style="white-space:pre-wrap;"' : ''}>
+            ${article.contentHtml ? article.contentHtml : esc(article.content || '')}
           </div>
 
           ${imagesHTML}
@@ -1225,8 +1226,30 @@ async function loadPostNewsPage(content) {
                class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
         <input id="newsSummary" type="text" placeholder="Short summary (shown on home page) *"
                class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
-        <textarea id="newsContent" rows="8" placeholder="Full article content *"
-                  class="w-full mb-4 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
+        <div class="mb-4">
+          <p class="text-sm font-semibold text-white/70 mb-2">Full article content *</p>
+          <div class="border border-white/20 rounded-3xl overflow-hidden bg-[#0f172a]">
+            <!-- Rich text toolbar -->
+            <div class="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/5 text-sm">
+              <button type="button" onclick="execNewsCommand('bold')" class="px-3 py-1.5 hover:bg-white/10 rounded-xl font-black" title="Bold">B</button>
+              <button type="button" onclick="execNewsCommand('italic')" class="px-3 py-1.5 hover:bg-white/10 rounded-xl italic" title="Italic">I</button>
+              <button type="button" onclick="execNewsCommand('underline')" class="px-3 py-1.5 hover:bg-white/10 rounded-xl underline" title="Underline">U</button>
+              <span class="w-px h-4 bg-white/20 mx-1.5"></span>
+              <button type="button" onclick="execNewsCommand('formatBlock', 'h2')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold" title="Heading 2">H2</button>
+              <button type="button" onclick="execNewsCommand('formatBlock', 'h3')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold" title="Heading 3">H3</button>
+              <span class="w-px h-4 bg-white/20 mx-1.5"></span>
+              <button type="button" onclick="execNewsCommand('insertUnorderedList')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-sm" title="Bullet list">• List</button>
+              <button type="button" onclick="execNewsCommand('insertOrderedList')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-mono" title="Numbered list">1. List</button>
+              <span class="w-px h-4 bg-white/20 mx-1.5"></span>
+              <button type="button" onclick="insertNewsLink()" class="px-3 py-1.5 hover:bg-white/10 rounded-xl flex items-center gap-1 text-xs" title="Insert hyperlink">🔗 Link</button>
+            </div>
+            <div id="newsContentEditor" contenteditable="true"
+                 class="min-h-[240px] max-h-[420px] overflow-auto p-5 text-[15px] leading-relaxed text-white/90 focus:outline-none bg-transparent"
+                 style="white-space: pre-wrap; word-break: break-word;">
+            </div>
+          </div>
+          <p class="text-[10px] text-white/40 mt-1 px-1">Formatting is preserved. Links will be clickable for readers.</p>
+        </div>
 
         <div class="mb-5">
           <p class="text-sm font-semibold text-white/70 mb-2">Photos (optional — click to add, drag to reorder)</p>
@@ -1309,16 +1332,57 @@ window.removeNewsImage = function (index) {
   }
 };
 
+window.execNewsCommand = function (command, value = null) {
+  const editor = document.getElementById('newsContentEditor');
+  if (!editor) return;
+  editor.focus();
+  if (command === 'formatBlock' && value) {
+    document.execCommand('formatBlock', false, value);
+  } else {
+    document.execCommand(command, false, value);
+  }
+  setTimeout(() => editor.focus(), 10);
+};
+
+window.insertNewsLink = function () {
+  const editor = document.getElementById('newsContentEditor');
+  if (!editor) return;
+  editor.focus();
+  const url = prompt('Enter the full URL (https:// or http://):');
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) {
+    showToast('Link must start with https:// or http://', 'error');
+    return;
+  }
+  document.execCommand('createLink', false, url);
+};
+
 window.submitNewsArticle = async function () {
   const title   = document.getElementById('newsTitle')?.value.trim();
   const summary = document.getElementById('newsSummary')?.value.trim();
-  const content = document.getElementById('newsContent')?.value.trim();
-  if (!title || !summary || !content) { showToast('Title, summary, and content are required', 'error'); return; }
+
+  const editorEl = document.getElementById('newsContentEditor');
+  let contentHtml = '';
+  let content = '';
+
+  if (editorEl) {
+    contentHtml = editorEl.innerHTML.trim();
+    // Create plain text fallback for old articles / search
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = contentHtml;
+    content = (tempDiv.textContent || tempDiv.innerText || '').trim().substring(0, 5000);
+  }
+
+  if (!title || !summary || (!content && !contentHtml)) {
+    showToast('Title, summary, and content are required', 'error');
+    return;
+  }
 
   const res = await apiPost('/news', {
     title,
     summary,
     content,
+    contentHtml,
     images: window._pendingNewsImages || []
   });
 
@@ -8750,6 +8814,7 @@ window.showNotificationSettingsModal = async function() {
     lostFound: prefs.lostFound !== false,
     messages:  prefs.messages  !== false,
     comments:  prefs.comments  !== false,
+    news:      prefs.news      !== false,
     marketplace: {
       all:       prefs.marketplace?.all       !== false,
       homes:     prefs.marketplace?.homes     !== false,
@@ -8803,6 +8868,7 @@ window.showNotificationSettingsModal = async function() {
           ${toggle('pref-lostfound', p.lostFound, '🔎 Lost & Found — lost pets and items nearby')}
           ${toggle('pref-messages',  p.messages,  '✉️ Direct Messages — messages from other users')}
           ${toggle('pref-comments',  p.comments,  '💬 Comments — replies on your posts and listings')}
+          ${toggle('pref-news',    p.news,    '📰 News — new articles & local updates')}
 
           <!-- Marketplace section -->
           <div class="pt-2">
@@ -8863,6 +8929,7 @@ window.saveNotificationPreferences = async function() {
     lostFound: document.getElementById('pref-lostfound')?.checked ?? true,
     messages: document.getElementById('pref-messages')?.checked ?? true,
     comments: document.getElementById('pref-comments')?.checked ?? true,
+    news: document.getElementById('pref-news')?.checked ?? true,
     marketplace: {
       all: document.getElementById('pref-market-all')?.checked ?? true,
       homes: document.getElementById('pref-market-homes')?.checked ?? true,

@@ -518,6 +518,10 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
+    let shoutoutThumb = null;
+    if (shoutout.images && shoutout.images.length > 0) {
+      shoutoutThumb = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
+    }
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -525,7 +529,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
         page: 'shoutouts', 
         id: shoutout._id.toString() 
       },
-      { type: 'shoutout' }
+      { type: 'shoutout', imageUrl: shoutoutThumb }
     );
 
     res.json(shoutout);
@@ -914,28 +918,42 @@ function requireAdminOrModerator(req, res, next) {
 
 // Send push to a single user (supports both native FCM and web VAPID)
 // AFTER — add imageUrl param with fallback to APP_ICON:
+// Send push to a single user (supports both native FCM and web VAPID)
+// Icon is ALWAYS the app icon. Big picture (image) only appears when a photo is provided.
+// Send push to a single user (supports both native FCM and web VAPID)
+// Icon is ALWAYS the app icon. Big picture only appears when a photo is provided.
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
   if (!sub) return false;
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const thumb = imageUrl || APP_ICON;
+  const hasPhoto = !!imageUrl;
 
   if (sub.nativeToken) {
     try {
-await admin.messaging().send({
-  token: sub.nativeToken,
-  notification: { title, body, imageUrl: thumb },
-  data: { page: data.page || '', id: data.id || '' },
-  android: {
-    priority: 'high',
-    notification: { sound: 'default', channelId: 'default', imageUrl: thumb }
-  },
-  apns: {
-    payload: { aps: { sound: 'default', 'mutable-content': 1 } },
-    fcmOptions: { imageUrl: thumb }
-  }
-});
+      await admin.messaging().send({
+        token: sub.nativeToken,
+        notification: {
+          title,
+          body,
+          icon: APP_ICON,
+          ...(hasPhoto && { imageUrl })
+        },
+        data: { page: data.page || '', id: data.id || '' },
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            icon: APP_ICON,
+            ...(hasPhoto && { imageUrl })
+          }
+        },
+        apns: {
+          payload: { aps: { sound: 'default', 'mutable-content': 1 } },
+          fcmOptions: hasPhoto ? { imageUrl } : {}
+        }
+      });
       return true;
     } catch (e) {
       console.error('FCM error:', e.message);
@@ -951,8 +969,8 @@ await admin.messaging().send({
           title,
           body,
           data: { page: data.page || '', id: data.id || '' },
-          icon: thumb,
-          image: thumb
+          icon: APP_ICON,
+          ...(hasPhoto && { image: imageUrl })
         })
       );
       return true;
@@ -1018,6 +1036,10 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
         case 'comment':
           if (prefs.comments === false) shouldSend = false;
+          break;
+
+        case 'news':
+          if (prefs.news === false) shouldSend = false;
           break;
 
         case 'marketplace':
@@ -1425,16 +1447,20 @@ router.post('/lostitems', authenticate, async (req, res) => {
       authorName: user.name
     });
 
-broadcastPush(
-  isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
-  `${user.name} posted: ${title}`,
-  { 
-    page: 'lostfound', 
-    id: item._id.toString(),
-    url: `/lostfound/${item._id}`
-  },
-  { type: 'lost' }
-);
+    let lostThumb = null;
+    if (item.images && item.images.length > 0) {
+      lostThumb = `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`;
+    }
+    broadcastPush(
+      isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
+      `${user.name} posted: ${title}`,
+      { 
+        page: 'lostfound', 
+        id: item._id.toString(),
+        url: `/lostfound/${item._id}`
+      },
+      { type: 'lost', imageUrl: lostThumb }
+    );
 
     res.json(item);
   } catch (err) {
@@ -1580,11 +1606,15 @@ router.post('/marketplace', authenticate, async (req, res) => {
         ? `🏠 New Listing from ${user.verifiedBusiness.name || user.name}`
         : `🛒 New from ${user.verifiedBusiness.name || user.name}`;
 
+      let marketThumb = null;
+      if (item.images && item.images.length > 0) {
+        marketThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
+      }
       broadcastPush(
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
-        { type: 'custom' }
+        { type: 'custom', imageUrl: marketThumb }
       );
     }
 
@@ -2344,26 +2374,44 @@ router.post('/news', authenticate, async (req, res) => {
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const clean = sanitizeContent(req.body);
-    const { title, summary, content, images } = clean;
+    const { title, summary, content, contentHtml, images } = req.body;
 
-    if (!title || !summary || !content)
+    if (!title || !summary || !(content || contentHtml))
       return res.status(400).json({ message: 'Title, summary, and content are required' });
 
-    const article = await News.create({ 
-      title, 
-      summary, 
-      content, 
-      images: images || [], 
-      author: user._id, 
-      authorName: user.name 
+    // Plain fields → use existing strip-all sanitizer
+    const plainTitle   = sanitizeContent({ title }).title   || title.substring(0, 200);
+    const plainSummary = sanitizeContent({ summary }).summary || summary.substring(0, 300);
+
+    // Create plain text version from contentHtml if no plain content was sent
+    const plainContent = content
+      ? (sanitizeContent({ content }).content || content)
+      : (contentHtml ? contentHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 5000) : '');
+
+    // Rich HTML → use the new safe sanitizer
+    const safeHtml = contentHtml ? sanitizeHtml(contentHtml) : undefined;
+
+    const article = await News.create({
+      title: plainTitle,
+      summary: plainSummary,
+      content: plainContent,
+      contentHtml: safeHtml,
+      images: Array.isArray(images) ? images.slice(0, 10) : [],
+      author: user._id,
+      authorName: user.name
     });
 
-    // === SEND PUSH NOTIFICATION ===
+    // === SEND PUSH NOTIFICATION (with thumbnail if photos exist) ===
+    let newsThumb = null;
+    if (article.images && article.images.length > 0) {
+      newsThumb = `https://www.milledgevilleconnect.com/api/news-thumb/${article._id}`;
+    }
+
     broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
-      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` }
+      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
+      { type: 'news', imageUrl: newsThumb }
     );
 
     res.json(article);
@@ -2380,11 +2428,12 @@ router.put('/news/:id', authenticate, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
-    const { title, summary, content, images } = req.body;
-    article.title   = title   || article.title;
-    article.summary = summary || article.summary;
-    article.content = content || article.content;
-    if (images !== undefined) article.images = images;
+    const { title, summary, content, contentHtml, images } = req.body;
+    if (title !== undefined)       article.title   = sanitizeContent({ title }).title || title;
+    if (summary !== undefined)     article.summary = sanitizeContent({ summary }).summary || summary;
+    if (content !== undefined)     article.content = sanitizeContent({ content }).content || content;
+    if (contentHtml !== undefined) article.contentHtml = sanitizeHtml(contentHtml);
+    if (images !== undefined)      article.images = images;
     await article.save();
     res.json(article);
   } catch (err) {
@@ -2995,6 +3044,10 @@ router.post('/owner/homes', authenticate, async (req, res) => {
 if (sendNotify) {
   const deducted = await deductNotificationCredit(req.userId, 1);
   if (deducted) {
+    let homeThumb = null;
+    if (item.images && item.images.length > 0) {
+      homeThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
+    }
     broadcastPush(
       `🏠 New Home Listing`,
       `${bizName} posted: ${title}`,
@@ -3003,7 +3056,8 @@ if (sendNotify) {
         id: item._id.toString() 
       },
       { 
-        type: 'custom'
+        type: 'custom',
+        imageUrl: homeThumb
       }
     );
   }
@@ -3508,6 +3562,20 @@ function sanitizeContent(fields = {}) {
   return out;
 }
 
+// ─── BASIC HTML SANITIZER FOR RICH-TEXT NEWS (allows safe formatting + links) ─
+function sanitizeHtml(dirty = '') {
+  if (typeof dirty !== 'string') return '';
+  return dirty
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?<\/embed>/gi, '')
+    .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/javascript:/gi, 'void(0);')
+    .trim()
+    .substring(0, 20000);
+}
+
 // ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
 router.get('/owner/subscription', authenticate, async (req, res) => {
   try {
@@ -3955,6 +4023,43 @@ res.set({
     res.status(500).send('Error');
   }
 });
+
+// ─── GENERIC THUMBNAIL SERVING FOR PUSH NOTIFICATIONS (shoutout/lost/market/news) ─
+async function serveImageThumb(req, res, Model) {
+  try {
+    const doc = await Model.findById(req.params.id).select('images image');
+    let imgData = null;
+    if (doc?.image) imgData = doc.image;                           // BusinessPost-style single image
+    else if (doc?.images && doc.images.length > 0) imgData = doc.images[0];
+
+    if (!imgData || typeof imgData !== 'string' || !imgData.startsWith('data:')) {
+      return res.status(404).send('No image');
+    }
+
+    const match = imgData.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Thumb error:', err.message);
+    res.status(500).send('Error');
+  }
+}
+
+// Public thumb endpoints so base64 images can be used as real HTTP URLs in push payloads
+router.get('/shoutout-thumb/:id',     (req, res) => serveImageThumb(req, res, Shoutout));
+router.get('/lostitem-thumb/:id',     (req, res) => serveImageThumb(req, res, LostItem));
+router.get('/marketplace-thumb/:id',  (req, res) => serveImageThumb(req, res, MarketplaceItem));
+router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, News));
 
 // GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
 // MUST come BEFORE the generic /:businessId route
