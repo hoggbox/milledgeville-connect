@@ -919,14 +919,15 @@ function requireAdminOrModerator(req, res, next) {
 // ─── SEND PUSH TO A SINGLE USER ────────────────────────────────────────────
 // Reads fcmTokens (FCM/APK) and webPushSubscriptions (web VAPID) directly from
 // the User document. Stale / expired tokens are pruned automatically on failure.
-async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
+async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, logoUrl = null) {
   const user = await User.findById(userId).select('fcmTokens webPushSubscriptions');
   if (!user) return false;
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const hasPhoto  = !!imageUrl;
-  const msgData   = { page: data.page || '', id: data.id || '' };
-  let   sent      = false;
+  const iconUrl  = logoUrl || APP_ICON;   // biz logo if available, else MC default
+  const hasPhoto = !!imageUrl;
+  const msgData  = { page: data.page || '', id: data.id || '' };
+  let   sent     = false;
 
   // ── FCM (Android APK) ──────────────────────────────────────────────────────
   if (user.fcmTokens?.length) {
@@ -946,7 +947,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
             notification: {
               sound:     'default',
               channelId: 'default',
-              ...(hasPhoto && { imageUrl }) // android big-picture image
+              ...(hasPhoto && { imageUrl }), // android big-picture image
+              ...(logoUrl && !hasPhoto && { imageUrl: logoUrl }) // biz logo as large icon when no big photo
             }
           },
           apns: {
@@ -985,7 +987,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
             title,
             body,
             data:  msgData,
-            icon:  APP_ICON,
+            icon:  iconUrl,                              // biz logo or MC default
+            badge: APP_ICON,                             // monochrome badge (status bar)
             ...(hasPhoto && { image: imageUrl })
           })
         );
@@ -1014,7 +1017,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 // ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
-  const { type = null, subCategory = null, imageUrl = null } = options;
+  const { type = null, subCategory = null, imageUrl = null, logoUrl = null } = options;
 
   console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
@@ -1033,7 +1036,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
       if (!type) {
         // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data, imageUrl);
+        await sendPushToUser(user._id, title, body, data, imageUrl, logoUrl);
         continue;
       }
 
@@ -1091,7 +1094,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
       }
 
       if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data, imageUrl);
+        await sendPushToUser(user._id, title, body, data, imageUrl, logoUrl);
       }
     }
   } catch (err) {
@@ -1878,8 +1881,9 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can send notifications' });
     }
 
-    const business = await Business.findById(user.verifiedBusiness).select('name');
+    const business = await Business.findById(user.verifiedBusiness).select('name logo');
     const bizName  = business?.name || user.name;
+    const bizLogoUrl = business?.logo ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness}` : null;
 
     const deducted = await deductNotificationCredit(req.userId, 2);
     if (!deducted) {
@@ -1912,7 +1916,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
   };
 }
 
-    await broadcastPush(title.trim(), stampedBody, deepLink);
+    await broadcastPush(title.trim(), stampedBody, deepLink, { type: 'custom', logoUrl: bizLogoUrl });
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
@@ -2928,6 +2932,9 @@ router.post('/owner/deals', authenticate, async (req, res) => {
     if (sendNotify) {
       const deducted = await deductNotificationCredit(req.userId, 1);
       if (deducted) {
+        const dealLogoUrl = user.verifiedBusiness?.logo
+          ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
+          : null;
         broadcastPush(
           '🔥 New Deal Available!',
           title,
@@ -2936,7 +2943,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
             id: deal._id.toString(),
             url: `/deals/${deal._id}`
           },
-          { type: 'custom', imageUrl: null }
+          { type: 'custom', imageUrl: null, logoUrl: dealLogoUrl }
         );
       }
     }
@@ -2985,6 +2992,9 @@ router.post('/owner/events', authenticate, async (req, res) => {
     if (sendNotify) {
       const deducted = await deductNotificationCredit(req.userId, 1);
       if (deducted) {
+        const eventLogoUrl = user.verifiedBusiness?.logo
+          ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
+          : null;
         broadcastPush(
           '📅 New Event Posted!',
           title + (location ? ` · ${location}` : ''),
@@ -2993,7 +3003,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
             id: event._id.toString(),
             url: `/events/${event._id}`
           },
-          { type: 'custom', imageUrl: null }
+          { type: 'custom', imageUrl: null, logoUrl: eventLogoUrl }
         );
       }
     }
@@ -3953,7 +3963,7 @@ resetProCredits(); // run once on server start
 // POST /api/owner/business-posts — create a new photo post
 router.post('/owner/business-posts', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name');
+    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name logo');
     if (!user)                  return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) return res.status(403).json({ message: 'Only verified business owners can post updates' });
 
@@ -3989,6 +3999,9 @@ if (sendNotify) {
     const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
 
     // Send with image + correct deep link data
+    const postLogoUrl = user.verifiedBusiness?.logo
+      ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
+      : null;
     await broadcastPush(
       pushTitle,
       caption?.trim() || 'Posted a new photo update — tap to see it!',
@@ -3998,7 +4011,8 @@ if (sendNotify) {
       },
       { 
         imageUrl: thumbUrl,
-        type: 'custom' 
+        type: 'custom',
+        logoUrl: postLogoUrl
       }
     );
   }
@@ -4075,6 +4089,30 @@ router.get('/shoutout-thumb/:id',     (req, res) => serveImageThumb(req, res, Sh
 router.get('/lostitem-thumb/:id',     (req, res) => serveImageThumb(req, res, LostItem));
 router.get('/marketplace-thumb/:id',  (req, res) => serveImageThumb(req, res, MarketplaceItem));
 router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, News));
+
+// GET /api/biz-logo-thumb/:bizId — serves a business logo as a real HTTP image URL for push notifications
+router.get('/biz-logo-thumb/:bizId', async (req, res) => {
+  try {
+    const biz = await Business.findById(req.params.bizId).select('logo');
+    if (!biz?.logo || typeof biz.logo !== 'string' || !biz.logo.startsWith('data:')) {
+      return res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
+    }
+    const match = biz.logo.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Biz logo thumb error:', err.message);
+    res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
+  }
+});
 
 // GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
 // MUST come BEFORE the generic /:businessId route
