@@ -158,91 +158,127 @@
   <script src="/js/auth.js"></script>
   <script src="/js/main.js"></script>
 
-  <script>
-    (function() {
-      // Already installed — never show
-      var isStandalone =
-        window.matchMedia('(display-mode: standalone)').matches ||
-        navigator.standalone === true ||
-        document.referrer.indexOf('android-app://') === 0;
-      if (isStandalone) return;
+<script>
+(function() {
+  let deferredPrompt = null;
 
-      // Dismissed in last 7 days — skip
-      var dismissedAt = parseInt(localStorage.getItem('mcInstallDismissed') || '0', 10);
-      if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
+  // Check if already installed as PWA
+  const isStandalone = 
+    window.matchMedia('(display-mode: standalone)').matches || 
+    navigator.standalone === true ||
+    document.referrer.indexOf('android-app://') === 0;
 
-      function makeBanner(installCallback, message) {
-        if (document.getElementById('mcInstallBanner')) return;
-        var banner = document.createElement('div');
-        banner.id = 'mcInstallBanner';
-        banner.style.cssText = [
-          'position:fixed','bottom:72px','left:50%','transform:translateX(-50%)',
-          'width:calc(100% - 32px)','max-width:480px',
-          'background:linear-gradient(135deg,#064e3b,#065f46)',
-          'border:1px solid rgba(52,211,153,0.4)','border-radius:20px',
-          'padding:14px 16px','display:flex','align-items:center','gap:12px',
-          'z-index:89000','box-shadow:0 8px 32px rgba(0,0,0,0.6)',
-        ].join(';');
+  if (isStandalone) return;
 
-        banner.innerHTML =
-          '<span style="font-size:1.5rem;flex-shrink:0">📲</span>' +
-          '<div style="flex:1;min-width:0">' +
-            '<p style="font-weight:700;font-size:.85rem;color:#fff;margin:0 0 2px">Install Milledgeville Connect</p>' +
-            '<p style="font-size:.75rem;color:rgba(255,255,255,.7);margin:0;line-height:1.4">' + message + '</p>' +
-          '</div>' +
-          (installCallback ?
-            '<button id="mcInstallBtn" style="background:#10b981;color:#fff;border:none;border-radius:12px;' +
-            'padding:10px 16px;font-weight:700;font-size:.82rem;white-space:nowrap;cursor:pointer;' +
-            'touch-action:manipulation;-webkit-tap-highlight-color:transparent;flex-shrink:0">Install</button>' : '') +
-          '<button id="mcDismissBtn" style="background:none;border:none;color:rgba(255,255,255,.5);' +
-          'font-size:1.5rem;line-height:1;cursor:pointer;padding:4px;' +
-          'touch-action:manipulation;-webkit-tap-highlight-color:transparent;flex-shrink:0">×</button>';
+  // Show manual install option in profile
+  function showInstallOptionInProfile() {
+    const container = document.getElementById('sheet-content');
+    if (!container || document.getElementById('installAppOption')) return;
 
-        document.body.appendChild(banner);
+    const installHTML = `
+      <div id="installAppOption" class="mt-4 pt-4 border-t border-white/10">
+        <button onclick="triggerInstallPrompt()" 
+                class="w-full flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold transition">
+          <span>📲</span>
+          <span>Install App to Home Screen</span>
+        </button>
+        <p class="text-center text-xs text-white/40 mt-2">Get faster access + notifications</p>
+      </div>
+    `;
+    container.insertAdjacentHTML('beforeend', installHTML);
+  }
 
-        document.getElementById('mcDismissBtn').addEventListener('click', function() {
-          localStorage.setItem('mcInstallDismissed', Date.now().toString());
+  // Make this function global so profile.js can call it
+  window.triggerInstallPrompt = function() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        deferredPrompt = null;
+        const banner = document.getElementById('mcInstallBanner');
+        if (banner) banner.remove();
+      });
+    } else {
+      // Fallback for browsers that don't support the prompt
+      alert("To install:\n\n1. Tap the browser menu (⋮)\n2. Tap 'Add to Home screen' or 'Install app'");
+    }
+  };
+
+  // Listen for Chrome/Edge install prompt
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+
+    // Show the floating banner
+    if (!document.getElementById('mcInstallBanner')) {
+      const banner = document.createElement('div');
+      banner.id = 'mcInstallBanner';
+      banner.style.cssText = 'position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:460px;background:#064e3b;border:1px solid #34d399;border-radius:20px;padding:14px 16px;display:flex;align-items:center;gap:12px;z-index:89000;box-shadow:0 8px 32px rgba(0,0,0,0.6);';
+      
+      banner.innerHTML = `
+        <span style="font-size:1.6rem">📲</span>
+        <div style="flex:1">
+          <p style="font-weight:700;font-size:.9rem;margin:0 0 2px">Install Milledgeville Connect</p>
+          <p style="font-size:.75rem;color:rgba(255,255,255,.75);margin:0">Add to home screen for the best experience</p>
+        </div>
+        <button id="mcInstallBtn" style="background:#10b981;color:white;border:none;border-radius:14px;padding:10px 18px;font-weight:700;font-size:.85rem;white-space:nowrap">Install</button>
+        <button id="mcDismissBtn" style="background:none;border:none;color:rgba(255,255,255,.5);font-size:1.6rem;line-height:1;padding:2px 8px">×</button>
+      `;
+
+      document.body.appendChild(banner);
+
+      document.getElementById('mcInstallBtn').onclick = () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          deferredPrompt = null;
           banner.remove();
         });
+      };
 
-        if (installCallback) {
-          document.getElementById('mcInstallBtn').addEventListener('click', installCallback);
-        }
-      }
-
-      // ── Chrome / Edge / Samsung Browser ──────────────────────────────────────
-      // Banner only created INSIDE the event so deferredPrompt is always valid
-      window.addEventListener('beforeinstallprompt', function(e) {
-        e.preventDefault();
-        var prompt = e;
-        makeBanner(function() {
-          prompt.prompt();
-          prompt.userChoice.then(function() {
-            var b = document.getElementById('mcInstallBanner');
-            if (b) b.remove();
-          });
-        }, 'Add to your home screen for the best experience');
-      });
-
-      window.addEventListener('appinstalled', function() {
-        var b = document.getElementById('mcInstallBanner');
-        if (b) b.remove();
+      document.getElementById('mcDismissBtn').onclick = () => {
         localStorage.setItem('mcInstallDismissed', Date.now().toString());
-      });
+        banner.remove();
+      };
+    }
+  });
 
-      // ── iOS Safari ────────────────────────────────────────────────────────────
-      var ua = navigator.userAgent || '';
-      var isIosSafari =
-        /iphone|ipad|ipod/i.test(ua) &&
-        /safari/i.test(ua) &&
-        !/crios|fxios|opios/i.test(ua);
-      if (isIosSafari) {
-        // No install button possible on iOS — just show the instructions
-        setTimeout(function() {
-          makeBanner(null, 'Tap the <strong>Share ↑</strong> button then tap <strong>"Add to Home Screen"</strong>');
-        }, 1500);
+  // Show install option inside the profile sheet when opened
+  const originalShowProfileSheet = window.showProfileSheet;
+  if (originalShowProfileSheet) {
+    window.showProfileSheet = function() {
+      originalShowProfileSheet();
+      setTimeout(() => {
+        if (!isStandalone) showInstallOptionInProfile();
+      }, 300);
+    };
+  }
+
+  // iOS fallback instructions (only if not dismissed recently)
+  const dismissed = parseInt(localStorage.getItem('mcInstallDismissed') || '0', 10);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  if (isIOS && Date.now() - dismissed > 7 * 24 * 60 * 60 * 1000) {
+    setTimeout(() => {
+      if (!document.getElementById('mcInstallBanner')) {
+        const banner = document.createElement('div');
+        banner.id = 'mcInstallBanner';
+        banner.style.cssText = 'position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:460px;background:#064e3b;border:1px solid #34d399;border-radius:20px;padding:14px 16px;z-index:89000;';
+        
+        banner.innerHTML = `
+          <div style="display:flex;gap:12px;align-items:center">
+            <span style="font-size:1.5rem">📲</span>
+            <div style="flex:1">
+              <p style="font-weight:700;font-size:.85rem;margin:0 0 4px">Install to Home Screen</p>
+              <p style="font-size:.72rem;color:rgba(255,255,255,.75);margin:0">Tap <strong>Share ↑</strong> → <strong>"Add to Home Screen"</strong></p>
+            </div>
+            <button onclick="this.closest('#mcInstallBanner').remove()" style="background:none;border:none;color:rgba(255,255,255,.6);font-size:1.4rem;padding:0 6px">×</button>
+          </div>
+        `;
+        document.body.appendChild(banner);
       }
-    })();
-  </script>
+    }, 1800);
+  }
+
+})();
+</script>
 </body>
 </html>
