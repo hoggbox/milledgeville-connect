@@ -159,96 +159,44 @@
   <script src="/js/main.js"></script>
 
   <script>
-    // ── PWA Install Button ──────────────────────────────────────────────────
-    // Always shows on mobile browsers. Uses native prompt on Chrome/Edge/Samsung.
-    // Falls back to manual instructions on iOS Safari and all other browsers.
     (function() {
-      // Already installed as PWA — hide forever
+      // Already installed — never show
       var isStandalone =
         window.matchMedia('(display-mode: standalone)').matches ||
         navigator.standalone === true ||
         document.referrer.indexOf('android-app://') === 0;
       if (isStandalone) return;
 
-      // User dismissed within 7 days
+      // Dismissed in last 7 days — skip
       var dismissedAt = parseInt(localStorage.getItem('mcInstallDismissed') || '0', 10);
       if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
 
-      var deferredPrompt = null;
-
-      // Capture Chrome/Edge/Samsung prompt as early as possible
-      window.addEventListener('beforeinstallprompt', function(e) {
-        e.preventDefault();
-        deferredPrompt = e;
-      });
-
-      window.addEventListener('appinstalled', function() {
-        var b = document.getElementById('mcInstallBanner');
-        if (b) b.remove();
-        localStorage.setItem('mcInstallDismissed', Date.now().toString());
-      });
-
-      function getInstructions() {
-        var ua = navigator.userAgent || '';
-        // iOS Safari
-        if (/iphone|ipad|ipod/i.test(ua) && /safari/i.test(ua) && !/crios|fxios/i.test(ua)) {
-          return 'Tap the <strong>Share ↑</strong> button then <strong>"Add to Home Screen"</strong>';
-        }
-        // Firefox Android
-        if (/firefox/i.test(ua) && /android/i.test(ua)) {
-          return 'Tap the <strong>menu ⋮</strong> then <strong>"Install"</strong> or <strong>"Add to Home Screen"</strong>';
-        }
-        // Samsung Internet
-        if (/samsungbrowser/i.test(ua)) {
-          return 'Tap the <strong>menu ⋮</strong> then <strong>"Add page to"</strong> → <strong>"Home screen"</strong>';
-        }
-        // Generic fallback
-        return 'Open your browser menu and tap <strong>"Add to Home Screen"</strong>';
-      }
-
-      function showBanner() {
+      function makeBanner(installCallback, message) {
         if (document.getElementById('mcInstallBanner')) return;
-
         var banner = document.createElement('div');
         banner.id = 'mcInstallBanner';
         banner.style.cssText = [
-          'position:fixed',
-          'bottom:72px',
-          'left:50%',
-          'transform:translateX(-50%)',
-          'width:calc(100% - 32px)',
-          'max-width:480px',
+          'position:fixed','bottom:72px','left:50%','transform:translateX(-50%)',
+          'width:calc(100% - 32px)','max-width:480px',
           'background:linear-gradient(135deg,#064e3b,#065f46)',
-          'border:1px solid rgba(52,211,153,0.4)',
-          'border-radius:20px',
-          'padding:14px 16px',
-          'display:flex',
-          'align-items:center',
-          'gap:12px',
-          'z-index:89000',
-          'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
+          'border:1px solid rgba(52,211,153,0.4)','border-radius:20px',
+          'padding:14px 16px','display:flex','align-items:center','gap:12px',
+          'z-index:89000','box-shadow:0 8px 32px rgba(0,0,0,0.6)',
         ].join(';');
-
-        // Show native Install button if Chrome prompt is available,
-        // otherwise show manual instructions text
-        var hasPrompt = !!deferredPrompt;
-        var instructions = getInstructions();
 
         banner.innerHTML =
           '<span style="font-size:1.5rem;flex-shrink:0">📲</span>' +
           '<div style="flex:1;min-width:0">' +
             '<p style="font-weight:700;font-size:.85rem;color:#fff;margin:0 0 2px">Install Milledgeville Connect</p>' +
-            '<p style="font-size:.75rem;color:rgba(255,255,255,.7);margin:0;line-height:1.4">' +
-              (hasPrompt ? 'Add to your home screen for the best experience' : instructions) +
-            '</p>' +
+            '<p style="font-size:.75rem;color:rgba(255,255,255,.7);margin:0;line-height:1.4">' + message + '</p>' +
           '</div>' +
-          (hasPrompt ?
+          (installCallback ?
             '<button id="mcInstallBtn" style="background:#10b981;color:#fff;border:none;border-radius:12px;' +
             'padding:10px 16px;font-weight:700;font-size:.82rem;white-space:nowrap;cursor:pointer;' +
-            'touch-action:manipulation;flex-shrink:0">Install</button>' : '') +
+            'touch-action:manipulation;-webkit-tap-highlight-color:transparent;flex-shrink:0">Install</button>' : '') +
           '<button id="mcDismissBtn" style="background:none;border:none;color:rgba(255,255,255,.5);' +
           'font-size:1.5rem;line-height:1;cursor:pointer;padding:4px;' +
-          'touch-action:manipulation;flex-shrink:0">×</button>';
+          'touch-action:manipulation;-webkit-tap-highlight-color:transparent;flex-shrink:0">×</button>';
 
         document.body.appendChild(banner);
 
@@ -257,23 +205,43 @@
           banner.remove();
         });
 
-        var installBtn = document.getElementById('mcInstallBtn');
-        if (installBtn) {
-          installBtn.addEventListener('click', function() {
-            if (!deferredPrompt) return;
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then(function() {
-              deferredPrompt = null;
-              banner.remove();
-            });
-          });
+        if (installCallback) {
+          document.getElementById('mcInstallBtn').addEventListener('click', installCallback);
         }
       }
 
-      // Show after page load — small delay so it doesn't pop up mid-render
-      window.addEventListener('load', function() {
-        setTimeout(showBanner, 1500);
+      // ── Chrome / Edge / Samsung Browser ──────────────────────────────────────
+      // Banner only created INSIDE the event so deferredPrompt is always valid
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        var prompt = e;
+        makeBanner(function() {
+          prompt.prompt();
+          prompt.userChoice.then(function() {
+            var b = document.getElementById('mcInstallBanner');
+            if (b) b.remove();
+          });
+        }, 'Add to your home screen for the best experience');
       });
+
+      window.addEventListener('appinstalled', function() {
+        var b = document.getElementById('mcInstallBanner');
+        if (b) b.remove();
+        localStorage.setItem('mcInstallDismissed', Date.now().toString());
+      });
+
+      // ── iOS Safari ────────────────────────────────────────────────────────────
+      var ua = navigator.userAgent || '';
+      var isIosSafari =
+        /iphone|ipad|ipod/i.test(ua) &&
+        /safari/i.test(ua) &&
+        !/crios|fxios|opios/i.test(ua);
+      if (isIosSafari) {
+        // No install button possible on iOS — just show the instructions
+        setTimeout(function() {
+          makeBanner(null, 'Tap the <strong>Share ↑</strong> button then tap <strong>"Add to Home Screen"</strong>');
+        }, 1500);
+      }
     })();
   </script>
 </body>
