@@ -945,7 +945,6 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            icon: APP_ICON,
             ...(hasPhoto && { imageUrl })
           }
         },
