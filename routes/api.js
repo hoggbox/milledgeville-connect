@@ -36,6 +36,25 @@ const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 const Settings        = require('../models/Settings');     // ← SITE-WIDE ADMIN SETTINGS
 
+async function uploadImagesToCloudinary(images = [], folder = 'general') {
+  if (!Array.isArray(images) || images.length === 0) return images;
+  return Promise.all(images.map(img => uploadToCloudinary(img, folder)));
+}
+
+function sanitizeContent(body = {}) {
+  const out = {};
+  for (const [key, val] of Object.entries(body)) {
+    if (typeof val === 'string') {
+      out[key] = val.trim().substring(0, 10000);
+    } else if (Array.isArray(val)) {
+      out[key] = val;
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
 //
@@ -1061,25 +1080,6 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
       await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
     }
   }
-
-  async function uploadImagesToCloudinary(images = [], folder = 'general') {
-  if (!Array.isArray(images) || images.length === 0) return images;
-  return Promise.all(images.map(img => uploadToCloudinary(img, folder)));
-}
-
-function sanitizeContent(body = {}) {
-  const out = {};
-  for (const [key, val] of Object.entries(body)) {
-    if (typeof val === 'string') {
-      out[key] = val.trim().substring(0, 10000);
-    } else if (Array.isArray(val)) {
-      out[key] = val;
-    } else {
-      out[key] = val;
-    }
-  }
-  return out;
-}
 
   // ── Web VAPID ──────────────────────────────────────────────────────────────
   if (user.webPushSubscriptions?.length) {
