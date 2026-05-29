@@ -2545,6 +2545,25 @@ window.removeShoutoutImage = function (index) {
   renderShoutoutImagePreviews();
 };
 
+window.postShoutoutWithPhoto = async function () {
+  if (!requireAuth('Sign in to post traffic alerts.')) return;
+  const input = document.getElementById('shoutoutInput');
+  if (!input || !input.value.trim()) return;
+
+  const res = await apiPost('/shoutouts', { 
+    text: input.value.trim(),
+    images: _pendingShoutoutImages || []
+  });
+
+  if (res._id) {
+    showToast('✅ Traffic Alert posted!');
+    _pendingShoutoutImages = [];
+    input.value = '';
+    loadPage('shoutouts');
+  } else {
+    showToast(res.message || 'Error posting traffic alert', 'error');
+  }
+}
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -5685,6 +5704,30 @@ window.hideMarketModal = function() {
   if (modal) modal.remove();
 };
 
+window.postMarketplaceComment = async function(itemId) {
+  const input = document.getElementById('marketCommentInput');
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!requireAuth('Sign in to comment')) return;
+
+  try {
+    await apiPost(`/marketplace/${itemId}/comments`, { text });
+    input.value = '';
+    showToast('Comment posted');
+
+    // Refresh comments
+    const res = await apiGet(`/marketplace/${itemId}`);
+    const container = document.getElementById('marketCommentsContainer');
+    if (container && res.comments) {
+      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
+    }
+  } catch (e) {
+    showToast('Failed to post comment', 'error');
+  }
+};
 
 window.postMarketplaceItem = async function() {
   const category  = document.getElementById('marketCategory')?.value;
@@ -6262,6 +6305,22 @@ async function loadMarketplacePage(content) {
   renderMarketplacePage();
 }
 
+// Set active category filter
+window.setMarketCategoryFilter = function(category) {
+  window.currentMarketCategoryFilter = category;
+
+  // Update active button styles
+  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
+    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
+    } else {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+    }
+  });
+
+  renderMarketplacePage();
+};
+
 // Improved filter + render function (replaces old filterAndRenderMarketplace if it exists)
 window.filterAndRenderMarketplace = function() {
   const conditionSelect = document.getElementById('marketConditionFilter');
@@ -6404,6 +6463,11 @@ window.changeMarketPage = function(page) {
   renderMarketplacePage();
 };
 
+window.filterAndRenderMarketplace = function() {
+  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
+  window.currentMarketPage = 1;
+  renderMarketplacePage();
+};
 
 // Simple debounce helper
 function debounce(func, delay) {
@@ -7200,6 +7264,11 @@ window.showLostDetail = async function(id) {
     console.error(e);
     showToast('Could not load item', 'error');
   }
+};
+
+window.hideLostDetailModal = function() {
+  const modal = document.getElementById('lostDetailModal');
+  if (modal) modal.remove();
 };
 
 window.postLostComment = async function(itemId) {
@@ -8361,12 +8430,10 @@ window.reportContent = async function (type, id, extraInfo = '') {
     if (res && (res.message?.includes('Report submitted') || res._id)) {
       showToast('🚩 Report sent to admin team. Thank you.', 'success');
     } else {
-      showToast(res?.message || 'Failed to send report — try again later', 'error');
+      showToast(res?.message || 'Failed to send report', 'error');
     }
   } catch (e) {
-    // Surface the real server error message so failures aren't silent
-    const msg = (e instanceof Error ? e.message : null) || (typeof e === 'string' ? e : null);
-    showToast(msg || 'Could not send report — try again later', 'error');
+    showToast('Could not send report — try again later', 'error');
   }
 };
 
@@ -8621,21 +8688,15 @@ window.flagShoutout = async function (shoutoutId) {
 
   if (!confirm('Flag this traffic alert as inappropriate?')) return;
 
-  try {
-    const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
+  const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
 
-    if (res.removed) {
-      showToast('🚩 Post was removed by community flags', 'success');
-      // Remove from DOM immediately
-      const card = document.getElementById(`shoutout-${shoutoutId}`);
-      if (card) card.remove();
-    } else {
-      showToast(res.message || '🚩 Thank you — your flag has been recorded.', 'success');
-    }
-  } catch (e) {
-    // Surface real server errors (already flagged, post not found, etc.)
-    const msg = (e instanceof Error ? e.message : null) || (typeof e === 'string' ? e : null);
-    showToast(msg || 'Could not flag post — try again later', 'error');
+  if (res.removed) {
+    showToast('🚩 Post was removed by community flags', 'success');
+    // Remove from DOM immediately
+    const card = document.getElementById(`shoutout-${shoutoutId}`);
+    if (card) card.remove();
+  } else {
+    showToast('🚩 Thank you — your flag has been recorded.', 'success');
   }
 };
 
