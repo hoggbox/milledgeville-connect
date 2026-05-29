@@ -172,9 +172,6 @@ window.handlePushNotificationClick = function(data) {
 // ─── Service Worker → App message bridge ────────────────────────────────────
 // When the SW receives a notification click and the app is already open,
 // it posts a message instead of doing a hard navigate so we can deep-link in-place.
-// ─── Service Worker → App message bridge ────────────────────────────────────
-// When the SW receives a notification click and the app is already open,
-// it posts a message instead of doing a hard navigate so we can deep-link in-place.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PUSH_NOTIFICATION_CLICK') {
@@ -257,6 +254,34 @@ function formatDateTime(date) {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit'
   });
+}
+
+// ─── Shared Pagination Helper ─────────────────────────────────────────────────
+/**
+ * Returns pagination HTML (Prev / Page X of Y / Next).
+ * @param {number} currentPage  - 1-based current page
+ * @param {number} totalPages   - total number of pages
+ * @param {string} onPrevClick  - JS expression for the Prev button onclick
+ * @param {string} onNextClick  - JS expression for the Next button onclick
+ */
+function paginationHTML(currentPage, totalPages, onPrevClick, onNextClick) {
+  if (totalPages <= 1) return '';
+  return `
+    <div class="flex items-center justify-between mt-6 px-1">
+      <button onclick="${onPrevClick}"
+              ${currentPage === 1 ? 'disabled' : ''}
+              class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+        ← Previous
+      </button>
+      <div class="text-sm text-white/50">
+        Page <span class="font-semibold text-white">${currentPage}</span> of ${totalPages}
+      </div>
+      <button onclick="${onNextClick}"
+              ${currentPage === totalPages ? 'disabled' : ''}
+              class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+        Next →
+      </button>
+    </div>`;
 }
 
 // ─── Share Content Helper ─────────────────────────────────────────────────────
@@ -1597,28 +1622,11 @@ function renderDirectory(businesses) {
 
   html += '</div>';
 
-  // Pagination
-  if (totalPages > 1) {
-    html += `
-      <div class="flex items-center justify-between mt-6 px-1">
-        <button onclick="goToDirectoryPage(${directoryCurrentPage - 1})" 
-                ${directoryCurrentPage === 1 ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          ← Previous
-        </button>
-
-        <div class="text-sm text-white/50">
-          Page <span class="font-semibold text-white">${directoryCurrentPage}</span> of ${totalPages}
-        </div>
-
-        <button onclick="goToDirectoryPage(${directoryCurrentPage + 1})" 
-                ${directoryCurrentPage === totalPages ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          Next →
-        </button>
-      </div>
-    `;
-  }
+  html += paginationHTML(
+    directoryCurrentPage, totalPages,
+    `goToDirectoryPage(${directoryCurrentPage - 1})`,
+    `goToDirectoryPage(${directoryCurrentPage + 1})`
+  );
 
   container.innerHTML = html;
 }
@@ -2537,25 +2545,6 @@ window.removeShoutoutImage = function (index) {
   renderShoutoutImagePreviews();
 };
 
-window.postShoutoutWithPhoto = async function () {
-  if (!requireAuth('Sign in to post traffic alerts.')) return;
-  const input = document.getElementById('shoutoutInput');
-  if (!input || !input.value.trim()) return;
-
-  const res = await apiPost('/shoutouts', { 
-    text: input.value.trim(),
-    images: _pendingShoutoutImages || []
-  });
-
-  if (res._id) {
-    showToast('✅ Traffic Alert posted!');
-    _pendingShoutoutImages = [];
-    input.value = '';
-    loadPage('shoutouts');
-  } else {
-    showToast(res.message || 'Error posting traffic alert', 'error');
-  }
-}
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -3437,25 +3426,11 @@ function renderResourcesList(items) {
     </div>`).join('');
 
   // === PAGINATION CONTROLS ===
-  if (totalPages > 1) {
-    html += `
-      <div class="flex items-center justify-between mt-6 px-1">
-        <button onclick="goToResourcesPage(${resourcesCurrentPage - 1})"
-                ${resourcesCurrentPage === 1 ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          ← Previous
-        </button>
-        <div class="text-sm text-white/50">
-          Page <span class="font-semibold text-white">${resourcesCurrentPage}</span> of ${totalPages}
-        </div>
-        <button onclick="goToResourcesPage(${resourcesCurrentPage + 1})"
-                ${resourcesCurrentPage === totalPages ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          Next →
-        </button>
-      </div>
-    `;
-  }
+  html += paginationHTML(
+    resourcesCurrentPage, totalPages,
+    `goToResourcesPage(${resourcesCurrentPage - 1})`,
+    `goToResourcesPage(${resourcesCurrentPage + 1})`
+  );
 
   container.innerHTML = html;
 }
@@ -5710,30 +5685,6 @@ window.hideMarketModal = function() {
   if (modal) modal.remove();
 };
 
-window.postMarketplaceComment = async function(itemId) {
-  const input = document.getElementById('marketCommentInput');
-  if (!input) return;
-
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!requireAuth('Sign in to comment')) return;
-
-  try {
-    await apiPost(`/marketplace/${itemId}/comments`, { text });
-    input.value = '';
-    showToast('Comment posted');
-
-    // Refresh comments
-    const res = await apiGet(`/marketplace/${itemId}`);
-    const container = document.getElementById('marketCommentsContainer');
-    if (container && res.comments) {
-      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
-    }
-  } catch (e) {
-    showToast('Failed to post comment', 'error');
-  }
-};
 
 window.postMarketplaceItem = async function() {
   const category  = document.getElementById('marketCategory')?.value;
@@ -6311,22 +6262,6 @@ async function loadMarketplacePage(content) {
   renderMarketplacePage();
 }
 
-// Set active category filter
-window.setMarketCategoryFilter = function(category) {
-  window.currentMarketCategoryFilter = category;
-
-  // Update active button styles
-  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
-    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
-      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
-    } else {
-      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
-    }
-  });
-
-  renderMarketplacePage();
-};
-
 // Improved filter + render function (replaces old filterAndRenderMarketplace if it exists)
 window.filterAndRenderMarketplace = function() {
   const conditionSelect = document.getElementById('marketConditionFilter');
@@ -6424,27 +6359,11 @@ function renderMarketplacePage() {
   html += '</div>';
 
   // Pagination controls
-  if (totalPages > 1) {
-    html += `
-      <div class="flex items-center justify-between mt-6 px-1">
-        <button onclick="goToMarketplacePage(${marketplaceCurrentPage - 1})" 
-                ${marketplaceCurrentPage === 1 ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          ← Previous
-        </button>
-
-        <div class="text-sm text-white/60">
-          Page <span class="font-semibold text-white">${marketplaceCurrentPage}</span> of ${totalPages}
-        </div>
-
-        <button onclick="goToMarketplacePage(${marketplaceCurrentPage + 1})" 
-                ${marketplaceCurrentPage === totalPages ? 'disabled' : ''}
-                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-          Next →
-        </button>
-      </div>
-    `;
-  }
+  html += paginationHTML(
+    marketplaceCurrentPage, totalPages,
+    `goToMarketplacePage(${marketplaceCurrentPage - 1})`,
+    `goToMarketplacePage(${marketplaceCurrentPage + 1})`
+  );
 
   container.innerHTML = html;
 }
@@ -6485,11 +6404,6 @@ window.changeMarketPage = function(page) {
   renderMarketplacePage();
 };
 
-window.filterAndRenderMarketplace = function() {
-  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
-  window.currentMarketPage = 1;
-  renderMarketplacePage();
-};
 
 // Simple debounce helper
 function debounce(func, delay) {
@@ -7286,11 +7200,6 @@ window.showLostDetail = async function(id) {
     console.error(e);
     showToast('Could not load item', 'error');
   }
-};
-
-window.hideLostDetailModal = function() {
-  const modal = document.getElementById('lostDetailModal');
-  if (modal) modal.remove();
 };
 
 window.postLostComment = async function(itemId) {
