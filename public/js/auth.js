@@ -101,7 +101,7 @@ async function handleRegister() {
     return showToast('Please provide a security answer', 'error');
   }
 
-  const result = await apiPost('/auth/register', { name, email, password, securityQuestion, securityAnswer });
+  const result = await apiPost('/auth/register', { name, email, password, securityQuestion, securityAnswer }).catch(e => ({ message: e.message }));
 
   if (result.token) {
     const modalTitle = document.getElementById('modalTitle');
@@ -132,7 +132,7 @@ async function handleLogin() {
   const email    = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
 
-  const result = await apiPost('/auth/login', { email, password });
+  const result = await apiPost('/auth/login', { email, password }).catch(e => ({ message: e.message }));
 
   if (result.token) {
     setToken(result.token);
@@ -263,7 +263,7 @@ async function handleForgotStep1() {
   const email = document.getElementById('forgotEmail').value.trim();
   if (!email) return showToast('Please enter your email', 'error');
 
-  const res = await apiPost('/auth/forgot-password/question', { email });
+  const res = await apiPost('/auth/forgot-password/question', { email }).catch(e => ({ message: e.message }));
 
   if (res.question) {
     const questionLabels = {
@@ -298,7 +298,7 @@ async function handleForgotStep2() {
   if (newPassword !== confirmNew) return showToast('Passwords do not match', 'error');
   if (newPassword.length < 6)    return showToast('Password must be at least 6 characters', 'error');
 
-  const res = await apiPost('/auth/forgot-password/reset', { email, answer, newPassword });
+  const res = await apiPost('/auth/forgot-password/reset', { email, answer, newPassword }).catch(e => ({ message: e.message }));
 
   if (res.success) {
     const modalTitle = document.getElementById('modalTitle');

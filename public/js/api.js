@@ -28,11 +28,22 @@ async function apiRequest(endpoint, data = null, method = 'GET') {
   const res = await fetch(API_BASE + endpoint, options);
   const text = await res.text();
 
+  let json;
   try {
-    return JSON.parse(text);
+    json = JSON.parse(text);
   } catch (e) {
-    return { message: text || 'Server error' };
+    json = { message: text || 'Server error' };
   }
+
+  if (!res.ok) {
+    // Throw with the server's own message so catch blocks can show it in a toast
+    const err = new Error(json.message || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.data   = json;
+    throw err;
+  }
+
+  return json;
 }
 
 async function apiGet(endpoint) {
