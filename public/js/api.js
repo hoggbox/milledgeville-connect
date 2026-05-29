@@ -25,7 +25,15 @@ async function apiRequest(endpoint, data = null, method = 'GET') {
     options.body = JSON.stringify(data);
   }
 
-  const res = await fetch(API_BASE + endpoint, options);
+  let res;
+  try {
+    res = await fetch(API_BASE + endpoint, options);
+  } catch (networkErr) {
+    // Network-level failure (offline, CORS, DNS) — show a real message
+    console.error('[API] Network error on ' + method + ' ' + endpoint + ':', networkErr);
+    throw new Error('Network error — check your connection and try again');
+  }
+
   const text = await res.text();
 
   let json;
@@ -36,8 +44,9 @@ async function apiRequest(endpoint, data = null, method = 'GET') {
   }
 
   if (!res.ok) {
-    // Throw with the server's own message so catch blocks can show it in a toast
-    const err = new Error(json.message || `Request failed (${res.status})`);
+    // Log every server error so you can see what's happening in the console
+    console.error('[API] ' + method + ' ' + endpoint + ' -> ' + res.status + ':', json);
+    const err = new Error(json.message || ('Request failed (' + res.status + ')'));
     err.status = res.status;
     err.data   = json;
     throw err;
@@ -63,9 +72,9 @@ async function apiDelete(endpoint) {
   return apiRequest(endpoint, null, 'DELETE');
 }
 
-window.apiGet    = apiGet;
-window.apiPost   = apiPost;
-window.apiPatch  = apiPatch;
-window.apiDelete = apiDelete;
-window.setToken  = setToken;
-window.apiRequest = apiRequest;  // ← add this
+window.apiGet     = apiGet;
+window.apiPost    = apiPost;
+window.apiPatch   = apiPatch;
+window.apiDelete  = apiDelete;
+window.setToken   = setToken;
+window.apiRequest = apiRequest;

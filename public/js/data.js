@@ -8361,12 +8361,11 @@ window.reportContent = async function (type, id, extraInfo = '') {
     if (res && (res.message?.includes('Report submitted') || res._id)) {
       showToast('🚩 Report sent to admin team. Thank you.', 'success');
     } else {
-      showToast(res?.message || 'Failed to send report — try again later', 'error');
+      showToast(res?.message || 'Failed to send report', 'error');
     }
   } catch (e) {
-    // Surface the real server error message so failures aren't silent
-    const msg = (e instanceof Error ? e.message : null) || (typeof e === 'string' ? e : null);
-    showToast(msg || 'Could not send report — try again later', 'error');
+    const msg = (e instanceof Error ? e.message : null) || 'Could not send report — try again later';
+    showToast(msg, 'error');
   }
 };
 
@@ -8623,19 +8622,16 @@ window.flagShoutout = async function (shoutoutId) {
 
   try {
     const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
-
     if (res.removed) {
       showToast('🚩 Post was removed by community flags', 'success');
-      // Remove from DOM immediately
       const card = document.getElementById(`shoutout-${shoutoutId}`);
       if (card) card.remove();
     } else {
       showToast(res.message || '🚩 Thank you — your flag has been recorded.', 'success');
     }
   } catch (e) {
-    // Surface real server errors (already flagged, post not found, etc.)
-    const msg = (e instanceof Error ? e.message : null) || (typeof e === 'string' ? e : null);
-    showToast(msg || 'Could not flag post — try again later', 'error');
+    const msg = (e instanceof Error ? e.message : null) || 'Could not flag post — try again later';
+    showToast(msg, 'error');
   }
 };
 
