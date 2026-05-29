@@ -172,6 +172,9 @@ window.handlePushNotificationClick = function(data) {
 // ─── Service Worker → App message bridge ────────────────────────────────────
 // When the SW receives a notification click and the app is already open,
 // it posts a message instead of doing a hard navigate so we can deep-link in-place.
+// ─── Service Worker → App message bridge ────────────────────────────────────
+// When the SW receives a notification click and the app is already open,
+// it posts a message instead of doing a hard navigate so we can deep-link in-place.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PUSH_NOTIFICATION_CLICK') {
@@ -254,34 +257,6 @@ function formatDateTime(date) {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit'
   });
-}
-
-// ─── Shared Pagination Helper ─────────────────────────────────────────────────
-/**
- * Returns pagination HTML (Prev / Page X of Y / Next).
- * @param {number} currentPage  - 1-based current page
- * @param {number} totalPages   - total number of pages
- * @param {string} onPrevClick  - JS expression for the Prev button onclick
- * @param {string} onNextClick  - JS expression for the Next button onclick
- */
-function paginationHTML(currentPage, totalPages, onPrevClick, onNextClick) {
-  if (totalPages <= 1) return '';
-  return `
-    <div class="flex items-center justify-between mt-6 px-1">
-      <button onclick="${onPrevClick}"
-              ${currentPage === 1 ? 'disabled' : ''}
-              class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-        ← Previous
-      </button>
-      <div class="text-sm text-white/50">
-        Page <span class="font-semibold text-white">${currentPage}</span> of ${totalPages}
-      </div>
-      <button onclick="${onNextClick}"
-              ${currentPage === totalPages ? 'disabled' : ''}
-              class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
-        Next →
-      </button>
-    </div>`;
 }
 
 // ─── Share Content Helper ─────────────────────────────────────────────────────
@@ -1622,11 +1597,28 @@ function renderDirectory(businesses) {
 
   html += '</div>';
 
-  html += paginationHTML(
-    directoryCurrentPage, totalPages,
-    `goToDirectoryPage(${directoryCurrentPage - 1})`,
-    `goToDirectoryPage(${directoryCurrentPage + 1})`
-  );
+  // Pagination
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="goToDirectoryPage(${directoryCurrentPage - 1})" 
+                ${directoryCurrentPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+
+        <div class="text-sm text-white/50">
+          Page <span class="font-semibold text-white">${directoryCurrentPage}</span> of ${totalPages}
+        </div>
+
+        <button onclick="goToDirectoryPage(${directoryCurrentPage + 1})" 
+                ${directoryCurrentPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
+      </div>
+    `;
+  }
 
   container.innerHTML = html;
 }
@@ -2545,25 +2537,7 @@ window.removeShoutoutImage = function (index) {
   renderShoutoutImagePreviews();
 };
 
-window.postShoutoutWithPhoto = async function () {
-  if (!requireAuth('Sign in to post traffic alerts.')) return;
-  const input = document.getElementById('shoutoutInput');
-  if (!input || !input.value.trim()) return;
-
-  const res = await apiPost('/shoutouts', { 
-    text: input.value.trim(),
-    images: _pendingShoutoutImages || []
-  });
-
-  if (res._id) {
-    showToast('✅ Traffic Alert posted!');
-    _pendingShoutoutImages = [];
-    input.value = '';
-    loadPage('shoutouts');
-  } else {
-    showToast(res.message || 'Error posting traffic alert', 'error');
-  }
-}
+// postShoutoutWithPhoto is defined below (with guard + credit check)
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -2742,12 +2716,19 @@ window.toggleLike = async function (shoutoutId) {
   if (!requireAuth('Sign in to like traffic alerts.')) return;
   const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
   if (res.likes !== undefined) {
+    // Update the count span that actually exists in the card HTML
+    const countEl = document.getElementById(`like-count-${shoutoutId}`);
+    if (countEl) countEl.textContent = res.likes;
+    // Also update icon/label if present (future-proofing)
     const icon = document.getElementById(`like-icon-${shoutoutId}`);
     const label = document.getElementById(`like-label-${shoutoutId}`);
     if (icon) icon.textContent = res.liked ? '❤️' : '🤍';
     if (label) label.textContent = 'Like';
   }
 };
+
+// Alias — card HTML calls likeShoutout(), function is named toggleLike
+window.likeShoutout = window.toggleLike;
 
 window.toggleCommentSection = function (shoutoutId) {
   const section = document.getElementById(`comment-section-${shoutoutId}`);
@@ -3445,11 +3426,25 @@ function renderResourcesList(items) {
     </div>`).join('');
 
   // === PAGINATION CONTROLS ===
-  html += paginationHTML(
-    resourcesCurrentPage, totalPages,
-    `goToResourcesPage(${resourcesCurrentPage - 1})`,
-    `goToResourcesPage(${resourcesCurrentPage + 1})`
-  );
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="goToResourcesPage(${resourcesCurrentPage - 1})"
+                ${resourcesCurrentPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+        <div class="text-sm text-white/50">
+          Page <span class="font-semibold text-white">${resourcesCurrentPage}</span> of ${totalPages}
+        </div>
+        <button onclick="goToResourcesPage(${resourcesCurrentPage + 1})"
+                ${resourcesCurrentPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
+      </div>
+    `;
+  }
 
   container.innerHTML = html;
 }
@@ -6418,11 +6413,27 @@ function renderMarketplacePage() {
   html += '</div>';
 
   // Pagination controls
-  html += paginationHTML(
-    marketplaceCurrentPage, totalPages,
-    `goToMarketplacePage(${marketplaceCurrentPage - 1})`,
-    `goToMarketplacePage(${marketplaceCurrentPage + 1})`
-  );
+  if (totalPages > 1) {
+    html += `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="goToMarketplacePage(${marketplaceCurrentPage - 1})" 
+                ${marketplaceCurrentPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+
+        <div class="text-sm text-white/60">
+          Page <span class="font-semibold text-white">${marketplaceCurrentPage}</span> of ${totalPages}
+        </div>
+
+        <button onclick="goToMarketplacePage(${marketplaceCurrentPage + 1})" 
+                ${marketplaceCurrentPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
+      </div>
+    `;
+  }
 
   container.innerHTML = html;
 }
@@ -8322,6 +8333,7 @@ let isPostingShoutout = false;
 
 // ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
 window.postShoutoutWithPhoto = async function() {
+  if (!requireAuth('Sign in to post traffic alerts.')) return;
   if (isPostingShoutout) return;
   isPostingShoutout = true;
 
@@ -8420,17 +8432,17 @@ window.reportContent = async function (type, id, extraInfo = '') {
   }
 
   try {
-    const res = await apiPost('/reports', {
+    const res = await apiPost('/flag', {
       type: type,
       contentId: id,
-      reason: reason.trim(),
-      extraInfo: extraInfo || ''
+      reason: reason.trim()
     });
 
-    if (res && (res.message?.includes('Report submitted') || res._id)) {
-      showToast('🚩 Report sent to admin team. Thank you.', 'success');
+    if (res && res.message) {
+      const isSuccess = !res.message.toLowerCase().includes('fail') && !res.message.toLowerCase().includes('error');
+      showToast(isSuccess ? '🚩 Report sent to admin team. Thank you.' : res.message, isSuccess ? 'success' : 'error');
     } else {
-      showToast(res?.message || 'Failed to send report', 'error');
+      showToast('🚩 Report sent to admin team. Thank you.', 'success');
     }
   } catch (e) {
     showToast('Could not send report — try again later', 'error');
