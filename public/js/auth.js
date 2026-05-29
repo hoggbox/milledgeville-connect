@@ -1,12 +1,6 @@
 let currentUser = null;
 let verificationPollInterval = null;
 
-// ─── App-ready signal ─────────────────────────────────────────────────────────
-// Resolved once checkAuth() finishes and the first page is rendered.
-// The cold-launch deep-link handler in data.js waits on this before navigating.
-let _resolveAppReady;
-window._appReadyPromise = new Promise(resolve => { _resolveAppReady = resolve; });
-
 // ─── Auth Modal ───────────────────────────────────────────────────────────────
 function showAuthModal(opts = {}) {
   const modal = document.getElementById('authModal');
@@ -101,7 +95,7 @@ async function handleRegister() {
     return showToast('Please provide a security answer', 'error');
   }
 
-  const result = await apiPost('/auth/register', { name, email, password, securityQuestion, securityAnswer }).catch(e => ({ message: e.message }));
+  const result = await apiPost('/auth/register', { name, email, password, securityQuestion, securityAnswer });
 
   if (result.token) {
     const modalTitle = document.getElementById('modalTitle');
@@ -132,7 +126,7 @@ async function handleLogin() {
   const email    = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
 
-  const result = await apiPost('/auth/login', { email, password }).catch(e => ({ message: e.message }));
+  const result = await apiPost('/auth/login', { email, password });
 
   if (result.token) {
     setToken(result.token);
@@ -170,8 +164,6 @@ async function checkAuth() {
   const storedToken = localStorage.getItem('token');
   if (!storedToken) {
     updateUserUI();
-    await loadPage('home');
-    _resolveAppReady();
     return;
   }
   try {
@@ -179,10 +171,10 @@ async function checkAuth() {
     if (result.user) {
       currentUser = result.user;
       updateUserUI();
-
+      
       // ─── Re-wire native push for returning logged-in users ──────────────────
       if (typeof window.initPushAfterLogin === 'function') {
-        setTimeout(() => window.initPushAfterLogin(), 1200);
+        setTimeout(() => window.initPushAfterLogin(), 1200);  // Slightly longer delay
       }
     } else {
       localStorage.removeItem('token');
@@ -192,9 +184,6 @@ async function checkAuth() {
     console.warn('Auth check failed:', e);
     updateUserUI();
   }
-  // Always load home and mark ready, whether logged in or not
-  await loadPage('home');
-  _resolveAppReady();
 }
 
 // ─── Verification polling ─────────────────────────────────────────────────────
@@ -263,7 +252,7 @@ async function handleForgotStep1() {
   const email = document.getElementById('forgotEmail').value.trim();
   if (!email) return showToast('Please enter your email', 'error');
 
-  const res = await apiPost('/auth/forgot-password/question', { email }).catch(e => ({ message: e.message }));
+  const res = await apiPost('/auth/forgot-password/question', { email });
 
   if (res.question) {
     const questionLabels = {
@@ -298,7 +287,7 @@ async function handleForgotStep2() {
   if (newPassword !== confirmNew) return showToast('Passwords do not match', 'error');
   if (newPassword.length < 6)    return showToast('Password must be at least 6 characters', 'error');
 
-  const res = await apiPost('/auth/forgot-password/reset', { email, answer, newPassword }).catch(e => ({ message: e.message }));
+  const res = await apiPost('/auth/forgot-password/reset', { email, answer, newPassword });
 
   if (res.success) {
     const modalTitle = document.getElementById('modalTitle');
