@@ -5090,6 +5090,54 @@ window.removeMenu = async function () {
 
 // ─── NOTE: toggleRSVP and postShoutoutWithPhoto are defined above — duplicates removed ───
 
+// ─── POST TRAFFIC ALERT ─────────────────────────────────────────────────────
+let isPostingShoutout = false;
+let _pendingShoutoutImages = [];
+
+window.postShoutoutWithPhoto = async function() {
+  if (isPostingShoutout) return;
+  isPostingShoutout = true;
+
+  try {
+    const input = document.getElementById('shoutoutInput');
+    const text = input ? input.value.trim() : '';
+
+    if (!text) {
+      showToast('Please write a traffic alert', 'error');
+      return;
+    }
+
+    const images = _pendingShoutoutImages || [];
+
+    showToast('Posting...', 'info');
+
+    const res = await apiPost('/shoutouts', { text, images });
+
+    if (res && res._id) {
+      showToast('🚦 Traffic alert posted!', 'success');
+
+      if (input) input.value = '';
+      _pendingShoutoutImages = [];
+
+      const previewContainer = document.getElementById('shoutoutImagePreviews');
+      if (previewContainer) previewContainer.innerHTML = '';
+
+      // Refresh the page
+      const content = document.getElementById('content');
+      if (content) {
+        await loadShoutoutsPage(content);
+      }
+    } else {
+      showToast(res?.message || 'Failed to post', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to post. Check console for details.', 'error');
+  } finally {
+    isPostingShoutout = false;
+  }
+};
+
 // ─── BIZ PHOTO GALLERY FUNCTIONS ─────────────────────────────────────────────
 window.handleBizPhotoUpload = async function (bizId, input) {
   const files = Array.from(input.files);
