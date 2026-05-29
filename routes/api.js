@@ -36,10 +36,13 @@ const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 const Settings        = require('../models/Settings');     // ← SITE-WIDE ADMIN SETTINGS
 
-async function uploadImagesToCloudinary(images = [], folder = 'general') {
-  if (!Array.isArray(images) || images.length === 0) return images;
-  return Promise.all(images.map(img => uploadToCloudinary(img, folder)));
-}
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 function sanitizeContent(body = {}) {
   const out = {};
@@ -483,18 +486,18 @@ router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
-    const clean = sanitizeContent(req.body);
-    const { text, location } = clean;
-    const rawImages = Array.isArray(clean.images) ? clean.images : [];
-    // ────────────────────────────────────────────────────────────────────────
+// ─── SANITIZE INPUT ─────────────────────────────────────────────────────
+const clean = sanitizeContent(req.body);
+const { text, location } = clean;
+const rawImages = Array.isArray(clean.images) ? clean.images : [];
+// ────────────────────────────────────────────────────────────────────────
 
-    if (!text?.trim()) {
-      return res.status(400).json({ message: 'Text is required' });
-    }
+if (!text?.trim()) {
+  return res.status(400).json({ message: 'Text is required' });
+}
 
-    // Upload images to Cloudinary
-    const images = await uploadImagesToCloudinary(rawImages || [], 'shoutouts');
+// Keep images as base64 (no Cloudinary)
+const images = rawImages || [];
 
     // ── Hard 45-second rate limit ──────────────────────────────────
     if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
