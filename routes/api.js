@@ -116,6 +116,15 @@ async function uploadToCloudinary(dataUrl, folder = 'general') {
   }
 }
 
+// Temporary compatibility shim — Claude left routes calling this but never created it
+function sanitizeContent(body) {
+  if (!body) return {};
+  const clean = deepSanitize(body);
+  // Preserve images (base64 or urls) because deepSanitize can be aggressive
+  if (body.images) clean.images = body.images;
+  return clean;
+}
+
 // Convenience: upload an array of base64 strings in parallel
 async function uploadImagesToCloudinary(images = [], folder = 'general') {
   if (!Array.isArray(images) || images.length === 0) return images;
@@ -204,6 +213,11 @@ router.post('/flag', authenticate, async (req, res) => {
 
     const entry = contentTypeMap(type);
     if (!entry) {
+      // 'comment' reports go through POST /reports (not /flag) since comments
+      // are embedded subdocuments and cannot be looked up by standalone ID.
+      if (type === 'comment') {
+        return res.status(400).json({ message: 'To report a comment, use the Report button — not the Flag button.' });
+      }
       return res.status(400).json({ message: `Unknown content type: ${type}` });
     }
 
@@ -304,62 +318,14 @@ router.post('/flag', authenticate, async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LEGACY SHOUTOUT FLAG REDIRECT — keeps old deep-links working
-// POST /api/shoutouts/:id/flag  →  delegates to the universal handler
+// POST /api/shoutouts/:id/flag  →  thin delegate to POST /api/flag
+// No logic is duplicated here; we rewrite the body and re-dispatch.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
+router.post('/shoutouts/:id/flag', authenticate, (req, res, next) => {
   req.body.type      = 'shoutout';
   req.body.contentId = req.params.id;
-  // Re-dispatch through the universal handler by hand (avoids a full redirect round-trip)
-  const entry = contentTypeMap('shoutout');
-  const { model, reportField, ownerField } = entry;
-  try {
-    const doc = await model.findById(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Post not found' });
-    if (doc.authorId && doc.authorId.toString() === req.userId)
-      return res.status(400).json({ message: 'You cannot flag your own post' });
-    if (doc.flaggedBy.some(id => id.toString() === req.userId))
-      return res.status(409).json({ message: 'You have already flagged this post' });
-    if (doc.autoHidden)
-      return res.status(409).json({ message: 'This post has already been removed for review' });
-
-    doc.flaggedBy.push(req.userId);
-    const flagCount = doc.flaggedBy.length;
-
-    try {
-      await Report.create({
-        type: 'shoutout', reporter: req.userId,
-        reportedShoutout: doc._id, reportedUser: doc.authorId || null,
-        snapshotText: getSnapshotText(doc, 'shoutout'),
-        reason: (req.body.reason || 'Flagged by user').trim(), status: 'pending'
-      });
-    } catch (dupErr) { if (dupErr.code !== 11000) throw dupErr; }
-
-    if (flagCount >= FLAG_THRESHOLD) {
-      doc.autoHidden = true;
-      await doc.save();
-      if (doc.authorId) {
-        await User.findByIdAndUpdate(doc.authorId, {
-          postTimeoutUntil: new Date(Date.now() + TIMEOUT_DURATION)
-        });
-      }
-      await Report.findOneAndUpdate(
-        { autoFlagged: true, reportedShoutout: doc._id },
-        { $set: { type: 'shoutout', reporter: req.userId, reportedShoutout: doc._id,
-            reportedUser: doc.authorId || null, snapshotText: getSnapshotText(doc, 'shoutout'),
-            reason: `Auto-removed: reached ${flagCount} unique community flags`,
-            autoFlagged: true, flagCount, status: 'pending' } },
-        { upsert: true, new: true }
-      );
-      return res.json({ message: 'Post removed by community flags', removed: true, flagCount });
-    }
-
-    await doc.save();
-    res.json({ message: 'Post flagged', removed: false, flagCount });
-  } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ message: 'You have already flagged this post' });
-    console.error('Flag error:', err);
-    res.status(500).json({ message: err.message });
-  }
+  req.url = '/flag';
+  router.handle(req, res, next);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1199,73 +1165,63 @@ async function broadcastPush(title, body, data = {}, options = {}) {
       ]
     }).select('_id notificationPreferences fcmTokens webPushSubscriptions');
 
-    for (const user of users) {
+    // ── Preference filter ─────────────────────────────────────────────────────
+    function userWantsNotification(user) {
+      if (!type) return true; // no type = send to everyone (legacy behaviour)
       const prefs = user.notificationPreferences || {};
-      let shouldSend = true;
-
-      if (!type) {
-        // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data, imageUrl, logoUrl);
-        continue;
-      }
-
       switch (type) {
-        case 'event':
-          if (prefs.events === false) shouldSend = false;
-          break;
-
-        case 'deal':
-          if (prefs.deals === false) shouldSend = false;
-          break;
-
-        case 'shoutout':
-          if (prefs.shoutouts === false) shouldSend = false;
-          break;
-
-        case 'lost':
-          if (prefs.lostFound === false) shouldSend = false;
-          break;
-
-        case 'message':
-          if (prefs.messages === false) shouldSend = false;
-          break;
-
-        case 'comment':
-          if (prefs.comments === false) shouldSend = false;
-          break;
-
-        case 'news':
-          if (prefs.news === false) shouldSend = false;
-          break;
-
-        case 'marketplace':
-          // Master toggle
-          if (prefs.marketplace?.all === false) {
-            shouldSend = false;
-          } 
-          // Individual category toggles
-          else if (subCategory) {
+        case 'event':       return prefs.events     !== false;
+        case 'deal':        return prefs.deals      !== false;
+        case 'shoutout':    return prefs.shoutouts  !== false;
+        case 'lost':        return prefs.lostFound  !== false;
+        case 'message':     return prefs.messages   !== false;
+        case 'comment':     return prefs.comments   !== false;
+        case 'news':        return prefs.news       !== false;
+        case 'custom':      return true; // business custom — always send
+        case 'marketplace': {
+          if (prefs.marketplace?.all === false) return false;
+          if (subCategory) {
             const cat = subCategory.toLowerCase();
-            if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
-            if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
-            if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
-            if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
+            if (prefs.marketplace?.[cat] === false) return false;
           }
-          break;
-
-        case 'custom':
-          // Verified business custom notifications — always send
-          shouldSend = true;
-          break;
-
-        default:
-          shouldSend = true;
-      }
-
-      if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data, imageUrl, logoUrl);
+          return true;
+        }
+        default: return true;
       }
     }
+
+    const eligible = users.filter(userWantsNotification);
+
+    // ── Parallel batching with per-send timeout ───────────────────────────────
+    // Sends in chunks of BATCH_SIZE concurrently; each individual send is
+    // wrapped in a 10-second timeout so a hung FCM call cannot stall the batch.
+    const BATCH_SIZE      = 50;
+    const SEND_TIMEOUT_MS = 10_000;
+
+    function withTimeout(promise, ms) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Push send timeout')), ms)
+        )
+      ]);
+    }
+
+    let sent = 0, failed = 0;
+    for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+      const batch = eligible.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(user =>
+          withTimeout(
+            sendPushToUser(user._id, title, body, data, imageUrl, logoUrl),
+            SEND_TIMEOUT_MS
+          )
+        )
+      );
+      results.forEach(r => r.status === 'fulfilled' ? sent++ : failed++);
+    }
+
+    console.log(`📢 [Broadcast] done — ${sent} sent, ${failed} failed out of ${eligible.length} eligible`);
   } catch (err) {
     console.error('broadcastPush error:', err);
   }
