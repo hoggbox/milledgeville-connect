@@ -7878,7 +7878,44 @@ async function renderAdminReports() {
 // ─── BROADCAST MESSAGE (Tab 5) ───────────────────────────────────────────────
 async function renderAdminBroadcast() {
   const container = document.getElementById('adminMainContent');
+
+  // Fetch current kill-switch state before rendering
+  let killSwitchDisabled = false;
+  try {
+    const ks = await apiGet('/admin/push-kill-switch');
+    killSwitchDisabled = ks.disabled === true;
+  } catch (_) {}
+
   container.innerHTML = `
+    <!-- ── NOTIFICATION KILL-SWITCH ── -->
+    <div class="max-w-2xl mx-auto mb-6 rounded-3xl border p-6 ${killSwitchDisabled
+      ? 'bg-red-500/15 border-red-500/40'
+      : 'bg-white/10 border-white/10'}">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h3 class="font-bold text-lg flex items-center gap-2">
+            ${killSwitchDisabled ? '🔕' : '🔔'} Global Notification Kill-Switch
+          </h3>
+          <p class="text-white/50 text-sm mt-1">
+            When <strong>disabled</strong>, no push notifications are sent to any user
+            except <span class="text-emerald-400 font-mono text-xs">imhoggbox@gmail.com</span>
+            and <span class="text-emerald-400 font-mono text-xs">test@gmail.com</span>.
+            Use this during testing so real users aren't spammed.
+          </p>
+          <p class="mt-2 text-sm font-semibold ${killSwitchDisabled ? 'text-red-400' : 'text-emerald-400'}">
+            Status: ${killSwitchDisabled ? '🔴 Notifications DISABLED for all users' : '🟢 Notifications active (normal)'}
+          </p>
+        </div>
+        <button id="killSwitchBtn" onclick="togglePushKillSwitch()"
+                class="flex-shrink-0 px-5 py-3 rounded-2xl font-bold text-sm transition ${killSwitchDisabled
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-red-600 hover:bg-red-700 text-white'}">
+          ${killSwitchDisabled ? '✅ Re-enable Notifications' : '🔕 Disable Notifications'}
+        </button>
+      </div>
+    </div>
+
+    <!-- ── BROADCAST MESSAGE ── -->
     <div class="max-w-2xl mx-auto bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
       <h3 class="font-bold text-xl mb-2">📢 Send Broadcast Message</h3>
       <p class="text-white/50 text-sm mb-6">Plain text only. To add a link use: &lt;a href="https://..."&gt;link text&lt;/a&gt;</p>
@@ -7912,6 +7949,27 @@ async function renderAdminBroadcast() {
     preview.innerHTML = sanitized || '<span class="text-white/30 italic">Start typing to preview…</span>';
   });
 }
+
+window.togglePushKillSwitch = async function () {
+  const btn = document.getElementById('killSwitchBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+  try {
+    // Read current state from the card's status text to decide what to toggle to
+    const currentlyDisabled = btn?.classList.contains('bg-emerald-600');
+    const res = await apiPost('/admin/push-kill-switch', { disabled: !currentlyDisabled });
+    showToast(
+      res.disabled
+        ? '🔕 Notifications disabled for all users (except test accounts)'
+        : '🔔 Notifications re-enabled for all users',
+      res.disabled ? 'error' : 'success'
+    );
+    // Re-render the broadcast tab to reflect new state
+    await renderAdminBroadcast();
+  } catch (e) {
+    showToast('Failed to update kill-switch', 'error');
+    if (btn) { btn.disabled = false; }
+  }
+};
 
 window.sendBroadcast = async function (ownersOnly = false) {
   const now = Date.now();
