@@ -979,7 +979,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
   const iconUrl  = logoUrl || APP_ICON;   // biz logo if available, else MC default
   const hasPhoto = !!imageUrl;
-  const msgData  = { page: data.page || '', id: data.id || '' };
+  const msgData  = { page: data.page || '', id: data.id || '', businessId: data.businessId || '' };
   let   sent     = false;
 
   // ── FCM (Android APK) ──────────────────────────────────────────────────────

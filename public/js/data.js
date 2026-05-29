@@ -100,7 +100,7 @@ window.handlePushNotificationClick = function(data) {
     return;
   }
 
-  const { page, id } = data;
+  const { page, id, businessId } = data;
 
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
@@ -188,9 +188,10 @@ if ('serviceWorker' in navigator) {
 // navigating, so the spinner never gets stuck.
 (function handleColdLaunchDeepLink() {
   try {
-    const params = new URLSearchParams(window.location.search);
-    const page = params.get('notif_page');
-    const id = params.get('notif_id');
+    const params     = new URLSearchParams(window.location.search);
+    const page       = params.get('notif_page');
+    const id         = params.get('notif_id');
+    const businessId = params.get('notif_business');
 
     if (!page) return;
 
@@ -199,7 +200,7 @@ if ('serviceWorker' in navigator) {
 
     // Wait until auth + initial page render are done, then deep-link
     window._appReadyPromise.then(() => {
-      window.handlePushNotificationClick({ page, id });
+      window.handlePushNotificationClick({ page, id, businessId });
     });
 
   } catch (e) {
