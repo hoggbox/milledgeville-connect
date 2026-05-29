@@ -116,6 +116,15 @@ async function uploadToCloudinary(dataUrl, folder = 'general') {
   }
 }
 
+// Temporary compatibility shim — Claude left routes calling this but never created it
+function sanitizeContent(body) {
+  if (!body) return {};
+  const clean = deepSanitize(body);
+  // Preserve images (base64 or urls) because deepSanitize can be aggressive
+  if (body.images) clean.images = body.images;
+  return clean;
+}
+
 // Convenience: upload an array of base64 strings in parallel
 async function uploadImagesToCloudinary(images = [], folder = 'general') {
   if (!Array.isArray(images) || images.length === 0) return images;
