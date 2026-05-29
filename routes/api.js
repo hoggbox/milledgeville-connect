@@ -557,6 +557,32 @@ router.post('/shoutouts', authenticate, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/shoutout-thumb/:id
+// Serves the first image of a shoutout as a real image response so FCM/APNs
+// push notifications can display it (they can't use base64 data URLs directly).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/shoutout-thumb/:id', async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id).select('images');
+    if (!shoutout?.images?.length) return res.status(404).end();
+
+    const dataUrl = shoutout.images[0];
+    const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (!matches) return res.status(400).end();
+
+    const mimeType = matches[1];
+    const buffer   = Buffer.from(matches[2], 'base64');
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (e) {
+    console.error('shoutout-thumb error:', e);
+    res.status(500).end();
+  }
+});
+
 // =============================================================================
 // ADMIN AUTO-MOD ROUTES
 // =============================================================================
