@@ -1957,19 +1957,27 @@ window.submitReview = async function (bizId) {
   if (!_reviewStarRating) { showToast('Please select a star rating.', 'error'); return; }
   const title = document.getElementById(`reviewTitle-${bizId}`)?.value.trim();
   const body  = document.getElementById(`reviewBody-${bizId}`)?.value.trim();
-  const res   = await apiPost(`/business/${bizId}/reviews`, { rating: _reviewStarRating, title, body });
-  if (res._id) {
-    showToast('✅ Review posted!');
-    const updatedReviews = await apiGet(`/business/${bizId}/reviews`);
-    window._currentBizReviews = updatedReviews;
-    const preview = updatedReviews.slice(0, 3);
-    const container = document.getElementById(`reviewCards-${bizId}`);
-    if (container) container.innerHTML = preview.map(r => renderReviewCard(r, bizId)).join('');
-    const form = document.getElementById(`reviewForm-${bizId}`);
-    if (form) form.classList.add('hidden');
-    _reviewStarRating = 0;
-  } else {
-    showToast(res.message || 'Error posting review', 'error');
+  const btn   = document.querySelector(`#reviewForm-${bizId} button[onclick*="submitReview"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+  try {
+    const res = await apiPost(`/business/${bizId}/reviews`, { rating: _reviewStarRating, title, body });
+    if (res._id) {
+      showToast('✅ Review posted!');
+      const updatedReviews = await apiGet(`/business/${bizId}/reviews`);
+      window._currentBizReviews = updatedReviews;
+      const preview = updatedReviews.slice(0, 3);
+      const container = document.getElementById(`reviewCards-${bizId}`);
+      if (container) container.innerHTML = preview.map(r => renderReviewCard(r, bizId)).join('');
+      const form = document.getElementById(`reviewForm-${bizId}`);
+      if (form) form.classList.add('hidden');
+      _reviewStarRating = 0;
+    } else {
+      showToast(res.message || 'Error posting review', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Post Review'; }
+    }
+  } catch (e) {
+    showToast('Network error — try again', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Post Review'; }
   }
 };
 
@@ -2753,9 +2761,9 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
     const input = document.getElementById(`commentinput-${shoutoutId}`);
     if (!input || !input.value.trim()) return;
     const text = input.value.trim();
-    input.value = '';
     const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text });
     if (res._id) {
+      input.value = ''; // only clear on success
       await loadShoutoutsPage(document.getElementById('content'));
     } else {
       showToast(res.message || 'Error posting comment', 'error');
@@ -5699,30 +5707,7 @@ window.hideMarketModal = function() {
   if (modal) modal.remove();
 };
 
-window.postMarketplaceComment = async function(itemId) {
-  const input = document.getElementById('marketCommentInput');
-  if (!input) return;
-
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!requireAuth('Sign in to comment')) return;
-
-  try {
-    await apiPost(`/marketplace/${itemId}/comments`, { text });
-    input.value = '';
-    showToast('Comment posted');
-
-    // Refresh comments
-    const res = await apiGet(`/marketplace/${itemId}`);
-    const container = document.getElementById('marketCommentsContainer');
-    if (container && res.comments) {
-      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
-    }
-  } catch (e) {
-    showToast('Failed to post comment', 'error');
-  }
-};
+// postMarketplaceComment defined below (complete version)
 
 window.postMarketplaceItem = async function() {
   const category  = document.getElementById('marketCategory')?.value;
