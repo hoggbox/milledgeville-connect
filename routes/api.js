@@ -1870,10 +1870,15 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body, postId } = req.body;  // ← accept postId
+    const { title, body, postId, imageUrl } = req.body;  // ← accept postId + optional imageUrl
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
     }
+
+    // Validate imageUrl if provided — must be a real HTTPS URL (not raw base64 data)
+    const safeImageUrl = (typeof imageUrl === 'string' && /^https:\/\/.+/.test(imageUrl.trim()))
+      ? imageUrl.trim()
+      : null;
 
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -1919,7 +1924,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
   };
 }
 
-    await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', logoUrl: bizLogoUrl });
+    await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', imageUrl: safeImageUrl, logoUrl: bizLogoUrl });
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
