@@ -34,6 +34,7 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
+const Settings        = require('../models/Settings');     // ← SITE-WIDE ADMIN SETTINGS
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
@@ -44,6 +45,23 @@ const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO
 //      isMuted, recentPostTimes fields)
 //   3. Drop this entire block above the `module.exports = router;` line
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── GLOBAL NOTIFICATION KILL-SWITCH (admin testing) ─────────────────────────
+// Persisted in MongoDB via the Settings model so it survives server restarts.
+// _pushDisabledCache is a fast local copy; DB is always the source of truth.
+let _pushDisabledCache = false;
+
+async function isPushGloballyDisabled() {
+  try {
+    const s = await Settings.getSiteSettings();
+    _pushDisabledCache = s.pushNotificationsDisabled === true;
+  } catch (_) {
+    // DB unavailable — fall back to cache (defaults to false = don't block sends)
+  }
+  return _pushDisabledCache;
+}
+
+const PUSH_EXEMPT_EMAILS = ['imhoggbox@gmail.com', 'test@gmail.com'];
 
 // ─── SPAM DETECTION CONSTANTS ─────────────────────────────────────────────────
 const SPAM_WINDOW_MS    = 5 * 60 * 1000; // 5-minute rolling window
@@ -764,6 +782,35 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
 });
 
 // ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
+// ─── ADMIN — GLOBAL NOTIFICATION KILL-SWITCH ─────────────────────────────────
+// GET  /api/admin/push-kill-switch  → returns current state from DB
+// POST /api/admin/push-kill-switch  → body: { disabled: true|false }
+router.get('/admin/push-kill-switch', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const s = await Settings.getSiteSettings();
+    res.json({ disabled: s.pushNotificationsDisabled, exemptEmails: PUSH_EXEMPT_EMAILS });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to read settings', error: err.message });
+  }
+});
+
+router.post('/admin/push-kill-switch', authenticate, requireAdmin, async (req, res) => {
+  const { disabled } = req.body;
+  if (typeof disabled !== 'boolean') {
+    return res.status(400).json({ message: '`disabled` must be a boolean' });
+  }
+  try {
+    const s = await Settings.getSiteSettings();
+    s.pushNotificationsDisabled = disabled;
+    await s.save();
+    _pushDisabledCache = disabled; // keep local cache in sync
+    console.log(`🔕 Global push notifications ${disabled ? 'DISABLED' : 'ENABLED'} by admin`);
+    res.json({ disabled: s.pushNotificationsDisabled, exemptEmails: PUSH_EXEMPT_EMAILS });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update settings', error: err.message });
+  }
+});
+
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
     const { message, ownersOnly = false } = req.body;
@@ -920,8 +967,14 @@ function requireAdminOrModerator(req, res, next) {
 // Reads fcmTokens (FCM/APK) and webPushSubscriptions (web VAPID) directly from
 // the User document. Stale / expired tokens are pruned automatically on failure.
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, logoUrl = null) {
-  const user = await User.findById(userId).select('fcmTokens webPushSubscriptions');
+  const user = await User.findById(userId).select('fcmTokens webPushSubscriptions email');
   if (!user) return false;
+
+  // ── Global kill-switch: skip everyone except exempt emails ─────────────────
+  const pushDisabled = await isPushGloballyDisabled();
+  if (pushDisabled && !PUSH_EXEMPT_EMAILS.includes((user.email || '').toLowerCase())) {
+    return false;
+  }
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
   const iconUrl  = logoUrl || APP_ICON;   // biz logo if available, else MC default

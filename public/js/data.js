@@ -4594,7 +4594,10 @@ window.sendUnifiedNotification = async function() {
       }
     } else {
       // Text-only path — POST /owner/custom-notification
-      res = await apiPost('/owner/custom-notification', { title, body });
+      const textOnlyPayload = { title, body };
+      // If a postId is tracked (e.g. linked to an existing BusinessPost), forward it
+      if (window._bizNotifLinkedPostId) textOnlyPayload.postId = window._bizNotifLinkedPostId;
+      res = await apiPost('/owner/custom-notification', textOnlyPayload);
 
       if (res.success) {
         showToast('\u2705 Notification sent to all users!', 'success');
@@ -8303,56 +8306,9 @@ window.postShoutoutWithPhoto = async function() {
 };
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
-window.sendCustomNotification = async function() {
-  // Check if user can send (handles credits + Pro status)
-  if (!window.canSendNotification()) return;
-
-  const titleEl = document.getElementById('customTitle');
-  const bodyEl  = document.getElementById('customBody');
-
-  const title = titleEl?.value.trim();
-  const body  = bodyEl?.value.trim();
-
-  if (!title || !body) {
-    showToast('Title and message are required', 'error');
-    return;
-  }
-
-  const btn = event.currentTarget; // optional: disable button while sending
-  if (btn) btn.disabled = true;
-
-  try {
-    showToast('Sending notification...', 'success');
-
-    const res = await apiPost('/owner/custom-notification', { title, body });
-
-    if (res.success) {
-      showToast('✅ Notification sent successfully!', 'success');
-
-      // Clear the form
-      if (titleEl) titleEl.value = '';
-      if (bodyEl) bodyEl.value = '';
-
-      // Update local credits
-      if (res.credits !== undefined && currentUser) {
-        currentUser.notificationCredits = res.credits;
-
-        // Refresh the credit number shown on screen (if visible)
-        const creditDisplay = document.getElementById('notifCreditDisplay');
-        if (creditDisplay) creditDisplay.textContent = res.credits;
-      }
-
-    } else {
-      showToast(res.message || 'Failed to send notification', 'error');
-    }
-
-  } catch (err) {
-    console.error(err);
-    showToast('Failed to send notification', 'error');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-};
+// NOTE: sendCustomNotification removed — sendUnifiedNotification (defined above) is the
+// canonical handler and supports both text-only and photo+text notifications.
+// All send buttons should call sendUnifiedNotification().
 
 window.nextOnboardingSlide = function() {
   const slide1  = document.getElementById('slide1');
