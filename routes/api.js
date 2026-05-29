@@ -466,17 +466,23 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
     const clean = sanitizeContent(req.body);
-    const { text, images, location } = clean;
+    const { text, location } = clean;
+    const rawImages = Array.isArray(clean.images) ? clean.images : [];
     // ────────────────────────────────────────────────────────────────────────
 
-    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+    if (!text?.trim()) {
+      return res.status(400).json({ message: 'Text is required' });
+    }
 
-    // ── Hard 45-second rate limit (existing) ──────────────────────────────────
+    // Upload images to Cloudinary
+    const images = await uploadImagesToCloudinary(rawImages || [], 'shoutouts');
+
+    // ── Hard 45-second rate limit ──────────────────────────────────
     if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
       return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
     }
 
-    // ── 24-hour timeout from community flags ───────────────────────────────────
+    // ── 24-hour timeout from community flags ───────────────────────
     if (user.isPostTimedOut()) {
       const releaseTime = user.postTimeoutUntil.toLocaleString();
       return res.status(403).json({
@@ -486,7 +492,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
-    // ── Admin/system mute check ────────────────────────────────────────────────
+    // ── Admin/system mute check ────────────────────────────────────
     if (user.isMuted) {
       return res.status(403).json({
         message: 'Your account has been muted by an administrator for excessive posting. Contact support if you believe this is an error.',
@@ -494,7 +500,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
-    // ── Spam burst detection ────────────────────────────────────────────────────
+    // ── Spam burst detection ───────────────────────────────────────
     const now = Date.now();
     const windowStart = now - SPAM_WINDOW_MS;
     const recentPosts = (user.recentPostTimes || []).filter(t => new Date(t).getTime() > windowStart);
@@ -518,7 +524,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
-    // ── All checks passed — create the shoutout ────────────────────────────────
+    // ── Create the shoutout ────────────────────────────────────────
     const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
 
     const shoutout = await Shoutout.create({
@@ -535,11 +541,12 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-    // ←←← THIS IS THE IMPORTANT PART ←←←
+    // ── Send push notification with thumbnail ──────────────────────
     let shoutoutThumb = null;
     if (shoutout.images && shoutout.images.length > 0) {
       shoutoutThumb = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
     }
+
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -551,6 +558,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     );
 
     res.json(shoutout);
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
@@ -1053,6 +1061,25 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
       await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
     }
   }
+
+  async function uploadImagesToCloudinary(images = [], folder = 'general') {
+  if (!Array.isArray(images) || images.length === 0) return images;
+  return Promise.all(images.map(img => uploadToCloudinary(img, folder)));
+}
+
+function sanitizeContent(body = {}) {
+  const out = {};
+  for (const [key, val] of Object.entries(body)) {
+    if (typeof val === 'string') {
+      out[key] = val.trim().substring(0, 10000);
+    } else if (Array.isArray(val)) {
+      out[key] = val;
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
 
   // ── Web VAPID ──────────────────────────────────────────────────────────────
   if (user.webPushSubscriptions?.length) {
