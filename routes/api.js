@@ -14,6 +14,26 @@ router.use((req, res, next) => {
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
+const rateLimit = require('express-rate-limit');
+
+// ─── AUTH RATE LIMITERS ───────────────────────────────────────────────────────
+// Protects login, register, and password-reset from brute-force attacks.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15-minute window
+  max: 10,                   // 10 attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts — please try again in 15 minutes.' }
+});
+
+// Stricter limiter for password-reset (prevents answer enumeration)
+const resetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1-hour window
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many reset attempts — please try again in an hour.' }
+});
 
 const User            = require('../models/User');
 const Business        = require('../models/Business');
@@ -35,6 +55,72 @@ const Message         = require('../models/Message');   // ← NEW MESSAGING MOD
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 const Settings        = require('../models/Settings');     // ← SITE-WIDE ADMIN SETTINGS
+
+// ─── CLOUDINARY IMAGE UPLOAD HELPER ──────────────────────────────────────────
+// Uploads a base64 data URL to Cloudinary and returns a secure HTTPS URL.
+// Falls back to the original data URL if Cloudinary env vars are not set,
+// so existing behaviour is preserved during a rolling deploy.
+//
+// Required env vars (add to .env / hosting config):
+//   CLOUDINARY_CLOUD_NAME=your_cloud_name
+//   CLOUDINARY_API_KEY=your_api_key
+//   CLOUDINARY_API_SECRET=your_api_secret
+//
+// Usage:
+//   const url = await uploadToCloudinary(base64DataUrl, 'folder_name');
+//   // Returns 'https://res.cloudinary.com/...' or original string on failure
+// ─────────────────────────────────────────────────────────────────────────────
+async function uploadToCloudinary(dataUrl, folder = 'general') {
+  // Skip if not a base64 data URL (already an https URL — e.g. re-saved record)
+  if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+  if (dataUrl.startsWith('https://')) return dataUrl;
+
+  // Graceful no-op when env vars are absent (dev / rolling deploy)
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+    return dataUrl; // fall back to storing base64 as before
+  }
+
+  try {
+    const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+    // Build FormData-style body using URLSearchParams (no extra deps needed)
+    const crypto = require('crypto');
+    const timestamp = Math.floor(Date.now() / 1000);
+    const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;
+    const signature = crypto
+      .createHmac('sha256', CLOUDINARY_API_SECRET)
+      .update(paramsToSign)
+      .digest('hex');
+
+    // Cloudinary's upload API accepts a raw base64 data URL in the `file` param
+    const body = new URLSearchParams({
+      file:       dataUrl,
+      api_key:    CLOUDINARY_API_KEY,
+      timestamp:  String(timestamp),
+      folder,
+      signature,
+    });
+
+    const resp = await fetch(endpoint, { method: 'POST', body });
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error('Cloudinary upload error:', err);
+      return dataUrl; // fallback
+    }
+    const json = await resp.json();
+    return json.secure_url;           // e.g. https://res.cloudinary.com/...
+  } catch (err) {
+    console.error('Cloudinary upload exception:', err.message);
+    return dataUrl; // fallback — never crash the route
+  }
+}
+
+// Convenience: upload an array of base64 strings in parallel
+async function uploadImagesToCloudinary(images = [], folder = 'general') {
+  if (!Array.isArray(images) || images.length === 0) return images;
+  return Promise.all(images.map(img => uploadToCloudinary(img, folder)));
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
@@ -351,7 +437,7 @@ router.post('/reports', authenticate, async (req, res) => {
 
 // STEP 1 — Client sends email, server returns the security question
 // POST /api/auth/forgot-password/question
-router.post('/auth/forgot-password/question', async (req, res) => {
+router.post('/auth/forgot-password/question', resetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -373,7 +459,7 @@ router.post('/auth/forgot-password/question', async (req, res) => {
 
 // STEP 2 — Client sends email + answer + new password, server verifies and resets
 // POST /api/auth/forgot-password/reset
-router.post('/auth/forgot-password/reset', async (req, res) => {
+router.post('/auth/forgot-password/reset', resetLimiter, async (req, res) => {
   try {
     const { email, answer, newPassword } = req.body;
 
@@ -466,7 +552,8 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
     const clean = sanitizeContent(req.body);
-    const { text, images, location } = clean;
+    const { text, location } = clean;
+    const images = await uploadImagesToCloudinary(clean.images || [], 'shoutouts');
     // ────────────────────────────────────────────────────────────────────────
 
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
@@ -568,6 +655,9 @@ router.get('/shoutout-thumb/:id', async (req, res) => {
     if (!shoutout?.images?.length) return res.status(404).end();
 
     const dataUrl = shoutout.images[0];
+    // Cloudinary URL — just redirect; no base64 decode needed
+    if (dataUrl.startsWith('https://')) return res.redirect(dataUrl);
+
     const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
     if (!matches) return res.status(400).end();
 
@@ -1502,6 +1592,46 @@ router.post('/business/:id/follow', authenticate, async (req, res) => {
   }
 });
 
+// ─── FOLLOWING FEED ────────────────────────────────────────────────────────────────
+// GET /api/feed/following
+// Returns recent BusinessPosts, Deals, and Events from businesses the user follows.
+// Sorted by creation date descending, up to 50 items total.
+router.get('/feed/following', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('following').lean();
+    const followedIds = user?.following || [];
+
+    if (followedIds.length === 0) {
+      return res.json({ posts: [], deals: [], events: [], followCount: 0 });
+    }
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // last 30 days
+
+    const [posts, deals, events] = await Promise.all([
+      BusinessPost.find({ business: { $in: followedIds } })
+        .sort({ createdAt: -1 })
+        .limit(30)
+        .lean(),
+
+      Deal.find({ business: { $in: followedIds }, createdAt: { $gte: since } })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate('business', 'name logo')
+        .lean(),
+
+      Event.find({ owner: { $in: followedIds }, date: { $gte: new Date() } })
+        .sort({ date: 1 })
+        .limit(20)
+        .lean(),
+    ]);
+
+    res.json({ posts, deals, events, followCount: followedIds.length });
+  } catch (err) {
+    console.error('Following feed error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ─── LOST & FOUND (Paginated) ─────────────────────────────────────────────
 router.get('/lostitems', optionalAuth, async (req, res) => {
   try {
@@ -1538,7 +1668,8 @@ router.post('/lostitems', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, images, location, type, itemType, isPet, date } = clean;
+    const { title, description, location, type, itemType, isPet, date } = clean;
+    const images = await uploadImagesToCloudinary(clean.images || [], 'lostitems');
 
     const item = await LostItem.create({
       type: type || 'lost',
@@ -1674,7 +1805,8 @@ router.post('/marketplace', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, price, images, category, condition, notifyCommunity, homeNotifDetails } = clean;
+    const { title, description, price, category, condition, notifyCommunity, homeNotifDetails } = clean;
+    const images = await uploadImagesToCloudinary(clean.images || [], 'marketplace');
 
     const item = await MarketplaceItem.create({
       title,
@@ -2014,7 +2146,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
 });
 
 // ─── REGISTER ───────────────────────────────────────────────────────────────
-router.post('/auth/register', async (req, res) => {
+router.post('/auth/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password, securityQuestion, securityAnswer } = req.body;
 
@@ -2039,7 +2171,11 @@ router.post('/auth/register', async (req, res) => {
       subscriptionTier: 'free'
     });
 
-    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign(
+      { userId: newUser._id, iat: Math.floor(Date.now() / 1000) },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
 
     res.json({ 
       token, 
@@ -2058,7 +2194,7 @@ router.post('/auth/register', async (req, res) => {
   }
 });
 
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() }).populate('verifiedBusiness');
@@ -2082,7 +2218,11 @@ router.post('/auth/login', async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign(
+      { userId: user._id, iat: Math.floor(Date.now() / 1000) },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
     const u = sanitizeUser(user);
     u.isAdmin = ADMIN_EMAILS.has(user.email);
     res.json({ token, user: u });
@@ -2103,11 +2243,56 @@ router.get('/auth/me', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/auth/refresh
+// Accepts a still-valid (or <7-day-expired) token and returns a fresh 30-day one.
+// Call this proactively when the stored token has < 7 days left: the frontend
+// reads the `exp` field from the decoded payload to decide when to refresh.
+router.post('/auth/refresh', async (req, res) => {
+  try {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer '))
+      return res.status(401).json({ message: 'No token provided' });
+
+    const token = header.split(' ')[1];
+    let decoded;
+
+    // Accept both valid tokens and recently-expired ones (grace window: 7 days)
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        // Allow refresh up to 7 days after expiry
+        decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
+        const expiredAt = decoded.exp * 1000;
+        if (Date.now() - expiredAt > 7 * 24 * 60 * 60 * 1000) {
+          return res.status(401).json({ message: 'Token too old to refresh — please log in again' });
+        }
+      } else {
+        return res.status(401).json({ message: 'Invalid token' });
+      }
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.isIpBanned) return res.status(403).json({ message: 'Account suspended' });
+
+    const newToken = jwt.sign(
+      { userId: user._id, iat: Math.floor(Date.now() / 1000) },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({ token: newToken });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.patch('/auth/profile', authenticate, async (req, res) => {
   try {
     const allowedFields = [
       'name', 'bio', 'phone', 'neighborhood', 'website', 'instagram', 
-      'facebook', 'avatar', 'notifyDeals', 'notifyEvents', 'notifyShoutouts',
+      'facebook', 'notifyDeals', 'notifyEvents', 'notifyShoutouts',
       'notifyShoutoutComments', 'notifyLostFound', 'notifyMarketplace', 
       'notifyMessages', 'pushEnabled'
     ];
@@ -2118,6 +2303,11 @@ router.patch('/auth/profile', authenticate, async (req, res) => {
         updateData[field] = req.body[field];
       }
     });
+
+    // Avatar handled separately — upload to Cloudinary if it's a base64 data URL
+    if (req.body.avatar !== undefined) {
+      updateData.avatar = await uploadToCloudinary(req.body.avatar, 'avatars');
+    }
 
     const user = await User.findByIdAndUpdate(
       req.userId, 
@@ -2322,6 +2512,41 @@ router.delete('/business/:id/reviews/:reviewId', authenticate, async (req, res) 
   }
 });
 
+// PATCH /api/business/:id/reviews/:reviewId — edit your own review
+router.patch('/business/:id/reviews/:reviewId', authenticate, async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.reviewId);
+    if (!review) return res.status(404).json({ message: 'Review not found' });
+    if (review.user.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body);
+    const { rating, title, body } = clean;
+
+    if (rating !== undefined) {
+      if (rating < 1 || rating > 5) return res.status(400).json({ message: 'Rating 1-5 required' });
+      review.rating = rating;
+    }
+    if (title !== undefined) review.title = title;
+    if (body  !== undefined) review.body  = body;
+
+    await review.save();
+    res.json(review);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/business/:id/reviews/mine — fetch the current user's own review for a business
+router.get('/business/:id/reviews/mine', authenticate, async (req, res) => {
+  try {
+    const review = await Review.findOne({ business: req.params.id, user: req.userId });
+    res.json(review || null);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -2493,7 +2718,9 @@ router.post('/news', authenticate, async (req, res) => {
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const { title, summary, content, contentHtml, images } = req.body;
+    const { title, summary, content, contentHtml } = req.body;
+    const rawImages = Array.isArray(req.body.images) ? req.body.images : [];
+    const images = await uploadImagesToCloudinary(rawImages, 'news');
 
     if (!title || !summary || !(content || contentHtml))
       return res.status(400).json({ message: 'Title, summary, and content are required' });
@@ -2547,12 +2774,15 @@ router.put('/news/:id', authenticate, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
-    const { title, summary, content, contentHtml, images } = req.body;
+    const { title, summary, content, contentHtml } = req.body;
+    const uploadedImages = req.body.images !== undefined
+      ? await uploadImagesToCloudinary(Array.isArray(req.body.images) ? req.body.images : [], 'news')
+      : undefined;
     if (title !== undefined)       article.title   = sanitizeContent({ title }).title || title;
     if (summary !== undefined)     article.summary = sanitizeContent({ summary }).summary || summary;
     if (content !== undefined)     article.content = sanitizeContent({ content }).content || content;
     if (contentHtml !== undefined) article.contentHtml = sanitizeHtml(contentHtml);
-    if (images !== undefined)      article.images = images;
+    if (uploadedImages !== undefined) article.images = uploadedImages;
     await article.save();
     res.json(article);
   } catch (err) {
@@ -2885,7 +3115,7 @@ router.put('/owner/business', authenticate, async (req, res) => {
     if (hours     !== undefined) updates.hours     = hours;
     if (priceRange !== undefined) updates.priceRange = priceRange;
     if (tags      !== undefined) updates.tags      = tags;
-    if (logo      !== undefined) updates.logo      = logo;
+    if (logo      !== undefined) updates.logo      = await uploadToCloudinary(logo, 'business-logos');
     const business = await Business.findByIdAndUpdate(
       user.verifiedBusiness,
       updates,
@@ -2910,7 +3140,8 @@ router.post('/owner/business/photos', authenticate, async (req, res) => {
     if (!Array.isArray(photos))
       return res.status(400).json({ message: 'photos must be an array' });
 
-    const combined = [...(business.photos || []), ...photos];
+    const uploadedPhotos = await uploadImagesToCloudinary(photos, 'business-photos');
+    const combined = [...(business.photos || []), ...uploadedPhotos];
     if (combined.length > 5)
       return res.status(400).json({ message: 'Maximum 5 photos allowed' });
 
@@ -3482,31 +3713,75 @@ router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) =>
   }
 });
 
-// ─── UPDATED SEARCH (now includes Lost & Found + Marketplace) ───────────────
+// ─── SEARCH (text-index powered, falls back to regex if indexes not built yet) ─
 router.get('/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ results: [] });
-    const regex = new RegExp(q, 'i');
 
-    const [businesses, events, deals, news, shoutouts, lostitems, marketplace] = await Promise.all([
-      Business.find({ $or: [{ name: regex }, { description: regex }] }).populate('category').limit(8),
-      Event.find({ $or: [{ title: regex }, { description: regex }] }).limit(6),
-      Deal.find({ $or: [{ title: regex }, { description: regex }] }).populate('business').limit(6),
-      News.find({ $or: [{ title: regex }, { summary: regex }, { content: regex }] }).limit(6),
-      Shoutout.find({ text: regex }).limit(6),
-      LostItem.find({ $or: [{ title: regex }, { description: regex }] }).limit(6),
-      MarketplaceItem.find({ $or: [{ title: regex }, { description: regex }] }).limit(6)
-    ]);
+    // Try full-text search first (requires text indexes — see migration script).
+    // Falls back to regex so the endpoint never breaks during a rolling deploy.
+    let businesses, events, deals, news, shoutouts, lostitems, marketplace;
+
+    try {
+      [businesses, events, deals, news, shoutouts, lostitems, marketplace] = await Promise.all([
+        Business.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).populate('category').limit(8),
+
+        Event.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).limit(6),
+
+        Deal.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).populate('business').limit(6),
+
+        News.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).limit(6),
+
+        Shoutout.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).limit(6),
+
+        LostItem.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).limit(6),
+
+        MarketplaceItem.find(
+          { $text: { $search: q } },
+          { score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).limit(6),
+      ]);
+    } catch (_textErr) {
+      // Text indexes not yet built — fall back to case-insensitive regex
+      const regex = new RegExp(q, 'i');
+      [businesses, events, deals, news, shoutouts, lostitems, marketplace] = await Promise.all([
+        Business.find({ $or: [{ name: regex }, { description: regex }] }).populate('category').limit(8),
+        Event.find({ $or: [{ title: regex }, { description: regex }] }).limit(6),
+        Deal.find({ $or: [{ title: regex }, { description: regex }] }).populate('business').limit(6),
+        News.find({ $or: [{ title: regex }, { summary: regex }, { content: regex }] }).limit(6),
+        Shoutout.find({ text: regex }).limit(6),
+        LostItem.find({ $or: [{ title: regex }, { description: regex }] }).limit(6),
+        MarketplaceItem.find({ $or: [{ title: regex }, { description: regex }] }).limit(6),
+      ]);
+    }
 
     const results = [
-      ...businesses.map(b => ({ type: 'business', id: b._id, title: b.name, subtitle: b.description || '', icon: '📍' })),
-      ...events.map(e    => ({ type: 'event',    id: e._id, title: e.title,  subtitle: e.description || '', icon: '📅' })),
-      ...deals.map(d     => ({ type: 'deal',     id: d._id, title: d.title,  subtitle: d.description || '', icon: '🔥' })),
-      ...news.map(n      => ({ type: 'news',     id: n._id, title: n.title,  subtitle: n.summary || '', icon: '📰' })),
-      ...shoutouts.map(s => ({ type: 'shoutout', id: s._id, title: s.text,   subtitle: `by ${s.author}`, icon: '💬' })),
-      ...lostitems.map(l => ({ type: 'lost',     id: l._id, title: l.title,   subtitle: l.description || '', icon: '🔎' })),
-      ...marketplace.map(m => ({ type: 'market', id: m._id, title: m.title,   subtitle: `$${m.price} · ${m.authorName}`, icon: '🛒' }))
+      ...businesses.map(b  => ({ type: 'business', id: b._id, title: b.name,  subtitle: b.description || '',          icon: '📍' })),
+      ...events.map(e      => ({ type: 'event',    id: e._id, title: e.title, subtitle: e.description || '',          icon: '📅' })),
+      ...deals.map(d       => ({ type: 'deal',     id: d._id, title: d.title, subtitle: d.description || '',          icon: '🔥' })),
+      ...news.map(n        => ({ type: 'news',     id: n._id, title: n.title, subtitle: n.summary || '',              icon: '📰' })),
+      ...shoutouts.map(s   => ({ type: 'shoutout', id: s._id, title: s.text,  subtitle: `by ${s.author}`,            icon: '💬' })),
+      ...lostitems.map(l   => ({ type: 'lost',     id: l._id, title: l.title, subtitle: l.description || '',          icon: '🔎' })),
+      ...marketplace.map(m => ({ type: 'market',   id: m._id, title: m.title, subtitle: `$${m.price} · ${m.authorName}`, icon: '🛒' })),
     ];
     res.json({ results });
   } catch (err) {
@@ -4060,19 +4335,22 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
     if (!user)                  return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) return res.status(403).json({ message: 'Only verified business owners can post updates' });
 
-    const { caption, image, sendNotify, notifTitle } = req.body;
+    const { caption, sendNotify, notifTitle } = req.body;
+    const rawImage = req.body.image;
 
-    if (!image?.trim()) return res.status(400).json({ message: 'An image is required' });
+    if (!rawImage?.trim()) return res.status(400).json({ message: 'An image is required' });
 
-    // Validate it's a real base64 data URL (jpeg/png/webp only)
-    if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) {
+    // Validate it's a real base64 data URL or Cloudinary URL
+    if (!rawImage.startsWith('https://') && !/^data:image\/(jpeg|png|webp);base64,/.test(rawImage)) {
       return res.status(400).json({ message: 'Image must be a valid JPEG, PNG, or WebP' });
     }
 
     // Enforce a ~4 MB base64 limit (4 MB raw ≈ 5.5 MB base64)
-    if (image.length > 5_600_000) {
+    if (!rawImage.startsWith('https://') && rawImage.length > 5_600_000) {
       return res.status(400).json({ message: 'Image is too large (max 4 MB)' });
     }
+
+    const image = await uploadToCloudinary(rawImage, 'business-posts');
 
     const bizName = user.verifiedBusiness.name || user.name;
 
@@ -4120,26 +4398,32 @@ if (sendNotify) {
   }
 });
 
-// GET /api/business-post-thumb/:postId — serves the stored base64 image as a real HTTP response
-// Used so FCM/VAPID push notifications can show a thumbnail via a public URL instead of raw base64
+// GET /api/business-post-thumb/:postId — serves the stored image as a real HTTP response
+// Supports both Cloudinary HTTPS URLs (redirect) and legacy base64 data URLs (decode + stream).
+// Used so FCM/VAPID push notifications can show a thumbnail via a public URL.
 router.get('/business-post-thumb/:postId', async (req, res) => {
   try {
     const post = await BusinessPost.findById(req.params.postId).select('image');
     if (!post?.image) return res.status(404).send('Not found');
 
-    // Parse the data URL: data:image/jpeg;base64,<data>
+    // Cloudinary URL — redirect directly; no base64 decode needed
+    if (post.image.startsWith('https://')) return res.redirect(post.image);
+
+    // Legacy base64 data URL path
+    if (!post.image.startsWith('data:')) return res.status(404).send('No image');
+
     const match = post.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) return res.status(400).send('Invalid image format');
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
-res.set({
-  'Content-Type': mimeType,
-  'Cache-Control': 'public, max-age=86400',
-  'Content-Length': buffer.length,
-  'Access-Control-Allow-Origin': '*',
-});
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
     res.send(buffer);
   } catch (err) {
     console.error('Thumb fetch error:', err);
@@ -4155,9 +4439,14 @@ async function serveImageThumb(req, res, Model) {
     if (doc?.image) imgData = doc.image;                           // BusinessPost-style single image
     else if (doc?.images && doc.images.length > 0) imgData = doc.images[0];
 
-    if (!imgData || typeof imgData !== 'string' || !imgData.startsWith('data:')) {
+    if (!imgData || typeof imgData !== 'string') {
       return res.status(404).send('No image');
     }
+
+    // Cloudinary URL — redirect directly; no base64 decode needed
+    if (imgData.startsWith('https://')) return res.redirect(imgData);
+
+    if (!imgData.startsWith('data:')) return res.status(404).send('No image');
 
     const match = imgData.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) return res.status(400).send('Invalid image format');
@@ -4188,7 +4477,12 @@ router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, Ne
 router.get('/biz-logo-thumb/:bizId', async (req, res) => {
   try {
     const biz = await Business.findById(req.params.bizId).select('logo');
-    if (!biz?.logo || typeof biz.logo !== 'string' || !biz.logo.startsWith('data:')) {
+    if (!biz?.logo || typeof biz.logo !== 'string') {
+      return res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
+    }
+    // Cloudinary URL — redirect directly
+    if (biz.logo.startsWith('https://')) return res.redirect(biz.logo);
+    if (!biz.logo.startsWith('data:')) {
       return res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
     }
     const match = biz.logo.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);

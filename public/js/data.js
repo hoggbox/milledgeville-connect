@@ -5914,6 +5914,11 @@ window.showMarketplaceDetail = async function(id) {
                     class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
               🔗 Share
             </button>
+            ${!isSeller ? `
+            <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')" 
+                    class="px-6 py-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-3xl font-semibold transition">
+              🚩 Report
+            </button>` : ''}
             <button onclick="hideMarketDetailModal()" 
                     class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
               Close
@@ -7090,6 +7095,10 @@ window.showEventDetail = async function(eventId) {
                   class="flex-1 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-3xl font-semibold transition">
             🔗 Share
           </button>
+          <button onclick="event.stopImmediatePropagation(); reportContent('event', '${event._id}', '${esc(event.title)}')" 
+                  class="px-6 py-4 bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 rounded-3xl font-semibold transition">
+            🚩 Report
+          </button>
           <button onclick="document.getElementById('eventDetailModal').remove()" 
                   class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
             Close
@@ -7136,6 +7145,10 @@ window.showDealDetail = async function(dealId) {
           <button onclick="shareContent('deal', '${esc(deal.title)}', '${deal.business?.name ? 'From: ' + esc(deal.business.name) : ''}')" 
                   class="flex-1 py-4 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-3xl font-semibold transition">
             🔗 Share
+          </button>
+          <button onclick="event.stopImmediatePropagation(); reportContent('deal', '${deal._id}', '${esc(deal.title)}')" 
+                  class="px-6 py-4 bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 rounded-3xl font-semibold transition">
+            🚩 Report
           </button>
           <button onclick="document.getElementById('dealDetailModal').remove()" 
                   class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
@@ -7247,6 +7260,11 @@ window.showLostDetail = async function(id) {
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     🔗 Share
   </button>
+  ${!isOwner ? `
+  <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
+          class="px-6 py-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-3xl font-semibold transition">
+    🚩 Report
+  </button>` : ''}
   <button onclick="hideLostDetailModal()" 
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     Close
