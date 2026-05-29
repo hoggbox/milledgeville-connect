@@ -598,7 +598,8 @@ router.get('/shoutout-thumb/:id', async (req, res) => {
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Access-Control-Allow-Origin', '*');   // ← ADD THIS LINE
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.send(buffer);
   } catch (e) {
     console.error('shoutout-thumb error:', e);
@@ -1049,13 +1050,22 @@ if (user.fcmTokens?.length) {
             sound: 'default',
             channelId: 'default',
           }
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+            }
+          }
         }
       };
 
-      // Add image if we have one
+      // Add image if we have one (Android + iOS + notification top-level)
       if (imageUrl) {
         message.notification.imageUrl = imageUrl;
         message.android.notification.imageUrl = imageUrl;
+        // iOS requires fcm_options.image for the expanded notification banner image
+        message.apns.fcm_options = { image: imageUrl };
       }
 
       await admin.messaging().send(message);
@@ -1972,10 +1982,24 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Title and body required' });
     }
 
-    // Validate imageUrl if provided — must be a real HTTPS URL (not raw base64 data)
-    const safeImageUrl = (typeof imageUrl === 'string' && /^https:\/\/.+/.test(imageUrl.trim()))
-      ? imageUrl.trim()
-      : null;
+    // Build a safe HTTPS image URL for the push notification.
+    // Priority:
+    //   1. If postId is provided, the post's first image is used as the thumb (built below).
+    //   2. If imageUrl is already an HTTPS URL, use it directly.
+    //   3. If imageUrl is a base64 data URL, save it as a temporary BusinessPost so we
+    //      can serve it via the /api/business-post-thumb/:id endpoint.
+    //   4. Otherwise no image.
+    let safeImageUrl = null;
+    let pendingBase64Image = null;
+
+    if (typeof imageUrl === 'string' && imageUrl.trim()) {
+      const trimmed = imageUrl.trim();
+      if (/^https:\/\/.+/.test(trimmed)) {
+        safeImageUrl = trimmed;
+      } else if (trimmed.startsWith('data:image/')) {
+        pendingBase64Image = trimmed;
+      }
+    }
 
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -2001,7 +2025,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     const pushBody = `${title.trim()}\n${body.trim()}`;
 
     // ✅ FIX: if a postId was attached, deep-link to the business-post screen
-    //         otherwise fall back to home (for generic announcements)
+    //         otherwise fall back to the business directory page
     let deepLink;
     if (postId) {
       // Verify the post exists and belongs to this owner before using it
@@ -2012,14 +2036,34 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       deepLink = {
         page: 'business-post',
         id: postId,
-        businessId: user.verifiedBusiness.toString()  // so the app can show the directory button
+        businessId: user.verifiedBusiness.toString()
       };
-} else {
-  deepLink = {
-    page: 'directory-business',
-    id: user.verifiedBusiness.toString()
-  };
-}
+      // If no imageUrl was supplied, use the post's first image as the notification thumb
+      if (!safeImageUrl && !pendingBase64Image && post.image) {
+        safeImageUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
+      }
+    } else {
+      deepLink = {
+        page: 'directory-business',
+        id: user.verifiedBusiness.toString()
+      };
+    }
+
+    // If owner sent a raw base64 image (not attached to a post), persist it so
+    // we can serve it as a real HTTP URL in the push payload
+    if (pendingBase64Image && !safeImageUrl) {
+      try {
+        const tempPost = await BusinessPost.create({
+          business: user.verifiedBusiness,
+          owner: req.userId,
+          image: pendingBase64Image,
+          caption: '__notification_thumb__',  // sentinel so it can be cleaned up later
+        });
+        safeImageUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${tempPost._id}`;
+      } catch (imgErr) {
+        console.warn('Could not persist notification image, sending without thumb:', imgErr.message);
+      }
+    }
 
     await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', imageUrl: safeImageUrl, logoUrl: bizLogoUrl });
 
@@ -4197,7 +4241,8 @@ async function serveImageThumb(req, res, Model) {
 }
 
 // Public thumb endpoints so base64 images can be used as real HTTP URLs in push payloads
-router.get('/shoutout-thumb/:id',     (req, res) => serveImageThumb(req, res, Shoutout));
+// NOTE: /shoutout-thumb/:id is already registered above (inline handler ~line 587);
+//       removing the duplicate here so Express doesn't silently skip the second registration.
 router.get('/lostitem-thumb/:id',     (req, res) => serveImageThumb(req, res, LostItem));
 router.get('/marketplace-thumb/:id',  (req, res) => serveImageThumb(req, res, MarketplaceItem));
 router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, News));
