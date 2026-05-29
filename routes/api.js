@@ -598,6 +598,7 @@ router.get('/shoutout-thumb/:id', async (req, res) => {
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Access-Control-Allow-Origin', '*');   // ← ADD THIS LINE
     res.send(buffer);
   } catch (e) {
     console.error('shoutout-thumb error:', e);
@@ -1030,51 +1031,46 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
   const msgData  = { page: data.page || '', id: data.id || '', businessId: data.businessId || '' };
   let   sent     = false;
 
-  // ── FCM (Android APK) ──────────────────────────────────────────────────────
-  if (user.fcmTokens?.length) {
-    const keepTokens = [];
-    for (const token of user.fcmTokens) {
-      try {
-        await admin.messaging().send({
-          token,
+// Inside sendPushToUser, replace the FCM send block with this:
+if (user.fcmTokens?.length) {
+  const keepTokens = [];
+  for (const token of user.fcmTokens) {
+    try {
+      const message = {
+        token,
+        notification: {
+          title,
+          body,
+        },
+        data: msgData,
+        android: {
+          priority: 'high',
           notification: {
-            title,
-            body,
-            ...(hasPhoto && { imageUrl })   // top-level image for rich notifications
-          },
-          data: msgData,
-          android: {
-            priority: 'high',
-            notification: {
-              sound:     'default',
-              channelId: 'default',
-              ...(hasPhoto && { imageUrl }), // android big-picture image
-              ...(logoUrl && !hasPhoto && { imageUrl: logoUrl }) // biz logo as large icon when no big photo
-            }
-          },
-          apns: {
-            payload:    { aps: { sound: 'default', 'mutable-content': 1 } },
-            fcmOptions: hasPhoto ? { imageUrl } : {}
+            sound: 'default',
+            channelId: 'default',
           }
-        });
-        keepTokens.push(token);
-        sent = true;
-      } catch (e) {
-        // Permanently invalid tokens get pruned; transient errors keep the token
-        const stale = [
-          'messaging/registration-token-not-registered',
-          'messaging/invalid-registration-token',
-          'messaging/invalid-argument'
-        ];
-        if (!stale.includes(e.code)) keepTokens.push(token);
-        console.error('FCM send error:', e.code || e.message);
+        }
+      };
+
+      // Add image if we have one
+      if (imageUrl) {
+        message.notification.imageUrl = imageUrl;
+        message.android.notification.imageUrl = imageUrl;
       }
-    }
-    // Only write back if we actually pruned something
-    if (keepTokens.length !== user.fcmTokens.length) {
-      await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
+
+      await admin.messaging().send(message);
+      keepTokens.push(token);
+      sent = true;
+    } catch (e) {
+      const stale = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'];
+      if (!stale.includes(e.code)) keepTokens.push(token);
+      console.error('FCM send error:', e.code || e.message);
     }
   }
+  if (keepTokens.length !== user.fcmTokens.length) {
+    await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
+  }
+}
 
   // ── Web VAPID ──────────────────────────────────────────────────────────────
   if (user.webPushSubscriptions?.length) {
