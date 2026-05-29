@@ -36,14 +36,6 @@ const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 const Settings        = require('../models/Settings');     // ← SITE-WIDE ADMIN SETTINGS
 
-const cloudinary = require('cloudinary').v2;
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
 function sanitizeContent(body = {}) {
   const out = {};
   for (const [key, val] of Object.entries(body)) {
