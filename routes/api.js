@@ -204,6 +204,11 @@ router.post('/flag', authenticate, async (req, res) => {
 
     const entry = contentTypeMap(type);
     if (!entry) {
+      // 'comment' reports go through POST /reports (not /flag) since comments
+      // are embedded subdocuments and cannot be looked up by standalone ID.
+      if (type === 'comment') {
+        return res.status(400).json({ message: 'To report a comment, use the Report button — not the Flag button.' });
+      }
       return res.status(400).json({ message: `Unknown content type: ${type}` });
     }
 

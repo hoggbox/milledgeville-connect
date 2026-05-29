@@ -8361,10 +8361,12 @@ window.reportContent = async function (type, id, extraInfo = '') {
     if (res && (res.message?.includes('Report submitted') || res._id)) {
       showToast('🚩 Report sent to admin team. Thank you.', 'success');
     } else {
-      showToast(res?.message || 'Failed to send report', 'error');
+      showToast(res?.message || 'Failed to send report — try again later', 'error');
     }
   } catch (e) {
-    showToast('Could not send report — try again later', 'error');
+    // Surface the real server error message so failures aren't silent
+    const msg = (e instanceof Error ? e.message : null) || (typeof e === 'string' ? e : null);
+    showToast(msg || 'Could not send report — try again later', 'error');
   }
 };
 
@@ -8619,15 +8621,21 @@ window.flagShoutout = async function (shoutoutId) {
 
   if (!confirm('Flag this traffic alert as inappropriate?')) return;
 
-  const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
+  try {
+    const res = await apiPost(`/shoutouts/${shoutoutId}/flag`, {});
 
-  if (res.removed) {
-    showToast('🚩 Post was removed by community flags', 'success');
-    // Remove from DOM immediately
-    const card = document.getElementById(`shoutout-${shoutoutId}`);
-    if (card) card.remove();
-  } else {
-    showToast('🚩 Thank you — your flag has been recorded.', 'success');
+    if (res.removed) {
+      showToast('🚩 Post was removed by community flags', 'success');
+      // Remove from DOM immediately
+      const card = document.getElementById(`shoutout-${shoutoutId}`);
+      if (card) card.remove();
+    } else {
+      showToast(res.message || '🚩 Thank you — your flag has been recorded.', 'success');
+    }
+  } catch (e) {
+    // Surface real server errors (already flagged, post not found, etc.)
+    const msg = (e instanceof Error ? e.message : null) || (typeof e === 'string' ? e : null);
+    showToast(msg || 'Could not flag post — try again later', 'error');
   }
 };
 
