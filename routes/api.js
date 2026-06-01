@@ -518,15 +518,25 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
-    broadcastPush(
-      `🚗 New Traffic Alert from ${user.name}`,
-      text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { 
-        page: 'shoutouts', 
-        id: shoutout._id.toString() 
-      },
-      { type: 'shoutout' }
-    );
+
+    // === ADD THIS BLOCK ===
+    let shoutoutThumbUrl = null;
+    if (shoutout.images && shoutout.images.length > 0) {
+    shoutoutThumbUrl = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
+    }
+
+broadcastPush(
+  `🚗 New Traffic Alert from ${user.name}`,
+  text.length > 80 ? text.substring(0, 77) + '...' : text,
+  { 
+    page: 'shoutouts', 
+    id: shoutout._id.toString() 
+  },
+  { 
+    type: 'shoutout', 
+    imageUrl: shoutoutThumbUrl     // ← Add this
+  }
+);
 
     res.json(shoutout);
   } catch (err) {
@@ -885,23 +895,33 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   if (!sub) return false;
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const thumb = imageUrl || APP_ICON;
+  const hasImage = !!imageUrl;
 
+  // === ANDROID (FCM) ===
   if (sub.nativeToken) {
     try {
-await admin.messaging().send({
-  token: sub.nativeToken,
-  notification: { title, body, imageUrl: thumb },
-  data: { page: data.page || '', id: data.id || '' },
-  android: {
-    priority: 'high',
-    notification: { sound: 'default', channelId: 'default', imageUrl: thumb }
-  },
-  apns: {
-    payload: { aps: { sound: 'default', 'mutable-content': 1 } },
-    fcmOptions: { imageUrl: thumb }
-  }
-});
+      const message = {
+        token: sub.nativeToken,
+        notification: {
+          title,
+          body
+        },
+        data: {
+          page: data.page || '',
+          id: data.id || ''
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            ...(hasImage && { imageUrl }),
+            ...(hasImage && { style: 'big_picture' })
+          }
+        }
+      };
+
+      await admin.messaging().send(message);
       return true;
     } catch (e) {
       console.error('FCM error:', e.message);
@@ -909,6 +929,7 @@ await admin.messaging().send({
     }
   }
 
+  // === WEB PUSH ===
   if (sub.subscription?.endpoint) {
     try {
       await webpush.sendNotification(
@@ -917,8 +938,8 @@ await admin.messaging().send({
           title,
           body,
           data: { page: data.page || '', id: data.id || '' },
-          icon: thumb,
-          image: thumb
+          icon: APP_ICON,
+          ...(hasImage && { image: imageUrl })
         })
       );
       return true;
@@ -927,6 +948,7 @@ await admin.messaging().send({
       return false;
     }
   }
+
   return false;
 }
 
@@ -1010,9 +1032,12 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           shouldSend = true;
       }
 
-      if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data, imageUrl);
-      }
+if (shouldSend) {
+  if (imageUrl) {
+    console.log(`🖼️ Sending push with image: ${imageUrl}`);
+  }
+  await sendPushToUser(user._id, title, body, data, imageUrl);
+}
     }
   } catch (err) {
     console.error('broadcastPush error:', err);
@@ -1777,40 +1802,70 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 });
 
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
+// ─── OWNER: CUSTOM NOTIFICATION (with optional photo) ───────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body } = req.body;
-    if (!title?.trim() || !body?.trim()) {
-      return res.status(400).json({ message: 'Title and body required' });
-    }
-
-    // Must have a verified business
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name');
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) {
       return res.status(403).json({ message: 'Only verified business owners can send notifications' });
     }
 
-    // Fetch business name to stamp on the notification
-    const business = await Business.findById(user.verifiedBusiness).select('name');
-    const bizName  = business?.name || user.name;
+    const { title, body, image, sendNotify } = req.body;
 
-    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
+    if (!title?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'Title and message are required' });
+    }
+
+    const bizName = user.verifiedBusiness.name || user.name;
+
+    // Deduct credits
     const deducted = await deductNotificationCredit(req.userId);
     if (!deducted) {
       return res.status(403).json({
-        message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
+        message: 'Not enough notification credits. Upgrade to Business Pro or buy more credits.',
         outOfCredits: true
       });
     }
 
-    // Prepend business name to the body so recipients always know who sent it
-    const stampedBody = `${bizName} · ${body.trim()}`;
-    await broadcastPush(title.trim(), stampedBody, { page: 'home' });
+    let thumbUrl = null;
+    let postId = null;
 
-    // Return updated credit balance so the frontend can refresh the display
+    // If there's an image, create a BusinessPost record (so it shows in history)
+    if (image && image.startsWith('data:image')) {
+      const post = await BusinessPost.create({
+        business: user.verifiedBusiness._id,
+        owner: user._id,
+        bizName,
+        caption: body.trim(),
+        image
+      });
+      postId = post._id;
+      thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
+    }
+
+    const stampedBody = `${bizName} · ${body.trim()}`;
+
+    await broadcastPush(
+      title.trim(),
+      stampedBody,
+      { 
+        page: image ? 'business-post' : 'home', 
+        id: postId || null 
+      },
+      { 
+        type: 'custom',
+        imageUrl: thumbUrl 
+      }
+    );
+
     const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
+    res.json({ 
+      success: true, 
+      message: 'Notification sent', 
+      credits: updated.notificationCredits ?? 0 
+    });
+
   } catch (err) {
     console.error('Custom notification error:', err);
     res.status(500).json({ message: 'Failed to send notification' });
