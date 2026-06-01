@@ -19,11 +19,6 @@ const userSchema = new mongoose.Schema({
   instagram: { type: String, default: '' },
   facebook:  { type: String, default: '' },
 
-  // ─── SECURITY QUESTION (password reset) ──────────────────────────────────
-  // securityAnswer is hashed on save — never returned in normal queries
-  securityQuestion: { type: String, default: null },
-  securityAnswer:   { type: String, default: null, select: false },
-
   // ─────────────────────────────────────────────────────────────
   // NOTIFICATION PREFERENCES
   // Users can toggle these. Custom business notifications are excluded.
@@ -108,14 +103,8 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', async function (next) {
-  if (this.isModified('password')) {
-    this.password = await bcrypt.hash(this.password, 10);
-  }
-  if (this.isModified('securityAnswer') && this.securityAnswer) {
-    this.securityAnswer = await bcrypt.hash(
-      this.securityAnswer.trim().toLowerCase(), 10
-    );
-  }
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 

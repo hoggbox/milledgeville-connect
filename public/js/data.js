@@ -135,13 +135,13 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-else if (page === 'business-post') {
-  if (id) {
-    showBusinessPostModal(id);
-  } else {
-    navigate('home');
+  else if (page === 'business-post') {
+    if (id) showBusinessPostModal(id);
+    else navigate('home');
   }
-}
+  else {
+    navigate(page);
+  }
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -163,15 +163,16 @@ if ('serviceWorker' in navigator) {
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
-const page  = params.get('notif_page');
-const id    = params.get('notif_id');
-const bizId = params.get('notif_bizId') || '';
-if (page) {
-  window.history.replaceState({}, document.title, window.location.pathname);
-  setTimeout(() => {
-    window.handlePushNotificationClick({ page, id, bizId });
-  }, 2200);
-}
+    const page = params.get('notif_page');
+    const id   = params.get('notif_id');
+    if (page) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => {
+        if (typeof window.handlePushNotificationClick === 'function') {
+          window.handlePushNotificationClick({ page, id });
+        }
+      }, 2200);
+    }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
   }
@@ -2376,35 +2377,31 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
   render();
 };
 
-// ─── SHOUTOUT PHOTO SYSTEM (CLEAN) ────────────────────────────────────────────
+// ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
 let _pendingShoutoutImages = [];
-let isPostingShoutout = false;
 
-window.handleShoutoutImages = async function(input) {
+window.handleShoutoutImages = async function (input) {
   const files = Array.from(input.files);
   if (!_pendingShoutoutImages) _pendingShoutoutImages = [];
 
-  const remaining = 5 - _pendingShoutoutImages.length;
-  if (remaining <= 0) {
-    showToast('Maximum 5 photos allowed', 'error');
-    input.value = '';
-    return;
-  }
-
-  for (const file of files.slice(0, remaining)) {
-    if (file.size > 6 * 1024 * 1024) {
-      showToast(`${file.name} is too large (max 6MB)`, 'error');
+  for (let file of files) {
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 8MB)`, 'error');
       continue;
     }
+
     try {
-      const compressed = await compressImage(file, 1000, 0.75);
+      showToast('Compressing image...', 'success');
+      const compressed = await compressImage(file, 1100, 0.72);
       const reader = new FileReader();
       reader.onload = e => {
         _pendingShoutoutImages.push(e.target.result);
         renderShoutoutImagePreviews();
       };
       reader.readAsDataURL(compressed);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   }
   input.value = '';
 };
@@ -2413,56 +2410,37 @@ function renderShoutoutImagePreviews() {
   const container = document.getElementById('shoutoutImagePreviews');
   if (!container) return;
   container.innerHTML = _pendingShoutoutImages.map((src, i) => `
-    <div class="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/10 group flex-shrink-0">
-      <img src="${src}" class="w-full h-full object-cover">
+    <div class="relative w-16 h-16 bg-white/10 rounded-2xl overflow-hidden group">
+      <img src="${src}" class="w-full h-full object-cover" alt="Preview">
       <button onclick="removeShoutoutImage(${i}); event.stopImmediatePropagation()" 
-              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-bl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">✕</button>
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-bl flex items-center justify-center">✕</button>
     </div>`).join('');
 }
 
-window.removeShoutoutImage = function(index) {
+window.removeShoutoutImage = function (index) {
   _pendingShoutoutImages.splice(index, 1);
   renderShoutoutImagePreviews();
 };
 
-window.postShoutoutWithPhoto = async function() {
-  if (isPostingShoutout) return;
-  isPostingShoutout = true;
+window.postShoutoutWithPhoto = async function () {
+  if (!requireAuth('Sign in to post traffic alerts.')) return;
+  const input = document.getElementById('shoutoutInput');
+  if (!input || !input.value.trim()) return;
 
-  try {
-    const input = document.getElementById('shoutoutInput');
-    const text = input ? input.value.trim() : '';
+  const res = await apiPost('/shoutouts', { 
+    text: input.value.trim(),
+    images: _pendingShoutoutImages || []
+  });
 
-    if (!text) {
-      showToast('Please write a traffic alert', 'error');
-      return;
-    }
-
-    const images = _pendingShoutoutImages || [];
-
-    showToast('Posting...', 'success');
-
-    const res = await apiPost('/shoutouts', { text, images });
-
-    if (res && res._id) {
-      showToast('🚦 Traffic alert posted!', 'success');
-
-      if (input) input.value = '';
-      _pendingShoutoutImages = [];
-      const previewContainer = document.getElementById('shoutoutImagePreviews');
-      if (previewContainer) previewContainer.innerHTML = '';
-
-      loadShoutoutsPage(document.getElementById('content'));
-    } else {
-      showToast(res?.message || 'Failed to post', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Network error — try again', 'error');
-  } finally {
-    isPostingShoutout = false;
+  if (res._id) {
+    showToast('✅ Traffic Alert posted!');
+    _pendingShoutoutImages = [];
+    input.value = '';
+    loadPage('shoutouts');
+  } else {
+    showToast(res.message || 'Error posting traffic alert', 'error');
   }
-};
+}
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -4102,21 +4080,23 @@ window.deleteBizPost = async function(id) {
 
 // ─── BUSINESS POST DETAIL MODAL (deep-link target) ───────────────────────────
 window.showBusinessPostModal = async function(postId) {
+  // Remove any existing instance
   const existing = document.getElementById('bizPostDetailModal');
   if (existing) existing.remove();
 
+  // Show a quick loading shell
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="bizPostDetailModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[30000] p-4">
-      <div class="bg-[#0f172a] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl">
-        
-        <!-- Header -->
-        <div class="flex justify-between items-center px-5 py-4 border-b border-white/10">
-          <span class="font-semibold">Business Update</span>
-          <button onclick="document.getElementById('bizPostDetailModal').remove()" 
-                  class="text-2xl text-white/50 hover:text-white">×</button>
+    <div id="bizPostDetailModal"
+         onclick="if(event.target.id==='bizPostDetailModal') document.getElementById('bizPostDetailModal').remove()"
+         class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <span class="text-sm font-semibold text-white/70">Business Update</span>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
-
-        <div id="bizPostDetailBody" class="p-6 flex justify-center items-center min-h-[320px]">
+        <div id="bizPostDetailBody" class="flex-1 overflow-y-auto flex items-center justify-center py-16">
           <div class="w-8 h-8 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
         </div>
       </div>
@@ -4124,65 +4104,47 @@ window.showBusinessPostModal = async function(postId) {
 
   try {
     const post = await apiGet(`/business-posts/post/${postId}`);
-    if (!post) throw new Error('Post not found');
 
-    const body = document.getElementById('bizPostDetailBody');
+    document.getElementById('bizPostDetailBody').innerHTML = `
+      <!-- Full image -->
+      <div class="w-full bg-black flex items-center justify-center">
+        <img src="${post.image}" class="w-full max-h-[60vh] object-contain" alt="Business photo update">
+      </div>
 
-    // Fetch business info if available
-    let businessHTML = '';
-    if (post.business) {
-      try {
-        const biz = await apiGet(`/business/${post.business}`);
-        if (biz) {
-          businessHTML = `
-            <div class="flex items-center gap-3 mt-4 p-3 bg-white/5 rounded-2xl">
-              <div class="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0">
-                ${biz.logo 
-                  ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
-                  : `<div class="w-full h-full bg-white/10 flex items-center justify-center text-xl">${biz.category?.icon || '🏪'}</div>`}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold">${esc(biz.name)}</div>
-                <div class="text-xs text-white/50">${biz.category?.name || ''}</div>
-              </div>
-            </div>`;
-        }
-      } catch (e) {}
-    }
-
-    body.innerHTML = `
-      <div class="w-full">
-        <!-- Big Photo -->
-        <div class="relative">
-          <img src="${post.image}" 
-               class="w-full max-h-[55vh] object-contain bg-black rounded-2xl"
-               onerror="this.src='/icon-192.png'">
+      <!-- Meta -->
+      <div class="p-5 space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">📸</div>
+          <div>
+            <p class="font-bold text-white leading-tight">${esc(post.bizName)}</p>
+            <p class="text-xs text-white/40">${timeAgo(post.createdAt)}</p>
+          </div>
         </div>
 
-        <div class="p-5">
-          ${post.caption ? `
-            <p class="text-white/90 text-[15px] leading-relaxed mb-4">${esc(post.caption)}</p>
-          ` : ''}
+        ${post.caption ? `
+        <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
 
-          ${businessHTML}
-
-          <div class="flex gap-3 mt-5">
-            ${post.business ? `
-              <button onclick="document.getElementById('bizPostDetailModal').remove(); showBusinessDetail('${post.business}')"
-                      class="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
-                🏪 View This Business
-              </button>
-            ` : ''}
-            <button onclick="document.getElementById('bizPostDetailModal').remove()"
-                    class="px-8 py-3.5 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold transition">
-              Close
-            </button>
-          </div>
+        <div class="flex gap-3 pt-2">
+          <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
+                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
+            🏪 View ${esc(post.bizName)}
+          </button>
+          <button onclick="shareContent('business-post', '${esc(post.bizName)}', '${esc(post.caption || '')}')"
+                  class="py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
+            🔗
+          </button>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()"
+                  class="py-3 px-4 bg-white/5 hover:bg-white/10 text-white/60 rounded-2xl text-sm font-semibold transition">
+            ✕
+          </button>
         </div>
       </div>`;
   } catch (e) {
-    document.getElementById('bizPostDetailBody').innerHTML = 
-      `<p class="text-red-400 p-8 text-center">Failed to load post</p>`;
+    document.getElementById('bizPostDetailBody').innerHTML = `
+      <div class="p-8 text-center text-white/40">
+        <p class="text-4xl mb-3">😕</p>
+        <p class="text-sm">This post could not be loaded.</p>
+      </div>`;
   }
 };
 
@@ -8079,6 +8041,49 @@ window.showOnboardingTour = function() {
 
   document.body.insertAdjacentHTML('beforeend', tourHTML);
   window.currentTourSlide = 1;
+};
+
+// ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
+let isPostingShoutout = false;
+
+// ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
+window.postShoutoutWithPhoto = async function() {
+  if (isPostingShoutout) return;
+  isPostingShoutout = true;
+
+  try {
+    const input = document.getElementById('shoutoutInput');
+    const text = input ? input.value.trim() : '';
+
+    if (!text) {
+      showToast('Please write a traffic alert', 'error');
+      return;
+    }
+
+    const images = window._shoutoutImages || [];
+
+    showToast('Posting...', 'success');
+
+    const res = await apiPost('/shoutouts', { text, images });
+
+    if (res && res._id) {
+      showToast('🚦 Traffic alert posted!', 'success');
+      
+      if (input) input.value = '';
+      window._shoutoutImages = [];
+      const previewContainer = document.getElementById('shoutoutImagePreviews');
+      if (previewContainer) previewContainer.innerHTML = '';
+
+      loadShoutoutsPage(document.getElementById('content'));
+    } else {
+      showToast(res?.message || 'Failed to post', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
+  } finally {
+    isPostingShoutout = false;
+  }
 };
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────

@@ -6,11 +6,7 @@ const mongoose = require('mongoose');
 const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
 router.use(securityHeaders);   // CSP + security headers
-router.use((req, res, next) => {
-  // Skip auth routes — sanitizing passwords mutates them before bcrypt sees them
-  if (req.path.startsWith("/auth/")) return next();
-  return sanitizeBody(req, res, next);
-});
+router.use(sanitizeBody);      // Deep sanitization on every req.body
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
@@ -328,112 +324,6 @@ router.post('/reports', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PASSWORD RESET & CHANGE ROUTES
-// ─────────────────────────────────────────────────────────────────────────────
-
-// STEP 1 — Client sends email, server returns the security question
-// POST /api/auth/forgot-password/question
-router.post('/auth/forgot-password/question', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required' });
-
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-                           .select('securityQuestion');
-
-    // Always return the same shape — don't reveal whether the email exists
-    if (!user || !user.securityQuestion) {
-      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
-    }
-
-    res.json({ question: user.securityQuestion });
-  } catch (err) {
-    console.error('Forgot password step 1 error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// STEP 2 — Client sends email + answer + new password, server verifies and resets
-// POST /api/auth/forgot-password/reset
-router.post('/auth/forgot-password/reset', async (req, res) => {
-  try {
-    const { email, answer, newPassword } = req.body;
-
-    if (!email || !answer || !newPassword) {
-      return res.status(400).json({ message: 'Email, answer, and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-                           .select('+securityAnswer +password');
-
-    if (!user || !user.securityAnswer) {
-      return res.status(404).json({ message: 'No account found with that email.' });
-    }
-
-    // Compare answer (case-insensitive, trimmed) against stored hash
-    const answerMatch = await bcrypt.compare(
-      answer.trim().toLowerCase(),
-      user.securityAnswer
-    );
-
-    if (!answerMatch) {
-      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
-    }
-
-    // Assign plain-text — the User pre('save') hook hashes it once
-    user.password = newPassword;
-    await user.save();
-
-    res.json({ success: true, message: 'Password reset successfully.' });
-  } catch (err) {
-    console.error('Forgot password reset error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// POST /api/auth/change-password
-router.post('/auth/change-password', authenticate, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
-    if (currentPassword === newPassword) {
-      return res.status(400).json({ message: 'New password must be different from current password' });
-    }
-
-    // Fetch user with password field (select: false on password means we must request it)
-    const user = await User.findById(req.userId).select('+password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
-    }
-
-    // Assign plain-text — the User pre('save') hook hashes it once
-    user.password = newPassword;
-    await user.save();
-
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (err) {
-    console.error('Change password error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 3.  UPDATED  POST /api/shoutouts  (replace your existing handler)
 //
 //     Adds:
@@ -475,6 +365,112 @@ router.post('/shoutouts', authenticate, async (req, res) => {
         muted: true
       });
     }
+
+    router.post('/auth/forgot-password/question', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+ 
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('securityQuestion');
+ 
+    // Always return the same shape — don't reveal whether the email exists
+    if (!user || !user.securityQuestion) {
+      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
+    }
+ 
+    res.json({ question: user.securityQuestion });
+  } catch (err) {
+    console.error('Forgot password step 1 error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+ 
+// STEP 2 — Client sends email + answer + new password, server verifies and resets
+// POST /api/auth/forgot-password/reset
+router.post('/auth/forgot-password/reset', async (req, res) => {
+  try {
+    const { email, answer, newPassword } = req.body;
+ 
+    if (!email || !answer || !newPassword) {
+      return res.status(400).json({ message: 'Email, answer, and new password are required' });
+    }
+ 
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+ 
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('+securityAnswer +password');
+ 
+    if (!user || !user.securityAnswer) {
+      return res.status(404).json({ message: 'No account found with that email.' });
+    }
+ 
+    // Compare answer (case-insensitive, trimmed) against stored hash
+    const answerMatch = await bcrypt.compare(
+      answer.trim().toLowerCase(),
+      user.securityAnswer
+    );
+ 
+    if (!answerMatch) {
+      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
+    }
+ 
+    // Hash and save the new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+ 
+    res.json({ success: true, message: 'Password reset successfully.' });
+  } catch (err) {
+    console.error('Forgot password reset error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGE PASSWORD ROUTE
+// Paste this into your server api.js above module.exports = router
+// Requires: authenticate middleware, bcrypt, User model (all already imported)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/auth/change-password
+router.post('/auth/change-password', authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'New password must be different from current password' });
+    }
+
+    // Fetch user with password field (select: false on password means we must request it)
+    const user = await User.findById(req.userId).select('+password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash and save new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
     // ── Spam burst detection ────────────────────────────────────────────────────
     const now = Date.now();
@@ -518,25 +514,15 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
-
-    // === ADD THIS BLOCK ===
-    let shoutoutThumbUrl = null;
-    if (shoutout.images && shoutout.images.length > 0) {
-    shoutoutThumbUrl = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
-    }
-
-broadcastPush(
-  `🚗 New Traffic Alert from ${user.name}`,
-  text.length > 80 ? text.substring(0, 77) + '...' : text,
-  { 
-    page: 'shoutouts', 
-    id: shoutout._id.toString() 
-  },
-  { 
-    type: 'shoutout', 
-    imageUrl: shoutoutThumbUrl     // ← Add this
-  }
-);
+    broadcastPush(
+      `🚗 New Traffic Alert from ${user.name}`,
+      text.length > 80 ? text.substring(0, 77) + '...' : text,
+      { 
+        page: 'shoutouts', 
+        id: shoutout._id.toString() 
+      },
+      { type: 'shoutout' }
+    );
 
     res.json(shoutout);
   } catch (err) {
@@ -891,89 +877,77 @@ function requireAdminOrModerator(req, res, next) {
 // Send push to a single user (supports both native FCM and web VAPID)
 // AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  try {
-    const sub = await PushSubscription.findOne({ user: userId });
-    if (!sub) {
-      console.log(`No subscription found for user ${userId}`);
-      return false;
-    }
+  const sub = await PushSubscription.findOne({ user: userId });
+  if (!sub) {
+    console.log(`[Push] No subscription record for user ${userId}`);
+    return false;
+  }
 
-    const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-    const hasImage = !!imageUrl;
+  const APP_ICON  = 'https://www.milledgevilleconnect.com/icon-192.png';
+  const notifImage = imageUrl || APP_ICON;   // ← use post thumbnail when provided
 
-    // === ANDROID (FCM) ===
-    if (sub.nativeToken) {
+  if (sub.nativeToken) {
+    try {
       const message = {
         token: sub.nativeToken,
-        notification: {
-          title,
+        notification: { 
+          title, 
           body,
-          ...(hasImage && { imageUrl })
+          imageUrl: notifImage        // ← real photo or fallback
         },
         data: {
           page: data.page || '',
-          id: data.id || ''
+          id:   data.id   || '',
+          url:  data.url  || ''
         },
-        android: {
+        android: { 
           priority: 'high',
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl }),
-            ...(hasImage && { style: 'big_picture' })
+            imageUrl: notifImage      // ← real photo or fallback
           }
         }
       };
-
       await admin.messaging().send(message);
-      console.log(`✅ FCM sent to ${userId}`);
+      console.log(`✅ Native push sent to ${userId}`);
       return true;
+    } catch (err) {
+      console.error(`[Push] FCM failed for ${userId}:`, err.message);
+      if (err.code === 'messaging/registration-token-not-registered') {
+        sub.nativeToken = null;
+        await sub.save();
+      }
+      return false;
     }
+  }
 
-    // === WEB PUSH ===
-    if (sub.subscription?.endpoint) {
+  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+    try {
       await webpush.sendNotification(
         sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data: { page: data.page || '', id: data.id || '' },
-          icon: APP_ICON,
-          ...(hasImage && { image: imageUrl })
+        JSON.stringify({ 
+          title, 
+          body, 
+          data,
+          icon:  APP_ICON,
+          image: notifImage,          // ← web push large image
+          badge: APP_ICON
         })
       );
       console.log(`✅ Web push sent to ${userId}`);
       return true;
+    } catch (err) {
+      console.error(`[Push] Web push failed for ${userId}:`, err.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        sub.subscription = null;
+        await sub.save();
+      }
+      return false;
     }
-
-    return false;
-  } catch (err) {
-    console.error('sendPushToUser error:', err.message);
-    return false;
   }
-}
 
-async function broadcastPush(title, body, data = {}, options = {}) {
-  const { type = null, imageUrl = null } = options;
-
-  console.log(`📢 BROADCAST: "${title}" | hasImage: ${!!imageUrl}`);
-
-  try {
-    const subs = await PushSubscription.find({
-      $or: [
-        { nativeToken: { $exists: true, $ne: null } },
-        { 'subscription.endpoint': { $exists: true, $ne: null } }
-      ]
-    });
-
-    console.log(`Found ${subs.length} subscriptions`);
-
-    for (const sub of subs) {
-      await sendPushToUser(sub.user, title, body, data, imageUrl);
-    }
-  } catch (err) {
-    console.error('broadcastPush error:', err.message);
-  }
+  return false;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -984,83 +958,80 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 // ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 // ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
-// ─── FIXED BROADCAST PUSH (Native FCM + Web) ───────────────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
   const { type = null, subCategory = null, imageUrl = null } = options;
 
-  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | image: ${!!imageUrl}`);
+  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
   try {
-    // Find all push subscriptions that have either a native token or web subscription
-    const subs = await PushSubscription.find({
+    const users = await User.find({
       $or: [
-        { nativeToken: { $exists: true, $ne: null } },
-        { 'subscription.endpoint': { $exists: true, $ne: null } }
+        { fcmTokens: { $exists: true, $ne: [] } },
+        { pushEnabled: true }
       ]
-    }).select('user');
+    }).select('_id notificationPreferences');
 
-    if (subs.length === 0) {
-      console.log('⚠️ No push subscriptions found');
-      return;
-    }
-
-    // Get unique user IDs
-    const userIds = [...new Set(subs.map(s => s.user.toString()))];
-
-    // Load users + preferences in one query
-    const users = await User.find({ _id: { $in: userIds } })
-      .select('_id notificationPreferences pushEnabled')
-      .lean();
-
-    const userMap = new Map(users.map(u => [u._id.toString(), u]));
-
-    for (const sub of subs) {
-      const userIdStr = sub.user.toString();
-      const user = userMap.get(userIdStr);
-      if (!user) continue;
-
-      // Respect notification preferences
+    for (const user of users) {
+      const prefs = user.notificationPreferences || {};
       let shouldSend = true;
 
-      if (type) {
-        const prefs = user.notificationPreferences || {};
+      if (!type) {
+        // No type passed = send to everyone (old/safe behavior)
+        await sendPushToUser(user._id, title, body, data, imageUrl);
+        continue;
+      }
 
-        switch (type) {
-          case 'shoutout':
-            if (prefs.shoutouts === false) shouldSend = false;
-            break;
-          case 'deal':
-            if (prefs.deals === false) shouldSend = false;
-            break;
-          case 'event':
-            if (prefs.events === false) shouldSend = false;
-            break;
-          case 'lost':
-            if (prefs.lostFound === false) shouldSend = false;
-            break;
-          case 'marketplace':
-            if (prefs.marketplace?.all === false) shouldSend = false;
-            else if (subCategory) {
-              const cat = subCategory.toLowerCase();
-              if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
-              if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
-              if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
-              if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
-            }
-            break;
-          case 'comment':
-            if (prefs.comments === false) shouldSend = false;
-            break;
-          case 'custom':
-            shouldSend = true; // Business custom notifications always go through
-            break;
-          default:
-            shouldSend = true;
-        }
+      switch (type) {
+        case 'event':
+          if (prefs.events === false) shouldSend = false;
+          break;
+
+        case 'deal':
+          if (prefs.deals === false) shouldSend = false;
+          break;
+
+        case 'shoutout':
+          if (prefs.shoutouts === false) shouldSend = false;
+          break;
+
+        case 'lost':
+          if (prefs.lostFound === false) shouldSend = false;
+          break;
+
+        case 'message':
+          if (prefs.messages === false) shouldSend = false;
+          break;
+
+        case 'comment':
+          if (prefs.comments === false) shouldSend = false;
+          break;
+
+        case 'marketplace':
+          // Master toggle
+          if (prefs.marketplace?.all === false) {
+            shouldSend = false;
+          } 
+          // Individual category toggles
+          else if (subCategory) {
+            const cat = subCategory.toLowerCase();
+            if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
+            if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
+            if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
+            if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
+          }
+          break;
+
+        case 'custom':
+          // Verified business custom notifications — always send
+          shouldSend = true;
+          break;
+
+        default:
+          shouldSend = true;
       }
 
       if (shouldSend) {
-        await sendPushToUser(userIdStr, title, body, data, imageUrl);
+        await sendPushToUser(user._id, title, body, data, imageUrl);
       }
     }
   } catch (err) {
@@ -1826,70 +1797,40 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 });
 
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
-// ─── OWNER: CUSTOM NOTIFICATION (with optional photo) ───────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name');
+    const { title, body } = req.body;
+    if (!title?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'Title and body required' });
+    }
+
+    // Must have a verified business
+    const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) {
       return res.status(403).json({ message: 'Only verified business owners can send notifications' });
     }
 
-    const { title, body, image, sendNotify } = req.body;
+    // Fetch business name to stamp on the notification
+    const business = await Business.findById(user.verifiedBusiness).select('name');
+    const bizName  = business?.name || user.name;
 
-    if (!title?.trim() || !body?.trim()) {
-      return res.status(400).json({ message: 'Title and message are required' });
-    }
-
-    const bizName = user.verifiedBusiness.name || user.name;
-
-    // Deduct credits
+    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
     const deducted = await deductNotificationCredit(req.userId);
     if (!deducted) {
       return res.status(403).json({
-        message: 'Not enough notification credits. Upgrade to Business Pro or buy more credits.',
+        message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
         outOfCredits: true
       });
     }
 
-    let thumbUrl = null;
-    let postId = null;
-
-    // If there's an image, create a BusinessPost record (so it shows in history)
-    if (image && image.startsWith('data:image')) {
-      const post = await BusinessPost.create({
-        business: user.verifiedBusiness._id,
-        owner: user._id,
-        bizName,
-        caption: body.trim(),
-        image
-      });
-      postId = post._id;
-      thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
-    }
-
+    // Prepend business name to the body so recipients always know who sent it
     const stampedBody = `${bizName} · ${body.trim()}`;
+    await broadcastPush(title.trim(), stampedBody, { page: 'home' });
 
-    await broadcastPush(
-      title.trim(),
-      stampedBody,
-      { 
-        page: image ? 'business-post' : 'home', 
-        id: postId || null 
-      },
-      { 
-        type: 'custom',
-        imageUrl: thumbUrl 
-      }
-    );
-
+    // Return updated credit balance so the frontend can refresh the display
     const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ 
-      success: true, 
-      message: 'Notification sent', 
-      credits: updated.notificationCredits ?? 0 
-    });
-
+    res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
   } catch (err) {
     console.error('Custom notification error:', err);
     res.status(500).json({ message: 'Failed to send notification' });
@@ -1899,25 +1840,21 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
 // ─── REGISTER ───────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
-    const { name, email, password, securityQuestion, securityAnswer } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    if (!securityQuestion?.trim() || !securityAnswer?.trim()) {
-      return res.status(400).json({ message: 'A security question and answer are required' });
-    }
-
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) return res.status(409).json({ message: 'Email already in use' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password,           // plain-text — the User pre('save') hook hashes it once
-      securityQuestion: securityQuestion.trim(),
-      securityAnswer: securityAnswer.trim().toLowerCase(), // hashed by pre('save') hook
+      password: hashedPassword,
       notificationCredits: 0,        // ← Normal users start with 0
       subscriptionTier: 'free'
     });
@@ -3891,24 +3828,12 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       const deducted = await deductNotificationCredit(req.userId);
       if (deducted) {
         const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-        const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
-
-        const subs = await PushSubscription.find({
-          $or: [
-            { nativeToken: { $exists: true, $ne: null } },
-            { 'subscription.endpoint': { $exists: true, $ne: null } }
-          ]
-        });
-
-        for (const sub of subs) {
-          await sendPushToUser(
-            sub.user,
-            pushTitle,
-            caption?.trim() || 'Posted a new photo update — tap to see it!',
-            { page: 'business-post', id: post._id.toString() },
-            thumbUrl
-          );
-        }
+        await broadcastPush(
+          pushTitle,
+          caption?.trim() || 'Posted a new photo update — tap to see it!',
+          { page: 'business-post', id: post._id.toString() },
+          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
+        );
       }
     }
 
@@ -3934,12 +3859,11 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
-res.set({
-  'Content-Type': mimeType,
-  'Cache-Control': 'public, max-age=86400',
-  'Content-Length': buffer.length,
-  'Access-Control-Allow-Origin': '*',
-});
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+    });
     res.send(buffer);
   } catch (err) {
     console.error('Thumb fetch error:', err);
