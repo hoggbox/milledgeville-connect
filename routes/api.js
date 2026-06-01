@@ -904,8 +904,18 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
+// ─── TESTING MODE STATE ───────────────────────────────────────────────────────
+// Declared here (before sendPushToUser) so the function can reference them safely.
+// Flag lives in memory — resets to OFF on server restart (intentionally safe).
+const NOTIF_TEST_WHITELIST = new Set([
+  'imhoggbox@gmail.com',
+  'test@gmail.com'
+]);
+
+let _testingModeEnabled = false;
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Send push to a single user (supports both native FCM and web VAPID)
-// AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   try {
     // ── Testing mode: suppress notifications for everyone except whitelisted accounts ──
@@ -923,6 +933,9 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     const hasImage = !!imageUrl;
 
     if (sub.nativeToken) {
+      // FCM v1 message — imageUrl is supported in notification (top-level) and
+      // android.notification for Android big-picture style.
+      // apns.payload.aps['mutable-content'] + apns.fcm_options.image handles iOS.
       const message = {
         token: sub.nativeToken,
         notification: {
@@ -939,10 +952,15 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl }),
-            ...(hasImage && { style: 'big_picture' })
+            ...(hasImage && { imageUrl })
           }
-        }
+        },
+        ...(hasImage && {
+          apns: {
+            payload: { aps: { 'mutable-content': 1 } },
+            fcm_options: { image: imageUrl }
+          }
+        })
       };
 
       await admin.messaging().send(message);
@@ -3996,15 +4014,8 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── TESTING MODE ────────────────────────────────────────────────────────────
-// Suppresses push notifications for all users EXCEPT the whitelist below.
-// Flag lives in memory — resets to OFF on server restart (intentionally safe).
-const NOTIF_TEST_WHITELIST = new Set([
-  'imhoggbox@gmail.com',
-  'test@gmail.com'
-]);
-
-let _testingModeEnabled = false;
+// ─── TESTING MODE ROUTES ─────────────────────────────────────────────────────
+// (NOTIF_TEST_WHITELIST and _testingModeEnabled are declared near sendPushToUser above)
 
 // GET /api/admin/testing-mode — returns current state
 router.get('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
