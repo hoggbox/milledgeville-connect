@@ -891,42 +891,88 @@ function requireAdminOrModerator(req, res, next) {
 // Send push to a single user (supports both native FCM and web VAPID)
 // AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  const sub = await PushSubscription.findOne({ user: userId });
-  if (!sub) return false;
-
-  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const hasImage = !!imageUrl;
-
-// === ANDROID (FCM) ===
-if (sub.nativeToken) {
   try {
-    const message = {
-      token: sub.nativeToken,
-      notification: {
-        title,
-        body,
-        ...(hasImage && { imageUrl })   // ← Important for some Android versions
-      },
-      data: {
-        page: data.page || '',
-        id: data.id || ''
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          sound: 'default',
-          channelId: 'default',
-          ...(hasImage && { imageUrl }),
-          ...(hasImage && { style: 'big_picture' })
-        }
-      }
-    };
+    const sub = await PushSubscription.findOne({ user: userId });
+    if (!sub) {
+      console.log(`No subscription found for user ${userId}`);
+      return false;
+    }
 
-    await admin.messaging().send(message);
-    return true;
-  } catch (e) {
-    console.error('FCM send error:', e.message);
+    const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
+    const hasImage = !!imageUrl;
+
+    // === ANDROID (FCM) ===
+    if (sub.nativeToken) {
+      const message = {
+        token: sub.nativeToken,
+        notification: {
+          title,
+          body,
+          ...(hasImage && { imageUrl })
+        },
+        data: {
+          page: data.page || '',
+          id: data.id || ''
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            ...(hasImage && { imageUrl }),
+            ...(hasImage && { style: 'big_picture' })
+          }
+        }
+      };
+
+      await admin.messaging().send(message);
+      console.log(`✅ FCM sent to ${userId}`);
+      return true;
+    }
+
+    // === WEB PUSH ===
+    if (sub.subscription?.endpoint) {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({
+          title,
+          body,
+          data: { page: data.page || '', id: data.id || '' },
+          icon: APP_ICON,
+          ...(hasImage && { image: imageUrl })
+        })
+      );
+      console.log(`✅ Web push sent to ${userId}`);
+      return true;
+    }
+
     return false;
+  } catch (err) {
+    console.error('sendPushToUser error:', err.message);
+    return false;
+  }
+}
+
+async function broadcastPush(title, body, data = {}, options = {}) {
+  const { type = null, imageUrl = null } = options;
+
+  console.log(`📢 BROADCAST: "${title}" | hasImage: ${!!imageUrl}`);
+
+  try {
+    const subs = await PushSubscription.find({
+      $or: [
+        { nativeToken: { $exists: true, $ne: null } },
+        { 'subscription.endpoint': { $exists: true, $ne: null } }
+      ]
+    });
+
+    console.log(`Found ${subs.length} subscriptions`);
+
+    for (const sub of subs) {
+      await sendPushToUser(sub.user, title, body, data, imageUrl);
+    }
+  } catch (err) {
+    console.error('broadcastPush error:', err.message);
   }
 }
 
