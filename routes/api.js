@@ -897,59 +897,37 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
   const hasImage = !!imageUrl;
 
-  // === ANDROID (FCM) ===
-  if (sub.nativeToken) {
-    try {
-      const message = {
-        token: sub.nativeToken,
+// === ANDROID (FCM) ===
+if (sub.nativeToken) {
+  try {
+    const message = {
+      token: sub.nativeToken,
+      notification: {
+        title,
+        body,
+        ...(hasImage && { imageUrl })   // ← Important for some Android versions
+      },
+      data: {
+        page: data.page || '',
+        id: data.id || ''
+      },
+      android: {
+        priority: 'high',
         notification: {
-          title,
-          body
-        },
-        data: {
-          page: data.page || '',
-          id: data.id || ''
-        },
-        android: {
-          priority: 'high',
-          notification: {
-            sound: 'default',
-            channelId: 'default',
-            ...(hasImage && { imageUrl }),
-            ...(hasImage && { style: 'big_picture' })
-          }
+          sound: 'default',
+          channelId: 'default',
+          ...(hasImage && { imageUrl }),
+          ...(hasImage && { style: 'big_picture' })
         }
-      };
+      }
+    };
 
-      await admin.messaging().send(message);
-      return true;
-    } catch (e) {
-      console.error('FCM error:', e.message);
-      return false;
-    }
+    await admin.messaging().send(message);
+    return true;
+  } catch (e) {
+    console.error('FCM send error:', e.message);
+    return false;
   }
-
-  // === WEB PUSH ===
-  if (sub.subscription?.endpoint) {
-    try {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data: { page: data.page || '', id: data.id || '' },
-          icon: APP_ICON,
-          ...(hasImage && { image: imageUrl })
-        })
-      );
-      return true;
-    } catch (e) {
-      console.error('Web push error:', e.message);
-      return false;
-    }
-  }
-
-  return false;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -960,84 +938,84 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 // ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 // ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
+// ─── FIXED BROADCAST PUSH (Native FCM + Web) ───────────────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
   const { type = null, subCategory = null, imageUrl = null } = options;
 
-  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
+  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | image: ${!!imageUrl}`);
 
   try {
-    const users = await User.find({
+    // Find all push subscriptions that have either a native token or web subscription
+    const subs = await PushSubscription.find({
       $or: [
-        { fcmTokens: { $exists: true, $ne: [] } },
-        { pushEnabled: true }
+        { nativeToken: { $exists: true, $ne: null } },
+        { 'subscription.endpoint': { $exists: true, $ne: null } }
       ]
-    }).select('_id notificationPreferences');
+    }).select('user');
 
-    for (const user of users) {
-      const prefs = user.notificationPreferences || {};
+    if (subs.length === 0) {
+      console.log('⚠️ No push subscriptions found');
+      return;
+    }
+
+    // Get unique user IDs
+    const userIds = [...new Set(subs.map(s => s.user.toString()))];
+
+    // Load users + preferences in one query
+    const users = await User.find({ _id: { $in: userIds } })
+      .select('_id notificationPreferences pushEnabled')
+      .lean();
+
+    const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
+    for (const sub of subs) {
+      const userIdStr = sub.user.toString();
+      const user = userMap.get(userIdStr);
+      if (!user) continue;
+
+      // Respect notification preferences
       let shouldSend = true;
 
-      if (!type) {
-        // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data, imageUrl);
-        continue;
+      if (type) {
+        const prefs = user.notificationPreferences || {};
+
+        switch (type) {
+          case 'shoutout':
+            if (prefs.shoutouts === false) shouldSend = false;
+            break;
+          case 'deal':
+            if (prefs.deals === false) shouldSend = false;
+            break;
+          case 'event':
+            if (prefs.events === false) shouldSend = false;
+            break;
+          case 'lost':
+            if (prefs.lostFound === false) shouldSend = false;
+            break;
+          case 'marketplace':
+            if (prefs.marketplace?.all === false) shouldSend = false;
+            else if (subCategory) {
+              const cat = subCategory.toLowerCase();
+              if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
+              if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
+              if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
+              if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
+            }
+            break;
+          case 'comment':
+            if (prefs.comments === false) shouldSend = false;
+            break;
+          case 'custom':
+            shouldSend = true; // Business custom notifications always go through
+            break;
+          default:
+            shouldSend = true;
+        }
       }
 
-      switch (type) {
-        case 'event':
-          if (prefs.events === false) shouldSend = false;
-          break;
-
-        case 'deal':
-          if (prefs.deals === false) shouldSend = false;
-          break;
-
-        case 'shoutout':
-          if (prefs.shoutouts === false) shouldSend = false;
-          break;
-
-        case 'lost':
-          if (prefs.lostFound === false) shouldSend = false;
-          break;
-
-        case 'message':
-          if (prefs.messages === false) shouldSend = false;
-          break;
-
-        case 'comment':
-          if (prefs.comments === false) shouldSend = false;
-          break;
-
-        case 'marketplace':
-          // Master toggle
-          if (prefs.marketplace?.all === false) {
-            shouldSend = false;
-          } 
-          // Individual category toggles
-          else if (subCategory) {
-            const cat = subCategory.toLowerCase();
-            if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
-            if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
-            if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
-            if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
-          }
-          break;
-
-        case 'custom':
-          // Verified business custom notifications — always send
-          shouldSend = true;
-          break;
-
-        default:
-          shouldSend = true;
+      if (shouldSend) {
+        await sendPushToUser(userIdStr, title, body, data, imageUrl);
       }
-
-if (shouldSend) {
-  if (imageUrl) {
-    console.log(`🖼️ Sending push with image: ${imageUrl}`);
-  }
-  await sendPushToUser(user._id, title, body, data, imageUrl);
-}
     }
   } catch (err) {
     console.error('broadcastPush error:', err);
