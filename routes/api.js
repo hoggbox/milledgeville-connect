@@ -518,19 +518,22 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
-    const shoutoutThumbUrl = shoutout.images?.length
-      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
-      : null;
+const shoutoutThumbUrl = shoutout.images?.length
+  ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
+  : null;
 
-    broadcastPush(
-      `🚗 New Traffic Alert from ${user.name}`,
-      text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { 
-        page: 'shoutouts', 
-        id: shoutout._id.toString() 
-      },
-      { type: 'shoutout', imageUrl: shoutoutThumbUrl }
-    );
+broadcastPush(
+  `🚗 New Traffic Alert from ${user.name}`,
+  text.length > 80 ? text.substring(0, 77) + '...' : text,
+  { 
+    page: 'shoutouts', 
+    id: shoutout._id.toString() 
+  },
+  { 
+    type: 'shoutout', 
+    imageUrl: shoutoutThumbUrl 
+  }
+);
 
     res.json(shoutout);
   } catch (err) {
@@ -885,53 +888,59 @@ function requireAdminOrModerator(req, res, next) {
 // Send push to a single user (supports both native FCM and web VAPID)
 // AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  const sub = await PushSubscription.findOne({ user: userId });
-  if (!sub) return false;
+  try {
+    const sub = await PushSubscription.findOne({ user: userId });
+    if (!sub) return false;
 
-  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const thumb = imageUrl || APP_ICON;
+    const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
+    const hasImage = !!imageUrl;
 
-  if (sub.nativeToken) {
-    try {
-await admin.messaging().send({
-  token: sub.nativeToken,
-  notification: { title, body, imageUrl: thumb },
-  data: { page: data.page || '', id: data.id || '' },
-  android: {
-    priority: 'high',
-    notification: { sound: 'default', channelId: 'default', imageUrl: thumb }
-  },
-  apns: {
-    payload: { aps: { sound: 'default', 'mutable-content': 1 } },
-    fcmOptions: { imageUrl: thumb }
-  }
-});
+    if (sub.nativeToken) {
+      const message = {
+        token: sub.nativeToken,
+        notification: {
+          title,
+          body,
+          ...(hasImage && { imageUrl: imageUrl })
+        },
+        data: {
+          page: data.page || '',
+          id: data.id || ''
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            ...(hasImage && { imageUrl: imageUrl })
+          }
+        }
+      };
+
+      await admin.messaging().send(message);
       return true;
-    } catch (e) {
-      console.error('FCM error:', e.message);
-      return false;
     }
-  }
 
-  if (sub.subscription?.endpoint) {
-    try {
+    // Web push fallback
+    if (sub.subscription?.endpoint) {
       await webpush.sendNotification(
         sub.subscription,
         JSON.stringify({
           title,
           body,
           data: { page: data.page || '', id: data.id || '' },
-          icon: thumb,
-          image: thumb
+          icon: APP_ICON,
+          ...(hasImage && { image: imageUrl })
         })
       );
       return true;
-    } catch (e) {
-      console.error('Web push error:', e.message);
-      return false;
     }
+
+    return false;
+  } catch (err) {
+    console.error('sendPushToUser error:', err.message);
+    return false;
   }
-  return false;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
