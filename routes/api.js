@@ -1894,10 +1894,25 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       }
     }
 
+    // Deep-link: if we have a BusinessPost (photo), open the post modal.
+    // Text-only: open the business directory card directly.
+    let deepLinkData;
+    if (notifImageUrl && notifImageUrl.includes('/business-post-thumb/')) {
+      // Extract the post _id from the thumb URL so we can deep-link to the modal
+      const postIdMatch = notifImageUrl.match(/business-post-thumb\/([a-f0-9]{24})/i);
+      const postId = postIdMatch ? postIdMatch[1] : null;
+      deepLinkData = postId
+        ? { page: 'business-post', id: postId }
+        : { page: 'directory',     id: String(user.verifiedBusiness) };
+    } else {
+      // Text-only notification — open their directory card
+      deepLinkData = { page: 'directory', id: String(user.verifiedBusiness) };
+    }
+
     await broadcastPush(
       title.trim(),
       stampedBody,
-      { page: 'home' },
+      deepLinkData,
       { type: 'custom', imageUrl: notifImageUrl }
     );
 
@@ -3936,7 +3951,6 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
       'Content-Type': mimeType,
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -3963,7 +3977,6 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
       'Content-Type':   mimeType,
       'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {

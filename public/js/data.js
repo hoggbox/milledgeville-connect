@@ -139,6 +139,11 @@ window.handlePushNotificationClick = function(data) {
     if (id) showBusinessPostModal(id);
     else navigate('home');
   }
+  else if (page === 'directory') {
+    // Text-only custom biz notification — open their directory card directly
+    navigate('directory');
+    if (id) setTimeout(() => showBusinessDetail(id), 900);
+  }
   else {
     navigate(page);
   }
@@ -8146,7 +8151,7 @@ window.postShoutoutWithPhoto = async function() {
       return;
     }
 
-    const images = _pendingShoutoutImages || [];
+    const images = window._shoutoutImages || [];
 
     showToast('Posting...', 'success');
 
@@ -8156,7 +8161,7 @@ window.postShoutoutWithPhoto = async function() {
       showToast('🚦 Traffic alert posted!', 'success');
       
       if (input) input.value = '';
-      _pendingShoutoutImages = [];
+      window._shoutoutImages = [];
       const previewContainer = document.getElementById('shoutoutImagePreviews');
       if (previewContainer) previewContainer.innerHTML = '';
 
