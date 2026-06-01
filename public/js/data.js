@@ -2376,31 +2376,35 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
   render();
 };
 
-// ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
+// ─── SHOUTOUT PHOTO SYSTEM (CLEAN) ────────────────────────────────────────────
 let _pendingShoutoutImages = [];
+let isPostingShoutout = false;
 
-window.handleShoutoutImages = async function (input) {
+window.handleShoutoutImages = async function(input) {
   const files = Array.from(input.files);
   if (!_pendingShoutoutImages) _pendingShoutoutImages = [];
 
-  for (let file of files) {
-    if (file.size > 8 * 1024 * 1024) {
-      showToast(`${file.name} is too large (max 8MB)`, 'error');
+  const remaining = 5 - _pendingShoutoutImages.length;
+  if (remaining <= 0) {
+    showToast('Maximum 5 photos allowed', 'error');
+    input.value = '';
+    return;
+  }
+
+  for (const file of files.slice(0, remaining)) {
+    if (file.size > 6 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 6MB)`, 'error');
       continue;
     }
-
     try {
-      showToast('Compressing image...', 'success');
-      const compressed = await compressImage(file, 1100, 0.72);
+      const compressed = await compressImage(file, 1000, 0.75);
       const reader = new FileReader();
       reader.onload = e => {
         _pendingShoutoutImages.push(e.target.result);
         renderShoutoutImagePreviews();
       };
       reader.readAsDataURL(compressed);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   }
   input.value = '';
 };
@@ -2409,37 +2413,56 @@ function renderShoutoutImagePreviews() {
   const container = document.getElementById('shoutoutImagePreviews');
   if (!container) return;
   container.innerHTML = _pendingShoutoutImages.map((src, i) => `
-    <div class="relative w-16 h-16 bg-white/10 rounded-2xl overflow-hidden group">
-      <img src="${src}" class="w-full h-full object-cover" alt="Preview">
+    <div class="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/10 group flex-shrink-0">
+      <img src="${src}" class="w-full h-full object-cover">
       <button onclick="removeShoutoutImage(${i}); event.stopImmediatePropagation()" 
-              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-bl flex items-center justify-center">✕</button>
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-bl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">✕</button>
     </div>`).join('');
 }
 
-window.removeShoutoutImage = function (index) {
+window.removeShoutoutImage = function(index) {
   _pendingShoutoutImages.splice(index, 1);
   renderShoutoutImagePreviews();
 };
 
-window.postShoutoutWithPhoto = async function () {
-  if (!requireAuth('Sign in to post traffic alerts.')) return;
-  const input = document.getElementById('shoutoutInput');
-  if (!input || !input.value.trim()) return;
+window.postShoutoutWithPhoto = async function() {
+  if (isPostingShoutout) return;
+  isPostingShoutout = true;
 
-  const res = await apiPost('/shoutouts', { 
-    text: input.value.trim(),
-    images: _pendingShoutoutImages || []
-  });
+  try {
+    const input = document.getElementById('shoutoutInput');
+    const text = input ? input.value.trim() : '';
 
-  if (res._id) {
-    showToast('✅ Traffic Alert posted!');
-    _pendingShoutoutImages = [];
-    input.value = '';
-    loadPage('shoutouts');
-  } else {
-    showToast(res.message || 'Error posting traffic alert', 'error');
+    if (!text) {
+      showToast('Please write a traffic alert', 'error');
+      return;
+    }
+
+    const images = _pendingShoutoutImages || [];
+
+    showToast('Posting...', 'success');
+
+    const res = await apiPost('/shoutouts', { text, images });
+
+    if (res && res._id) {
+      showToast('🚦 Traffic alert posted!', 'success');
+
+      if (input) input.value = '';
+      _pendingShoutoutImages = [];
+      const previewContainer = document.getElementById('shoutoutImagePreviews');
+      if (previewContainer) previewContainer.innerHTML = '';
+
+      loadShoutoutsPage(document.getElementById('content'));
+    } else {
+      showToast(res?.message || 'Failed to post', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
+  } finally {
+    isPostingShoutout = false;
   }
-}
+};
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -8056,49 +8079,6 @@ window.showOnboardingTour = function() {
 
   document.body.insertAdjacentHTML('beforeend', tourHTML);
   window.currentTourSlide = 1;
-};
-
-// ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
-let isPostingShoutout = false;
-
-// ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
-window.postShoutoutWithPhoto = async function() {
-  if (isPostingShoutout) return;
-  isPostingShoutout = true;
-
-  try {
-    const input = document.getElementById('shoutoutInput');
-    const text = input ? input.value.trim() : '';
-
-    if (!text) {
-      showToast('Please write a traffic alert', 'error');
-      return;
-    }
-
-    const images = window._shoutoutImages || [];
-
-    showToast('Posting...', 'success');
-
-    const res = await apiPost('/shoutouts', { text, images });
-
-    if (res && res._id) {
-      showToast('🚦 Traffic alert posted!', 'success');
-      
-      if (input) input.value = '';
-      window._shoutoutImages = [];
-      const previewContainer = document.getElementById('shoutoutImagePreviews');
-      if (previewContainer) previewContainer.innerHTML = '';
-
-      loadShoutoutsPage(document.getElementById('content'));
-    } else {
-      showToast(res?.message || 'Failed to post', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Network error — try again', 'error');
-  } finally {
-    isPostingShoutout = false;
-  }
 };
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
