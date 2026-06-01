@@ -561,7 +561,7 @@ const images = rawImages || [];
       shoutoutThumb = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
     }
 
-    broadcastPush(
+    await broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
       { 
@@ -1032,55 +1032,58 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
   const msgData  = { page: data.page || '', id: data.id || '', businessId: data.businessId || '' };
   let   sent     = false;
 
-// Inside sendPushToUser, replace the FCM send block with this:
-if (user.fcmTokens?.length) {
-  const keepTokens = [];
-  for (const token of user.fcmTokens) {
-    try {
-      const message = {
-        token,
-        notification: {
-          title,
-          body,
-        },
-        data: msgData,
-        android: {
-          priority: 'high',
+  // ── FCM (Android APK / iOS native) ──────────────────────────────────────────
+  if (user.fcmTokens?.length) {
+    const keepTokens = [];
+    for (const token of user.fcmTokens) {
+      try {
+        // FCM data payloads require ALL values to be strings
+        const fcmData = {
+          page:       String(msgData.page       || ''),
+          id:         String(msgData.id         || ''),
+          businessId: String(msgData.businessId || ''),
+        };
+
+        const message = {
+          token,
           notification: {
-            sound: 'default',
-            channelId: 'default',
-          }
-        },
-        apns: {
-          payload: {
-            aps: {
+            title,
+            body,
+            // top-level imageUrl is recognised by the FCM SDK on some platforms
+            ...(imageUrl && { imageUrl }),
+          },
+          data: fcmData,
+          android: {
+            priority: 'high',
+            notification: {
               sound: 'default',
-            }
-          }
-        }
-      };
+              channelId: 'default',
+              // Android uses `image`, NOT `imageUrl`
+              ...(imageUrl && { image: imageUrl }),
+            },
+          },
+          apns: {
+            payload: {
+              aps: { sound: 'default' },
+            },
+            // iOS expanded-banner image comes from fcm_options
+            ...(imageUrl && { fcm_options: { image: imageUrl } }),
+          },
+        };
 
-      // Add image if we have one (Android + iOS + notification top-level)
-      if (imageUrl) {
-        message.notification.imageUrl = imageUrl;
-        message.android.notification.imageUrl = imageUrl;
-        // iOS requires fcm_options.image for the expanded notification banner image
-        message.apns.fcm_options = { image: imageUrl };
+        await admin.messaging().send(message);
+        keepTokens.push(token);
+        sent = true;
+      } catch (e) {
+        const stale = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'];
+        if (!stale.includes(e.code)) keepTokens.push(token);
+        console.error('FCM send error:', e.code || e.message);
       }
-
-      await admin.messaging().send(message);
-      keepTokens.push(token);
-      sent = true;
-    } catch (e) {
-      const stale = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'];
-      if (!stale.includes(e.code)) keepTokens.push(token);
-      console.error('FCM send error:', e.code || e.message);
+    }
+    if (keepTokens.length !== user.fcmTokens.length) {
+      await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
     }
   }
-  if (keepTokens.length !== user.fcmTokens.length) {
-    await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
-  }
-}
 
   // ── Web VAPID ──────────────────────────────────────────────────────────────
   if (user.webPushSubscriptions?.length) {
@@ -1585,7 +1588,7 @@ router.post('/lostitems', authenticate, async (req, res) => {
     if (item.images && item.images.length > 0) {
       lostThumb = `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`;
     }
-    broadcastPush(
+    await broadcastPush(
       isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
       `${user.name} posted: ${title}`,
       { 
@@ -1744,7 +1747,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
       if (item.images && item.images.length > 0) {
         marketThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
       }
-      broadcastPush(
+      await broadcastPush(
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
@@ -2401,11 +2404,11 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
 
     // Broadcast to everyone who enabled "Comments on Traffic Alerts"
     const commentText = (req.body.text || '').trim();
-    broadcastPush(
-    `💬 New comment on Traffic Alert`,
-    `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
+    await broadcastPush(
+      `💬 New comment on Traffic Alert`,
+      `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
       { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` },
-      { type: 'comment' }          // filter
+      { type: 'comment' }
     );
 
     res.json(shoutout.comments[shoutout.comments.length - 1]);
@@ -2588,7 +2591,7 @@ router.post('/news', authenticate, async (req, res) => {
       newsThumb = `https://www.milledgevilleconnect.com/api/news-thumb/${article._id}`;
     }
 
-    broadcastPush(
+    await broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
       { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
@@ -3089,7 +3092,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
           ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
           : null;
         const dealBizName = user.verifiedBusiness?.name || user.name;
-        broadcastPush(
+        await broadcastPush(
           dealBizName,
           `🔥 New Deal Available!\n${title}`,
           {
@@ -3150,7 +3153,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
           ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
           : null;
         const eventBizName = user.verifiedBusiness?.name || user.name;
-        broadcastPush(
+        await broadcastPush(
           eventBizName,
           `📅 New Event!\n${title}${location ? ' · ' + location : ''}`,
           {
@@ -3237,7 +3240,7 @@ if (sendNotify) {
     if (item.images && item.images.length > 0) {
       homeThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
     }
-    broadcastPush(
+    await broadcastPush(
       `🏠 New Home Listing`,
       `${bizName} posted: ${title}`,
       { 
