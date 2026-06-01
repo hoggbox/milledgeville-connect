@@ -5,6 +5,10 @@ const mongoose = require('mongoose');
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
 const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
+// Notification kill-switch
+const NOTIF_TEST_WHITELIST = ['imhoggbox@gmail.com', 'test@gmail.com'];
+let _testingModeEnabled = false;
+
 router.use(securityHeaders);   // CSP + security headers
 router.use((req, res, next) => {
   // Skip auth routes — sanitizing passwords mutates them before bcrypt sees them
@@ -534,7 +538,6 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-    // ←←← THIS IS THE IMPORTANT PART ←←←
 // === SHOUTOUT NOTIFICATION (with image) ===
 let shoutoutThumbUrl = null;
 if (shoutout.images && shoutout.images.length > 0) {
@@ -907,42 +910,30 @@ function requireAdminOrModerator(req, res, next) {
 // ─── TESTING MODE STATE ───────────────────────────────────────────────────────
 // Declared here (before sendPushToUser) so the function can reference them safely.
 // Flag lives in memory — resets to OFF on server restart (intentionally safe).
-const NOTIF_TEST_WHITELIST = new Set([
+// ─── TESTING MODE WHITELIST ─────────────────────────────────────────────────
+const NOTIF_TEST_WHITELIST = [
   'imhoggbox@gmail.com',
   'test@gmail.com'
-]);
-
+];
 let _testingModeEnabled = false;
-// ─────────────────────────────────────────────────────────────────────────────
 
-// Send push to a single user (supports both native FCM and web VAPID)
+// Call this from admin panel to toggle
+function setTestingMode(enabled) {
+  _testingModeEnabled = !!enabled;
+  console.log(`🚧 [Testing Mode] ${_testingModeEnabled ? 'ENABLED' : 'DISABLED'}`);
+}
+
+// Send push to user
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   try {
-    // ── Testing mode: suppress notifications for everyone except whitelisted accounts ──
-    if (_testingModeEnabled) {
-      const userDoc = await User.findById(userId).select('email');
-      if (!userDoc || !NOTIF_TEST_WHITELIST.has(userDoc.email)) {
-        return false; // silently suppressed during testing
-      }
-    }
-
     const sub = await PushSubscription.findOne({ user: userId });
     if (!sub) return false;
 
     const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
     const hasImage = !!imageUrl;
 
+    // === APK (FCM Native) ===
     if (sub.nativeToken) {
-      // FCM v1 message — imageUrl is supported in notification (top-level) and
-      // android.notification for Android big-picture style.
-      // apns.payload.aps['mutable-content'] + apns.fcm_options.image handles iOS.
-      //
-      // FCM data values MUST be strings — convert everything so bizId etc. survive.
-      const fcmData = {};
-      for (const [k, v] of Object.entries(data)) {
-        if (v !== null && v !== undefined) fcmData[k] = String(v);
-      }
-
       const message = {
         token: sub.nativeToken,
         notification: {
@@ -950,39 +941,39 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           body,
           ...(hasImage && { imageUrl })
         },
-        data: fcmData,
+        data: {
+          page: data.page || '',
+          id: data.id || ''
+        },
         android: {
           priority: 'high',
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl })
+            ...(hasImage && { imageUrl }),
+            ...(hasImage && { style: 'big_picture' })
           }
-        },
-        ...(hasImage && {
-          apns: {
-            payload: { aps: { 'mutable-content': 1 } },
-            fcm_options: { image: imageUrl }
-          }
-        })
+        }
       };
 
       await admin.messaging().send(message);
       return true;
     }
 
-    // Web VAPID — always send; include image only when an actual imageUrl exists.
-    // Spread the full data object so bizId, page, id etc. all reach the service worker.
+    // === Web Push (VAPID) ===
     if (sub.subscription?.endpoint) {
-      const vapidPayload = {
+      const payload = {
         title,
         body,
-        icon: APP_ICON,
-        badge: APP_ICON,
-        data: { ...data },
-        ...(hasImage && { image: imageUrl })
+        data: { page: data.page || '', id: data.id || '' },
+        icon: APP_ICON
       };
-      await webpush.sendNotification(sub.subscription, JSON.stringify(vapidPayload));
+
+      if (hasImage) {
+        payload.image = imageUrl;
+      }
+
+      await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
       return true;
     }
 
@@ -993,88 +984,68 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   }
 }
 
-// ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
-// Sends exactly ONE notification per user:
-//   • If the user has a native FCM token → use FCM (preferred, higher delivery rate)
-//   • Else if the user has a web VAPID subscription → use VAPID
-//   • Users with BOTH channels only receive one notification (no duplicates)
-// ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
-// ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
-// ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
+// Broadcast push function
 async function broadcastPush(title, body, data = {}, options = {}) {
   const { type = null, subCategory = null, imageUrl = null } = options;
 
-  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
+  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | hasImage: ${!!imageUrl}`);
 
   try {
-    const users = await User.find({
+    const subs = await PushSubscription.find({
       $or: [
-        { fcmTokens: { $exists: true, $ne: [] } },
-        { pushEnabled: true }
+        { nativeToken: { $exists: true, $ne: null } },
+        { 'subscription.endpoint': { $exists: true, $ne: null } }
       ]
-    }).select('_id notificationPreferences');
+    });
 
-    for (const user of users) {
+    if (!subs.length) return;
+
+    const userIds = subs.map(s => s.user);
+    const users = await User.find({ _id: { $in: userIds } })
+      .select('_id email notificationPreferences pushEnabled')
+      .lean();
+
+    for (const sub of subs) {
+      const user = users.find(u => u._id.toString() === sub.user.toString());
+      if (!user || user.pushEnabled === false) continue;
+
+      // === TESTING MODE (only your 2 accounts) ===
+      if (_testingModeEnabled) {
+        if (!NOTIF_TEST_WHITELIST.includes(user.email)) {
+          continue;
+        }
+      }
+
       const prefs = user.notificationPreferences || {};
       let shouldSend = true;
 
-      if (!type) {
-        // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data, imageUrl);
-        continue;
-      }
-
-      switch (type) {
-        case 'event':
-          if (prefs.events === false) shouldSend = false;
-          break;
-
-        case 'deal':
-          if (prefs.deals === false) shouldSend = false;
-          break;
-
-        case 'shoutout':
-          if (prefs.shoutouts === false) shouldSend = false;
-          break;
-
-        case 'lost':
-          if (prefs.lostFound === false) shouldSend = false;
-          break;
-
-        case 'message':
-          if (prefs.messages === false) shouldSend = false;
-          break;
-
-        case 'comment':
-          if (prefs.comments === false) shouldSend = false;
-          break;
-
-        case 'marketplace':
-          // Master toggle
-          if (prefs.marketplace?.all === false) {
-            shouldSend = false;
-          } 
-          // Individual category toggles
-          else if (subCategory) {
-            const cat = subCategory.toLowerCase();
-            if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
-            if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
-            if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
-            if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
-          }
-          break;
-
-        case 'custom':
-          // Verified business custom notifications — always send
-          shouldSend = true;
-          break;
-
-        default:
-          shouldSend = true;
+      if (type) {
+        switch (type) {
+          case 'shoutout':   if (prefs.shoutouts === false) shouldSend = false; break;
+          case 'event':      if (prefs.events === false) shouldSend = false; break;
+          case 'deal':       if (prefs.deals === false) shouldSend = false; break;
+          case 'lost':       if (prefs.lostFound === false) shouldSend = false; break;
+          case 'message':    if (prefs.messages === false) shouldSend = false; break;
+          case 'comment':    if (prefs.comments === false) shouldSend = false; break;
+          case 'marketplace':
+            if (prefs.marketplace?.all === false) shouldSend = false;
+            else if (subCategory) {
+              const cat = subCategory.toLowerCase();
+              if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
+              if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
+              if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
+              if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
+            }
+            break;
+          case 'custom':
+            shouldSend = true;
+            break;
+          default:
+            shouldSend = true;
+        }
       }
 
 if (shouldSend) {
-  // Always pass imageUrl if it exists — don't let type checks drop it
   await sendPushToUser(user._id, title, body, data, imageUrl || null);
 }
     }
@@ -1082,6 +1053,7 @@ if (shouldSend) {
     console.error('broadcastPush error:', err);
   }
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NEW: MESSAGING SYSTEM ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4023,15 +3995,15 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
 // ─── TESTING MODE ROUTES ─────────────────────────────────────────────────────
 // (NOTIF_TEST_WHITELIST and _testingModeEnabled are declared near sendPushToUser above)
 
-// GET /api/admin/testing-mode — returns current state
+// GET current testing mode status
 router.get('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
   res.json({ enabled: _testingModeEnabled });
 });
 
-// POST /api/admin/testing-mode — { enabled: true|false }
+// Toggle testing mode
 router.post('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
   _testingModeEnabled = !!req.body.enabled;
-  console.log(`🚧 [Testing Mode] ${_testingModeEnabled ? 'ENABLED' : 'DISABLED'} by ${req.user?.email || 'admin'}`);
+  console.log(`🚧 [Testing Mode] set to ${_testingModeEnabled} by admin`);
   res.json({ enabled: _testingModeEnabled });
 });
 
