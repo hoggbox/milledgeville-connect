@@ -922,8 +922,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         token: sub.nativeToken,
         notification: {
           title,
-          body,
-          ...(hasImage && { imageUrl })
+          body
+          // ← Do NOT put imageUrl here when using big_picture
         },
         data: {
           page: data.page || '',
@@ -934,7 +934,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl }),
+            ...(hasImage && { imageUrl: imageUrl }),
             ...(hasImage && { style: 'big_picture' })
           }
         }
