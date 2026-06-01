@@ -923,7 +923,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         notification: {
           title,
           body,
-          ...(hasImage && { imageUrl })          // ← Keep it here too
+          ...(hasImage && { image: imageUrl })   // FCM field is "image", not "imageUrl"
         },
         data: {
           page: data.page || '',
@@ -934,8 +934,6 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl }),       // ← And here
-            ...(hasImage && { style: 'big_picture' })
           }
         }
       };
