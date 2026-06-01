@@ -34,21 +34,6 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
-const Settings        = require('../models/Settings');     // ← SITE-WIDE ADMIN SETTINGS
-
-function sanitizeContent(body = {}) {
-  const out = {};
-  for (const [key, val] of Object.entries(body)) {
-    if (typeof val === 'string') {
-      out[key] = val.trim().substring(0, 10000);
-    } else if (Array.isArray(val)) {
-      out[key] = val;
-    } else {
-      out[key] = val;
-    }
-  }
-  return out;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
@@ -59,23 +44,6 @@ function sanitizeContent(body = {}) {
 //      isMuted, recentPostTimes fields)
 //   3. Drop this entire block above the `module.exports = router;` line
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── GLOBAL NOTIFICATION KILL-SWITCH (admin testing) ─────────────────────────
-// Persisted in MongoDB via the Settings model so it survives server restarts.
-// _pushDisabledCache is a fast local copy; DB is always the source of truth.
-let _pushDisabledCache = false;
-
-async function isPushGloballyDisabled() {
-  try {
-    const s = await Settings.getSiteSettings();
-    _pushDisabledCache = s.pushNotificationsDisabled === true;
-  } catch (_) {
-    // DB unavailable — fall back to cache (defaults to false = don't block sends)
-  }
-  return _pushDisabledCache;
-}
-
-const PUSH_EXEMPT_EMAILS = ['imhoggbox@gmail.com', 'test@gmail.com'];
 
 // ─── SPAM DETECTION CONSTANTS ─────────────────────────────────────────────────
 const SPAM_WINDOW_MS    = 5 * 60 * 1000; // 5-minute rolling window
@@ -478,25 +446,19 @@ router.post('/shoutouts', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-// ─── SANITIZE INPUT ─────────────────────────────────────────────────────
-const clean = sanitizeContent(req.body);
-const { text, location } = clean;
-const rawImages = Array.isArray(clean.images) ? clean.images : [];
-// ────────────────────────────────────────────────────────────────────────
+    // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
+    const clean = sanitizeContent(req.body);
+    const { text, images, location } = clean;
+    // ────────────────────────────────────────────────────────────────────────
 
-if (!text?.trim()) {
-  return res.status(400).json({ message: 'Text is required' });
-}
+    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
-// Keep images as base64 (no Cloudinary)
-const images = rawImages || [];
-
-    // ── Hard 45-second rate limit ──────────────────────────────────
+    // ── Hard 45-second rate limit (existing) ──────────────────────────────────
     if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
       return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
     }
 
-    // ── 24-hour timeout from community flags ───────────────────────
+    // ── 24-hour timeout from community flags ───────────────────────────────────
     if (user.isPostTimedOut()) {
       const releaseTime = user.postTimeoutUntil.toLocaleString();
       return res.status(403).json({
@@ -506,7 +468,7 @@ const images = rawImages || [];
       });
     }
 
-    // ── Admin/system mute check ────────────────────────────────────
+    // ── Admin/system mute check ────────────────────────────────────────────────
     if (user.isMuted) {
       return res.status(403).json({
         message: 'Your account has been muted by an administrator for excessive posting. Contact support if you believe this is an error.',
@@ -514,7 +476,7 @@ const images = rawImages || [];
       });
     }
 
-    // ── Spam burst detection ───────────────────────────────────────
+    // ── Spam burst detection ────────────────────────────────────────────────────
     const now = Date.now();
     const windowStart = now - SPAM_WINDOW_MS;
     const recentPosts = (user.recentPostTimes || []).filter(t => new Date(t).getTime() > windowStart);
@@ -538,7 +500,7 @@ const images = rawImages || [];
       });
     }
 
-    // ── Create the shoutout ────────────────────────────────────────
+    // ── All checks passed — create the shoutout ────────────────────────────────
     const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
 
     const shoutout = await Shoutout.create({
@@ -555,13 +517,12 @@ const images = rawImages || [];
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-    // ── Send push notification with thumbnail ──────────────────────
+    // ←←← THIS IS THE IMPORTANT PART ←←←
     let shoutoutThumb = null;
     if (shoutout.images && shoutout.images.length > 0) {
       shoutoutThumb = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
     }
-
-    await broadcastPush(
+    broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
       { 
@@ -572,38 +533,9 @@ const images = rawImages || [];
     );
 
     res.json(shoutout);
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/shoutout-thumb/:id
-// Serves the first image of a shoutout as a real image response so FCM/APNs
-// push notifications can display it (they can't use base64 data URLs directly).
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/shoutout-thumb/:id', async (req, res) => {
-  try {
-    const shoutout = await Shoutout.findById(req.params.id).select('images');
-    if (!shoutout?.images?.length) return res.status(404).end();
-
-    const dataUrl = shoutout.images[0];
-    const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (!matches) return res.status(400).end();
-
-    const mimeType = matches[1];
-    const buffer   = Buffer.from(matches[2], 'base64');
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Content-Length', buffer.length);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.send(buffer);
-  } catch (e) {
-    console.error('shoutout-thumb error:', e);
-    res.status(500).end();
   }
 });
 
@@ -832,35 +764,6 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
 });
 
 // ─── ADMIN BROADCAST (Fixed - sends exactly once) ─────────────────────────────
-// ─── ADMIN — GLOBAL NOTIFICATION KILL-SWITCH ─────────────────────────────────
-// GET  /api/admin/push-kill-switch  → returns current state from DB
-// POST /api/admin/push-kill-switch  → body: { disabled: true|false }
-router.get('/admin/push-kill-switch', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const s = await Settings.getSiteSettings();
-    res.json({ disabled: s.pushNotificationsDisabled, exemptEmails: PUSH_EXEMPT_EMAILS });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to read settings', error: err.message });
-  }
-});
-
-router.post('/admin/push-kill-switch', authenticate, requireAdmin, async (req, res) => {
-  const { disabled } = req.body;
-  if (typeof disabled !== 'boolean') {
-    return res.status(400).json({ message: '`disabled` must be a boolean' });
-  }
-  try {
-    const s = await Settings.getSiteSettings();
-    s.pushNotificationsDisabled = disabled;
-    await s.save();
-    _pushDisabledCache = disabled; // keep local cache in sync
-    console.log(`🔕 Global push notifications ${disabled ? 'DISABLED' : 'ENABLED'} by admin`);
-    res.json({ disabled: s.pushNotificationsDisabled, exemptEmails: PUSH_EXEMPT_EMAILS });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to update settings', error: err.message });
-  }
-});
-
 router.post('/admin/broadcast', authenticate, requireAdmin, async (req, res) => {
   try {
     const { message, ownersOnly = false } = req.body;
@@ -1017,70 +920,56 @@ function requireAdminOrModerator(req, res, next) {
 // Reads fcmTokens (FCM/APK) and webPushSubscriptions (web VAPID) directly from
 // the User document. Stale / expired tokens are pruned automatically on failure.
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, logoUrl = null) {
-  const user = await User.findById(userId).select('fcmTokens webPushSubscriptions email');
+  const user = await User.findById(userId).select('fcmTokens webPushSubscriptions');
   if (!user) return false;
-
-  // ── Global kill-switch: skip everyone except exempt emails ─────────────────
-  const pushDisabled = await isPushGloballyDisabled();
-  if (pushDisabled && !PUSH_EXEMPT_EMAILS.includes((user.email || '').toLowerCase())) {
-    return false;
-  }
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
   const iconUrl  = logoUrl || APP_ICON;   // biz logo if available, else MC default
   const hasPhoto = !!imageUrl;
-  const msgData  = { page: data.page || '', id: data.id || '', businessId: data.businessId || '' };
+  const msgData  = { page: data.page || '', id: data.id || '' };
   let   sent     = false;
 
-  // ── FCM (Android APK / iOS native) ──────────────────────────────────────────
+  // ── FCM (Android APK) ──────────────────────────────────────────────────────
   if (user.fcmTokens?.length) {
     const keepTokens = [];
     for (const token of user.fcmTokens) {
       try {
-        // FCM data payloads require ALL values to be strings
-        const fcmData = {
-          page:       String(msgData.page       || ''),
-          id:         String(msgData.id         || ''),
-          businessId: String(msgData.businessId || ''),
-        };
-
-        const message = {
+        await admin.messaging().send({
           token,
           notification: {
             title,
             body,
-            // NOTE: do NOT put imageUrl here — it is not a valid FCM v1 field
-            // and can interfere with delivery. Images are set below in
-            // android.notification.image and apns.fcm_options.image instead.
+            ...(hasPhoto && { imageUrl })   // top-level image for rich notifications
           },
-          data: fcmData,
+          data: msgData,
           android: {
             priority: 'high',
             notification: {
-              sound: 'default',
+              sound:     'default',
               channelId: 'default',
-              // Android uses `image`, NOT `imageUrl`
-              ...(imageUrl && { image: imageUrl }),
-            },
+              ...(hasPhoto && { imageUrl }), // android big-picture image
+              ...(logoUrl && !hasPhoto && { imageUrl: logoUrl }) // biz logo as large icon when no big photo
+            }
           },
           apns: {
-            payload: {
-              aps: { sound: 'default' },
-            },
-            // iOS expanded-banner image comes from fcm_options
-            ...(imageUrl && { fcm_options: { image: imageUrl } }),
-          },
-        };
-
-        await admin.messaging().send(message);
+            payload:    { aps: { sound: 'default', 'mutable-content': 1 } },
+            fcmOptions: hasPhoto ? { imageUrl } : {}
+          }
+        });
         keepTokens.push(token);
         sent = true;
       } catch (e) {
-        const stale = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'];
+        // Permanently invalid tokens get pruned; transient errors keep the token
+        const stale = [
+          'messaging/registration-token-not-registered',
+          'messaging/invalid-registration-token',
+          'messaging/invalid-argument'
+        ];
         if (!stale.includes(e.code)) keepTokens.push(token);
         console.error('FCM send error:', e.code || e.message);
       }
     }
+    // Only write back if we actually pruned something
     if (keepTokens.length !== user.fcmTokens.length) {
       await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
     }
@@ -1589,7 +1478,7 @@ router.post('/lostitems', authenticate, async (req, res) => {
     if (item.images && item.images.length > 0) {
       lostThumb = `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`;
     }
-    await broadcastPush(
+    broadcastPush(
       isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
       `${user.name} posted: ${title}`,
       { 
@@ -1748,7 +1637,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
       if (item.images && item.images.length > 0) {
         marketThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
       }
-      await broadcastPush(
+      broadcastPush(
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
@@ -1981,28 +1870,9 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body, postId, imageUrl } = req.body;  // ← accept postId + optional imageUrl
+    const { title, body, postId } = req.body;  // ← accept postId
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
-    }
-
-    // Build a safe HTTPS image URL for the push notification.
-    // Priority:
-    //   1. If postId is provided, the post's first image is used as the thumb (built below).
-    //   2. If imageUrl is already an HTTPS URL, use it directly.
-    //   3. If imageUrl is a base64 data URL, save it as a temporary BusinessPost so we
-    //      can serve it via the /api/business-post-thumb/:id endpoint.
-    //   4. Otherwise no image.
-    let safeImageUrl = null;
-    let pendingBase64Image = null;
-
-    if (typeof imageUrl === 'string' && imageUrl.trim()) {
-      const trimmed = imageUrl.trim();
-      if (/^https:\/\/.+/.test(trimmed)) {
-        safeImageUrl = trimmed;
-      } else if (trimmed.startsWith('data:image/')) {
-        pendingBase64Image = trimmed;
-      }
     }
 
     const user = await User.findById(req.userId);
@@ -2029,7 +1899,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     const pushBody = `${title.trim()}\n${body.trim()}`;
 
     // ✅ FIX: if a postId was attached, deep-link to the business-post screen
-    //         otherwise fall back to the business directory page
+    //         otherwise fall back to home (for generic announcements)
     let deepLink;
     if (postId) {
       // Verify the post exists and belongs to this owner before using it
@@ -2040,36 +1910,16 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       deepLink = {
         page: 'business-post',
         id: postId,
-        businessId: user.verifiedBusiness.toString()
+        businessId: user.verifiedBusiness.toString()  // so the app can show the directory button
       };
-      // If no imageUrl was supplied, use the post's first image as the notification thumb
-      if (!safeImageUrl && !pendingBase64Image && post.image) {
-        safeImageUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
-      }
-    } else {
-      deepLink = {
-        page: 'directory-business',
-        id: user.verifiedBusiness.toString()
-      };
-    }
+} else {
+  deepLink = {
+    page: 'directory-business',
+    id: user.verifiedBusiness.toString()
+  };
+}
 
-    // If owner sent a raw base64 image (not attached to a post), persist it so
-    // we can serve it as a real HTTP URL in the push payload
-    if (pendingBase64Image && !safeImageUrl) {
-      try {
-        const tempPost = await BusinessPost.create({
-          business: user.verifiedBusiness,
-          owner: req.userId,
-          image: pendingBase64Image,
-          caption: '__notification_thumb__',  // sentinel so it can be cleaned up later
-        });
-        safeImageUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${tempPost._id}`;
-      } catch (imgErr) {
-        console.warn('Could not persist notification image, sending without thumb:', imgErr.message);
-      }
-    }
-
-    await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', imageUrl: safeImageUrl, logoUrl: bizLogoUrl });
+    await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', logoUrl: bizLogoUrl });
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
@@ -2405,11 +2255,11 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
 
     // Broadcast to everyone who enabled "Comments on Traffic Alerts"
     const commentText = (req.body.text || '').trim();
-    await broadcastPush(
-      `💬 New comment on Traffic Alert`,
-      `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
+    broadcastPush(
+    `💬 New comment on Traffic Alert`,
+    `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
       { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` },
-      { type: 'comment' }
+      { type: 'comment' }          // filter
     );
 
     res.json(shoutout.comments[shoutout.comments.length - 1]);
@@ -2592,7 +2442,7 @@ router.post('/news', authenticate, async (req, res) => {
       newsThumb = `https://www.milledgevilleconnect.com/api/news-thumb/${article._id}`;
     }
 
-    await broadcastPush(
+    broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
       { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
@@ -3093,7 +2943,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
           ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
           : null;
         const dealBizName = user.verifiedBusiness?.name || user.name;
-        await broadcastPush(
+        broadcastPush(
           dealBizName,
           `🔥 New Deal Available!\n${title}`,
           {
@@ -3154,7 +3004,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
           ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
           : null;
         const eventBizName = user.verifiedBusiness?.name || user.name;
-        await broadcastPush(
+        broadcastPush(
           eventBizName,
           `📅 New Event!\n${title}${location ? ' · ' + location : ''}`,
           {
@@ -3241,7 +3091,7 @@ if (sendNotify) {
     if (item.images && item.images.length > 0) {
       homeThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
     }
-    await broadcastPush(
+    broadcastPush(
       `🏠 New Home Listing`,
       `${bizName} posted: ${title}`,
       { 
@@ -4215,19 +4065,8 @@ res.set({
 
 // ─── GENERIC THUMBNAIL SERVING FOR PUSH NOTIFICATIONS (shoutout/lost/market/news) ─
 async function serveImageThumb(req, res, Model) {
-  // Push image fetches are killed by the OS after ~5s. If the server is
-  // cold-starting on Render, redirect to the default icon rather than hanging —
-  // a timed-out fetch means NO image shows in the notification at all.
-  const timeoutHandle = setTimeout(() => {
-    if (!res.headersSent) {
-      res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
-    }
-  }, 4000);
-
   try {
     const doc = await Model.findById(req.params.id).select('images image');
-    clearTimeout(timeoutHandle);
-
     let imgData = null;
     if (doc?.image) imgData = doc.image;                           // BusinessPost-style single image
     else if (doc?.images && doc.images.length > 0) imgData = doc.images[0];
@@ -4250,15 +4089,13 @@ async function serveImageThumb(req, res, Model) {
     });
     res.send(buffer);
   } catch (err) {
-    clearTimeout(timeoutHandle);
     console.error('Thumb error:', err.message);
-    if (!res.headersSent) res.status(500).send('Error');
+    res.status(500).send('Error');
   }
 }
 
 // Public thumb endpoints so base64 images can be used as real HTTP URLs in push payloads
-// NOTE: /shoutout-thumb/:id is already registered above (inline handler ~line 587);
-//       removing the duplicate here so Express doesn't silently skip the second registration.
+router.get('/shoutout-thumb/:id',     (req, res) => serveImageThumb(req, res, Shoutout));
 router.get('/lostitem-thumb/:id',     (req, res) => serveImageThumb(req, res, LostItem));
 router.get('/marketplace-thumb/:id',  (req, res) => serveImageThumb(req, res, MarketplaceItem));
 router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, News));
