@@ -447,11 +447,28 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
+    // Pull images out BEFORE sanitizeContent — base64 data URLs contain
+    // characters (< > =) that the HTML-strip regex would destroy.
+    const rawImages = Array.isArray(req.body.images) ? req.body.images : [];
     const clean = sanitizeContent(req.body);
-    const { text, images, location } = clean;
+    const { text, location } = clean;
+    // Restore images directly from the raw body (already validated below)
+    const images = rawImages;
     // ────────────────────────────────────────────────────────────────────────
 
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+
+    // ── Validate images (if provided) ─────────────────────────────────────────
+    if (images.length > 0) {
+      for (const img of images) {
+        if (typeof img !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(img)) {
+          return res.status(400).json({ message: 'Images must be valid JPEG, PNG, or WebP data URLs' });
+        }
+        if (img.length > 5_600_000) {
+          return res.status(400).json({ message: 'One or more images exceed the 4 MB limit' });
+        }
+      }
+    }
 
     // ── Hard 45-second rate limit (existing) ──────────────────────────────────
     if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
@@ -924,18 +941,16 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
       return true;
     }
 
-    // Web VAPID
-    if (sub.subscription?.endpoint && hasImage) {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data: { page: data.page || '', id: data.id || '' },
-          icon: APP_ICON,
-          image: imageUrl
-        })
-      );
+    // Web VAPID — always send; include image only when available
+    if (sub.subscription?.endpoint) {
+      const payload = {
+        title,
+        body,
+        data: { page: data.page || '', id: data.id || '' },
+        icon: APP_ICON,
+        ...(hasImage && { image: imageUrl })
+      };
+      await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
       return true;
     }
 
