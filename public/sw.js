@@ -6,12 +6,19 @@ self.addEventListener('push', event => {
     body:  payload.body  || '',
     icon:  payload.icon  || '/icon-192.png',
     badge: payload.badge || '/icon-192.png',
-    // ── FIX 1: actually pass the image so the thumbnail shows ──────────────
-    image: payload.image || undefined,
     // ── Keep the full data object so notificationclick can read page + id ──
     data:  payload.data  || {},
-    tag:   payload.tag   || 'default'
+    tag:   payload.tag   || 'default',
+    // Stay visible until the user taps (improves visibility on mobile)
+    requireInteraction: true
   };
+
+  // ✅ FIX: only set image when it's a real https:// URL.
+  // Passing a data: base64 string or undefined here causes Chrome Android to
+  // silently drop the notification entirely on some devices.
+  if (payload.image && payload.image.startsWith('https://')) {
+    options.image = payload.image;
+  }
 
   event.waitUntil(
     self.registration.showNotification(payload.title || 'Milledgeville Connect', options)

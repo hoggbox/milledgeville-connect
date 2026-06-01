@@ -514,6 +514,12 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
+    // ✅ FIX: if the shoutout has a photo, pass a real https:// thumb URL
+    // so the notification shows the image (data: URLs are blocked in push notifications)
+    const shoutoutThumb = (shoutout.images && shoutout.images.length > 0)
+      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
+      : null;
+
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -521,7 +527,7 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
         page: 'shoutouts', 
         id: shoutout._id.toString() 
       },
-      { type: 'shoutout' }
+      { type: 'shoutout', imageUrl: shoutoutThumb }
     );
 
     res.json(shoutout);
@@ -875,7 +881,6 @@ function requireAdminOrModerator(req, res, next) {
 }
 
 // Send push to a single user (supports both native FCM and web VAPID)
-// AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
   if (!sub) {
@@ -883,34 +888,45 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     return false;
   }
 
-  const APP_ICON  = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const notifImage = imageUrl || APP_ICON;   // ← use post thumbnail when provided
+  const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
+  // Only use a real https:// URL as the notification image.
+  // data: URLs are blocked by browsers/FCM in push notifications.
+  const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
 
   if (sub.nativeToken) {
     try {
       const message = {
         token: sub.nativeToken,
-        notification: { 
-          title, 
+        notification: {
+          title,
           body,
-          imageUrl: notifImage        // ← real photo or fallback
+          // ✅ FIX: Firebase Admin SDK uses "image", NOT "imageUrl"
+          ...(notifImage ? { image: notifImage } : {})
         },
         data: {
           page: data.page || '',
           id:   data.id   || '',
           url:  data.url  || ''
         },
-        android: { 
+        android: {
           priority: 'high',
           notification: {
-            sound: 'default',
+            sound:     'default',
             channelId: 'default',
-            imageUrl: notifImage      // ← real photo or fallback
+            // ✅ FIX: "image" not "imageUrl" here too
+            ...(notifImage ? { image: notifImage } : {})
           }
-        }
+        },
+        // iOS support
+        ...(notifImage ? {
+          apns: {
+            payload: { aps: { 'mutable-content': 1 } },
+            fcmOptions: { image: notifImage }
+          }
+        } : {})
       };
       await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}`);
+      console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
       return true;
     } catch (err) {
       console.error(`[Push] FCM failed for ${userId}:`, err.message);
@@ -926,16 +942,17 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     try {
       await webpush.sendNotification(
         sub.subscription,
-        JSON.stringify({ 
-          title, 
-          body, 
+        JSON.stringify({
+          title,
+          body,
           data,
           icon:  APP_ICON,
-          image: notifImage,          // ← web push large image
-          badge: APP_ICON
+          badge: APP_ICON,
+          // ✅ Only attach image when it's a real https:// URL
+          ...(notifImage ? { image: notifImage } : {})
         })
       );
-      console.log(`✅ Web push sent to ${userId}`);
+      console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
       return true;
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
@@ -1799,7 +1816,8 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body } = req.body;
+    // ✅ FIX: also read imageUrl from request body so biz dashboard images work
+    const { title, body, imageUrl } = req.body;
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
     }
@@ -1826,7 +1844,37 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
 
     // Prepend business name to the body so recipients always know who sent it
     const stampedBody = `${bizName} · ${body.trim()}`;
-    await broadcastPush(title.trim(), stampedBody, { page: 'home' });
+
+    // ✅ FIX: resolve the notification image URL
+    // - If it's already an https:// URL (e.g. previously uploaded), use it directly
+    // - If it's a base64 data URL, persist it as a BusinessPost and use the thumb endpoint
+    // - Otherwise send with no image
+    let notifImageUrl = null;
+    if (imageUrl) {
+      if (imageUrl.startsWith('https://')) {
+        notifImageUrl = imageUrl;
+      } else if (/^data:image\/(jpeg|png|webp);base64,/.test(imageUrl)) {
+        if (imageUrl.length > 5_600_000) {
+          return res.status(400).json({ message: 'Image too large (max ~4MB)' });
+        }
+        // Store via BusinessPost so we can serve it at a real https:// URL
+        const tempPost = await BusinessPost.create({
+          business: user.verifiedBusiness,
+          owner:    user._id,
+          bizName,
+          caption:  `[notification image: ${title.trim()}]`,
+          image:    imageUrl
+        });
+        notifImageUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${tempPost._id}`;
+      }
+    }
+
+    await broadcastPush(
+      title.trim(),
+      stampedBody,
+      { page: 'home' },
+      { type: 'custom', imageUrl: notifImageUrl }
+    );
 
     // Return updated credit balance so the frontend can refresh the display
     const updated = await User.findById(req.userId).select('notificationCredits');
@@ -3867,6 +3915,32 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Thumb fetch error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// GET /api/shoutout-thumb/:shoutoutId — serves a shoutout's first image as a real HTTP response
+// Required because data: URLs are blocked by browsers/FCM in push notification image fields
+router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
+    if (!shoutout?.images?.length) return res.status(404).send('Not found');
+
+    const raw = shoutout.images[0];
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Shoutout thumb error:', err);
     res.status(500).send('Error');
   }
 });
