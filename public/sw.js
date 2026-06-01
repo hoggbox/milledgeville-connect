@@ -3,24 +3,17 @@ self.addEventListener('push', event => {
   const payload = event.data?.json() || {};
 
   const options = {
-    body:  payload.body  || '',
-    icon:  payload.icon  || '/icon-192.png',
+    body: payload.body || '',
+    icon: payload.icon || '/icon-192.png',
+    image: payload.image || payload.icon || undefined,
     badge: payload.badge || '/icon-192.png',
-    data:  payload.data  || {},           // ← important: carries page, id, bizId
-    tag:   payload.tag   || 'default',
+    data: payload.data || {},           // ← important: carries page, id, bizId
+    tag: payload.tag || 'default'
   };
-
-  // ONLY set `image` when the server explicitly sends one.
-  // Never fall back to the icon — that would show the app logo as a giant
-  // banner on every notification, AND block real photo images from appearing.
-  if (payload.image) {
-    options.image = payload.image;
-  }
 
   event.waitUntil(
     self.registration.showNotification(payload.title || 'Milledgeville Connect', options)
   );
-
 });
 
 self.addEventListener('notificationclick', event => {

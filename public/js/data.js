@@ -100,7 +100,7 @@ window.handlePushNotificationClick = function(data) {
     return;
   }
 
-  const { page, id, businessId } = data;
+  const { page, id } = data;
 
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
@@ -188,10 +188,9 @@ if ('serviceWorker' in navigator) {
 // navigating, so the spinner never gets stuck.
 (function handleColdLaunchDeepLink() {
   try {
-    const params     = new URLSearchParams(window.location.search);
-    const page       = params.get('notif_page');
-    const id         = params.get('notif_id');
-    const businessId = params.get('notif_business');
+    const params = new URLSearchParams(window.location.search);
+    const page = params.get('notif_page');
+    const id = params.get('notif_id');
 
     if (!page) return;
 
@@ -200,7 +199,7 @@ if ('serviceWorker' in navigator) {
 
     // Wait until auth + initial page render are done, then deep-link
     window._appReadyPromise.then(() => {
-      window.handlePushNotificationClick({ page, id, businessId });
+      window.handlePushNotificationClick({ page, id });
     });
 
   } catch (e) {
@@ -1957,27 +1956,19 @@ window.submitReview = async function (bizId) {
   if (!_reviewStarRating) { showToast('Please select a star rating.', 'error'); return; }
   const title = document.getElementById(`reviewTitle-${bizId}`)?.value.trim();
   const body  = document.getElementById(`reviewBody-${bizId}`)?.value.trim();
-  const btn   = document.querySelector(`#reviewForm-${bizId} button[onclick*="submitReview"]`);
-  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
-  try {
-    const res = await apiPost(`/business/${bizId}/reviews`, { rating: _reviewStarRating, title, body });
-    if (res._id) {
-      showToast('✅ Review posted!');
-      const updatedReviews = await apiGet(`/business/${bizId}/reviews`);
-      window._currentBizReviews = updatedReviews;
-      const preview = updatedReviews.slice(0, 3);
-      const container = document.getElementById(`reviewCards-${bizId}`);
-      if (container) container.innerHTML = preview.map(r => renderReviewCard(r, bizId)).join('');
-      const form = document.getElementById(`reviewForm-${bizId}`);
-      if (form) form.classList.add('hidden');
-      _reviewStarRating = 0;
-    } else {
-      showToast(res.message || 'Error posting review', 'error');
-      if (btn) { btn.disabled = false; btn.textContent = 'Post Review'; }
-    }
-  } catch (e) {
-    showToast('Network error — try again', 'error');
-    if (btn) { btn.disabled = false; btn.textContent = 'Post Review'; }
+  const res   = await apiPost(`/business/${bizId}/reviews`, { rating: _reviewStarRating, title, body });
+  if (res._id) {
+    showToast('✅ Review posted!');
+    const updatedReviews = await apiGet(`/business/${bizId}/reviews`);
+    window._currentBizReviews = updatedReviews;
+    const preview = updatedReviews.slice(0, 3);
+    const container = document.getElementById(`reviewCards-${bizId}`);
+    if (container) container.innerHTML = preview.map(r => renderReviewCard(r, bizId)).join('');
+    const form = document.getElementById(`reviewForm-${bizId}`);
+    if (form) form.classList.add('hidden');
+    _reviewStarRating = 0;
+  } else {
+    showToast(res.message || 'Error posting review', 'error');
   }
 };
 
@@ -2545,7 +2536,25 @@ window.removeShoutoutImage = function (index) {
   renderShoutoutImagePreviews();
 };
 
-// postShoutoutWithPhoto is defined below (with guard + credit check)
+window.postShoutoutWithPhoto = async function () {
+  if (!requireAuth('Sign in to post traffic alerts.')) return;
+  const input = document.getElementById('shoutoutInput');
+  if (!input || !input.value.trim()) return;
+
+  const res = await apiPost('/shoutouts', { 
+    text: input.value.trim(),
+    images: _pendingShoutoutImages || []
+  });
+
+  if (res._id) {
+    showToast('✅ Traffic Alert posted!');
+    _pendingShoutoutImages = [];
+    input.value = '';
+    loadPage('shoutouts');
+  } else {
+    showToast(res.message || 'Error posting traffic alert', 'error');
+  }
+}
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -2724,19 +2733,12 @@ window.toggleLike = async function (shoutoutId) {
   if (!requireAuth('Sign in to like traffic alerts.')) return;
   const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
   if (res.likes !== undefined) {
-    // Update the count span that actually exists in the card HTML
-    const countEl = document.getElementById(`like-count-${shoutoutId}`);
-    if (countEl) countEl.textContent = res.likes;
-    // Also update icon/label if present (future-proofing)
     const icon = document.getElementById(`like-icon-${shoutoutId}`);
     const label = document.getElementById(`like-label-${shoutoutId}`);
     if (icon) icon.textContent = res.liked ? '❤️' : '🤍';
     if (label) label.textContent = 'Like';
   }
 };
-
-// Alias — card HTML calls likeShoutout(), function is named toggleLike
-window.likeShoutout = window.toggleLike;
 
 window.toggleCommentSection = function (shoutoutId) {
   const section = document.getElementById(`comment-section-${shoutoutId}`);
@@ -2761,9 +2763,9 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
     const input = document.getElementById(`commentinput-${shoutoutId}`);
     if (!input || !input.value.trim()) return;
     const text = input.value.trim();
+    input.value = '';
     const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text });
     if (res._id) {
-      input.value = ''; // only clear on success
       await loadShoutoutsPage(document.getElementById('content'));
     } else {
       showToast(res.message || 'Error posting comment', 'error');
@@ -4592,10 +4594,7 @@ window.sendUnifiedNotification = async function() {
       }
     } else {
       // Text-only path — POST /owner/custom-notification
-      const textOnlyPayload = { title, body };
-      // If a postId is tracked (e.g. linked to an existing BusinessPost), forward it
-      if (window._bizNotifLinkedPostId) textOnlyPayload.postId = window._bizNotifLinkedPostId;
-      res = await apiPost('/owner/custom-notification', textOnlyPayload);
+      res = await apiPost('/owner/custom-notification', { title, body });
 
       if (res.success) {
         showToast('\u2705 Notification sent to all users!', 'success');
@@ -5707,7 +5706,30 @@ window.hideMarketModal = function() {
   if (modal) modal.remove();
 };
 
-// postMarketplaceComment defined below (complete version)
+window.postMarketplaceComment = async function(itemId) {
+  const input = document.getElementById('marketCommentInput');
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!requireAuth('Sign in to comment')) return;
+
+  try {
+    await apiPost(`/marketplace/${itemId}/comments`, { text });
+    input.value = '';
+    showToast('Comment posted');
+
+    // Refresh comments
+    const res = await apiGet(`/marketplace/${itemId}`);
+    const container = document.getElementById('marketCommentsContainer');
+    if (container && res.comments) {
+      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
+    }
+  } catch (e) {
+    showToast('Failed to post comment', 'error');
+  }
+};
 
 window.postMarketplaceItem = async function() {
   const category  = document.getElementById('marketCategory')?.value;
@@ -5888,11 +5910,6 @@ window.showMarketplaceDetail = async function(id) {
                     class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
               🔗 Share
             </button>
-            ${!isSeller ? `
-            <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')" 
-                    class="px-6 py-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-3xl font-semibold transition">
-              🚩 Report
-            </button>` : ''}
             <button onclick="hideMarketDetailModal()" 
                     class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
               Close
@@ -6960,7 +6977,7 @@ window.loadLostFoundPage     = loadLostFoundPage;
 window.loadMarketplacePage   = loadMarketplacePage;
 window.loadResourcesPage     = loadResourcesPage;
 window.loadPage              = loadPage;
-window.postShoutout          = function() { return window.postShoutoutWithPhoto && window.postShoutoutWithPhoto(); };
+window.postShoutout          = postShoutoutWithPhoto;
 window.navigate              = loadPage;
 window.filterDirectory       = filterDirectory;
 window.filterByCategory      = filterByCategory;
@@ -7069,10 +7086,6 @@ window.showEventDetail = async function(eventId) {
                   class="flex-1 py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-3xl font-semibold transition">
             🔗 Share
           </button>
-          <button onclick="event.stopImmediatePropagation(); reportContent('event', '${event._id}', '${esc(event.title)}')" 
-                  class="px-6 py-4 bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 rounded-3xl font-semibold transition">
-            🚩 Report
-          </button>
           <button onclick="document.getElementById('eventDetailModal').remove()" 
                   class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
             Close
@@ -7119,10 +7132,6 @@ window.showDealDetail = async function(dealId) {
           <button onclick="shareContent('deal', '${esc(deal.title)}', '${deal.business?.name ? 'From: ' + esc(deal.business.name) : ''}')" 
                   class="flex-1 py-4 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-3xl font-semibold transition">
             🔗 Share
-          </button>
-          <button onclick="event.stopImmediatePropagation(); reportContent('deal', '${deal._id}', '${esc(deal.title)}')" 
-                  class="px-6 py-4 bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 rounded-3xl font-semibold transition">
-            🚩 Report
           </button>
           <button onclick="document.getElementById('dealDetailModal').remove()" 
                   class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-slate-900 rounded-3xl font-semibold transition">
@@ -7234,11 +7243,6 @@ window.showLostDetail = async function(id) {
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     🔗 Share
   </button>
-  ${!isOwner ? `
-  <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
-          class="px-6 py-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-3xl font-semibold transition">
-    🚩 Report
-  </button>` : ''}
   <button onclick="hideLostDetailModal()" 
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     Close
@@ -7871,44 +7875,7 @@ async function renderAdminReports() {
 // ─── BROADCAST MESSAGE (Tab 5) ───────────────────────────────────────────────
 async function renderAdminBroadcast() {
   const container = document.getElementById('adminMainContent');
-
-  // Fetch current kill-switch state before rendering
-  let killSwitchDisabled = false;
-  try {
-    const ks = await apiGet('/admin/push-kill-switch');
-    killSwitchDisabled = ks.disabled === true;
-  } catch (_) {}
-
   container.innerHTML = `
-    <!-- ── NOTIFICATION KILL-SWITCH ── -->
-    <div class="max-w-2xl mx-auto mb-6 rounded-3xl border p-6 ${killSwitchDisabled
-      ? 'bg-red-500/15 border-red-500/40'
-      : 'bg-white/10 border-white/10'}">
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex-1">
-          <h3 class="font-bold text-lg flex items-center gap-2">
-            ${killSwitchDisabled ? '🔕' : '🔔'} Global Notification Kill-Switch
-          </h3>
-          <p class="text-white/50 text-sm mt-1">
-            When <strong>disabled</strong>, no push notifications are sent to any user
-            except <span class="text-emerald-400 font-mono text-xs">imhoggbox@gmail.com</span>
-            and <span class="text-emerald-400 font-mono text-xs">test@gmail.com</span>.
-            Use this during testing so real users aren't spammed.
-          </p>
-          <p class="mt-2 text-sm font-semibold ${killSwitchDisabled ? 'text-red-400' : 'text-emerald-400'}">
-            Status: ${killSwitchDisabled ? '🔴 Notifications DISABLED for all users' : '🟢 Notifications active (normal)'}
-          </p>
-        </div>
-        <button id="killSwitchBtn" onclick="togglePushKillSwitch()"
-                class="flex-shrink-0 px-5 py-3 rounded-2xl font-bold text-sm transition ${killSwitchDisabled
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  : 'bg-red-600 hover:bg-red-700 text-white'}">
-          ${killSwitchDisabled ? '✅ Re-enable Notifications' : '🔕 Disable Notifications'}
-        </button>
-      </div>
-    </div>
-
-    <!-- ── BROADCAST MESSAGE ── -->
     <div class="max-w-2xl mx-auto bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
       <h3 class="font-bold text-xl mb-2">📢 Send Broadcast Message</h3>
       <p class="text-white/50 text-sm mb-6">Plain text only. To add a link use: &lt;a href="https://..."&gt;link text&lt;/a&gt;</p>
@@ -7942,27 +7909,6 @@ async function renderAdminBroadcast() {
     preview.innerHTML = sanitized || '<span class="text-white/30 italic">Start typing to preview…</span>';
   });
 }
-
-window.togglePushKillSwitch = async function () {
-  const btn = document.getElementById('killSwitchBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
-  try {
-    // Read current state from the card's status text to decide what to toggle to
-    const currentlyDisabled = btn?.classList.contains('bg-emerald-600');
-    const res = await apiPost('/admin/push-kill-switch', { disabled: !currentlyDisabled });
-    showToast(
-      res.disabled
-        ? '🔕 Notifications disabled for all users (except test accounts)'
-        : '🔔 Notifications re-enabled for all users',
-      res.disabled ? 'error' : 'success'
-    );
-    // Re-render the broadcast tab to reflect new state
-    await renderAdminBroadcast();
-  } catch (e) {
-    showToast('Failed to update kill-switch', 'error');
-    if (btn) { btn.disabled = false; }
-  }
-};
 
 window.sendBroadcast = async function (ownersOnly = false) {
   const now = Date.now();
@@ -8318,7 +8264,6 @@ let isPostingShoutout = false;
 
 // ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
 window.postShoutoutWithPhoto = async function() {
-  if (!requireAuth('Sign in to post traffic alerts.')) return;
   if (isPostingShoutout) return;
   isPostingShoutout = true;
 
@@ -8331,7 +8276,7 @@ window.postShoutoutWithPhoto = async function() {
       return;
     }
 
-    const images = _pendingShoutoutImages || [];
+    const images = window._shoutoutImages || [];
 
     showToast('Posting...', 'success');
 
@@ -8341,7 +8286,7 @@ window.postShoutoutWithPhoto = async function() {
       showToast('🚦 Traffic alert posted!', 'success');
       
       if (input) input.value = '';
-      _pendingShoutoutImages = [];
+      window._shoutoutImages = [];
       const previewContainer = document.getElementById('shoutoutImagePreviews');
       if (previewContainer) previewContainer.innerHTML = '';
 
@@ -8358,9 +8303,56 @@ window.postShoutoutWithPhoto = async function() {
 };
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
-// NOTE: sendCustomNotification removed — sendUnifiedNotification (defined above) is the
-// canonical handler and supports both text-only and photo+text notifications.
-// All send buttons should call sendUnifiedNotification().
+window.sendCustomNotification = async function() {
+  // Check if user can send (handles credits + Pro status)
+  if (!window.canSendNotification()) return;
+
+  const titleEl = document.getElementById('customTitle');
+  const bodyEl  = document.getElementById('customBody');
+
+  const title = titleEl?.value.trim();
+  const body  = bodyEl?.value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  const btn = event.currentTarget; // optional: disable button while sending
+  if (btn) btn.disabled = true;
+
+  try {
+    showToast('Sending notification...', 'success');
+
+    const res = await apiPost('/owner/custom-notification', { title, body });
+
+    if (res.success) {
+      showToast('✅ Notification sent successfully!', 'success');
+
+      // Clear the form
+      if (titleEl) titleEl.value = '';
+      if (bodyEl) bodyEl.value = '';
+
+      // Update local credits
+      if (res.credits !== undefined && currentUser) {
+        currentUser.notificationCredits = res.credits;
+
+        // Refresh the credit number shown on screen (if visible)
+        const creditDisplay = document.getElementById('notifCreditDisplay');
+        if (creditDisplay) creditDisplay.textContent = res.credits;
+      }
+
+    } else {
+      showToast(res.message || 'Failed to send notification', 'error');
+    }
+
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to send notification', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
 
 window.nextOnboardingSlide = function() {
   const slide1  = document.getElementById('slide1');
@@ -8417,17 +8409,17 @@ window.reportContent = async function (type, id, extraInfo = '') {
   }
 
   try {
-    const res = await apiPost('/flag', {
+    const res = await apiPost('/reports', {
       type: type,
       contentId: id,
-      reason: reason.trim()
+      reason: reason.trim(),
+      extraInfo: extraInfo || ''
     });
 
-    if (res && res.message) {
-      const isSuccess = !res.message.toLowerCase().includes('fail') && !res.message.toLowerCase().includes('error');
-      showToast(isSuccess ? '🚩 Report sent to admin team. Thank you.' : res.message, isSuccess ? 'success' : 'error');
-    } else {
+    if (res && (res.message?.includes('Report submitted') || res._id)) {
       showToast('🚩 Report sent to admin team. Thank you.', 'success');
+    } else {
+      showToast(res?.message || 'Failed to send report', 'error');
     }
   } catch (e) {
     showToast('Could not send report — try again later', 'error');
