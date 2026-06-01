@@ -944,11 +944,21 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 
     // === Web Push ===
     if (sub.subscription?.endpoint) {
+      // Build a tag that uniquely identifies this notification without collapsing
+      // image and non-image notifications into the same browser slot.
+      // SW will use this directly; it will NOT fall back to the 'default' catch-all.
+      const contentId = data.id || '';
+      const imageFlag = hasImage ? '-img' : '';
+      const tag = contentId
+        ? `notif-${contentId}${imageFlag}`
+        : `notif-${Date.now()}`;
+
       const payload = {
         title,
         body,
         data: { page: data.page || '', id: data.id || '' },
-        icon: APP_ICON
+        icon: APP_ICON,
+        tag
       };
 
       if (hasImage) payload.image = imageUrl;
