@@ -5,7 +5,8 @@ self.addEventListener('push', event => {
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon-192.png',
-    image: payload.image || payload.icon || undefined,
+    // Only set image when an actual image URL is provided — never fall back to the icon
+    ...(payload.image ? { image: payload.image } : {}),
     badge: payload.badge || '/icon-192.png',
     data: payload.data || {},           // ← important: carries page, id, bizId
     tag: payload.tag || 'default'

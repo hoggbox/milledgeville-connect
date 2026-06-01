@@ -936,6 +936,13 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
       // FCM v1 message — imageUrl is supported in notification (top-level) and
       // android.notification for Android big-picture style.
       // apns.payload.aps['mutable-content'] + apns.fcm_options.image handles iOS.
+      //
+      // FCM data values MUST be strings — convert everything so bizId etc. survive.
+      const fcmData = {};
+      for (const [k, v] of Object.entries(data)) {
+        if (v !== null && v !== undefined) fcmData[k] = String(v);
+      }
+
       const message = {
         token: sub.nativeToken,
         notification: {
@@ -943,10 +950,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           body,
           ...(hasImage && { imageUrl })
         },
-        data: {
-          page: data.page || '',
-          id: data.id || ''
-        },
+        data: fcmData,
         android: {
           priority: 'high',
           notification: {
@@ -967,16 +971,18 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
       return true;
     }
 
-    // Web VAPID — always send; include image only when available
+    // Web VAPID — always send; include image only when an actual imageUrl exists.
+    // Spread the full data object so bizId, page, id etc. all reach the service worker.
     if (sub.subscription?.endpoint) {
-      const payload = {
+      const vapidPayload = {
         title,
         body,
-        data: { page: data.page || '', id: data.id || '' },
         icon: APP_ICON,
+        badge: APP_ICON,
+        data: { ...data },
         ...(hasImage && { image: imageUrl })
       };
-      await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
+      await webpush.sendNotification(sub.subscription, JSON.stringify(vapidPayload));
       return true;
     }
 
