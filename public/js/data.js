@@ -778,6 +778,10 @@ const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
   apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
 
+// Guard: if the user navigated away while fetches were in-flight, todayDigest
+// (and all other home-page elements) no longer exist — bail out silently.
+if (!document.getElementById('todayDigest')) return;
+
 const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
