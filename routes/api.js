@@ -338,10 +338,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
     const clean = sanitizeContent(req.body);
-    const { text, location } = clean;
-    // Images are base64 data URLs (can be 500KB+) — pull from raw body to
-    // avoid sanitizeContent's 10,000-char truncation destroying them
-    const images = Array.isArray(req.body.images) ? req.body.images : [];
+    const { text, images, location } = clean;
     // ────────────────────────────────────────────────────────────────────────
 
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
@@ -1441,9 +1438,7 @@ router.post('/lostitems', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, location, type, itemType, isPet, date } = clean;
-    // Images are base64 data URLs — pull from raw body to avoid 10k-char truncation
-    const images = Array.isArray(req.body.images) ? req.body.images : [];
+    const { title, description, images, location, type, itemType, isPet, date } = clean;
 
     const item = await LostItem.create({
       type: type || 'lost',
@@ -1575,9 +1570,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, price, category, condition, notifyCommunity, homeNotifDetails } = clean;
-    // Images are base64 data URLs — pull from raw body to avoid 10k-char truncation
-    const images = Array.isArray(req.body.images) ? req.body.images : [];
+    const { title, description, price, images, category, condition, notifyCommunity, homeNotifDetails } = clean;
 
     const item = await MarketplaceItem.create({
       title,
@@ -3943,6 +3936,7 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
       'Content-Type': mimeType,
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -3969,6 +3963,7 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
       'Content-Type':   mimeType,
       'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
