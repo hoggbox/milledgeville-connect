@@ -518,9 +518,11 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
-const shoutoutThumbUrl = shoutout.images?.length
-  ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
-  : null;
+// === SHOUTOUT NOTIFICATION (with image) ===
+let shoutoutThumbUrl = null;
+if (shoutout.images && shoutout.images.length > 0) {
+  shoutoutThumbUrl = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
+}
 
 broadcastPush(
   `🚗 New Traffic Alert from ${user.name}`,
@@ -901,7 +903,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         notification: {
           title,
           body,
-          ...(hasImage && { imageUrl: imageUrl })
+          ...(hasImage && { imageUrl })
         },
         data: {
           page: data.page || '',
@@ -912,7 +914,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl: imageUrl })
+            ...(hasImage && { imageUrl }),
+            ...(hasImage && { style: 'big_picture' })
           }
         }
       };
@@ -921,8 +924,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
       return true;
     }
 
-    // Web push fallback
-    if (sub.subscription?.endpoint) {
+    // Web VAPID
+    if (sub.subscription?.endpoint && hasImage) {
       await webpush.sendNotification(
         sub.subscription,
         JSON.stringify({
@@ -930,7 +933,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           body,
           data: { page: data.page || '', id: data.id || '' },
           icon: APP_ICON,
-          ...(hasImage && { image: imageUrl })
+          image: imageUrl
         })
       );
       return true;
@@ -1023,9 +1026,10 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           shouldSend = true;
       }
 
-      if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data, imageUrl);
-      }
+if (shouldSend) {
+  // Always pass imageUrl if it exists — don't let type checks drop it
+  await sendPushToUser(user._id, title, body, data, imageUrl || null);
+}
     }
   } catch (err) {
     console.error('broadcastPush error:', err);
