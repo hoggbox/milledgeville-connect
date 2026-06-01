@@ -1049,8 +1049,9 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
           notification: {
             title,
             body,
-            // top-level imageUrl is recognised by the FCM SDK on some platforms
-            ...(imageUrl && { imageUrl }),
+            // NOTE: do NOT put imageUrl here — it is not a valid FCM v1 field
+            // and can interfere with delivery. Images are set below in
+            // android.notification.image and apns.fcm_options.image instead.
           },
           data: fcmData,
           android: {
@@ -4214,8 +4215,19 @@ res.set({
 
 // ─── GENERIC THUMBNAIL SERVING FOR PUSH NOTIFICATIONS (shoutout/lost/market/news) ─
 async function serveImageThumb(req, res, Model) {
+  // Push image fetches are killed by the OS after ~5s. If the server is
+  // cold-starting on Render, redirect to the default icon rather than hanging —
+  // a timed-out fetch means NO image shows in the notification at all.
+  const timeoutHandle = setTimeout(() => {
+    if (!res.headersSent) {
+      res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
+    }
+  }, 4000);
+
   try {
     const doc = await Model.findById(req.params.id).select('images image');
+    clearTimeout(timeoutHandle);
+
     let imgData = null;
     if (doc?.image) imgData = doc.image;                           // BusinessPost-style single image
     else if (doc?.images && doc.images.length > 0) imgData = doc.images[0];
@@ -4238,8 +4250,9 @@ async function serveImageThumb(req, res, Model) {
     });
     res.send(buffer);
   } catch (err) {
+    clearTimeout(timeoutHandle);
     console.error('Thumb error:', err.message);
-    res.status(500).send('Error');
+    if (!res.headersSent) res.status(500).send('Error');
   }
 }
 
