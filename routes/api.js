@@ -953,7 +953,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 
       if (hasImage) payload.image = imageUrl;
 
-      await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
+      await webpush.sendNotification(sub.subscription, JSON.stringify(payload), { TTL: 86400 });
       return true;
     }
 
