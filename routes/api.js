@@ -907,22 +907,6 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ─── TESTING MODE STATE ───────────────────────────────────────────────────────
-// Declared here (before sendPushToUser) so the function can reference them safely.
-// Flag lives in memory — resets to OFF on server restart (intentionally safe).
-// ─── TESTING MODE WHITELIST ─────────────────────────────────────────────────
-const NOTIF_TEST_WHITELIST = [
-  'imhoggbox@gmail.com',
-  'test@gmail.com'
-];
-let _testingModeEnabled = false;
-
-// Call this from admin panel to toggle
-function setTestingMode(enabled) {
-  _testingModeEnabled = !!enabled;
-  console.log(`🚧 [Testing Mode] ${_testingModeEnabled ? 'ENABLED' : 'DISABLED'}`);
-}
-
 // Send push to user
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   try {
