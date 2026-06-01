@@ -2382,6 +2382,7 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
 
 // ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
 let _pendingShoutoutImages = [];
+let isPostingShoutout = false;
 
 window.handleShoutoutImages = async function (input) {
   const files = Array.from(input.files);
@@ -2427,23 +2428,37 @@ window.removeShoutoutImage = function (index) {
 
 window.postShoutoutWithPhoto = async function () {
   if (!requireAuth('Sign in to post traffic alerts.')) return;
-  const input = document.getElementById('shoutoutInput');
-  if (!input || !input.value.trim()) return;
+  if (isPostingShoutout) return;
+  isPostingShoutout = true;
 
-  const res = await apiPost('/shoutouts', { 
-    text: input.value.trim(),
-    images: _pendingShoutoutImages || []
-  });
+  try {
+    const input = document.getElementById('shoutoutInput');
+    const text = input ? input.value.trim() : '';
+    if (!text) { showToast('Please write a traffic alert', 'error'); return; }
 
-  if (res._id) {
-    showToast('✅ Traffic Alert posted!');
-    _pendingShoutoutImages = [];
-    input.value = '';
-    loadPage('shoutouts');
-  } else {
-    showToast(res.message || 'Error posting traffic alert', 'error');
+    showToast('Posting...', 'success');
+
+    const res = await apiPost('/shoutouts', {
+      text,
+      images: _pendingShoutoutImages || []
+    });
+
+    if (res && res._id) {
+      showToast('🚦 Traffic alert posted!', 'success');
+      _pendingShoutoutImages = [];
+      if (input) input.value = '';
+      renderShoutoutImagePreviews();
+      loadShoutoutsPage(document.getElementById('content'));
+    } else {
+      showToast(res?.message || 'Error posting traffic alert', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
+  } finally {
+    isPostingShoutout = false;
   }
-}
+};
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -8062,48 +8077,7 @@ window.showOnboardingTour = function() {
   window.currentTourSlide = 1;
 };
 
-// ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
-let isPostingShoutout = false;
-
-// ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
-window.postShoutoutWithPhoto = async function() {
-  if (isPostingShoutout) return;
-  isPostingShoutout = true;
-
-  try {
-    const input = document.getElementById('shoutoutInput');
-    const text = input ? input.value.trim() : '';
-
-    if (!text) {
-      showToast('Please write a traffic alert', 'error');
-      return;
-    }
-
-    const images = window._shoutoutImages || [];
-
-    showToast('Posting...', 'success');
-
-    const res = await apiPost('/shoutouts', { text, images });
-
-    if (res && res._id) {
-      showToast('🚦 Traffic alert posted!', 'success');
-      
-      if (input) input.value = '';
-      window._shoutoutImages = [];
-      const previewContainer = document.getElementById('shoutoutImagePreviews');
-      if (previewContainer) previewContainer.innerHTML = '';
-
-      loadShoutoutsPage(document.getElementById('content'));
-    } else {
-      showToast(res?.message || 'Failed to post', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Network error — try again', 'error');
-  } finally {
-    isPostingShoutout = false;
-  }
-};
+// ─── POST TRAFFIC ALERT — defined above near handleShoutoutImages (line ~2428) ───
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
 window.sendCustomNotification = async function() {
