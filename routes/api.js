@@ -518,6 +518,10 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
+    const shoutoutThumbUrl = shoutout.images?.length
+      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
+      : null;
+
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -525,7 +529,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
         page: 'shoutouts', 
         id: shoutout._id.toString() 
       },
-      { type: 'shoutout' }
+      { type: 'shoutout', imageUrl: shoutoutThumbUrl }
     );
 
     res.json(shoutout);
@@ -3864,6 +3868,32 @@ res.set({
     res.send(buffer);
   } catch (err) {
     console.error('Thumb fetch error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// GET /api/shoutout-thumb/:shoutoutId — serves first shoutout image as a real HTTP response
+// Used so FCM/VAPID push notifications can show a thumbnail via a public URL instead of raw base64
+router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
+    if (!shoutout?.images?.length) return res.status(404).send('Not found');
+
+    const match = shoutout.images[0].match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Shoutout thumb error:', err);
     res.status(500).send('Error');
   }
 });
