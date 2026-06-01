@@ -934,6 +934,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
+            ...(hasImage && { imageUrl: imageUrl })  // ← required: android.notification overrides top-level; image must be repeated here
           }
         }
       };
