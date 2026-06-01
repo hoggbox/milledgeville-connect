@@ -7660,7 +7660,47 @@ async function renderAdminReports() {
 // ─── BROADCAST MESSAGE (Tab 5) ───────────────────────────────────────────────
 async function renderAdminBroadcast() {
   const container = document.getElementById('adminMainContent');
+
+  // Load current switch state before rendering
+  let notifEnabled = true;
+  try {
+    const status = await apiGet('/admin/notifications/status');
+    notifEnabled = status.enabled !== false;
+  } catch (e) { /* default to enabled if fetch fails */ }
+
   container.innerHTML = `
+    <!-- ── Notification Kill-Switch ───────────────────────────────────────── -->
+    <div class="max-w-2xl mx-auto mb-6 bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <h3 class="font-bold text-lg flex items-center gap-2">
+            🔔 Global Notifications
+          </h3>
+          <p class="text-white/50 text-sm mt-1">
+            Toggle push notifications for all users.<br>
+            <span class="text-emerald-400 font-medium">imhoggbox@gmail.com</span> and
+            <span class="text-emerald-400 font-medium">test@gmail.com</span> always receive notifications regardless.
+          </p>
+        </div>
+        <button id="notifToggleBtn" onclick="toggleGlobalNotifications()"
+                class="relative flex-shrink-0 w-16 h-9 rounded-full transition-colors duration-300 focus:outline-none
+                       ${notifEnabled ? 'bg-emerald-500' : 'bg-red-500/70'}">
+          <span id="notifToggleKnob"
+                class="absolute top-1 w-7 h-7 bg-white rounded-full shadow transition-transform duration-300
+                       ${notifEnabled ? 'translate-x-8' : 'translate-x-1'}"></span>
+        </button>
+      </div>
+      <div id="notifStatusBadge"
+           class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
+                  ${notifEnabled
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-red-500/20 text-red-300 border border-red-500/30'}">
+        <span id="notifStatusDot" class="w-2 h-2 rounded-full ${notifEnabled ? 'bg-emerald-400' : 'bg-red-400'}"></span>
+        <span id="notifStatusText">${notifEnabled ? 'Notifications ON — all users receiving pushes' : 'Notifications OFF — only test accounts receiving pushes'}</span>
+      </div>
+    </div>
+
+    <!-- ── Broadcast Message ─────────────────────────────────────────────── -->
     <div class="max-w-2xl mx-auto bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8">
       <h3 class="font-bold text-xl mb-2">📢 Send Broadcast Message</h3>
       <p class="text-white/50 text-sm mb-6">Plain text only. To add a link use: &lt;a href="https://..."&gt;link text&lt;/a&gt;</p>
@@ -7717,7 +7757,53 @@ window.sendBroadcast = async function (ownersOnly = false) {
   }
 };
 
-// ─── ADMIN — EDIT BUSINESS ─────────────────────────────────────────────────
+window.toggleGlobalNotifications = async function () {
+  const btn  = document.getElementById('notifToggleBtn');
+  const knob = document.getElementById('notifToggleKnob');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await apiPost('/admin/notifications/toggle', {});
+    const on  = res.enabled !== false;
+
+    // Update toggle appearance
+    if (btn) {
+      btn.className = btn.className
+        .replace(/bg-(emerald|red)[^\s]*/g, '')
+        .trim() + ` ${on ? 'bg-emerald-500' : 'bg-red-500/70'}`;
+    }
+    if (knob) {
+      knob.className = knob.className
+        .replace(/translate-x-\d+/g, '')
+        .trim() + ` ${on ? 'translate-x-8' : 'translate-x-1'}`;
+    }
+
+    // Update status badge
+    const badge = document.getElementById('notifStatusBadge');
+    const dot   = document.getElementById('notifStatusDot');
+    const text  = document.getElementById('notifStatusText');
+    if (badge) {
+      badge.className = badge.className
+        .replace(/bg-(emerald|red)[^\s]*/g, '')
+        .replace(/text-(emerald|red)[^\s]*/g, '')
+        .replace(/border-(emerald|red)[^\s]*/g, '')
+        .trim() + ` ${on
+          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+          : 'bg-red-500/20 text-red-300 border border-red-500/30'}`;
+    }
+    if (dot)  dot.className  = dot.className.replace(/bg-(emerald|red)-400/g, '').trim() + ` ${on ? 'bg-emerald-400' : 'bg-red-400'}`;
+    if (text) text.textContent = on
+      ? 'Notifications ON — all users receiving pushes'
+      : 'Notifications OFF — only test accounts receiving pushes';
+
+    showToast(on ? '🔔 Notifications enabled for all users' : '🔕 Notifications disabled (test accounts exempt)', on ? 'success' : 'info');
+  } catch (e) {
+    console.error('Toggle notifications error:', e);
+    showToast('Failed to toggle notifications', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
 window.editBusiness = async function(businessId) {
   const business = allBusinesses.find(b => b._id === businessId);
   if (!business) return showToast('Business not found', 'error');

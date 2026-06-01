@@ -338,7 +338,10 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
     const clean = sanitizeContent(req.body);
-    const { text, images, location } = clean;
+    const { text, location } = clean;
+    // Images are base64 data URLs (can be 500KB+) — pull from raw body to
+    // avoid sanitizeContent's 10,000-char truncation destroying them
+    const images = Array.isArray(req.body.images) ? req.body.images : [];
     // ────────────────────────────────────────────────────────────────────────
 
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
@@ -975,6 +978,25 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 // ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 // ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
+// ─── GLOBAL NOTIFICATION KILL-SWITCH ─────────────────────────────────────────
+// When true, push notifications are suppressed for ALL users EXCEPT the
+// exempt test accounts listed below.  Toggled by admins via the Broadcast panel.
+// In-memory: resets to true (enabled) on server restart — intentional.
+let globalNotificationsEnabled = true;
+const NOTIFICATION_EXEMPT_EMAILS = ['imhoggbox@gmail.com', 'test@gmail.com'];
+
+// GET /api/admin/notifications/status — returns current switch state
+router.get('/admin/notifications/status', authenticate, requireAdmin, (req, res) => {
+  res.json({ enabled: globalNotificationsEnabled });
+});
+
+// POST /api/admin/notifications/toggle — flips the switch
+router.post('/admin/notifications/toggle', authenticate, requireAdmin, (req, res) => {
+  globalNotificationsEnabled = !globalNotificationsEnabled;
+  console.log(`🔔 Global notifications ${globalNotificationsEnabled ? 'ENABLED' : 'DISABLED'} by admin ${req.userId}`);
+  res.json({ enabled: globalNotificationsEnabled });
+});
+
 async function broadcastPush(title, body, data = {}, options = {}) {
   const { type = null, subCategory = null, imageUrl = null } = options;
 
@@ -986,11 +1008,17 @@ async function broadcastPush(title, body, data = {}, options = {}) {
         { fcmTokens: { $exists: true, $ne: [] } },
         { pushEnabled: true }
       ]
-    }).select('_id notificationPreferences');
+    }).select('_id email notificationPreferences');
 
     for (const user of users) {
       const prefs = user.notificationPreferences || {};
       let shouldSend = true;
+
+      // ── Global kill-switch: skip non-exempt users when notifications are off ─
+      if (!globalNotificationsEnabled) {
+        const isExempt = NOTIFICATION_EXEMPT_EMAILS.includes((user.email || '').toLowerCase());
+        if (!isExempt) continue;
+      }
 
       if (!type) {
         // No type passed = send to everyone (old/safe behavior)
@@ -1413,7 +1441,9 @@ router.post('/lostitems', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, images, location, type, itemType, isPet, date } = clean;
+    const { title, description, location, type, itemType, isPet, date } = clean;
+    // Images are base64 data URLs — pull from raw body to avoid 10k-char truncation
+    const images = Array.isArray(req.body.images) ? req.body.images : [];
 
     const item = await LostItem.create({
       type: type || 'lost',
@@ -1545,7 +1575,9 @@ router.post('/marketplace', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, price, images, category, condition, notifyCommunity, homeNotifDetails } = clean;
+    const { title, description, price, category, condition, notifyCommunity, homeNotifDetails } = clean;
+    // Images are base64 data URLs — pull from raw body to avoid 10k-char truncation
+    const images = Array.isArray(req.body.images) ? req.body.images : [];
 
     const item = await MarketplaceItem.create({
       title,
