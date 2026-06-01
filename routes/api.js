@@ -922,8 +922,8 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         token: sub.nativeToken,
         notification: {
           title,
-          body
-          // ← Do NOT put imageUrl here when using big_picture
+          body,
+          ...(hasImage && { imageUrl })          // ← Keep it here too
         },
         data: {
           page: data.page || '',
@@ -934,7 +934,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl: imageUrl }),
+            ...(hasImage && { imageUrl }),       // ← And here
             ...(hasImage && { style: 'big_picture' })
           }
         }
@@ -944,7 +944,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
       return true;
     }
 
-    // === Web Push (VAPID) ===
+    // === Web Push ===
     if (sub.subscription?.endpoint) {
       const payload = {
         title,
@@ -953,9 +953,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         icon: APP_ICON
       };
 
-      if (hasImage) {
-        payload.image = imageUrl;
-      }
+      if (hasImage) payload.image = imageUrl;
 
       await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
       return true;
