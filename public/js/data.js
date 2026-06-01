@@ -135,13 +135,13 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-else if (page === 'business-post') {
-  if (id) {
-    showBusinessPostModal(id);
-  } else {
-    navigate('home');
+  else if (page === 'business-post') {
+    if (id) showBusinessPostModal(id);
+    else navigate('home');
   }
-}
+  else {
+    navigate(page);
+  }
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -163,15 +163,16 @@ if ('serviceWorker' in navigator) {
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
-const page  = params.get('notif_page');
-const id    = params.get('notif_id');
-const bizId = params.get('notif_bizId') || '';
-if (page) {
-  window.history.replaceState({}, document.title, window.location.pathname);
-  setTimeout(() => {
-    window.handlePushNotificationClick({ page, id, bizId });
-  }, 2200);
-}
+    const page = params.get('notif_page');
+    const id   = params.get('notif_id');
+    if (page) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => {
+        if (typeof window.handlePushNotificationClick === 'function') {
+          window.handlePushNotificationClick({ page, id });
+        }
+      }, 2200);
+    }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
   }
@@ -777,10 +778,6 @@ const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
   apiGet('/news').catch(() => []),
   apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
-
-// Guard: if the user navigated away while fetches were in-flight, todayDigest
-// (and all other home-page elements) no longer exist — bail out silently.
-if (!document.getElementById('todayDigest')) return;
 
 const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
@@ -2382,7 +2379,6 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
 
 // ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
 let _pendingShoutoutImages = [];
-let isPostingShoutout = false;
 
 window.handleShoutoutImages = async function (input) {
   const files = Array.from(input.files);
@@ -2428,37 +2424,23 @@ window.removeShoutoutImage = function (index) {
 
 window.postShoutoutWithPhoto = async function () {
   if (!requireAuth('Sign in to post traffic alerts.')) return;
-  if (isPostingShoutout) return;
-  isPostingShoutout = true;
+  const input = document.getElementById('shoutoutInput');
+  if (!input || !input.value.trim()) return;
 
-  try {
-    const input = document.getElementById('shoutoutInput');
-    const text = input ? input.value.trim() : '';
-    if (!text) { showToast('Please write a traffic alert', 'error'); return; }
+  const res = await apiPost('/shoutouts', { 
+    text: input.value.trim(),
+    images: _pendingShoutoutImages || []
+  });
 
-    showToast('Posting...', 'success');
-
-    const res = await apiPost('/shoutouts', {
-      text,
-      images: _pendingShoutoutImages || []
-    });
-
-    if (res && res._id) {
-      showToast('🚦 Traffic alert posted!', 'success');
-      _pendingShoutoutImages = [];
-      if (input) input.value = '';
-      renderShoutoutImagePreviews();
-      loadShoutoutsPage(document.getElementById('content'));
-    } else {
-      showToast(res?.message || 'Error posting traffic alert', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Network error — try again', 'error');
-  } finally {
-    isPostingShoutout = false;
+  if (res._id) {
+    showToast('✅ Traffic Alert posted!');
+    _pendingShoutoutImages = [];
+    input.value = '';
+    loadPage('shoutouts');
+  } else {
+    showToast(res.message || 'Error posting traffic alert', 'error');
   }
-};
+}
 
 function renderShoutoutCard(s) {
   const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
@@ -4098,21 +4080,23 @@ window.deleteBizPost = async function(id) {
 
 // ─── BUSINESS POST DETAIL MODAL (deep-link target) ───────────────────────────
 window.showBusinessPostModal = async function(postId) {
+  // Remove any existing instance
   const existing = document.getElementById('bizPostDetailModal');
   if (existing) existing.remove();
 
+  // Show a quick loading shell
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="bizPostDetailModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[30000] p-4">
-      <div class="bg-[#0f172a] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl">
-        
-        <!-- Header -->
-        <div class="flex justify-between items-center px-5 py-4 border-b border-white/10">
-          <span class="font-semibold">Business Update</span>
-          <button onclick="document.getElementById('bizPostDetailModal').remove()" 
-                  class="text-2xl text-white/50 hover:text-white">×</button>
+    <div id="bizPostDetailModal"
+         onclick="if(event.target.id==='bizPostDetailModal') document.getElementById('bizPostDetailModal').remove()"
+         class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <span class="text-sm font-semibold text-white/70">Business Update</span>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
-
-        <div id="bizPostDetailBody" class="p-6 flex justify-center items-center min-h-[320px]">
+        <div id="bizPostDetailBody" class="flex-1 overflow-y-auto flex items-center justify-center py-16">
           <div class="w-8 h-8 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
         </div>
       </div>
@@ -4120,65 +4104,47 @@ window.showBusinessPostModal = async function(postId) {
 
   try {
     const post = await apiGet(`/business-posts/post/${postId}`);
-    if (!post) throw new Error('Post not found');
 
-    const body = document.getElementById('bizPostDetailBody');
+    document.getElementById('bizPostDetailBody').innerHTML = `
+      <!-- Full image -->
+      <div class="w-full bg-black flex items-center justify-center">
+        <img src="${post.image}" class="w-full max-h-[60vh] object-contain" alt="Business photo update">
+      </div>
 
-    // Fetch business info if available
-    let businessHTML = '';
-    if (post.business) {
-      try {
-        const biz = await apiGet(`/business/${post.business}`);
-        if (biz) {
-          businessHTML = `
-            <div class="flex items-center gap-3 mt-4 p-3 bg-white/5 rounded-2xl">
-              <div class="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0">
-                ${biz.logo 
-                  ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
-                  : `<div class="w-full h-full bg-white/10 flex items-center justify-center text-xl">${biz.category?.icon || '🏪'}</div>`}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold">${esc(biz.name)}</div>
-                <div class="text-xs text-white/50">${biz.category?.name || ''}</div>
-              </div>
-            </div>`;
-        }
-      } catch (e) {}
-    }
-
-    body.innerHTML = `
-      <div class="w-full">
-        <!-- Big Photo -->
-        <div class="relative">
-          <img src="${post.image}" 
-               class="w-full max-h-[55vh] object-contain bg-black rounded-2xl"
-               onerror="this.src='/icon-192.png'">
+      <!-- Meta -->
+      <div class="p-5 space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">📸</div>
+          <div>
+            <p class="font-bold text-white leading-tight">${esc(post.bizName)}</p>
+            <p class="text-xs text-white/40">${timeAgo(post.createdAt)}</p>
+          </div>
         </div>
 
-        <div class="p-5">
-          ${post.caption ? `
-            <p class="text-white/90 text-[15px] leading-relaxed mb-4">${esc(post.caption)}</p>
-          ` : ''}
+        ${post.caption ? `
+        <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
 
-          ${businessHTML}
-
-          <div class="flex gap-3 mt-5">
-            ${post.business ? `
-              <button onclick="document.getElementById('bizPostDetailModal').remove(); showBusinessDetail('${post.business}')"
-                      class="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold transition">
-                🏪 View This Business
-              </button>
-            ` : ''}
-            <button onclick="document.getElementById('bizPostDetailModal').remove()"
-                    class="px-8 py-3.5 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold transition">
-              Close
-            </button>
-          </div>
+        <div class="flex gap-3 pt-2">
+          <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
+                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
+            🏪 View ${esc(post.bizName)}
+          </button>
+          <button onclick="shareContent('business-post', '${esc(post.bizName)}', '${esc(post.caption || '')}')"
+                  class="py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
+            🔗
+          </button>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()"
+                  class="py-3 px-4 bg-white/5 hover:bg-white/10 text-white/60 rounded-2xl text-sm font-semibold transition">
+            ✕
+          </button>
         </div>
       </div>`;
   } catch (e) {
-    document.getElementById('bizPostDetailBody').innerHTML = 
-      `<p class="text-red-400 p-8 text-center">Failed to load post</p>`;
+    document.getElementById('bizPostDetailBody').innerHTML = `
+      <div class="p-8 text-center text-white/40">
+        <p class="text-4xl mb-3">😕</p>
+        <p class="text-sm">This post could not be loaded.</p>
+      </div>`;
   }
 };
 
@@ -7199,12 +7165,7 @@ window.resolveLostItem = async function(itemId) {
 // ─── ADMIN DASHBOARD (Tab 0) ─────────────────────────────────────────────────
 async function renderAdminDashboard() {
   const container = document.getElementById('adminMainContent');
-  const [stats, testingMode] = await Promise.all([
-    apiGet('/admin/stats').catch(() => ({})),
-    apiGet('/admin/testing-mode').catch(() => ({ enabled: false }))
-  ]);
-
-  const tmEnabled = !!testingMode.enabled;
+  const stats = await apiGet('/admin/stats').catch(() => ({}));
 
   container.innerHTML = `
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -7230,28 +7191,6 @@ async function renderAdminDashboard() {
       </div>
     </div>
 
-    <!-- 🚧 TESTING MODE TOGGLE -->
-    <div class="bg-amber-500/10 border ${tmEnabled ? 'border-amber-400/60' : 'border-amber-500/20'} rounded-3xl p-6 mb-6 flex items-center justify-between gap-4 transition-all">
-      <div class="flex-1 min-w-0">
-        <p class="font-bold text-amber-300 text-lg flex items-center gap-2">🚧 Testing Mode</p>
-        <p class="text-white/50 text-sm mt-1">
-          When ON, push notifications are suppressed for <strong class="text-white/70">all users</strong>
-          except <span class="font-mono text-white/70">imhoggbox@gmail.com</span> and <span class="font-mono text-white/70">test@gmail.com</span>.
-        </p>
-        <p id="testingModeStatus" class="text-xs mt-2 font-semibold ${tmEnabled ? 'text-amber-400' : 'text-emerald-400'}">
-          ${tmEnabled ? '⚠️ ACTIVE — real users will NOT receive notifications' : '✅ OFF — notifications going to all users normally'}
-        </p>
-      </div>
-      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-        <input type="checkbox" id="testingModeToggle" class="sr-only peer"
-               ${tmEnabled ? 'checked' : ''}
-               onchange="toggleTestingMode(this.checked)">
-        <div class="w-14 h-8 bg-white/20 peer-checked:bg-amber-500 rounded-full transition-colors duration-200
-                    after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full
-                    after:h-6 after:w-6 after:transition-all peer-checked:after:translate-x-6"></div>
-      </label>
-    </div>
-
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
       <h3 class="font-bold mb-4">Recent Activity</h3>
       <div id="recentActivity" class="space-y-3 text-sm">
@@ -7259,30 +7198,6 @@ async function renderAdminDashboard() {
       </div>
     </div>`;
 }
-
-window.toggleTestingMode = async function(enabled) {
-  try {
-    await apiPost('/admin/testing-mode', { enabled });
-    const statusEl = document.getElementById('testingModeStatus');
-    if (statusEl) {
-      statusEl.className = `text-xs mt-2 font-semibold ${enabled ? 'text-amber-400' : 'text-emerald-400'}`;
-      statusEl.textContent = enabled
-        ? '⚠️ ACTIVE — real users will NOT receive notifications'
-        : '✅ OFF — notifications going to all users normally';
-    }
-    const card = document.getElementById('testingModeToggle')?.closest('.rounded-3xl');
-    if (card) {
-      card.classList.toggle('border-amber-400/60', enabled);
-      card.classList.toggle('border-amber-500/20', !enabled);
-    }
-    showToast(enabled ? '🚧 Testing mode ON — notifications suppressed' : '✅ Testing mode OFF — notifications live', enabled ? 'error' : 'success');
-  } catch (e) {
-    showToast('Failed to toggle testing mode', 'error');
-    // Revert the checkbox if the call failed
-    const cb = document.getElementById('testingModeToggle');
-    if (cb) cb.checked = !enabled;
-  }
-};
 
 // ─── USERS MANAGEMENT (Tab 1) ────────────────────────────────────────────────
 async function renderAdminUsers() {
@@ -8128,7 +8043,48 @@ window.showOnboardingTour = function() {
   window.currentTourSlide = 1;
 };
 
-// ─── POST TRAFFIC ALERT — defined above near handleShoutoutImages (line ~2428) ───
+// ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
+let isPostingShoutout = false;
+
+// ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
+window.postShoutoutWithPhoto = async function() {
+  if (isPostingShoutout) return;
+  isPostingShoutout = true;
+
+  try {
+    const input = document.getElementById('shoutoutInput');
+    const text = input ? input.value.trim() : '';
+
+    if (!text) {
+      showToast('Please write a traffic alert', 'error');
+      return;
+    }
+
+    const images = window._shoutoutImages || [];
+
+    showToast('Posting...', 'success');
+
+    const res = await apiPost('/shoutouts', { text, images });
+
+    if (res && res._id) {
+      showToast('🚦 Traffic alert posted!', 'success');
+      
+      if (input) input.value = '';
+      window._shoutoutImages = [];
+      const previewContainer = document.getElementById('shoutoutImagePreviews');
+      if (previewContainer) previewContainer.innerHTML = '';
+
+      loadShoutoutsPage(document.getElementById('content'));
+    } else {
+      showToast(res?.message || 'Failed to post', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
+  } finally {
+    isPostingShoutout = false;
+  }
+};
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
 window.sendCustomNotification = async function() {

@@ -3,13 +3,14 @@ self.addEventListener('push', event => {
   const payload = event.data?.json() || {};
 
   const options = {
-    body: payload.body || '',
-    icon: payload.icon || '/icon-192.png',
-    // Only set image when an actual image URL is provided — never fall back to the icon
-    ...(payload.image ? { image: payload.image } : {}),
+    body:  payload.body  || '',
+    icon:  payload.icon  || '/icon-192.png',
     badge: payload.badge || '/icon-192.png',
-    data: payload.data || {},           // ← important: carries page, id, bizId
-    tag: payload.tag || 'default'
+    // ── FIX 1: actually pass the image so the thumbnail shows ──────────────
+    image: payload.image || undefined,
+    // ── Keep the full data object so notificationclick can read page + id ──
+    data:  payload.data  || {},
+    tag:   payload.tag   || 'default'
   };
 
   event.waitUntil(
@@ -20,26 +21,33 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
 
-  const data  = event.notification.data || {};
-  const page  = data.page  || 'home';
-  const id    = data.id    || '';
-  const bizId = data.bizId || '';   // ← business directory card ID
+  const data = event.notification.data || {};
+  const page = data.page || 'home';
+  const id   = data.id   || '';
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      const client = clients.find(c => c.url.includes(self.location.origin));
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
 
-      if (client) {
-        client.focus();
-        client.postMessage({
-          type: 'PUSH_NOTIFICATION_CLICK',
-          data: { page, id, bizId }  // ← bizId forwarded to app
-        });
+      // Case 1: App is already open and visible
+      const visibleClient = windowClients.find(c => c.visibilityState === 'visible');
+      if (visibleClient) {
+        visibleClient.focus();
+        visibleClient.postMessage({ type: 'PUSH_NOTIFICATION_CLICK', data: { page, id } });
         return;
       }
 
-      // App was closed → open with query params (bizId included for cold-start routing)
-      const url = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}&notif_bizId=${encodeURIComponent(bizId)}`;
+      // Case 2: App is open but backgrounded
+      // ── FIX 2: no setTimeout in service workers — post the message immediately,
+      //    then focus. The app's 'message' listener handles sequencing via its own
+      //    setTimeout internally (already in data.js). ─────────────────────────
+      const backgroundClient = windowClients.find(c => c.url.includes(self.location.origin));
+      if (backgroundClient) {
+        backgroundClient.postMessage({ type: 'PUSH_NOTIFICATION_CLICK', data: { page, id } });
+        return backgroundClient.focus();
+      }
+
+      // Case 3: App was completely closed → open with query params
+      const url = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}`;
       return self.clients.openWindow(url);
     })
   );

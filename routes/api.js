@@ -5,16 +5,8 @@ const mongoose = require('mongoose');
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
 const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
-// Notification kill-switch
-const NOTIF_TEST_WHITELIST = ['imhoggbox@gmail.com', 'test@gmail.com'];
-let _testingModeEnabled = false;
-
 router.use(securityHeaders);   // CSP + security headers
-router.use((req, res, next) => {
-  // Skip auth routes — sanitizing passwords mutates them before bcrypt sees them
-  if (req.path.startsWith("/auth/")) return next();
-  return sanitizeBody(req, res, next);
-});
+router.use(sanitizeBody);      // Deep sanitization on every req.body
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
@@ -332,72 +324,115 @@ router.post('/reports', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PASSWORD RESET & CHANGE ROUTES
+// 3.  UPDATED  POST /api/shoutouts  (replace your existing handler)
+//
+//     Adds:
+//       • 24-hour post timeout check  (postTimeoutUntil)
+//       • Mute check                  (isMuted)
+//       • Spam burst detection        (recentPostTimes rolling window)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// STEP 1 — Client sends email, server returns the security question
-// POST /api/auth/forgot-password/question
-router.post('/auth/forgot-password/question', async (req, res) => {
+router.post('/shoutouts', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
+    const clean = sanitizeContent(req.body);
+    const { text, images, location } = clean;
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+
+    // ── Hard 45-second rate limit (existing) ──────────────────────────────────
+    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
+      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
+    }
+
+    // ── 24-hour timeout from community flags ───────────────────────────────────
+    if (user.isPostTimedOut()) {
+      const releaseTime = user.postTimeoutUntil.toLocaleString();
+      return res.status(403).json({
+        message: `Your posting privileges are suspended until ${releaseTime} due to community flags on a previous post.`,
+        timedOut: true,
+        until: user.postTimeoutUntil
+      });
+    }
+
+    // ── Admin/system mute check ────────────────────────────────────────────────
+    if (user.isMuted) {
+      return res.status(403).json({
+        message: 'Your account has been muted by an administrator for excessive posting. Contact support if you believe this is an error.',
+        muted: true
+      });
+    }
+
+    router.post('/auth/forgot-password/question', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
-
+ 
     const user = await User.findOne({ email: email.toLowerCase().trim() })
                            .select('securityQuestion');
-
+ 
     // Always return the same shape — don't reveal whether the email exists
     if (!user || !user.securityQuestion) {
       return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
     }
-
+ 
     res.json({ question: user.securityQuestion });
   } catch (err) {
     console.error('Forgot password step 1 error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
-
+ 
 // STEP 2 — Client sends email + answer + new password, server verifies and resets
 // POST /api/auth/forgot-password/reset
 router.post('/auth/forgot-password/reset', async (req, res) => {
   try {
     const { email, answer, newPassword } = req.body;
-
+ 
     if (!email || !answer || !newPassword) {
       return res.status(400).json({ message: 'Email, answer, and new password are required' });
     }
-
+ 
     if (newPassword.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
-
+ 
     const user = await User.findOne({ email: email.toLowerCase().trim() })
                            .select('+securityAnswer +password');
-
+ 
     if (!user || !user.securityAnswer) {
       return res.status(404).json({ message: 'No account found with that email.' });
     }
-
+ 
     // Compare answer (case-insensitive, trimmed) against stored hash
     const answerMatch = await bcrypt.compare(
       answer.trim().toLowerCase(),
       user.securityAnswer
     );
-
+ 
     if (!answerMatch) {
       return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
     }
-
-    // Assign plain-text — the User pre('save') hook hashes it once
-    user.password = newPassword;
+ 
+    // Hash and save the new password
+    user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-
+ 
     res.json({ success: true, message: 'Password reset successfully.' });
   } catch (err) {
     console.error('Forgot password reset error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGE PASSWORD ROUTE
+// Paste this into your server api.js above module.exports = router
+// Requires: authenticate middleware, bcrypt, User model (all already imported)
+// ─────────────────────────────────────────────────────────────────────────────
 
 // POST /api/auth/change-password
 router.post('/auth/change-password', authenticate, async (req, res) => {
@@ -426,8 +461,8 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    // Assign plain-text — the User pre('save') hook hashes it once
-    user.password = newPassword;
+    // Hash and save new password
+    user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
 
     res.json({ success: true, message: 'Password updated successfully' });
@@ -436,66 +471,6 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 3.  UPDATED  POST /api/shoutouts  (replace your existing handler)
-//
-//     Adds:
-//       • 24-hour post timeout check  (postTimeoutUntil)
-//       • Mute check                  (isMuted)
-//       • Spam burst detection        (recentPostTimes rolling window)
-// ─────────────────────────────────────────────────────────────────────────────
-
-router.post('/shoutouts', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-
-    // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
-    // Pull images out BEFORE sanitizeContent — base64 data URLs contain
-    // characters (< > =) that the HTML-strip regex would destroy.
-    const rawImages = Array.isArray(req.body.images) ? req.body.images : [];
-    const clean = sanitizeContent(req.body);
-    const { text, location } = clean;
-    // Restore images directly from the raw body (already validated below)
-    const images = rawImages;
-    // ────────────────────────────────────────────────────────────────────────
-
-    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
-
-    // ── Validate images (if provided) ─────────────────────────────────────────
-    if (images.length > 0) {
-      for (const img of images) {
-        if (typeof img !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(img)) {
-          return res.status(400).json({ message: 'Images must be valid JPEG, PNG, or WebP data URLs' });
-        }
-        if (img.length > 5_600_000) {
-          return res.status(400).json({ message: 'One or more images exceed the 4 MB limit' });
-        }
-      }
-    }
-
-    // ── Hard 45-second rate limit (existing) ──────────────────────────────────
-    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
-      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
-    }
-
-    // ── 24-hour timeout from community flags ───────────────────────────────────
-    if (user.isPostTimedOut()) {
-      const releaseTime = user.postTimeoutUntil.toLocaleString();
-      return res.status(403).json({
-        message: `Your posting privileges are suspended until ${releaseTime} due to community flags on a previous post.`,
-        timedOut: true,
-        until: user.postTimeoutUntil
-      });
-    }
-
-    // ── Admin/system mute check ────────────────────────────────────────────────
-    if (user.isMuted) {
-      return res.status(403).json({
-        message: 'Your account has been muted by an administrator for excessive posting. Contact support if you believe this is an error.',
-        muted: true
-      });
-    }
 
     // ── Spam burst detection ────────────────────────────────────────────────────
     const now = Date.now();
@@ -538,24 +513,16 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-// === SHOUTOUT NOTIFICATION (with image) ===
-let shoutoutThumbUrl = null;
-if (shoutout.images && shoutout.images.length > 0) {
-  shoutoutThumbUrl = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
-}
-
-broadcastPush(
-  `🚗 New Traffic Alert from ${user.name}`,
-  text.length > 80 ? text.substring(0, 77) + '...' : text,
-  { 
-    page: 'shoutouts', 
-    id: shoutout._id.toString() 
-  },
-  { 
-    type: 'shoutout', 
-    imageUrl: shoutoutThumbUrl 
-  }
-);
+    // ←←← THIS IS THE IMPORTANT PART ←←←
+    broadcastPush(
+      `🚗 New Traffic Alert from ${user.name}`,
+      text.length > 80 ? text.substring(0, 77) + '...' : text,
+      { 
+        page: 'shoutouts', 
+        id: shoutout._id.toString() 
+      },
+      { type: 'shoutout' }
+    );
 
     res.json(shoutout);
   } catch (err) {
@@ -907,144 +874,170 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// Send push to user
+// Send push to a single user (supports both native FCM and web VAPID)
+// AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  try {
-    const sub = await PushSubscription.findOne({ user: userId });
-    if (!sub) return false;
+  const sub = await PushSubscription.findOne({ user: userId });
+  if (!sub) {
+    console.log(`[Push] No subscription record for user ${userId}`);
+    return false;
+  }
 
-    const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-    const hasImage = !!imageUrl;
+  const APP_ICON  = 'https://www.milledgevilleconnect.com/icon-192.png';
+  const notifImage = imageUrl || APP_ICON;   // ← use post thumbnail when provided
 
-    // === APK (FCM Native) ===
-    if (sub.nativeToken) {
+  if (sub.nativeToken) {
+    try {
       const message = {
         token: sub.nativeToken,
-        notification: {
-          title,
+        notification: { 
+          title, 
           body,
-          ...(hasImage && { image: imageUrl })   // FCM field is "image", not "imageUrl"
+          imageUrl: notifImage        // ← real photo or fallback
         },
         data: {
           page: data.page || '',
-          id: data.id || ''
+          id:   data.id   || '',
+          url:  data.url  || ''
         },
-        android: {
+        android: { 
           priority: 'high',
           notification: {
             sound: 'default',
             channelId: 'default',
-            ...(hasImage && { imageUrl: imageUrl })  // ← required: android.notification overrides top-level; image must be repeated here
+            imageUrl: notifImage      // ← real photo or fallback
           }
         }
       };
-
       await admin.messaging().send(message);
+      console.log(`✅ Native push sent to ${userId}`);
       return true;
+    } catch (err) {
+      console.error(`[Push] FCM failed for ${userId}:`, err.message);
+      if (err.code === 'messaging/registration-token-not-registered') {
+        sub.nativeToken = null;
+        await sub.save();
+      }
+      return false;
     }
-
-    // === Web Push ===
-    if (sub.subscription?.endpoint) {
-      // Build a tag that uniquely identifies this notification without collapsing
-      // image and non-image notifications into the same browser slot.
-      // SW will use this directly; it will NOT fall back to the 'default' catch-all.
-      const contentId = data.id || '';
-      const imageFlag = hasImage ? '-img' : '';
-      const tag = contentId
-        ? `notif-${contentId}${imageFlag}`
-        : `notif-${Date.now()}`;
-
-      const payload = {
-        title,
-        body,
-        data: { page: data.page || '', id: data.id || '' },
-        icon: APP_ICON,
-        tag
-      };
-
-      if (hasImage) payload.image = imageUrl;
-
-      await webpush.sendNotification(sub.subscription, JSON.stringify(payload), { TTL: 86400 });
-      return true;
-    }
-
-    return false;
-  } catch (err) {
-    console.error('sendPushToUser error:', err.message);
-    return false;
   }
+
+  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+    try {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({ 
+          title, 
+          body, 
+          data,
+          icon:  APP_ICON,
+          image: notifImage,          // ← web push large image
+          badge: APP_ICON
+        })
+      );
+      console.log(`✅ Web push sent to ${userId}`);
+      return true;
+    } catch (err) {
+      console.error(`[Push] Web push failed for ${userId}:`, err.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        sub.subscription = null;
+        await sub.save();
+      }
+      return false;
+    }
+  }
+
+  return false;
 }
 
-// Broadcast push function
+// ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
+// Sends exactly ONE notification per user:
+//   • If the user has a native FCM token → use FCM (preferred, higher delivery rate)
+//   • Else if the user has a web VAPID subscription → use VAPID
+//   • Users with BOTH channels only receive one notification (no duplicates)
+// ─── UPDATED BROADCAST PUSH (Respects User Preferences) ─────────────────────
+// ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
+// ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
   const { type = null, subCategory = null, imageUrl = null } = options;
 
-  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | hasImage: ${!!imageUrl}`);
+  console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
   try {
-    const subs = await PushSubscription.find({
+    const users = await User.find({
       $or: [
-        { nativeToken: { $exists: true, $ne: null } },
-        { 'subscription.endpoint': { $exists: true, $ne: null } }
+        { fcmTokens: { $exists: true, $ne: [] } },
+        { pushEnabled: true }
       ]
-    });
+    }).select('_id notificationPreferences');
 
-    if (!subs.length) return;
-
-    const userIds = subs.map(s => s.user);
-    const users = await User.find({ _id: { $in: userIds } })
-      .select('_id email notificationPreferences pushEnabled')
-      .lean();
-
-    for (const sub of subs) {
-      const user = users.find(u => u._id.toString() === sub.user.toString());
-      if (!user || user.pushEnabled === false) continue;
-
-      // === TESTING MODE (only your 2 accounts) ===
-      if (_testingModeEnabled) {
-        if (!NOTIF_TEST_WHITELIST.includes(user.email)) {
-          continue;
-        }
-      }
-
+    for (const user of users) {
       const prefs = user.notificationPreferences || {};
       let shouldSend = true;
 
-      if (type) {
-        switch (type) {
-          case 'shoutout':   if (prefs.shoutouts === false) shouldSend = false; break;
-          case 'event':      if (prefs.events === false) shouldSend = false; break;
-          case 'deal':       if (prefs.deals === false) shouldSend = false; break;
-          case 'lost':       if (prefs.lostFound === false) shouldSend = false; break;
-          case 'message':    if (prefs.messages === false) shouldSend = false; break;
-          case 'comment':    if (prefs.comments === false) shouldSend = false; break;
-          case 'marketplace':
-            if (prefs.marketplace?.all === false) shouldSend = false;
-            else if (subCategory) {
-              const cat = subCategory.toLowerCase();
-              if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
-              if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
-              if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
-              if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
-            }
-            break;
-          case 'custom':
-            shouldSend = true;
-            break;
-          default:
-            shouldSend = true;
-        }
+      if (!type) {
+        // No type passed = send to everyone (old/safe behavior)
+        await sendPushToUser(user._id, title, body, data, imageUrl);
+        continue;
       }
 
-if (shouldSend) {
-  await sendPushToUser(user._id, title, body, data, imageUrl || null);
-}
+      switch (type) {
+        case 'event':
+          if (prefs.events === false) shouldSend = false;
+          break;
+
+        case 'deal':
+          if (prefs.deals === false) shouldSend = false;
+          break;
+
+        case 'shoutout':
+          if (prefs.shoutouts === false) shouldSend = false;
+          break;
+
+        case 'lost':
+          if (prefs.lostFound === false) shouldSend = false;
+          break;
+
+        case 'message':
+          if (prefs.messages === false) shouldSend = false;
+          break;
+
+        case 'comment':
+          if (prefs.comments === false) shouldSend = false;
+          break;
+
+        case 'marketplace':
+          // Master toggle
+          if (prefs.marketplace?.all === false) {
+            shouldSend = false;
+          } 
+          // Individual category toggles
+          else if (subCategory) {
+            const cat = subCategory.toLowerCase();
+            if (cat === 'homes' && prefs.marketplace?.homes === false) shouldSend = false;
+            if (cat === 'cars' && prefs.marketplace?.cars === false) shouldSend = false;
+            if (cat === 'furniture' && prefs.marketplace?.furniture === false) shouldSend = false;
+            if (cat === 'other' && prefs.marketplace?.other === false) shouldSend = false;
+          }
+          break;
+
+        case 'custom':
+          // Verified business custom notifications — always send
+          shouldSend = true;
+          break;
+
+        default:
+          shouldSend = true;
+      }
+
+      if (shouldSend) {
+        await sendPushToUser(user._id, title, body, data, imageUrl);
+      }
     }
   } catch (err) {
     console.error('broadcastPush error:', err);
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // NEW: MESSAGING SYSTEM ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1847,25 +1840,21 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
 // ─── REGISTER ───────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
-    const { name, email, password, securityQuestion, securityAnswer } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    if (!securityQuestion?.trim() || !securityAnswer?.trim()) {
-      return res.status(400).json({ message: 'A security question and answer are required' });
-    }
-
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) return res.status(409).json({ message: 'Email already in use' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password,           // plain-text — the User pre('save') hook hashes it once
-      securityQuestion: securityQuestion.trim(),
-      securityAnswer: securityAnswer.trim().toLowerCase(), // hashed by pre('save') hook
+      password: hashedPassword,
       notificationCredits: 0,        // ← Normal users start with 0
       subscriptionTier: 'free'
     });
@@ -3839,24 +3828,12 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       const deducted = await deductNotificationCredit(req.userId);
       if (deducted) {
         const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-        const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
-
-        const subs = await PushSubscription.find({
-          $or: [
-            { nativeToken: { $exists: true, $ne: null } },
-            { 'subscription.endpoint': { $exists: true, $ne: null } }
-          ]
-        });
-
-        for (const sub of subs) {
-          await sendPushToUser(
-            sub.user,
-            pushTitle,
-            caption?.trim() || 'Posted a new photo update — tap to see it!',
-            { page: 'business-post', id: post._id.toString() },
-            thumbUrl
-          );
-        }
+        await broadcastPush(
+          pushTitle,
+          caption?.trim() || 'Posted a new photo update — tap to see it!',
+          { page: 'business-post', id: post._id.toString() },
+          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
+        );
       }
     }
 
@@ -3882,41 +3859,14 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
-res.set({
-  'Content-Type': mimeType,
-  'Cache-Control': 'public, max-age=86400',
-  'Content-Length': buffer.length,
-  'Access-Control-Allow-Origin': '*',
-});
-    res.send(buffer);
-  } catch (err) {
-    console.error('Thumb fetch error:', err);
-    res.status(500).send('Error');
-  }
-});
-
-// GET /api/shoutout-thumb/:shoutoutId — serves first shoutout image as a real HTTP response
-// Used so FCM/VAPID push notifications can show a thumbnail via a public URL instead of raw base64
-router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
-  try {
-    const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
-    if (!shoutout?.images?.length) return res.status(404).send('Not found');
-
-    const match = shoutout.images[0].match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
-
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
-
     res.set({
       'Content-Type': mimeType,
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
-    console.error('Shoutout thumb error:', err);
+    console.error('Thumb fetch error:', err);
     res.status(500).send('Error');
   }
 });
@@ -3981,21 +3931,6 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
-});
-
-// ─── TESTING MODE ROUTES ─────────────────────────────────────────────────────
-// (NOTIF_TEST_WHITELIST and _testingModeEnabled are declared near sendPushToUser above)
-
-// GET current testing mode status
-router.get('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
-  res.json({ enabled: _testingModeEnabled });
-});
-
-// Toggle testing mode
-router.post('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
-  _testingModeEnabled = !!req.body.enabled;
-  console.log(`🚧 [Testing Mode] set to ${_testingModeEnabled} by admin`);
-  res.json({ enabled: _testingModeEnabled });
 });
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
