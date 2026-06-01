@@ -908,6 +908,14 @@ function requireAdminOrModerator(req, res, next) {
 // AFTER — add imageUrl param with fallback to APP_ICON:
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   try {
+    // ── Testing mode: suppress notifications for everyone except whitelisted accounts ──
+    if (_testingModeEnabled) {
+      const userDoc = await User.findById(userId).select('email');
+      if (!userDoc || !NOTIF_TEST_WHITELIST.has(userDoc.email)) {
+        return false; // silently suppressed during testing
+      }
+    }
+
     const sub = await PushSubscription.findOne({ user: userId });
     if (!sub) return false;
 
@@ -3986,6 +3994,28 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// ─── TESTING MODE ────────────────────────────────────────────────────────────
+// Suppresses push notifications for all users EXCEPT the whitelist below.
+// Flag lives in memory — resets to OFF on server restart (intentionally safe).
+const NOTIF_TEST_WHITELIST = new Set([
+  'imhoggbox@gmail.com',
+  'test@gmail.com'
+]);
+
+let _testingModeEnabled = false;
+
+// GET /api/admin/testing-mode — returns current state
+router.get('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
+  res.json({ enabled: _testingModeEnabled });
+});
+
+// POST /api/admin/testing-mode — { enabled: true|false }
+router.post('/admin/testing-mode', authenticate, requireAdmin, (req, res) => {
+  _testingModeEnabled = !!req.body.enabled;
+  console.log(`🚧 [Testing Mode] ${_testingModeEnabled ? 'ENABLED' : 'DISABLED'} by ${req.user?.email || 'admin'}`);
+  res.json({ enabled: _testingModeEnabled });
 });
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←

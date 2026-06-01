@@ -7199,7 +7199,12 @@ window.resolveLostItem = async function(itemId) {
 // ─── ADMIN DASHBOARD (Tab 0) ─────────────────────────────────────────────────
 async function renderAdminDashboard() {
   const container = document.getElementById('adminMainContent');
-  const stats = await apiGet('/admin/stats').catch(() => ({}));
+  const [stats, testingMode] = await Promise.all([
+    apiGet('/admin/stats').catch(() => ({})),
+    apiGet('/admin/testing-mode').catch(() => ({ enabled: false }))
+  ]);
+
+  const tmEnabled = !!testingMode.enabled;
 
   container.innerHTML = `
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -7225,6 +7230,28 @@ async function renderAdminDashboard() {
       </div>
     </div>
 
+    <!-- 🚧 TESTING MODE TOGGLE -->
+    <div class="bg-amber-500/10 border ${tmEnabled ? 'border-amber-400/60' : 'border-amber-500/20'} rounded-3xl p-6 mb-6 flex items-center justify-between gap-4 transition-all">
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-amber-300 text-lg flex items-center gap-2">🚧 Testing Mode</p>
+        <p class="text-white/50 text-sm mt-1">
+          When ON, push notifications are suppressed for <strong class="text-white/70">all users</strong>
+          except <span class="font-mono text-white/70">imhoggbox@gmail.com</span> and <span class="font-mono text-white/70">test@gmail.com</span>.
+        </p>
+        <p id="testingModeStatus" class="text-xs mt-2 font-semibold ${tmEnabled ? 'text-amber-400' : 'text-emerald-400'}">
+          ${tmEnabled ? '⚠️ ACTIVE — real users will NOT receive notifications' : '✅ OFF — notifications going to all users normally'}
+        </p>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+        <input type="checkbox" id="testingModeToggle" class="sr-only peer"
+               ${tmEnabled ? 'checked' : ''}
+               onchange="toggleTestingMode(this.checked)">
+        <div class="w-14 h-8 bg-white/20 peer-checked:bg-amber-500 rounded-full transition-colors duration-200
+                    after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full
+                    after:h-6 after:w-6 after:transition-all peer-checked:after:translate-x-6"></div>
+      </label>
+    </div>
+
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
       <h3 class="font-bold mb-4">Recent Activity</h3>
       <div id="recentActivity" class="space-y-3 text-sm">
@@ -7232,6 +7259,30 @@ async function renderAdminDashboard() {
       </div>
     </div>`;
 }
+
+window.toggleTestingMode = async function(enabled) {
+  try {
+    await apiPost('/admin/testing-mode', { enabled });
+    const statusEl = document.getElementById('testingModeStatus');
+    if (statusEl) {
+      statusEl.className = `text-xs mt-2 font-semibold ${enabled ? 'text-amber-400' : 'text-emerald-400'}`;
+      statusEl.textContent = enabled
+        ? '⚠️ ACTIVE — real users will NOT receive notifications'
+        : '✅ OFF — notifications going to all users normally';
+    }
+    const card = document.getElementById('testingModeToggle')?.closest('.rounded-3xl');
+    if (card) {
+      card.classList.toggle('border-amber-400/60', enabled);
+      card.classList.toggle('border-amber-500/20', !enabled);
+    }
+    showToast(enabled ? '🚧 Testing mode ON — notifications suppressed' : '✅ Testing mode OFF — notifications live', enabled ? 'error' : 'success');
+  } catch (e) {
+    showToast('Failed to toggle testing mode', 'error');
+    // Revert the checkbox if the call failed
+    const cb = document.getElementById('testingModeToggle');
+    if (cb) cb.checked = !enabled;
+  }
+};
 
 // ─── USERS MANAGEMENT (Tab 1) ────────────────────────────────────────────────
 async function renderAdminUsers() {
