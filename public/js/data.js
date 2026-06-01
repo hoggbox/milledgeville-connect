@@ -8146,7 +8146,7 @@ window.postShoutoutWithPhoto = async function() {
       return;
     }
 
-    const images = window._shoutoutImages || [];
+    const images = _pendingShoutoutImages || [];
 
     showToast('Posting...', 'success');
 
@@ -8156,7 +8156,7 @@ window.postShoutoutWithPhoto = async function() {
       showToast('🚦 Traffic alert posted!', 'success');
       
       if (input) input.value = '';
-      window._shoutoutImages = [];
+      _pendingShoutoutImages = [];
       const previewContainer = document.getElementById('shoutoutImagePreviews');
       if (previewContainer) previewContainer.innerHTML = '';
 
