@@ -76,7 +76,7 @@
   </div>
 </div>
 
-  <!-- AUTH MODAL -->
+  <!-- AUTH MODAL — must be in DOM before scripts run -->
   <div id="authModal" onclick="if(event.target.id==='authModal')hideAuthModal()"
        class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[10000]">
     <div onclick="event.stopImmediatePropagation()"
@@ -95,8 +95,9 @@
           <p onclick="switchToRegister()" class="text-center text-sm mt-3 text-emerald-600 cursor-pointer">Don't have an account? Register</p>
         </div>
 
-        <!-- FORGOT PASSWORD -->
+        <!-- FORGOT PASSWORD PANEL -->
         <div id="forgotPasswordForm" class="hidden">
+          <!-- Step 1: enter email -->
           <div id="forgotStep1">
             <p class="text-sm text-slate-500 mb-4 text-center">Enter your email and we'll show your security question.</p>
             <input id="forgotEmail" type="email" placeholder="Email"
@@ -104,6 +105,7 @@
             <button onclick="handleForgotStep1()"
                     class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">Continue</button>
           </div>
+          <!-- Step 2: answer question + new password -->
           <div id="forgotStep2" class="hidden">
             <p id="forgotQuestionText" class="text-sm font-semibold text-slate-700 mb-3 text-center bg-slate-50 rounded-2xl px-4 py-3"></p>
             <input id="forgotAnswer" type="text" placeholder="Your answer"
@@ -147,7 +149,7 @@
     </div>
   </div>
 
-  <!-- Scripts -->
+  <!-- Scripts load after all HTML is parsed -->
   <script src="/js/api.js"></script>
   <script src="/js/security.js"></script>
   <script src="/js/data.js"></script>
@@ -156,95 +158,26 @@
   <script src="/js/auth.js"></script>
   <script src="/js/main.js"></script>
 
-<!-- ===================================================== -->
-  <!-- IMPROVED PWA INSTALL BANNER (Mobile) -->
-  <!-- ===================================================== -->
   <script>
-    (function() {
-      // Don't show if already installed as PWA
-      if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) return;
+    // PWA Install Prompt
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
 
-      // Only show on mobile
-      if (window.innerWidth > 900) return;
+      const installBtn = document.createElement('button');
+      installBtn.textContent = '📲 Install App';
+      installBtn.className = 'fixed bottom-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-3xl shadow-2xl text-sm font-semibold z-[99999]';
+      
+      installBtn.onclick = () => {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          installBtn.remove();
+        });
+      };
 
-      // Don't show if dismissed in last 7 days
-      const dismissed = parseInt(localStorage.getItem('mcInstallDismissed') || '0', 10);
-      if (Date.now() - dismissed < 7 * 24 * 60 * 60 * 1000) return;
-
-      let deferredPrompt = null;
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-
-      // Capture native install prompt when available
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-      });
-
-      window.addEventListener('appinstalled', () => {
-        const banner = document.getElementById('mcInstallBanner');
-        if (banner) banner.remove();
-      });
-
-      function showInstallBanner() {
-        if (document.getElementById('mcInstallBanner')) return;
-
-        const banner = document.createElement('div');
-        banner.id = 'mcInstallBanner';
-        banner.style.cssText = `
-          position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
-          width:calc(100% - 40px); max-width:420px; background:#064e3b;
-          border:1px solid #34d399; border-radius:20px; padding:16px 18px;
-          display:flex; align-items:center; gap:14px; z-index:99999;
-          box-shadow:0 10px 30px rgba(0,0,0,0.5); color:#fff;
-        `;
-
-        banner.innerHTML = `
-          <span style="font-size:1.6rem;flex-shrink:0">📲</span>
-          <div style="flex:1;min-width:0">
-            <p style="font-weight:700;font-size:15px;margin:0 0 4px">Install Milledgeville Connect</p>
-            <p style="font-size:13px;color:rgba(255,255,255,.75);margin:0">Add to home screen for faster access + notifications</p>
-          </div>
-          <button id="mcInstallBtn" style="background:#10b981;color:#fff;border:none;border-radius:14px;padding:10px 20px;font-weight:700;font-size:14px;white-space:nowrap">Install</button>
-          <button id="mcDismissBtn" style="background:none;border:none;color:rgba(255,255,255,.5);font-size:22px;padding:0 6px">×</button>
-        `;
-
-        document.body.appendChild(banner);
-
-        // Dismiss button
-        document.getElementById('mcDismissBtn').onclick = () => {
-          localStorage.setItem('mcInstallDismissed', Date.now());
-          banner.remove();
-        };
-
-        // Install button
-        document.getElementById('mcInstallBtn').onclick = () => {
-          const btn = document.getElementById('mcInstallBtn');
-          
-          if (deferredPrompt) {
-            // Native prompt available — trigger it
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then(() => {
-              deferredPrompt = null;
-              banner.remove();
-            });
-          } else {
-            // No native prompt available — show helpful instructions
-            btn.style.display = 'none';
-            const text = banner.querySelector('p:last-of-type');
-            if (text) {
-              text.innerHTML = isIOS 
-                ? 'Tap <b>Share ↑</b> → <b>"Add to Home Screen"</b>' 
-                : 'Tap the browser menu <b>⋮</b> → <b>"Add to Home Screen"</b> or <b>"Install app"</b>';
-            }
-          }
-        };
-      }
-
-      // Show banner after page loads
-      window.addEventListener('load', () => {
-        setTimeout(showInstallBanner, 1800);
-      });
-    })();
+      document.body.appendChild(installBtn);
+    });
   </script>
 </body>
 </html>

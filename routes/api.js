@@ -518,10 +518,6 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     await user.save();
 
     // ←←← THIS IS THE IMPORTANT PART ←←←
-    let shoutoutThumb = null;
-    if (shoutout.images && shoutout.images.length > 0) {
-      shoutoutThumb = `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`;
-    }
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       text.length > 80 ? text.substring(0, 77) + '...' : text,
@@ -529,7 +525,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
         page: 'shoutouts', 
         id: shoutout._id.toString() 
       },
-      { type: 'shoutout', imageUrl: shoutoutThumb }
+      { type: 'shoutout' }
     );
 
     res.json(shoutout);
@@ -682,40 +678,6 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
     res.json(reports);
   } catch (err) {
     res.status(500).json({ message: err.message });
-  }
-});
-
-// ─── ONE-TIME: Activate Developer Badge for imhoggbox ────────────────────────
-router.post('/admin/activate-developer-badge', authenticate, requireAdmin, async (req, res) => {
-  try {
-    // Extra safety: only allow imhoggbox@gmail.com to run this
-    if (req.user.email !== 'imhoggbox@gmail.com') {
-      return res.status(403).json({ message: 'This route is only for the developer account.' });
-    }
-
-    const user = await User.findById(req.userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (user.isDeveloper) {
-      return res.json({ 
-        success: true, 
-        message: 'Developer badge is already active on your account.' 
-      });
-    }
-
-    user.isDeveloper = true;
-    await user.save();
-
-    res.json({ 
-      success: true, 
-      message: '✅ Developer badge activated! Refresh the app to see it.' 
-    });
-
-  } catch (err) {
-    console.error('Activate developer badge error:', err);
-    res.status(500).json({ message: 'Failed to activate badge' });
   }
 });
 
@@ -916,96 +878,56 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// ─── SEND PUSH TO A SINGLE USER ────────────────────────────────────────────
-// Reads fcmTokens (FCM/APK) and webPushSubscriptions (web VAPID) directly from
-// the User document. Stale / expired tokens are pruned automatically on failure.
-async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, logoUrl = null) {
-  const user = await User.findById(userId).select('fcmTokens webPushSubscriptions');
-  if (!user) return false;
+// Send push to a single user (supports both native FCM and web VAPID)
+// AFTER — add imageUrl param with fallback to APP_ICON:
+async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
+  const sub = await PushSubscription.findOne({ user: userId });
+  if (!sub) return false;
 
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
-  const iconUrl  = logoUrl || APP_ICON;   // biz logo if available, else MC default
-  const hasPhoto = !!imageUrl;
-  const msgData  = { page: data.page || '', id: data.id || '' };
-  let   sent     = false;
+  const thumb = imageUrl || APP_ICON;
 
-  // ── FCM (Android APK) ──────────────────────────────────────────────────────
-  if (user.fcmTokens?.length) {
-    const keepTokens = [];
-    for (const token of user.fcmTokens) {
-      try {
-        await admin.messaging().send({
-          token,
-          notification: {
-            title,
-            body,
-            ...(hasPhoto && { imageUrl })   // top-level image for rich notifications
-          },
-          data: msgData,
-          android: {
-            priority: 'high',
-            notification: {
-              sound:     'default',
-              channelId: 'default',
-              ...(hasPhoto && { imageUrl }), // android big-picture image
-              ...(logoUrl && !hasPhoto && { imageUrl: logoUrl }) // biz logo as large icon when no big photo
-            }
-          },
-          apns: {
-            payload:    { aps: { sound: 'default', 'mutable-content': 1 } },
-            fcmOptions: hasPhoto ? { imageUrl } : {}
-          }
-        });
-        keepTokens.push(token);
-        sent = true;
-      } catch (e) {
-        // Permanently invalid tokens get pruned; transient errors keep the token
-        const stale = [
-          'messaging/registration-token-not-registered',
-          'messaging/invalid-registration-token',
-          'messaging/invalid-argument'
-        ];
-        if (!stale.includes(e.code)) keepTokens.push(token);
-        console.error('FCM send error:', e.code || e.message);
-      }
-    }
-    // Only write back if we actually pruned something
-    if (keepTokens.length !== user.fcmTokens.length) {
-      await User.findByIdAndUpdate(userId, { $set: { fcmTokens: keepTokens } });
+  if (sub.nativeToken) {
+    try {
+await admin.messaging().send({
+  token: sub.nativeToken,
+  notification: { title, body, imageUrl: thumb },
+  data: { page: data.page || '', id: data.id || '' },
+  android: {
+    priority: 'high',
+    notification: { sound: 'default', channelId: 'default', imageUrl: thumb }
+  },
+  apns: {
+    payload: { aps: { sound: 'default', 'mutable-content': 1 } },
+    fcmOptions: { imageUrl: thumb }
+  }
+});
+      return true;
+    } catch (e) {
+      console.error('FCM error:', e.message);
+      return false;
     }
   }
 
-  // ── Web VAPID ──────────────────────────────────────────────────────────────
-  if (user.webPushSubscriptions?.length) {
-    const keepSubs = [];
-    for (const sub of user.webPushSubscriptions) {
-      if (!sub?.endpoint) continue;
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, expirationTime: sub.expirationTime, keys: sub.keys },
-          JSON.stringify({
-            title,
-            body,
-            data:  msgData,
-            icon:  iconUrl,                              // biz logo or MC default
-            badge: APP_ICON,                             // monochrome badge (status bar)
-            ...(hasPhoto && { image: imageUrl })
-          })
-        );
-        keepSubs.push(sub);
-        sent = true;
-      } catch (e) {
-        // 410 Gone / 404 Not Found = subscription permanently expired
-        if (e.statusCode !== 410 && e.statusCode !== 404) keepSubs.push(sub);
-        console.error('Web push send error:', e.statusCode || e.message);
-      }
-    }
-    if (keepSubs.length !== user.webPushSubscriptions.length) {
-      await User.findByIdAndUpdate(userId, { $set: { webPushSubscriptions: keepSubs } });
+  if (sub.subscription?.endpoint) {
+    try {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({
+          title,
+          body,
+          data: { page: data.page || '', id: data.id || '' },
+          icon: thumb,
+          image: thumb
+        })
+      );
+      return true;
+    } catch (e) {
+      console.error('Web push error:', e.message);
+      return false;
     }
   }
-
-  return sent;
+  return false;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -1017,18 +939,17 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null, l
 // ─── SAFE UPDATED BROADCAST PUSH (Backward Compatible) ──────────────────────
 // ─── IMPROVED BROADCAST PUSH (Respects All Preferences) ─────────────────────
 async function broadcastPush(title, body, data = {}, options = {}) {
-  const { type = null, subCategory = null, imageUrl = null, logoUrl = null } = options;
+  const { type = null, subCategory = null, imageUrl = null } = options;
 
   console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
   try {
-    // Find anyone who has at least one FCM token OR one web VAPID subscription
     const users = await User.find({
       $or: [
-        { fcmTokens:            { $exists: true, $ne: [] } },
-        { 'webPushSubscriptions.0': { $exists: true } }
+        { fcmTokens: { $exists: true, $ne: [] } },
+        { pushEnabled: true }
       ]
-    }).select('_id notificationPreferences fcmTokens webPushSubscriptions');
+    }).select('_id notificationPreferences');
 
     for (const user of users) {
       const prefs = user.notificationPreferences || {};
@@ -1036,7 +957,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
       if (!type) {
         // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data, imageUrl, logoUrl);
+        await sendPushToUser(user._id, title, body, data, imageUrl);
         continue;
       }
 
@@ -1065,10 +986,6 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           if (prefs.comments === false) shouldSend = false;
           break;
 
-        case 'news':
-          if (prefs.news === false) shouldSend = false;
-          break;
-
         case 'marketplace':
           // Master toggle
           if (prefs.marketplace?.all === false) {
@@ -1094,7 +1011,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
       }
 
       if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data, imageUrl, logoUrl);
+        await sendPushToUser(user._id, title, body, data, imageUrl);
       }
     }
   } catch (err) {
@@ -1307,25 +1224,26 @@ router.get('/push/vapid-public-key', (req, res) => {
 router.post('/push/subscribe', authenticate, async (req, res) => {
   try {
     const { subscription } = req.body;
-    if (!subscription?.endpoint) {
-      return res.status(400).json({ message: 'Subscription object with endpoint required' });
+    if (!subscription) {
+      return res.status(400).json({ message: 'Subscription object required' });
     }
 
-    // Avoid duplicates — check by endpoint before pushing
-    const user = await User.findById(req.userId).select('webPushSubscriptions');
-    const alreadyStored = user?.webPushSubscriptions?.some(s => s.endpoint === subscription.endpoint);
+    // ── IMPORTANT: use findOneAndUpdate + upsert so we never wipe a nativeToken ──
+    // Deleting + recreating would erase the FCM token for users who have both.
+    await PushSubscription.findOneAndUpdate(
+      { user: req.userId },
+      {
+        $set: {
+          user: req.userId,
+          subscription: subscription,
+          platform: 'web',
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
 
-    if (!alreadyStored) {
-      await User.findByIdAndUpdate(req.userId, {
-        $push:  { webPushSubscriptions: {
-          endpoint:       subscription.endpoint,
-          expirationTime: subscription.expirationTime ?? null,
-          keys:           subscription.keys
-        }},
-        $set:   { pushEnabled: true }
-      });
-    }
-
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
     res.json({ message: 'Web push subscription saved' });
   } catch (err) {
     console.error('Push subscribe error:', err);
@@ -1335,9 +1253,8 @@ router.post('/push/subscribe', authenticate, async (req, res) => {
 
 router.post('/push/unsubscribe', authenticate, async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.userId, {
-      $set: { fcmTokens: [], webPushSubscriptions: [], pushEnabled: false }
-    });
+    await PushSubscription.deleteOne({ user: req.userId });
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: false });
     res.json({ message: 'Unsubscribed' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1474,20 +1391,16 @@ router.post('/lostitems', authenticate, async (req, res) => {
       authorName: user.name
     });
 
-    let lostThumb = null;
-    if (item.images && item.images.length > 0) {
-      lostThumb = `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`;
-    }
-    broadcastPush(
-      isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
-      `${user.name} posted: ${title}`,
-      { 
-        page: 'lostfound', 
-        id: item._id.toString(),
-        url: `/lostfound/${item._id}`
-      },
-      { type: 'lost', imageUrl: lostThumb }
-    );
+broadcastPush(
+  isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
+  `${user.name} posted: ${title}`,
+  { 
+    page: 'lostfound', 
+    id: item._id.toString(),
+    url: `/lostfound/${item._id}`
+  },
+  { type: 'lost' }
+);
 
     res.json(item);
   } catch (err) {
@@ -1633,15 +1546,11 @@ router.post('/marketplace', authenticate, async (req, res) => {
         ? `🏠 New Listing from ${user.verifiedBusiness.name || user.name}`
         : `🛒 New from ${user.verifiedBusiness.name || user.name}`;
 
-      let marketThumb = null;
-      if (item.images && item.images.length > 0) {
-        marketThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
-      }
       broadcastPush(
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
-        { type: 'custom', imageUrl: marketThumb }
+        { type: 'marketplace', subCategory: category }
       );
     }
 
@@ -1870,24 +1779,24 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
 // ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
 router.post('/owner/custom-notification', authenticate, async (req, res) => {
   try {
-    const { title, body, postId } = req.body;  // ← accept postId
+    const { title, body } = req.body;
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'Title and body required' });
     }
 
+    // Must have a verified business
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) {
       return res.status(403).json({ message: 'Only verified business owners can send notifications' });
     }
 
-    const business = await Business.findById(user.verifiedBusiness).select('name logo');
-    const bizName    = business?.name || user.name;
-    const bizLogoUrl = business?.logo
-      ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness}`
-      : null;
+    // Fetch business name to stamp on the notification
+    const business = await Business.findById(user.verifiedBusiness).select('name');
+    const bizName  = business?.name || user.name;
 
-    const deducted = await deductNotificationCredit(req.userId, 2);
+    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
+    const deducted = await deductNotificationCredit(req.userId);
     if (!deducted) {
       return res.status(403).json({
         message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
@@ -1895,32 +1804,11 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       });
     }
 
-    // title = Business Name, body = notification title + newline + message
-    const pushBody = `${title.trim()}\n${body.trim()}`;
+    // Prepend business name to the body so recipients always know who sent it
+    const stampedBody = `${bizName} · ${body.trim()}`;
+    await broadcastPush(title.trim(), stampedBody, { page: 'home' });
 
-    // ✅ FIX: if a postId was attached, deep-link to the business-post screen
-    //         otherwise fall back to home (for generic announcements)
-    let deepLink;
-    if (postId) {
-      // Verify the post exists and belongs to this owner before using it
-      const post = await BusinessPost.findOne({ _id: postId, owner: req.userId });
-      if (!post) {
-        return res.status(404).json({ message: 'Post not found or not yours' });
-      }
-      deepLink = {
-        page: 'business-post',
-        id: postId,
-        businessId: user.verifiedBusiness.toString()  // so the app can show the directory button
-      };
-} else {
-  deepLink = {
-    page: 'directory-business',
-    id: user.verifiedBusiness.toString()
-  };
-}
-
-    await broadcastPush(bizName, pushBody, deepLink, { type: 'custom', logoUrl: bizLogoUrl });
-
+    // Return updated credit balance so the frontend can refresh the display
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
   } catch (err) {
@@ -2122,31 +2010,6 @@ router.get('/popular', optionalAuth, async (req, res) => {
       .sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0))
       .slice(0, 5);
     res.json(sorted);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// GET /api/business/:id — single business by ID (used by business post modal)
-router.get('/business/:id', optionalAuth, async (req, res) => {
-  try {
-    const business = await Business.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { profileViews: 1 } },
-      { new: true }
-    )
-      .select('name address phone email website description hours priceRange tags logo photos category ratings isPremium profileViews')
-      .populate('category', 'name icon _id')
-      .lean();
-
-    if (!business) return res.status(404).json({ message: 'Business not found' });
-
-    const count = (business.ratings || []).length;
-    business.avgRating = count > 0
-      ? Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / count) * 10) / 10
-      : 0;
-
-    res.json(business);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2409,44 +2272,26 @@ router.post('/news', authenticate, async (req, res) => {
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const { title, summary, content, contentHtml, images } = req.body;
+    const clean = sanitizeContent(req.body);
+    const { title, summary, content, images } = clean;
 
-    if (!title || !summary || !(content || contentHtml))
+    if (!title || !summary || !content)
       return res.status(400).json({ message: 'Title, summary, and content are required' });
 
-    // Plain fields → use existing strip-all sanitizer
-    const plainTitle   = sanitizeContent({ title }).title   || title.substring(0, 200);
-    const plainSummary = sanitizeContent({ summary }).summary || summary.substring(0, 300);
-
-    // Create plain text version from contentHtml if no plain content was sent
-    const plainContent = content
-      ? (sanitizeContent({ content }).content || content)
-      : (contentHtml ? contentHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 5000) : '');
-
-    // Rich HTML → use the new safe sanitizer
-    const safeHtml = contentHtml ? sanitizeHtml(contentHtml) : undefined;
-
-    const article = await News.create({
-      title: plainTitle,
-      summary: plainSummary,
-      content: plainContent,
-      contentHtml: safeHtml,
-      images: Array.isArray(images) ? images.slice(0, 10) : [],
-      author: user._id,
-      authorName: user.name
+    const article = await News.create({ 
+      title, 
+      summary, 
+      content, 
+      images: images || [], 
+      author: user._id, 
+      authorName: user.name 
     });
 
-    // === SEND PUSH NOTIFICATION (with thumbnail if photos exist) ===
-    let newsThumb = null;
-    if (article.images && article.images.length > 0) {
-      newsThumb = `https://www.milledgevilleconnect.com/api/news-thumb/${article._id}`;
-    }
-
+    // === SEND PUSH NOTIFICATION ===
     broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
-      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
-      { type: 'news', imageUrl: newsThumb }
+      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` }
     );
 
     res.json(article);
@@ -2463,12 +2308,11 @@ router.put('/news/:id', authenticate, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
-    const { title, summary, content, contentHtml, images } = req.body;
-    if (title !== undefined)       article.title   = sanitizeContent({ title }).title || title;
-    if (summary !== undefined)     article.summary = sanitizeContent({ summary }).summary || summary;
-    if (content !== undefined)     article.content = sanitizeContent({ content }).content || content;
-    if (contentHtml !== undefined) article.contentHtml = sanitizeHtml(contentHtml);
-    if (images !== undefined)      article.images = images;
+    const { title, summary, content, images } = req.body;
+    article.title   = title   || article.title;
+    article.summary = summary || article.summary;
+    article.content = content || article.content;
+    if (images !== undefined) article.images = images;
     await article.save();
     res.json(article);
   } catch (err) {
@@ -2922,7 +2766,7 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category, sendNotify } = req.body;
+    const { title, description, expires, category } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2936,28 +2780,18 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-    if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId, 1);
-      if (deducted) {
-        const dealLogoUrl = user.verifiedBusiness?.logo
-          ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
-          : null;
-        const dealBizName = user.verifiedBusiness?.name || user.name;
-        broadcastPush(
-          dealBizName,
-          `🔥 New Deal Available!\n${title}`,
-          {
-            page: 'deals',
-            id: deal._id.toString(),
-            url: `/deals/${deal._id}`
-          },
-          { type: 'custom', imageUrl: null, logoUrl: dealLogoUrl }
-        );
-      }
-    }
+broadcastPush(
+  '🔥 New Deal Available!',
+  title,
+  { 
+    page: 'deals', 
+    id: deal._id.toString(),
+    url: `/deals/${deal._id}`
+  },
+  { type: 'deal' }
+);
 
-    const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...deal.toObject(), credits: updated.notificationCredits ?? 0 });
+    res.json(deal);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2984,7 +2818,7 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category, sendNotify } = req.body;
+    const { title, date, location, description, category } = req.body;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -2997,28 +2831,18 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId, 1);
-      if (deducted) {
-        const eventLogoUrl = user.verifiedBusiness?.logo
-          ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
-          : null;
-        const eventBizName = user.verifiedBusiness?.name || user.name;
-        broadcastPush(
-          eventBizName,
-          `📅 New Event!\n${title}${location ? ' · ' + location : ''}`,
-          {
-            page: 'events',
-            id: event._id.toString(),
-            url: `/events/${event._id}`
-          },
-          { type: 'custom', imageUrl: null, logoUrl: eventLogoUrl }
-        );
-      }
-    }
+    broadcastPush(
+    '📅 New Event Posted!',
+    title + (location ? ` · ${location}` : ''),
+    { 
+    page: 'events', 
+    id: event._id.toString(),
+    url: `/events/${event._id}`
+    },
+    { type: 'event' }
+);
 
-    const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...event.toObject(), credits: updated.notificationCredits ?? 0 });
+    res.json(event);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -3083,14 +2907,10 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       address:     address || ''
     });
 
-    // Optional push notification — costs 1 credit
+    // Optional push notification — costs 2 credits
 if (sendNotify) {
-  const deducted = await deductNotificationCredit(req.userId, 1);
+  const deducted = await deductNotificationCredit(req.userId, 2, false);
   if (deducted) {
-    let homeThumb = null;
-    if (item.images && item.images.length > 0) {
-      homeThumb = `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`;
-    }
     broadcastPush(
       `🏠 New Home Listing`,
       `${bizName} posted: ${title}`,
@@ -3099,8 +2919,8 @@ if (sendNotify) {
         id: item._id.toString() 
       },
       { 
-        type: 'custom',
-        imageUrl: homeThumb
+        type: 'marketplace', 
+        subCategory: 'Homes'     // ← Important
       }
     );
   }
@@ -3461,18 +3281,27 @@ function sanitizeUser(user) {
 
 router.post('/push/native-subscribe', authenticate, async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, platform = 'android' } = req.body;
     if (!token || token.length < 100) {
       return res.status(400).json({ message: 'Invalid token' });
     }
 
-    // $addToSet prevents duplicate tokens if the APK calls this more than once
-    await User.findByIdAndUpdate(req.userId, {
-      $addToSet: { fcmTokens: token },
-      $set:      { pushEnabled: true }
-    });
+    const sub = await PushSubscription.findOneAndUpdate(
+      { user: req.userId },
+      { 
+        $set: {
+          user: req.userId,
+          nativeToken: token,
+          platform: platform,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
 
-    console.log(`✅ FCM token stored on User for ${req.userId}`);
+    await User.findByIdAndUpdate(req.userId, { pushEnabled: true });
+
+    console.log(`✅ Native token saved for user ${req.userId}`);
     res.json({ message: 'Token saved', success: true });
 
   } catch (err) {
@@ -3596,20 +3425,6 @@ function sanitizeContent(fields = {}) {
   return out;
 }
 
-// ─── BASIC HTML SANITIZER FOR RICH-TEXT NEWS (allows safe formatting + links) ─
-function sanitizeHtml(dirty = '') {
-  if (typeof dirty !== 'string') return '';
-  return dirty
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed[\s\S]*?<\/embed>/gi, '')
-    .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/javascript:/gi, 'void(0);')
-    .trim()
-    .substring(0, 20000);
-}
-
 // ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
 router.get('/owner/subscription', authenticate, async (req, res) => {
   try {
@@ -3731,14 +3546,6 @@ router.post('/owner/buy-credits', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can buy credits' });
     }
 
-    // Credit purchasing requires an active Pro subscription
-    if (user.subscriptionTier !== 'pro' || !user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
-      return res.status(403).json({
-        message: 'Buying credits requires an active Business Pro subscription ($29.99/mo).',
-        requiresPro: true
-      });
-    }
-
     const { credits = 10 } = req.body;
 
     user.notificationCredits = (user.notificationCredits || 0) + Number(credits);
@@ -3747,10 +3554,8 @@ router.post('/owner/buy-credits', authenticate, async (req, res) => {
     res.json({ 
       success: true, 
       credits: user.notificationCredits,
-      added: credits,
       message: `${credits} credits added successfully`
     });
-
   } catch (err) {
     console.error('Buy credits error:', err);
     res.status(500).json({ message: 'Failed to add credits' });
@@ -3903,12 +3708,14 @@ router.delete('/user/delete-account', authenticate, async (req, res) => {
 // Pro users have their 12 monthly credits refreshed each billing cycle.
 // Normal users (no verifiedBusiness) should never reach this function,
 // but we guard against it anyway.
-async function deductNotificationCredit(userId, cost = 1) {
+async function deductNotificationCredit(userId) {
   const user = await User.findById(userId);
   if (!user) return false;
 
   // Non-owners cannot use notification credits at all
   if (!user.verifiedBusiness) return false;
+
+  const cost = 2;
 
   if ((user.notificationCredits || 0) < cost) {
     return false; // Out of credits — blocked for both free and pro owners
@@ -3972,7 +3779,7 @@ resetProCredits(); // run once on server start
 // POST /api/owner/business-posts — create a new photo post
 router.post('/owner/business-posts', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name logo');
+    const user = await User.findById(req.userId).populate('verifiedBusiness', 'name');
     if (!user)                  return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) return res.status(403).json({ message: 'Only verified business owners can post updates' });
 
@@ -4000,33 +3807,31 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       image,
     });
 
-// Optional push notification with thumbnail
-if (sendNotify) {
-  const deducted = await deductNotificationCredit(req.userId, 1);
-  if (deducted) {
-    const postNotifTitle = (notifTitle || '').trim() || '📸 New Photo Post';
-    const postBody = caption?.trim() || 'Tap to see the latest update.';
-    const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
+    // Optional push notification — costs 2 credits
+    if (sendNotify) {
+      const deducted = await deductNotificationCredit(req.userId);
+      if (deducted) {
+        const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
+        const thumbUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}`;
 
-    // Business name as title, owner's custom title + caption as body
-    const postLogoUrl = user.verifiedBusiness?.logo
-      ? `https://www.milledgevilleconnect.com/api/biz-logo-thumb/${user.verifiedBusiness._id}`
-      : null;
-    await broadcastPush(
-      bizName,
-      `${postNotifTitle}\n${postBody}`,
-      { 
-        page: 'business-post', 
-        id: post._id.toString() 
-      },
-      { 
-        imageUrl: thumbUrl,
-        type: 'custom',
-        logoUrl: postLogoUrl
+        const subs = await PushSubscription.find({
+          $or: [
+            { nativeToken: { $exists: true, $ne: null } },
+            { 'subscription.endpoint': { $exists: true, $ne: null } }
+          ]
+        });
+
+        for (const sub of subs) {
+          await sendPushToUser(
+            sub.user,
+            pushTitle,
+            caption?.trim() || 'Posted a new photo update — tap to see it!',
+            { page: 'business-post', id: post._id.toString() },
+            thumbUrl
+          );
+        }
       }
-    );
-  }
-}
+    }
 
     const updated = await User.findById(req.userId).select('notificationCredits');
     res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
@@ -4060,67 +3865,6 @@ res.set({
   } catch (err) {
     console.error('Thumb fetch error:', err);
     res.status(500).send('Error');
-  }
-});
-
-// ─── GENERIC THUMBNAIL SERVING FOR PUSH NOTIFICATIONS (shoutout/lost/market/news) ─
-async function serveImageThumb(req, res, Model) {
-  try {
-    const doc = await Model.findById(req.params.id).select('images image');
-    let imgData = null;
-    if (doc?.image) imgData = doc.image;                           // BusinessPost-style single image
-    else if (doc?.images && doc.images.length > 0) imgData = doc.images[0];
-
-    if (!imgData || typeof imgData !== 'string' || !imgData.startsWith('data:')) {
-      return res.status(404).send('No image');
-    }
-
-    const match = imgData.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
-
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.send(buffer);
-  } catch (err) {
-    console.error('Thumb error:', err.message);
-    res.status(500).send('Error');
-  }
-}
-
-// Public thumb endpoints so base64 images can be used as real HTTP URLs in push payloads
-router.get('/shoutout-thumb/:id',     (req, res) => serveImageThumb(req, res, Shoutout));
-router.get('/lostitem-thumb/:id',     (req, res) => serveImageThumb(req, res, LostItem));
-router.get('/marketplace-thumb/:id',  (req, res) => serveImageThumb(req, res, MarketplaceItem));
-router.get('/news-thumb/:id',         (req, res) => serveImageThumb(req, res, News));
-
-// GET /api/biz-logo-thumb/:bizId — serves a business logo as a real HTTP image for push notification icons
-router.get('/biz-logo-thumb/:bizId', async (req, res) => {
-  try {
-    const biz = await Business.findById(req.params.bizId).select('logo');
-    if (!biz?.logo || typeof biz.logo !== 'string' || !biz.logo.startsWith('data:')) {
-      return res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
-    }
-    const match = biz.logo.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
-    res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.send(buffer);
-  } catch (err) {
-    console.error('Biz logo thumb error:', err.message);
-    res.redirect('https://www.milledgevilleconnect.com/icon-192.png');
   }
 });
 
@@ -4186,52 +3930,5 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
-
-// ─── OWNER ANALYTICS ─────────────────────────────────────────────────────────────
-router.get('/owner/analytics', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user?.verifiedBusiness) return res.status(403).json({ message: 'No verified business' });
-
-    const bizId = user.verifiedBusiness;
-
-    const [biz, deals, events] = await Promise.all([
-      Business.findById(bizId).select('profileViews ratings name'),
-      Deal.find({ owner: req.userId }).select('title createdAt'),
-      Event.find({ owner: req.userId }).select('title date rsvps createdAt'),
-    ]);
-
-    // Notifications sent = starting credits (12 pro / 5 free) minus current, plus resets
-    // Best proxy: credits spent = max possible - current (not perfect but useful)
-    const sub = user.subscriptionTier === 'pro' ? 'pro' : 'free';
-    const maxCredits = sub === 'pro' ? 12 : 5;
-    const creditsUsedThisCycle = Math.max(0, maxCredits - (user.notificationCredits || 0));
-
-    // Event RSVP totals
-    const eventStats = events.map(e => ({
-      title: e.title,
-      date: e.date,
-      rsvpCount: e.rsvps ? e.rsvps.length : 0,
-    })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
-
-    res.json({
-      profileViews:       biz?.profileViews || 0,
-      totalDeals:         deals.length,
-      totalEvents:        events.length,
-      totalRsvps:         events.reduce((s, e) => s + (e.rsvps?.length || 0), 0),
-      avgRating:          biz?.ratings?.length
-                            ? Math.round((biz.ratings.reduce((s,r) => s + r.score, 0) / biz.ratings.length) * 10) / 10
-                            : null,
-      reviewCount:        biz?.ratings?.length || 0,
-      creditsRemaining:   user.notificationCredits || 0,
-      creditsUsedThisCycle,
-      subscriptionTier:   sub,
-      eventStats,
-    });
-  } catch (err) {
-    console.error('Owner analytics error:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;

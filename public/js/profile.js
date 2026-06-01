@@ -188,12 +188,32 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
     console.log('🔔 Notification tapped:', action);
 
     const data = action?.notification?.data || {};
-    if (!data.page) return;
+    const page = data.page;
+    const id   = data.id;
 
-    // Delegate to the centralized handler so every page (including
-    // business-post) is handled correctly without unknown-page spinners.
-    if (typeof window.handlePushNotificationClick === 'function') {
-      window.handlePushNotificationClick(data);
+    if (!page) return;
+
+    // Navigate to the right page, then scroll to/highlight the specific post
+    if (typeof loadPage === 'function') {
+      loadPage(page).then(() => {
+        if (id && page === 'shoutouts') {
+          // Increased delay for better reliability after page load
+          setTimeout(() => {
+            const el = document.getElementById('shoutout-' + id);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              el.classList.add('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
+              
+              // Remove highlight after 4 seconds
+              setTimeout(() => {
+                el.classList.remove('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
+              }, 4000);
+            } else {
+              console.warn(`Could not find shoutout-${id} element`);
+            }
+          }, 800);
+        }
+      });
     }
   });
 }
@@ -318,7 +338,6 @@ content.innerHTML = `
   <p class="text-emerald-400 text-base mb-1">${currentUser.email}</p>
   ${currentUser.neighborhood ? `<p class="text-white/60 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
 
-  <!-- Reputation + Developer Badge -->
   <div class="flex justify-center mt-3 mb-6">
     <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
       ⭐ ${currentUser.reputation || 0}
@@ -326,24 +345,25 @@ content.innerHTML = `
     </div>
   </div>
 
-  ${currentUser.isDeveloper ? `
-  <div class="flex justify-center mb-4">
-    <div class="inline-flex items-center gap-2 px-5 py-1.5 rounded-3xl 
-                bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 
-                text-white font-bold text-sm tracking-[1.5px] shadow-lg shadow-violet-500/30
-                border border-white/20">
-      <span class="font-mono text-base">&lt;/&gt;</span>
-      <span>DEVELOPER</span>
-    </div>
-  </div>` : ''}
+  ${currentUser.bio ? `<p class="text-white/80 text-sm mt-4 px-2 leading-relaxed italic">"${escHtml(currentUser.bio)}"</p>` : ''}
+  ${isVerified ? `<div class="mt-4 inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-semibold px-4 py-2 rounded-full">🏪 ${bizName}</div>` : ''}
 
-  <!-- Role -->
-  <div class="flex justify-center mb-6">
-    <div class="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-5 py-2 rounded-3xl text-sm">
-      <span class="text-lg">${currentUser.isDeveloper ? '🧠' : (isAdmin ? '🔧' : '⭐')}</span>
-      <span class="font-semibold text-white/90">
-        ${currentUser.isDeveloper ? 'Creator & Developer' : (isAdmin ? 'Admin' : 'Member')}
-      </span>
+  <!-- Stats Cards -->
+  <div class="mt-6 grid grid-cols-3 gap-3">
+    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+      <span class="text-xl font-bold text-white">🗓️</span>
+      <span class="text-xs text-white/50 mt-1">Joined</span>
+      <span class="text-xs font-semibold text-white">${joinedStr}</span>
+    </div>
+    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+      <span class="text-lg font-bold text-white">${isVerified ? '🏪' : '🌱'}</span>
+      <span class="text-xs text-white/50 mt-1">Status</span>
+      <span class="text-xs font-semibold text-white">${isVerified ? 'Owner' : 'Member'}</span>
+    </div>
+    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+      <span class="text-lg font-bold text-white">${isAdmin ? '🔧' : '⭐'}</span>
+      <span class="text-xs text-white/50 mt-1">Role</span>
+      <span class="text-xs font-semibold text-white">${isAdmin ? 'Admin' : 'User'}</span>
     </div>
   </div>
 
@@ -710,7 +730,6 @@ window.showNotificationSettingsModal = async function() {
     events: true,
     lostFound: true,
     messages: true,
-    news: true,
     marketplace: { all: true, homes: true, cars: true, furniture: true, other: true }
   };
 
@@ -819,7 +838,6 @@ window.showNotificationSettingsModal = async function() {
             <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Other</p>
             ${row('np-lostFound', '🔍', 'Lost & Found',     'New lost or found pet/item posts',  prefs.lostFound)}
             ${row('np-messages',  '✉️',  'Private Messages', 'Direct messages from other users',  prefs.messages)}
-            ${row('np-news',      '📰',  'News',             'New articles & local updates',      prefs.news)}
           </div>
 
           <!-- Save -->
@@ -865,7 +883,6 @@ window.saveNotificationPreferences = async function() {
     events:     get('np-events'),
     lostFound:  get('np-lostFound'),
     messages:   get('np-messages'),
-      news:       get('np-news'),
     marketplace: {
       all:       get('np-marketplace-all'),
       homes:     get('np-marketplace-homes'),
@@ -904,22 +921,15 @@ window.showUserProfileModal = async function (userId) {
 
     const rep = user.reputation || 0;
     const isOwnProfile = String(currentUser._id) === String(user._id);
-    const isDev = !!user.isDeveloper;
-
-    // Format joined date
-    const joined = user.joinedAt 
-      ? new Date(user.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) 
-      : 'Recently';
 
     const html = `
       <div onclick="if(event.target.id==='userProfileModal') hideUserProfileModal()" 
            id="userProfileModal"
-           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[30000] flex items-end md:items-center md:justify-center overflow-y-auto">
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[13000] flex items-end md:items-center md:justify-center overflow-y-auto">
         
         <div onclick="event.stopImmediatePropagation()" 
              class="bg-[#0f172a] text-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
-          <!-- Header bar -->
           <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 flex justify-center border-b border-white/10 z-10">
             <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
           </div>
@@ -934,66 +944,42 @@ window.showUserProfileModal = async function (userId) {
               </div>
             </div>
 
-            <!-- Name + Badges -->
-            <div class="text-center mb-4">
-              <h2 class="text-3xl font-bold">${esc(user.name)}</h2>
-              
-              ${isDev ? `
-              <div class="flex justify-center mt-2 mb-1">
-                <div class="inline-flex items-center gap-1.5 px-4 py-1 rounded-full 
-                            bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 
-                            text-white text-xs font-bold tracking-[1.5px] shadow-lg shadow-violet-500/40">
-                  <span class="font-mono text-sm">&lt;/&gt;</span>
-                  <span>DEVELOPER</span>
-                </div>
-              </div>` : ''}
+            <h2 class="text-3xl font-bold text-center mb-1">${esc(user.name)}</h2>
 
-              ${user.isBetaTester ? `
-              <div class="flex justify-center mt-1">
-                <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold">
-                  🚀 MVP Beta Tester
-                </div>
-              </div>` : ''}
-            </div>
-
-            <!-- Reputation -->
-            <div class="flex justify-center mb-5">
-              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
-                ⭐ ${rep}
+            <!-- Beta Tester Badge -->
+            ${user.isBetaTester ? `
+            <div class="flex justify-center mb-2">
+              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow">
+                🚀 MVP Beta Tester
               </div>
-            </div>
-
-            <!-- Bio -->
-            ${user.bio ? `
-            <div class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
-              <p class="text-white/80 italic text-center">"${esc(user.bio)}"</p>
             </div>` : ''}
 
-            <!-- Info Grid -->
-            <div class="grid grid-cols-2 gap-3 mb-6">
-              ${user.neighborhood ? `
-              <div class="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
-                <div class="text-xs text-white/50">NEIGHBORHOOD</div>
-                <div class="font-semibold mt-0.5">${user.neighborhood}</div>
-              </div>` : ''}
-
-              <div class="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
-                <div class="text-xs text-white/50">JOINED</div>
-                <div class="font-semibold mt-0.5">${joined}</div>
+            <!-- Reputation -->
+            <div class="flex justify-center mb-6">
+              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
+                ⭐ ${rep}
+                <span class="text-base font-normal opacity-75">Reputation</span>
               </div>
             </div>
 
+            ${user.bio ? `<p class="text-center text-white/70 italic mb-6">"${esc(user.bio)}"</p>` : ''}
+
+            ${user.neighborhood ? `
+            <div class="text-center text-white/50 mb-6">
+              📍 ${user.neighborhood}
+            </div>` : ''}
+
             <!-- Action Buttons -->
-            <div class="flex gap-3">
+            <div class="flex gap-3 mt-8">
               <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
-                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition active:scale-[0.985]">
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
                 ✉️ Message
               </button>
               
               ${!isOwnProfile ? `
               <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
-                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg transition active:scale-[0.985]">
-                🚩 Report
+                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
+                🚩 Report User
               </button>` : ''}
             </div>
 
@@ -1004,10 +990,6 @@ window.showUserProfileModal = async function (userId) {
           </div>
         </div>
       </div>`;
-
-    // Remove any existing profile modal first
-    const existing = document.getElementById('userProfileModal');
-    if (existing) existing.remove();
 
     document.body.insertAdjacentHTML('beforeend', html);
 

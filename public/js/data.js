@@ -135,38 +135,13 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-  else if (page === 'business-post') {
-    // Open the photo modal directly — no navigate('home') needed.
-    // showBusinessPostModal is self-contained and works from any page.
-    if (id) {
-      if (typeof window.showBusinessPostModal === 'function') {
-        window.showBusinessPostModal(id);
-      } else {
-        // Function not yet defined — wait for it (e.g. cold launch race)
-        let attempts = 0;
-        const retry = setInterval(() => {
-          attempts++;
-          if (typeof window.showBusinessPostModal === 'function') {
-            clearInterval(retry);
-            window.showBusinessPostModal(id);
-          } else if (attempts > 6) {
-            clearInterval(retry);
-            console.warn('showBusinessPostModal not available after retries');
-          }
-        }, 600);
-      }
-    }
-  }
-  else if (page === 'directory-business') {
-    if (id) {
-      loadDirectoryAndOpen(id);
-    } else {
-      navigate('directory');
-    }
-  }
-  else {
+else if (page === 'business-post') {
+  if (id) {
+    showBusinessPostModal(id);
+  } else {
     navigate('home');
   }
+}
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -184,26 +159,21 @@ if ('serviceWorker' in navigator) {
 }
 
 // ─── COLD LAUNCH DEEP LINK HANDLER ──────────────────────────────────────────
-// Waits for checkAuth() to finish and the home page to render before
-// navigating, so the spinner never gets stuck.
+// Handles when app is opened from a closed state via notification
 (function handleColdLaunchDeepLink() {
   try {
     const params = new URLSearchParams(window.location.search);
-    const page = params.get('notif_page');
-    const id = params.get('notif_id');
-
-    if (!page) return;
-
-    // Clean the URL immediately
-    window.history.replaceState({}, document.title, window.location.pathname);
-
-    // Wait until auth + initial page render are done, then deep-link
-    window._appReadyPromise.then(() => {
-      window.handlePushNotificationClick({ page, id });
-    });
-
+const page  = params.get('notif_page');
+const id    = params.get('notif_id');
+const bizId = params.get('notif_bizId') || '';
+if (page) {
+  window.history.replaceState({}, document.title, window.location.pathname);
+  setTimeout(() => {
+    window.handlePushNotificationClick({ page, id, bizId });
+  }, 2200);
+}
   } catch (e) {
-    console.warn('Cold launch deep-link error:', e);
+    console.warn('Cold launch deep-link handler failed:', e);
   }
 })();
 
@@ -297,13 +267,11 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
   let userId = null;
   let displayName = fallbackName;
   let reputation = 0;
-  let isDeveloper = false;
 
   if (typeof userData === 'object' && userData !== null) {
     userId = userData._id || userData.id;
     displayName = userData.name || userData.authorName || userData.author || fallbackName;
     reputation = userData.reputation || 0;
-    isDeveloper = !!userData.isDeveloper;
   } else if (typeof userData === 'string' && userData.length > 10) {
     userId = userData;
   }
@@ -314,18 +282,9 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
     ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">⭐${reputation}</span>`
     : '';
 
-  // === COOL DEVELOPER BADGE ===
-  const devBadge = isDeveloper 
-    ? `<span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full 
-               bg-gradient-to-br from-violet-600 via-fuchsia-600 to-indigo-600 
-               text-white text-[9px] font-black shadow-md shadow-violet-500/40 ring-1 ring-white/30"> 
-         &lt;/&gt;
-       </span>` 
-    : '';
-
   return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
                 class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
-            ${displayName}${devBadge}${repHTML}
+            ${displayName}${repHTML}
           </span>`;
 }
 
@@ -353,7 +312,6 @@ function showUpdateBanner(newVersion) {
 
   document.body.insertAdjacentHTML('beforeend', bannerHTML);
 }
-
 
 window.dismissUpdateBanner = function() {
   const banner = document.getElementById('updateBanner');
@@ -605,27 +563,26 @@ function wmoCond(code) {
   }
 
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
-// ─── HOME PAGE HELPERS ────────────────────────────────────────────────────────
-
-function _renderHomeShell(content) {
-  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
       <!-- Today in Milledgeville (Compact) -->
       <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-5 md:p-6 mb-8 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
-
+        
         <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-
+          
           <!-- Left: Title + Date + Podcast -->
           <div class="flex items-start gap-3 min-w-0">
             <span class="text-3xl flex-shrink-0 mt-0.5">🌅</span>
             <div class="min-w-0 flex-1">
               <h1 class="text-[22px] font-bold leading-tight">Today in Milledgeville</h1>
+              
               <div class="flex flex-wrap items-center gap-2 mt-1.5">
-                <p class="text-emerald-100 text-xs">${dateStr}</p>
-                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')"
+                <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
+                
+                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')" 
                       class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-3.5 py-1 rounded-2xl text-xs shadow-lg cursor-pointer transition-all active:scale-95">
                   <span>🎙️</span>
                   <span class="font-extrabold">LISTEN</span>
@@ -678,16 +635,16 @@ function _renderHomeShell(content) {
 
         <!-- Filter buttons -->
         <div class="flex gap-2 mb-4 overflow-x-auto pb-2 hide-scrollbar">
-          <button onclick="hotFeed.setFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
-          <button onclick="hotFeed.setFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
-          <button onclick="hotFeed.setFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
-          <button onclick="hotFeed.setFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
-          <button onclick="hotFeed.setFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
+          <button onclick="setHotFilter('all')" id="hotFilter-all" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-emerald-600 text-white">All</button>
+          <button onclick="setHotFilter('news')" id="hotFilter-news" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📰 News</button>
+          <button onclick="setHotFilter('event')" id="hotFilter-event" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">📅 Events</button>
+          <button onclick="setHotFilter('deal')" id="hotFilter-deal" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🔥 Deals</button>
+          <button onclick="setHotFilter('shoutout')" id="hotFilter-shoutout" class="flex-shrink-0 px-5 py-2 rounded-3xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/80">🚦 Traffic Alert!</button>
         </div>
 
         <div id="hotFeed" class="space-y-3"></div>
         <div id="hotLoadMoreWrapper" class="mt-4 hidden">
-          <button id="hotLoadMoreBtn" onclick="hotFeed.loadMore()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
+          <button id="hotLoadMoreBtn" onclick="loadMoreHotItems()" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white py-3 rounded-3xl text-sm font-semibold transition">Load More</button>
         </div>
       </div>
 
@@ -696,277 +653,68 @@ function _renderHomeShell(content) {
 
       <!-- Quick actions -->
       <div class="grid grid-cols-2 gap-3 mb-8">
-        <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-          <span class="text-3xl">🚦</span>
-          <p class="font-semibold mt-3">Post Traffic Alert</p>
-        </button>
+      <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
+      <span class="text-3xl">🚦</span>
+      <p class="font-semibold mt-3">Post Traffic Alert</p>
+      </button>
         <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
           <span class="text-3xl">📅</span>
           <p class="font-semibold mt-3">See Events</p>
         </button>
       </div>
     </div>`;
-}
 
-async function _loadHomeWeather() {
-  try {
-    const wRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
-    if (!wRes.ok) throw new Error('Weather API error');
+  // Weather widget (bulletproof version)
+  (async () => {
+    try {
+      const wRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.0801&longitude=-83.2321&current=temperature_2m,weathercode&daily=temperature_2m_max,weathercode,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=4');
+      
+      if (!wRes.ok) throw new Error('Weather API error');
+      
+      const wData = await wRes.json();
+      const curr = wData.current;
+      const daily = wData.daily || {};
 
-    const wData = await wRes.json();
-    const curr = wData.current;
-    const daily = wData.daily || {};
+      // Current weather
+      const cond = wmoCond(curr.weathercode);
+      const temp = Math.round(curr.temperature_2m);
 
-    const cond = wmoCond(curr.weathercode);
-    const temp = Math.round(curr.temperature_2m);
+      document.getElementById('weatherIcon').textContent = cond.icon;
+      document.getElementById('weatherTemp').textContent = temp + '°F';
+      document.getElementById('weatherDesc').textContent = cond.label;
 
-    // Guard every write — the user may have navigated away before this resolves
-    const iconEl     = document.getElementById('weatherIcon');
-    const tempEl     = document.getElementById('weatherTemp');
-    const descEl     = document.getElementById('weatherDesc');
-    const forecastEl = document.getElementById('weatherForecast');
-    if (!iconEl || !tempEl || !descEl || !forecastEl) return;
+      // Forecast (fixed field names)
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      let forecastHTML = '';
 
-    iconEl.textContent = cond.icon;
-    tempEl.textContent = temp + '°F';
-    descEl.textContent = cond.label;
+      const forecastDates = daily.time || daily.date || [];
+      const forecastTemps = daily.temperature_2m_max || [];
+      const forecastCodes = daily.weathercode || [];
 
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const forecastDates = daily.time || daily.date || [];
-    const forecastTemps = daily.temperature_2m_max || [];
-    const forecastCodes = daily.weathercode || [];
+      if (forecastDates.length > 1 && forecastTemps.length > 1 && forecastCodes.length > 1) {
+        forecastHTML = forecastDates.slice(1, 4).map((d, i) => {
+          const fc = wmoCond(forecastCodes[i + 1] || 0);
+          const high = Math.round(forecastTemps[i + 1] || 0);
+          const dow = days[new Date(d + 'T12:00:00').getDay()];
+          return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
+            <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
+            <div class="text-sm leading-none my-0.5">${fc.icon}</div>
+            <div class="text-[10px] font-bold">${high}°</div>
+          </div>`;
+        }).join('');
+      }
 
-    let forecastHTML = '';
-    if (forecastDates.length > 1 && forecastTemps.length > 1 && forecastCodes.length > 1) {
-      forecastHTML = forecastDates.slice(1, 4).map((d, i) => {
-        const fc = wmoCond(forecastCodes[i + 1] || 0);
-        const high = Math.round(forecastTemps[i + 1] || 0);
-        const dow = days[new Date(d + 'T12:00:00').getDay()];
-        return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
-          <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
-          <div class="text-sm leading-none my-0.5">${fc.icon}</div>
-          <div class="text-[10px] font-bold">${high}°</div>
-        </div>`;
-      }).join('');
+      document.getElementById('weatherForecast').innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
+
+    } catch (err) {
+      console.warn('Weather error:', err);
+      const desc = document.getElementById('weatherDesc');
+      if (desc) desc.textContent = 'Weather unavailable';
     }
+  })();
 
-    forecastEl.innerHTML = forecastHTML || '<div class="text-[9px] text-emerald-100">No forecast</div>';
-  } catch (err) {
-    console.warn('Weather error:', err);
-    const desc = document.getElementById('weatherDesc');
-    if (desc) desc.textContent = 'Weather unavailable';
-  }
-}
-
-function _renderHomeDigest(eventsData, dealsData) {
-  const digestEl = document.getElementById('todayDigest');
-  if (!digestEl) return;
-
-  const evClick = eventsData[0]
-    ? `showEventDetail('${eventsData[0]._id}'); navigate('events')`
-    : `navigate('events')`;
-  const dealClick = dealsData[0]
-    ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')`
-    : `navigate('deals')`;
-
-  digestEl.innerHTML = `
-    <div class="grid grid-cols-2 gap-3">
-      <div onclick="${evClick}" class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
-        <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
-        <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
-      </div>
-      <div onclick="${dealClick}" class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
-        <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
-        <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
-      </div>
-    </div>`;
-}
-
-function _buildHotItems(eventsData, newsData, dealsData, shoutoutsData) {
-  const now = new Date();
-
-  const newsItems = (newsData || []).map(n => ({
-    type: 'news', sortDate: new Date(n.createdAt), data: n
-  })).sort((a, b) => b.sortDate - a.sortDate);
-
-  const eventItems = (eventsData || [])
-    .filter(e => new Date(e.date) >= now)
-    .map(e => ({ type: 'event', sortDate: new Date(e.date), data: e }))
-    .sort((a, b) => a.sortDate - b.sortDate);
-
-  const dealItems = (dealsData || []).map(d => ({
-    type: 'deal', sortDate: new Date(d.createdAt), data: d
-  })).sort((a, b) => b.sortDate - a.sortDate);
-
-  const shoutoutItems = (shoutoutsData || []).map(s => ({
-    type: 'shoutout', sortDate: new Date(s.createdAt), data: s
-  })).sort((a, b) => b.sortDate - a.sortDate);
-
-  return [
-    ...eventItems.slice(0, 3),
-    ...newsItems,
-    ...dealItems,
-    ...shoutoutItems
-  ].sort((a, b) => {
-    if (a.type === 'event' && b.type !== 'event') return -1;
-    if (b.type === 'event' && a.type !== 'event') return 1;
-    return b.sortDate - a.sortDate;
-  });
-}
-
-function _initHotFeed(allHotItems) {
-  const HOT_PAGE_SIZE = 6;
-
-  // Module-level state — no window pollution
-  const _hotState = { items: allHotItems, filter: 'all', page: 0 };
-
-  function renderHotFeed(filter = _hotState.filter) {
-    const container = document.getElementById('hotFeed');
-    if (!container) return;
-
-    const filtered = filter === 'all'
-      ? _hotState.items
-      : _hotState.items.filter(item => item.type === filter);
-
-    const visibleCount = (_hotState.page + 1) * HOT_PAGE_SIZE;
-    const visibleItems = filtered.slice(0, visibleCount);
-
-    let html = '';
-    visibleItems.forEach(item => {
-      if (item.type === 'news') {
-        const n = item.data;
-        html += `
-          <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
-              <h4 class="font-semibold text-lg mt-2">${esc(n.title)}</h4>
-              <p class="text-white/70 line-clamp-2">${esc(n.summary || '')}</p>
-              <div class="text-xs text-white/50 mt-3">${timeAgo(n.createdAt)}</div>
-            </div>
-          </div>`;
-      } else if (item.type === 'event') {
-        const e = item.data;
-        html += `
-          <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-amber-500 px-3 py-1 rounded-full">📅 EVENT</span>
-              <h4 class="font-semibold text-lg mt-2">${esc(e.title)}</h4>
-              <p class="text-white/70">${esc(e.description || '')}</p>
-              <div class="text-xs text-white/50 mt-3">${formatDate(e.date)}</div>
-            </div>
-          </div>`;
-      } else if (item.type === 'deal') {
-        const d = item.data;
-        html += `
-          <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-red-500 px-3 py-1 rounded-full">🔥 DEAL</span>
-              <h4 class="font-semibold text-lg mt-2">${esc(d.title)}</h4>
-              <p class="text-white/70">${esc(d.description || '')}</p>
-              <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
-            </div>
-          </div>`;
-      } else if (item.type === 'shoutout') {
-        const s = item.data;
-        html += `
-          <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-            <div class="flex-1">
-              <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
-              <h4 class="font-semibold text-lg mt-2 line-clamp-2">${esc(s.text)}</h4>
-              <div class="text-xs text-white/50 mt-3">by ${esc(s.author || s.authorName || 'Community')} · ${timeAgo(s.createdAt)}</div>
-            </div>
-          </div>`;
-      }
-    });
-
-    container.innerHTML = html || `<p class="text-white/40 text-center py-12">No activity yet — be the first to post!</p>`;
-
-    const moreWrapper = document.getElementById('hotLoadMoreWrapper');
-    if (moreWrapper) moreWrapper.classList.toggle('hidden', filtered.length <= visibleCount);
-  }
-
-  function setHotFilter(filter) {
-    _hotState.filter = filter;
-    _hotState.page = 0;
-    document.querySelectorAll('[id^="hotFilter-"]').forEach(btn => {
-      const isActive = btn.id === `hotFilter-${filter}`;
-      btn.classList.toggle('bg-emerald-600', isActive);
-      btn.classList.toggle('text-white', isActive);
-      btn.classList.toggle('bg-white/10', !isActive);
-      btn.classList.toggle('text-white/80', !isActive);
-    });
-    renderHotFeed(filter);
-  }
-
-  function loadMore() {
-    _hotState.page++;
-    renderHotFeed(_hotState.filter);
-  }
-
-  // Single namespace — no loose globals
-  window.hotFeed = { render: renderHotFeed, setFilter: setHotFilter, loadMore };
-
-  renderHotFeed('all');
-}
-
-function _renderCommunityStats(eventsData, dealsData, shoutoutsData) {
-  const statsBar = document.getElementById('communityStatsBar');
-  if (!statsBar) return;
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const activeDealsCount = (dealsData || []).length;
-  const upcomingEvCount = (eventsData || []).filter(e => new Date(e.date) >= now).length;
-  const shoutoutsTodayCount = (shoutoutsData || []).filter(s => new Date(s.createdAt) >= todayStart).length;
-  const bizCount = allBusinesses.length;
-
-  statsBar.innerHTML = `
-    <div class="bg-gradient-to-r from-white/5 to-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
-      <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-4 text-center">Community at a Glance</p>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div onclick="navigate('directory')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl p-4 transition text-center">
-          <span class="text-2xl mb-1">📍</span>
-          <span class="text-xl font-black text-white group-hover:text-emerald-300 transition">${bizCount}</span>
-          <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Businesses<br>in Directory</span>
-        </div>
-        <div onclick="navigate('deals')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 rounded-2xl p-4 transition text-center">
-          <span class="text-2xl mb-1">🔥</span>
-          <span class="text-xl font-black text-white group-hover:text-amber-300 transition">${activeDealsCount}</span>
-          <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Active<br>Deals</span>
-        </div>
-        <div onclick="navigate('events')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/30 rounded-2xl p-4 transition text-center">
-          <span class="text-2xl mb-1">📅</span>
-          <span class="text-xl font-black text-white group-hover:text-blue-300 transition">${upcomingEvCount}</span>
-          <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Upcoming<br>Events</span>
-        </div>
-        <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 rounded-2xl p-4 transition text-center">
-          <span class="text-2xl mb-1">🚦</span>
-          <span class="text-xl font-black text-white group-hover:text-red-300 transition">${shoutoutsTodayCount}</span>
-          <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Traffic Alerts<br>Today</span>
-        </div>
-      </div>
-    </div>`;
-}
-
-// ─── SPOTLIGHT (Home Page) ────────────────────────────────────────────────────
-function _loadAndRenderSpotlight() {
-  if (allBusinesses.length === 0) {
-    apiGet('/directory').then(d => {
-      if (d && d.businesses) {
-        allBusinesses = d.businesses.map(b => {
-          if (b.hours && b._openStatus === undefined) {
-            b._openStatus = getOpenStatus(b.hours);
-          }
-          return b;
-        });
-        _renderSpotlight(allBusinesses);
-      }
-    }).catch(() => _renderSpotlight([]));
-  } else {
-    _renderSpotlight(allBusinesses);
-  }
-}
-
+// AFTER — fire directory fetch in background; don't block home feed on it
+// ─── SPOTLIGHT (Home Page) ───────────────────────────────────────────────────
 function _renderSpotlight(businesses) {
   const spotEl = document.getElementById('spotlightScroll');
   if (!spotEl) return;
@@ -979,11 +727,14 @@ function _renderSpotlight(businesses) {
   if (!sb.length) sb = [...businesses].slice(0, 8);
 
   spotEl.innerHTML = sb.map(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
+
     return `
       <div onclick="showBusinessDetail('${b._id}')"
            class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
+        
         ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
+
         <div class="flex items-center gap-3 mb-3">
           ${b.logo
             ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
@@ -1001,33 +752,231 @@ function _renderSpotlight(businesses) {
   }).join('');
 }
 
-// ─── MAIN loadHomePage ────────────────────────────────────────────────────────
-async function loadHomePage(content) {
-  // 1. Render the static shell immediately (no waiting on network)
-  _renderHomeShell(content);
+if (allBusinesses.length === 0) {
+  apiGet('/directory').then(d => {
+    if (d && d.businesses) {
+      // PRE-COMPUTE open status once (this fixes the hang)
+      allBusinesses = d.businesses.map(b => {
+        if (b.hours && b._openStatus === undefined) {
+          b._openStatus = getOpenStatus(b.hours);
+        }
+        return b;
+      });
+      _renderSpotlight(allBusinesses);
+    }
+  }).catch(() => {
+    _renderSpotlight([]);
+  });
+} else {
+  _renderSpotlight(allBusinesses);
+}
 
-  // 2. Kick off weather in the background (non-blocking)
-  _loadHomeWeather();
+const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
+  apiGet('/events').catch(() => ({ events: [] })),
+  apiGet('/deals').catch(() => ({ deals: [] })),
+  apiGet('/news').catch(() => []),
+  apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
+]);
 
-  // 3. Spotlight — fire directory fetch in background; don't block home feed on it
-  _loadAndRenderSpotlight();
+const eventsData = eventsRes.events || [];
+const dealsData  = dealsRes.deals || [];
+const shoutoutsData = shoutoutsRes.shoutouts || [];
 
-  // 4. Fetch feed data in parallel
-  const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
-    apiGet('/events').catch(() => ({ events: [] })),
-    apiGet('/deals').catch(() => ({ deals: [] })),
-    apiGet('/news').catch(() => []),
-    apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
-  ]);
+  // Digest
+  // Digest — now clickable
+  const digestHTML = `
+    <div class="grid grid-cols-2 gap-3">
+      <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
+           class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
+        <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
+        <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
+      </div>
 
-  const eventsData = eventsRes.events || [];
-  const dealsData  = dealsRes.deals  || [];
-  const shoutoutsData = shoutoutsRes.shoutouts || [];
+      <div onclick="${dealsData[0] ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')` : `navigate('deals')`}" 
+           class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
+        <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
+        <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
+      </div>
+    </div>`;
 
-  // 5. Render each section via focused helpers
-  _renderHomeDigest(eventsData, dealsData);
-  _initHotFeed(_buildHotItems(eventsData, newsData, dealsData, shoutoutsData));
-  _renderCommunityStats(eventsData, dealsData, shoutoutsData);
+  document.getElementById('todayDigest').innerHTML = digestHTML;
+
+  // Spotlight — rendered by _renderSpotlight() called above after directory data loads
+
+  // ── FIXED Hot Right Now Feed (News + Shoutouts + Events + Deals) ─────────────
+  const now = new Date();
+
+  const newsItems = (newsData || []).map(n => ({
+    type: 'news',
+    sortDate: new Date(n.createdAt),
+    data: n
+  })).sort((a, b) => b.sortDate - a.sortDate);
+
+  const eventItems = (eventsData || [])
+    .filter(e => new Date(e.date) >= now)
+    .map(e => ({
+      type: 'event',
+      sortDate: new Date(e.date),
+      data: e
+    }))
+    .sort((a, b) => a.sortDate - b.sortDate);
+
+  const dealItems = (dealsData || []).map(d => ({
+    type: 'deal',
+    sortDate: new Date(d.createdAt),
+    data: d
+  })).sort((a, b) => b.sortDate - a.sortDate);
+
+  const shoutoutItems = (shoutoutsData || []).map(s => ({
+    type: 'shoutout',
+    sortDate: new Date(s.createdAt),
+    data: s
+  })).sort((a, b) => b.sortDate - a.sortDate);
+
+  const allHotItems = [
+    ...eventItems.slice(0, 3),
+    ...newsItems,
+    ...dealItems,
+    ...shoutoutItems
+  ].sort((a, b) => {
+    if (a.type === 'event' && b.type !== 'event') return -1;
+    if (b.type === 'event' && a.type !== 'event') return 1;
+    return b.sortDate - a.sortDate;
+  });
+
+  window._hotItems = allHotItems;
+  window._hotFilter = 'all';
+  window._hotPage = 0;
+  const HOT_PAGE_SIZE = 6;
+
+  window.renderHotFeed = function (filter = 'all') {
+    const container = document.getElementById('hotFeed');
+    if (!container) return;
+
+    let filtered = window._hotItems;
+    if (filter !== 'all') {
+      filtered = window._hotItems.filter(item => item.type === filter);
+    }
+
+    // Accumulate all pages from 0 through current page
+    const visibleCount = (window._hotPage + 1) * HOT_PAGE_SIZE;
+    const visibleItems = filtered.slice(0, visibleCount);
+
+    let html = '';
+visibleItems.forEach(item => {
+  if (item.type === 'news') {
+    const n = item.data;
+    html += `
+      <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
+          <h4 class="font-semibold text-lg mt-2">${esc(n.title)}</h4>
+          <p class="text-white/70 line-clamp-2">${esc(n.summary || '')}</p>
+          <div class="text-xs text-white/50 mt-3">${timeAgo(n.createdAt)}</div>
+        </div>
+      </div>`;
+  } else if (item.type === 'event') {
+    const e = item.data;
+    html += `
+      <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-amber-500 px-3 py-1 rounded-full">📅 EVENT</span>
+          <h4 class="font-semibold text-lg mt-2">${esc(e.title)}</h4>
+          <p class="text-white/70">${esc(e.description || '')}</p>
+          <div class="text-xs text-white/50 mt-3">${formatDate(e.date)}</div>
+        </div>
+      </div>`;
+  } else if (item.type === 'deal') {
+    const d = item.data;
+    html += `
+      <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-red-500 px-3 py-1 rounded-full">🔥 DEAL</span>
+          <h4 class="font-semibold text-lg mt-2">${esc(d.title)}</h4>
+          <p class="text-white/70">${esc(d.description || '')}</p>
+          <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
+        </div>
+      </div>`;
+  } else if (item.type === 'shoutout') {
+    const s = item.data;
+    html += `
+      <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
+        <div class="flex-1">
+          <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
+          <h4 class="font-semibold text-lg mt-2 line-clamp-2">${esc(s.text)}</h4>
+          <div class="text-xs text-white/50 mt-3">by ${esc(s.author || s.authorName || 'Community')} · ${timeAgo(s.createdAt)}</div>
+        </div>
+      </div>`;
+  }
+});
+
+    container.innerHTML = html || `<p class="text-white/40 text-center py-12">No activity yet — be the first to post!</p>`;
+
+    const hasMore = filtered.length > visibleCount;
+    document.getElementById('hotLoadMoreWrapper').classList.toggle('hidden', !hasMore);
+  };
+
+  window.setHotFilter = function (filter) {
+    window._hotFilter = filter;
+    window._hotPage = 0;
+    document.querySelectorAll('[id^="hotFilter-"]').forEach(btn => {
+      if (btn.id === `hotFilter-${filter}`) {
+        btn.classList.add('bg-emerald-600', 'text-white');
+        btn.classList.remove('bg-white/10', 'text-white/80');
+      } else {
+        btn.classList.remove('bg-emerald-600', 'text-white');
+        btn.classList.add('bg-white/10', 'text-white/80');
+      }
+    });
+    window.renderHotFeed(filter);
+  };
+
+  window.loadMoreHotItems = function () {
+    window._hotPage++;
+    window.renderHotFeed(window._hotFilter);
+  };
+
+  // Render the feed
+  window.renderHotFeed('all');
+
+  // Community Stats Bar
+  const activeDealsCount = (dealsData || []).length;
+  const upcomingEvCount = (eventsData || []).filter(e => new Date(e.date) >= now).length;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const shoutoutsTodayCount = (shoutoutsData || []).filter(s => new Date(s.createdAt) >= todayStart).length;
+
+  // allBusinesses was already populated above from the parallel fetch — no second call needed
+  const bizCount = allBusinesses.length;
+
+  const statsBar = document.getElementById('communityStatsBar');
+  if (statsBar) {
+    statsBar.innerHTML = `
+      <div class="bg-gradient-to-r from-white/5 to-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-4 text-center">Community at a Glance</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div onclick="navigate('directory')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">📍</span>
+            <span class="text-xl font-black text-white group-hover:text-emerald-300 transition">${bizCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Businesses<br>in Directory</span>
+          </div>
+          <div onclick="navigate('deals')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">🔥</span>
+            <span class="text-xl font-black text-white group-hover:text-amber-300 transition">${activeDealsCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Active<br>Deals</span>
+          </div>
+          <div onclick="navigate('events')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">📅</span>
+            <span class="text-xl font-black text-white group-hover:text-blue-300 transition">${upcomingEvCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Upcoming<br>Events</span>
+          </div>
+          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 rounded-2xl p-4 transition text-center">
+            <span class="text-2xl mb-1">🚦</span>
+            <span class="text-xl font-black text-white group-hover:text-red-300 transition">${shoutoutsTodayCount}</span>
+            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Traffic Alerts<br>Today</span>
+          </div>
+        </div>
+      </div>`;
+  }
 }
 // ─── NEWS ARTICLE VIEWER ──────────────────────────────────────────────────────
 window.openNewsArticle = async function (articleId) {
@@ -1079,9 +1028,8 @@ window.openNewsArticle = async function (articleId) {
             </div>
           </div>
 
-          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px]"
-               ${!article.contentHtml ? 'style="white-space:pre-wrap;"' : ''}>
-            ${article.contentHtml ? article.contentHtml : esc(article.content || '')}
+          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px]" style="white-space:pre-wrap;">
+            ${esc(article.content)}
           </div>
 
           ${imagesHTML}
@@ -1226,30 +1174,8 @@ async function loadPostNewsPage(content) {
                class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
         <input id="newsSummary" type="text" placeholder="Short summary (shown on home page) *"
                class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
-        <div class="mb-4">
-          <p class="text-sm font-semibold text-white/70 mb-2">Full article content *</p>
-          <div class="border border-white/20 rounded-3xl overflow-hidden bg-[#0f172a]">
-            <!-- Rich text toolbar -->
-            <div class="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-white/10 bg-white/5 text-sm">
-              <button type="button" onclick="execNewsCommand('bold')" class="px-3 py-1.5 hover:bg-white/10 rounded-xl font-black" title="Bold">B</button>
-              <button type="button" onclick="execNewsCommand('italic')" class="px-3 py-1.5 hover:bg-white/10 rounded-xl italic" title="Italic">I</button>
-              <button type="button" onclick="execNewsCommand('underline')" class="px-3 py-1.5 hover:bg-white/10 rounded-xl underline" title="Underline">U</button>
-              <span class="w-px h-4 bg-white/20 mx-1.5"></span>
-              <button type="button" onclick="execNewsCommand('formatBlock', 'h2')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold" title="Heading 2">H2</button>
-              <button type="button" onclick="execNewsCommand('formatBlock', 'h3')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold" title="Heading 3">H3</button>
-              <span class="w-px h-4 bg-white/20 mx-1.5"></span>
-              <button type="button" onclick="execNewsCommand('insertUnorderedList')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-sm" title="Bullet list">• List</button>
-              <button type="button" onclick="execNewsCommand('insertOrderedList')" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-mono" title="Numbered list">1. List</button>
-              <span class="w-px h-4 bg-white/20 mx-1.5"></span>
-              <button type="button" onclick="insertNewsLink()" class="px-3 py-1.5 hover:bg-white/10 rounded-xl flex items-center gap-1 text-xs" title="Insert hyperlink">🔗 Link</button>
-            </div>
-            <div id="newsContentEditor" contenteditable="true"
-                 class="min-h-[240px] max-h-[420px] overflow-auto p-5 text-[15px] leading-relaxed text-white/90 focus:outline-none bg-transparent"
-                 style="white-space: pre-wrap; word-break: break-word;">
-            </div>
-          </div>
-          <p class="text-[10px] text-white/40 mt-1 px-1">Formatting is preserved. Links will be clickable for readers.</p>
-        </div>
+        <textarea id="newsContent" rows="8" placeholder="Full article content *"
+                  class="w-full mb-4 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
 
         <div class="mb-5">
           <p class="text-sm font-semibold text-white/70 mb-2">Photos (optional — click to add, drag to reorder)</p>
@@ -1332,57 +1258,16 @@ window.removeNewsImage = function (index) {
   }
 };
 
-window.execNewsCommand = function (command, value = null) {
-  const editor = document.getElementById('newsContentEditor');
-  if (!editor) return;
-  editor.focus();
-  if (command === 'formatBlock' && value) {
-    document.execCommand('formatBlock', false, value);
-  } else {
-    document.execCommand(command, false, value);
-  }
-  setTimeout(() => editor.focus(), 10);
-};
-
-window.insertNewsLink = function () {
-  const editor = document.getElementById('newsContentEditor');
-  if (!editor) return;
-  editor.focus();
-  const url = prompt('Enter the full URL (https:// or http://):');
-  if (!url) return;
-  if (!/^https?:\/\//i.test(url)) {
-    showToast('Link must start with https:// or http://', 'error');
-    return;
-  }
-  document.execCommand('createLink', false, url);
-};
-
 window.submitNewsArticle = async function () {
   const title   = document.getElementById('newsTitle')?.value.trim();
   const summary = document.getElementById('newsSummary')?.value.trim();
-
-  const editorEl = document.getElementById('newsContentEditor');
-  let contentHtml = '';
-  let content = '';
-
-  if (editorEl) {
-    contentHtml = editorEl.innerHTML.trim();
-    // Create plain text fallback for old articles / search
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = contentHtml;
-    content = (tempDiv.textContent || tempDiv.innerText || '').trim().substring(0, 5000);
-  }
-
-  if (!title || !summary || (!content && !contentHtml)) {
-    showToast('Title, summary, and content are required', 'error');
-    return;
-  }
+  const content = document.getElementById('newsContent')?.value.trim();
+  if (!title || !summary || !content) { showToast('Title, summary, and content are required', 'error'); return; }
 
   const res = await apiPost('/news', {
     title,
     summary,
     content,
-    contentHtml,
     images: window._pendingNewsImages || []
   });
 
@@ -3128,45 +3013,6 @@ async function loadEventsPage(content) {
   renderEventsFiltered();
 }
 
-function renderEventCard(e, now) {
-  const isPast     = new Date(e.date) < now;
-  const rsvpCount  = e.rsvps ? e.rsvps.length : 0;
-  const isGoing    = currentUser && e.rsvps && e.rsvps.includes(currentUser._id);
-  const catMap     = Object.fromEntries((window._eventCategories || EVENT_CATEGORIES || []).map(c => [c.name, c.icon]));
-  const catIcon    = e.category ? (catMap[e.category] || '📅') : '📅';
-
-  const dateStr    = new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const timeStr    = new Date(e.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
-  return `
-    <div onclick="showEventDetail('${e._id}')"
-         class="bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-5 cursor-pointer transition">
-      <div class="flex justify-between items-start gap-3">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 flex-wrap">
-            ${e.category ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${catIcon} ${e.category}</span>` : ''}
-            ${isPast ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-white/40">Past</span>` : ''}
-          </div>
-          <div class="font-bold text-base leading-snug">${esc(e.title)}</div>
-          ${e.location ? `<div class="text-xs text-emerald-300 mt-1">📍 ${esc(e.location)}</div>` : ''}
-          ${e.description ? `<div class="text-sm text-white/60 mt-1 line-clamp-2">${esc(e.description)}</div>` : ''}
-        </div>
-        <div class="flex-shrink-0 text-right">
-          <div class="text-xs font-semibold text-white/70">${dateStr}</div>
-          <div class="text-xs text-white/40">${timeStr}</div>
-          ${rsvpCount > 0 ? `<div class="text-xs text-emerald-400 mt-1">🎟️ ${rsvpCount} going</div>` : ''}
-        </div>
-      </div>
-      ${!isPast && currentUser ? `
-        <div class="mt-3 pt-3 border-t border-white/10 flex justify-end">
-          <button onclick="event.stopPropagation(); toggleRSVP('${e._id}')"
-                  class="px-4 py-1.5 rounded-2xl text-xs font-semibold transition ${isGoing ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
-            ${isGoing ? '✅ Going' : '🎟️ RSVP'}
-          </button>
-        </div>` : ''}
-    </div>`;
-}
-
 window.renderEventsFiltered = function () {
   const search    = (window._eventSearch || '').toLowerCase();
   const filter    = window._eventFilter  || 'All';
@@ -3249,6 +3095,57 @@ let events = allEvents.filter(e => {
   } else {
     container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
   }
+}
+
+function renderEventCard(e, now) {
+  const eDate   = new Date(e.date);
+  const isPast  = eDate < now;
+  const icon    = catIcon(e.category);
+  const label   = e.category || 'General';
+
+  const rsvpCount = e.rsvps ? e.rsvps.length : 0;
+
+  // Gray out + Past badge for events that have already happened
+  const pastStyles = isPast 
+    ? 'opacity-60 grayscale-[0.3] border border-white/10' 
+    : 'border border-white/10 hover:border-emerald-500/30';
+
+  const pastBadge = isPast 
+    ? `<span class="text-[10px] bg-gray-500/30 text-gray-300 px-2 py-0.5 rounded-full">Past Event</span>` 
+    : '';
+
+  const rsvpHTML = currentUser && !isPast ? `
+    <button onclick="toggleRSVP('${e._id}'); event.stopImmediatePropagation()" 
+            class="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2 rounded-2xl text-sm font-semibold transition">
+      ${e.rsvps && e.rsvps.includes(currentUser._id) ? '✅ Going' : '🎟️ RSVP'}
+    </button>` : '';
+
+  return `
+    <div onclick="showEventDetail('${e._id}')" 
+         class="bg-white/10 ${pastStyles} rounded-3xl p-5 cursor-pointer transition">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
+            ${pastBadge}
+          </div>
+          <h3 class="font-bold text-lg leading-snug">${e.title}</h3>
+          <p class="text-white/70 text-sm mt-1 line-clamp-2">${e.description || ''}</p>
+          
+          <div class="flex items-center gap-2 text-xs text-white/50 mt-3">
+            <span>📅 ${formatDate(e.date)}</span>
+            ${e.location ? `<span>· 📍 ${e.location}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      
+      ${rsvpHTML}
+      
+      ${rsvpCount > 0 ? `
+        <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+          <span>🎟️</span> <span>${rsvpCount} going</span>
+        </div>` : ''}
+    </div>`;
 }
 
 async function loadResourcesPage(content) {
@@ -3665,9 +3562,6 @@ const tabs = [
   const isPro = sub.tier === 'pro';
   const credits = sub.credits || 0;
 
-  // Keep currentUser in sync so other parts of the app know the real credit count
-  if (currentUser) currentUser.notificationCredits = credits;
-
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
 
@@ -3677,16 +3571,16 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      <!-- 🔥 BUSINESS PRO TIER CARD -->
-      <div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
-        <div class="flex justify-between items-start">
-          <div>
-            <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
-              ⭐ PRO TIER
-            </div>
-            <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
-            <p class="text-white/80 mt-2">12 credits per month • Full business tools • Boosted visibility</p>
-          </div>
+      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
+<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
+  <div class="flex justify-between items-start">
+    <div>
+      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
+        ⭐ PRO TIER
+      </div>
+      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
+      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
+    </div>
           
           ${isPro ? `
             <div class="text-right">
@@ -3701,7 +3595,6 @@ const tabs = [
           `}
         </div>
 
-        <!-- Credit Counter -->
         <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <div class="text-xs opacity-75">Notification Credits</div>
@@ -3866,12 +3759,6 @@ const tabs = [
             ${dealAutoHint}
             <label class="block text-xs text-white/50 mb-1 px-1">Expiry Date (optional)</label>
             <input id="dealExpires" type="date" class="${inputClass}">
-            <div class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 mt-1">
-              <input type="checkbox" id="dealNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="dealNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(1 credit)</span>
-              </label>
-            </div>
             <button onclick="addOwnerDeal()" class="w-full bg-amber-500 hover:bg-amber-600 py-4 rounded-3xl font-semibold mt-1">🔥 Post Deal</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Active Deals</p>
@@ -3891,12 +3778,6 @@ const tabs = [
               ${eventCatOptions}
             </select>
             <textarea id="eventDesc" rows="2" placeholder="Event description" class="${inputClass} resize-none"></textarea>
-            <div class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 mt-1">
-              <input type="checkbox" id="eventNotify" class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="eventNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-                📢 Send push notification to all users <span class="text-amber-400 font-semibold">(1 credit)</span>
-              </label>
-            </div>
             <button onclick="addOwnerEvent()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-4 rounded-3xl font-semibold mt-1">📅 Post Event</button>
           </div>
           <p class="text-xs font-bold uppercase tracking-widest text-white/30 mb-3 px-1">Your Events</p>
@@ -4006,14 +3887,14 @@ const tabs = [
 
 <!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
 <div id="dtabContent-notifications" class="hidden">
-  ${(!isPro && credits === 0) ? `
+  ${!isPro ? `
   <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
     <div class="text-5xl mb-4">📢</div>
     <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
     <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
     <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 12 credits / month included (can add more credits if needed)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Optional photo attachment to notifications</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
       <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
     </div>
@@ -4218,22 +4099,18 @@ window.showBusinessPostModal = async function(postId) {
       </div>
     </div>`);
 
-  const body = document.getElementById('bizPostDetailBody');
-
   try {
     const post = await apiGet(`/business-posts/post/${postId}`);
-    
-    if (!post || post.message) {
-      body.innerHTML = `<p class="text-red-400 text-center py-8">Post not found or has been removed.</p>`;
-      return;
-    }
+    if (!post) throw new Error('Post not found');
+
+    const body = document.getElementById('bizPostDetailBody');
 
     // Fetch business info if available
     let businessHTML = '';
     if (post.business) {
       try {
         const biz = await apiGet(`/business/${post.business}`);
-        if (biz && biz._id) {
+        if (biz) {
           businessHTML = `
             <div class="flex items-center gap-3 mt-4 p-3 bg-white/5 rounded-2xl">
               <div class="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0">
@@ -4281,13 +4158,8 @@ window.showBusinessPostModal = async function(postId) {
         </div>
       </div>`;
   } catch (e) {
-    console.error('Business post modal error:', e);
-    body.innerHTML = `
-      <div class="text-center py-8">
-        <p class="text-red-400 mb-2">Failed to load post</p>
-        <button onclick="document.getElementById('bizPostDetailModal').remove()" 
-                class="text-sm text-white/60 underline">Close</button>
-      </div>`;
+    document.getElementById('bizPostDetailBody').innerHTML = 
+      `<p class="text-red-400 p-8 text-center">Failed to load post</p>`;
   }
 };
 
@@ -4558,7 +4430,10 @@ window.sendUnifiedNotification = async function() {
 
   // Credit pre-check (2 credits either way)
   const canSend = await window.canSendNotification(true);
-  if (!canSend) return; // message already shown inside canSendNotification
+  if (!canSend) {
+    showToast('Not enough credits. Buy more or upgrade to Pro!', 'error');
+    return;
+  }
 
   const btn = document.getElementById('unifiedSendBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
@@ -4706,29 +4581,25 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
-  const title    = document.getElementById('dealTitle').value.trim();
-  const desc     = document.getElementById('dealDesc').value.trim();
-  const expires  = document.getElementById('dealExpires').value;
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
+
+  const title = document.getElementById('dealTitle').value.trim();
+  const desc = document.getElementById('dealDesc').value.trim();
+  const expires = document.getElementById('dealExpires').value;
   const category = document.getElementById('dealCategory').value;
-  const sendNotify = document.getElementById('dealNotify')?.checked ?? false;
 
   if (!title) return showToast('Deal title required', 'error');
 
-  // Only gate on credits if the owner opted in to notify
-  if (sendNotify && !(await checkNotificationCredits(1))) return;
-
   try {
-    const res = await apiPost('/owner/deals', {
-      title, description: desc, expires, category, sendNotify
+    const res = await apiPost('/owner/deals', { 
+      title, description: desc, expires, category 
     });
 
     if (res._id) {
-      showToast(sendNotify ? '🔥 Deal posted & notification sent!' : '🔥 Deal posted!', 'success');
+      showToast('🔥 Deal posted!', 'success');
+      // Clear fields
       document.getElementById('dealTitle').value = '';
       document.getElementById('dealDesc').value = '';
-      // Uncheck the box for next time
-      const notifyEl = document.getElementById('dealNotify');
-      if (notifyEl) notifyEl.checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -4744,31 +4615,27 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
-  const title      = document.getElementById('eventTitle').value.trim();
-  const date       = document.getElementById('eventDate').value;
-  const location   = document.getElementById('eventLocation').value.trim();
-  const desc       = document.getElementById('eventDesc').value.trim();
-  const category   = document.getElementById('eventCategory').value;
-  const sendNotify = document.getElementById('eventNotify')?.checked ?? false;
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
+
+  const title = document.getElementById('eventTitle').value.trim();
+  const date = document.getElementById('eventDate').value;
+  const location = document.getElementById('eventLocation').value.trim();
+  const desc = document.getElementById('eventDesc').value.trim();
+  const category = document.getElementById('eventCategory').value;
 
   if (!title || !date) return showToast('Title and date required', 'error');
 
-  // Only gate on credits if the owner opted in to notify
-  if (sendNotify && !(await checkNotificationCredits(1))) return;
-
   try {
-    const res = await apiPost('/owner/events', {
-      title, date, location, description: desc, category, sendNotify
+    const res = await apiPost('/owner/events', { 
+      title, date, location, description: desc, category 
     });
 
     if (res._id) {
-      showToast(sendNotify ? '📅 Event posted & notification sent!' : '📅 Event posted!', 'success');
+      showToast('📅 Event posted!', 'success');
+      // Clear fields
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';
-      // Uncheck the box for next time
-      const notifyEl = document.getElementById('eventNotify');
-      if (notifyEl) notifyEl.checked = false;
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -6077,17 +5944,15 @@ async function loadLostFoundPage(content) {
 </select>
       </div>
 
-      <div id="lostItemsList" class="space-y-4"></div>
+      <div id="lostItemsList" class="space-y-4">
+        ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
+      </div>
       <div id="lostPagination" class="flex justify-center gap-3 mt-8"></div>
     </div>`;
 
   window.currentLostPage = 1;
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
-
-  // Show skeleton immediately while data loads
-  document.getElementById('lostItemsList').innerHTML =
-    [1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('');
 
   // Fetch all items once and cache them — search/filter then runs instantly in-memory
   _allLostItems = [];
@@ -6272,9 +6137,7 @@ async function loadMarketplacePage(content) {
         <button onclick="setMarketCategoryFilter('General')" id="cat-General"
                 class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📦 General</button>
       </div>
-      <div id="marketItemsList" class="space-y-4 min-h-[400px]">
-        ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
-      </div>
+      <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
     </div>`;
 
   // Load data once and cache it
@@ -6342,9 +6205,11 @@ window.setMarketCategoryFilter = function(category) {
   renderMarketplacePage();
 };
 
-function renderMarketplacePage() {
+async function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
   if (!container) return;
+
+  container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
 
   let filtered = allMarketplaceItems || [];
 
@@ -7350,11 +7215,6 @@ async function renderAdminDashboard() {
 }
 
 // ─── USERS MANAGEMENT (Tab 1) ────────────────────────────────────────────────
-// ─── ADMIN USERS PAGINATION STATE ────────────────────────────────────────────
-const ADMIN_USERS_PAGE_SIZE = 15;
-let _adminUsersPage = 1;
-let _adminUsersFiltered = [];
-
 async function renderAdminUsers() {
   const container = document.getElementById('adminMainContent');
   
@@ -7365,27 +7225,22 @@ async function renderAdminUsers() {
       throw new Error('Invalid users data');
     }
 
-    _adminUsersPage = 1;
-    _adminUsersFiltered = window._adminUsersData;
-
     container.innerHTML = `
       <div class="mb-4">
         <input type="text" id="userSearch" placeholder="🔍 Search by name or email…" 
                class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 text-base">
       </div>
-      <div id="usersCardList" class="space-y-3"></div>
-      <div id="usersPagination" class="mt-4 flex items-center justify-between gap-3"></div>`;
+      <div id="usersCardList" class="space-y-3"></div>`;
 
-    renderUsersTable(_adminUsersFiltered);
+    renderUsersTable(window._adminUsersData);
 
     document.getElementById('userSearch').addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase();
-      _adminUsersFiltered = window._adminUsersData.filter(u => 
+      const filtered = window._adminUsersData.filter(u => 
         (u.name || '').toLowerCase().includes(term) || 
         (u.email || '').toLowerCase().includes(term)
       );
-      _adminUsersPage = 1;
-      renderUsersTable(_adminUsersFiltered);
+      renderUsersTable(filtered);
     });
   } catch (err) {
     console.error(err);
@@ -7396,14 +7251,7 @@ async function renderAdminUsers() {
 function renderUsersTable(users) {
   const list = document.getElementById('usersCardList');
   if (!list) return;
-
-  const totalPages = Math.max(1, Math.ceil(users.length / ADMIN_USERS_PAGE_SIZE));
-  if (_adminUsersPage > totalPages) _adminUsersPage = totalPages;
-
-  const start = (_adminUsersPage - 1) * ADMIN_USERS_PAGE_SIZE;
-  const pageUsers = users.slice(start, start + ADMIN_USERS_PAGE_SIZE);
-
-  list.innerHTML = pageUsers.map(u => `
+  list.innerHTML = users.map(u => `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
@@ -7431,7 +7279,7 @@ function renderUsersTable(users) {
         ${u.isIpBanned ? `<div class="text-red-400 text-xs font-semibold">🚫 IP Banned</div>` : ''}
       </div>` : ``}
       <div class="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-2">
-        <button onclick="adminEditReputation('${u._id}', ${u.reputation || 0})" 
+        <button onclick="adminEditReputation('${u._id}')" 
                 class="flex-1 min-w-[80px] px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition">
           ⭐ Edit Rep
         </button>
@@ -7450,55 +7298,7 @@ function renderUsersTable(users) {
       </div>
     </div>
   `).join('');
-
-  // ── Pagination controls ──────────────────────────────────────────────────────
-  const pager = document.getElementById('usersPagination');
-  if (!pager) return;
-
-  if (totalPages <= 1) {
-    pager.innerHTML = `<span class="text-white/40 text-xs">${users.length} user${users.length !== 1 ? 's' : ''}</span>`;
-    return;
-  }
-
-  pager.innerHTML = `
-    <button onclick="adminUsersPageNav(-1)"
-            class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition disabled:opacity-30"
-            ${_adminUsersPage <= 1 ? 'disabled' : ''}>← Prev</button>
-    <span class="text-white/60 text-sm">Page ${_adminUsersPage} of ${totalPages} <span class="text-white/30">(${users.length} users)</span></span>
-    <button onclick="adminUsersPageNav(1)"
-            class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition disabled:opacity-30"
-            ${_adminUsersPage >= totalPages ? 'disabled' : ''}>Next →</button>`;
 }
-
-window.adminUsersPageNav = function(dir) {
-  const totalPages = Math.ceil(_adminUsersFiltered.length / ADMIN_USERS_PAGE_SIZE);
-  _adminUsersPage = Math.max(1, Math.min(totalPages, _adminUsersPage + dir));
-  renderUsersTable(_adminUsersFiltered);
-  document.getElementById('usersCardList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
-
-window.adminEditReputation = async function(userId, currentRep) {
-  const input = prompt(`Set new reputation score for this user:`, currentRep ?? 0);
-  if (input === null) return; // cancelled
-  const val = parseInt(input, 10);
-  if (isNaN(val) || val < 0) {
-    return showToast('Please enter a valid number (0 or higher)', 'error');
-  }
-  try {
-    const res = await apiPost(`/admin/users/${userId}/reputation`, { reputation: val });
-    if (res.success) {
-      showToast(`⭐ Reputation updated to ${res.reputation}`, 'success');
-      // Update in-memory data so the card re-renders correctly without a full reload
-      const user = (window._adminUsersData || []).find(u => u._id === userId);
-      if (user) user.reputation = res.reputation;
-      renderUsersTable(_adminUsersFiltered);
-    } else {
-      showToast(res.message || 'Failed to update reputation', 'error');
-    }
-  } catch (e) {
-    showToast('Network error — try again', 'error');
-  }
-};
 
 // ─── OWNER ANALYTICS ─────────────────────────────────────────────────────────
 async function loadOwnerAnalytics() {
@@ -8207,48 +8007,47 @@ window.showOnboardingTour = function() {
   // Don't show again if already completed
   if (localStorage.getItem('onboardingCompleted') === 'true') return;
 
-  // backdrop-blur removed — causes GPU freeze on older Android (Pixel 6 etc.)
   const tourHTML = `
-    <div id="onboardingTour" style="position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-overflow-scrolling:touch;overflow-y:auto;">
-      <div style="background:#18181b;border:1px solid rgba(255,255,255,0.1);border-radius:24px;max-width:448px;width:100%;overflow:hidden;">
+    <div id="onboardingTour" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+      <div class="bg-zinc-900 border border-white/10 rounded-3xl max-w-md w-full overflow-hidden">
         
         <!-- Progress dots -->
-        <div style="display:flex;justify-content:center;gap:8px;padding-top:24px;">
+        <div class="flex justify-center gap-2 pt-6">
           <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
           <div class="w-2 h-2 bg-white/30 rounded-full"></div>
           <div class="w-2 h-2 bg-white/30 rounded-full"></div>
         </div>
 
-        <div id="tourSlide" style="padding:32px;text-align:center;">
+        <div id="tourSlide" class="p-8 text-center min-h-[380px] flex flex-col">
           <!-- Slide 1 -->
           <div id="slide1">
-            <div style="font-size:3.5rem;margin-bottom:20px;">🚦</div>
-            <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:12px;color:#fff;">Welcome to Milledgeville Connect</h2>
-            <p style="color:#a1a1aa;font-size:1rem;line-height:1.6;">Your local community app for real-time traffic alerts, buying & selling, lost pets, events, and more.</p>
+            <div class="text-6xl mb-6">🚦</div>
+            <h2 class="text-3xl font-bold mb-3">Welcome to Milledgeville Connect</h2>
+            <p class="text-zinc-400 text-lg leading-relaxed">Your local community app for real-time traffic alerts, buying & selling, lost pets, events, and more.</p>
           </div>
 
           <!-- Slide 2 (hidden by default) -->
-          <div id="slide2" style="display:none;">
-            <div style="font-size:3.5rem;margin-bottom:20px;">🛒</div>
-            <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:12px;color:#fff;">Marketplace & Lost & Found</h2>
-            <p style="color:#a1a1aa;font-size:1rem;line-height:1.6;">Buy, sell, trade locally and help neighbors find lost items and pets.</p>
+          <div id="slide2" class="hidden">
+            <div class="text-6xl mb-6">🛒</div>
+            <h2 class="text-3xl font-bold mb-3">Marketplace & Lost & Found</h2>
+            <p class="text-zinc-400 text-lg leading-relaxed">Buy, sell, trade locally and help neighbors find lost items and pets.</p>
           </div>
 
           <!-- Slide 3 -->
-          <div id="slide3" style="display:none;">
-            <div style="font-size:3.5rem;margin-bottom:20px;">📅</div>
-            <h2 style="font-size:1.6rem;font-weight:700;margin-bottom:12px;color:#fff;">Stay Connected</h2>
-            <p style="color:#a1a1aa;font-size:1rem;line-height:1.6;">Events, deals, news, and live community shoutouts — all in one place.</p>
+          <div id="slide3" class="hidden">
+            <div class="text-6xl mb-6">📅</div>
+            <h2 class="text-3xl font-bold mb-3">Stay Connected</h2>
+            <p class="text-zinc-400 text-lg leading-relaxed">Events, deals, news, and live community shoutouts — all in one place.</p>
           </div>
         </div>
 
-        <div style="padding:20px 24px 24px;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:12px;">
+        <div class="p-6 border-t border-white/10 flex items-center gap-4">
           <button onclick="skipOnboarding()" 
-                  style="flex:1;padding:16px;color:rgba(255,255,255,0.7);font-weight:500;background:none;border:none;cursor:pointer;font-size:0.95rem;touch-action:manipulation;">
+                  class="flex-1 py-4 text-white/70 hover:text-white font-medium transition">
             Skip
           </button>
           <button onclick="nextOnboardingSlide()" id="tourNextBtn"
-                  style="flex:1;background:#059669;color:#fff;border:none;padding:16px;border-radius:16px;font-weight:600;cursor:pointer;font-size:0.95rem;touch-action:manipulation;">
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-700 py-4 rounded-2xl font-semibold transition">
             Next
           </button>
         </div>
@@ -8304,53 +8103,46 @@ window.postShoutoutWithPhoto = async function() {
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
 window.sendCustomNotification = async function() {
-  // Check if user can send (handles credits + Pro status)
-  if (!window.canSendNotification()) return;
-
-  const titleEl = document.getElementById('customTitle');
-  const bodyEl  = document.getElementById('customBody');
-
-  const title = titleEl?.value.trim();
-  const body  = bodyEl?.value.trim();
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
 
   if (!title || !body) {
     showToast('Title and message are required', 'error');
     return;
   }
 
-  const btn = event.currentTarget; // optional: disable button while sending
-  if (btn) btn.disabled = true;
+  // Client-side credit pre-check (2 credits for custom)
+  const canSend = await window.canSendNotification(true);
+  if (!canSend) {
+    showToast('Not enough credits. Upgrade to Pro!', 'error');
+    return;
+  }
+
+  const btn = document.querySelector('#notificationsContent button[onclick="sendCustomNotification()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
   try {
-    showToast('Sending notification...', 'success');
-
     const res = await apiPost('/owner/custom-notification', { title, body });
 
     if (res.success) {
-      showToast('✅ Notification sent successfully!', 'success');
-
-      // Clear the form
-      if (titleEl) titleEl.value = '';
-      if (bodyEl) bodyEl.value = '';
-
-      // Update local credits
-      if (res.credits !== undefined && currentUser) {
-        currentUser.notificationCredits = res.credits;
-
-        // Refresh the credit number shown on screen (if visible)
-        const creditDisplay = document.getElementById('notifCreditDisplay');
-        if (creditDisplay) creditDisplay.textContent = res.credits;
+      showToast('✅ Custom notification sent to all users!', 'success');
+      document.getElementById('customTitle').value = '';
+      document.getElementById('customBody').value  = '';
+      document.getElementById('customTitle').dispatchEvent(new Event('input'));
+      document.getElementById('customBody').dispatchEvent(new Event('input'));
+      // Refresh the credit counter in the tab
+      if (res.credits !== undefined) {
+        const creditEl = document.getElementById('notifCreditDisplay');
+        if (creditEl) creditEl.textContent = res.credits;
       }
-
     } else {
       showToast(res.message || 'Failed to send notification', 'error');
     }
-
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     showToast('Failed to send notification', 'error');
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = '📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>'; }
   }
 };
 
@@ -8369,13 +8161,13 @@ window.nextOnboardingSlide = function() {
   }
 
   if (window.currentTourSlide === 1) {
-    slide1.style.display = 'none';
-    slide2.style.display = 'block';
+    slide1.classList.add('hidden');
+    slide2.classList.remove('hidden');
     setDot(1);
     window.currentTourSlide = 2;
   } else if (window.currentTourSlide === 2) {
-    slide2.style.display = 'none';
-    slide3.style.display = 'block';
+    slide2.classList.add('hidden');
+    slide3.classList.remove('hidden');
     setDot(2);
     nextBtn.textContent = "Get Started";
     window.currentTourSlide = 3;
@@ -8461,20 +8253,16 @@ window.viewReportedContent = async function (type, id) {
 
 // Credit check helper for other posting functions
 async function checkNotificationCredits(required = 2) {
+  // Only verified business owners have a credit system at all
   if (!currentUser || !currentUser.verifiedBusiness) return true;
+  if (currentUser.subscriptionTier === 'pro') return true;
 
   const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  const isPro = (sub.tier || currentUser.subscriptionTier) === 'pro';
-  const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-
-  if (credits >= required) return true;
-
-  if (isPro) {
-    showToast('You\'re out of credits — purchase more to keep sending notifications.', 'error');
-  } else {
-    showToast('You\'ve used your 5 free credits. Upgrade to Pro for 12 monthly credits!', 'error');
+  if ((sub.credits || 0) < required) {
+    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
+    return false;
   }
-  return false;
+  return true;
 }
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
@@ -8509,17 +8297,8 @@ window.canSendNotification = async function(isCustom = false) {
   try {
     const sub = await apiGet('/owner/subscription');
     const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const isPro = (sub.tier || currentUser.subscriptionTier) === 'pro';
-    const cost = 2;
-
-    if (credits >= cost) return true;
-
-    if (isPro) {
-      showToast('You\'re out of credits. Buy a credit pack to keep sending notifications.', 'error');
-    } else {
-      showToast('You\'ve used your 5 free credits. Upgrade to Pro for 12 monthly credits!', 'error');
-    }
-    return false;
+    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
+    return credits >= cost;
   } catch (e) {
     console.error('Credit check failed', e);
     return false;
@@ -8557,13 +8336,6 @@ window.buyProTier = async function() {
 window.buyCreditPack = async function() {
   if (!window.Capacitor) {
     showToast('Credit purchases are only available in the Android app', 'error');
-    return;
-  }
-
-  // Only Pro members can buy credit packs
-  const isPro = currentUser?.subscriptionTier === 'pro';
-  if (!isPro) {
-    showToast('You need Business Pro to purchase credit packs. Upgrade first!', 'error');
     return;
   }
 
@@ -8641,7 +8413,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits`, 'success');
+  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
 };
 
 window.saveOwnerBusinessLogo = async function() {
@@ -8854,7 +8626,6 @@ window.showNotificationSettingsModal = async function() {
     lostFound: prefs.lostFound !== false,
     messages:  prefs.messages  !== false,
     comments:  prefs.comments  !== false,
-    news:      prefs.news      !== false,
     marketplace: {
       all:       prefs.marketplace?.all       !== false,
       homes:     prefs.marketplace?.homes     !== false,
@@ -8908,7 +8679,6 @@ window.showNotificationSettingsModal = async function() {
           ${toggle('pref-lostfound', p.lostFound, '🔎 Lost & Found — lost pets and items nearby')}
           ${toggle('pref-messages',  p.messages,  '✉️ Direct Messages — messages from other users')}
           ${toggle('pref-comments',  p.comments,  '💬 Comments — replies on your posts and listings')}
-          ${toggle('pref-news',    p.news,    '📰 News — new articles & local updates')}
 
           <!-- Marketplace section -->
           <div class="pt-2">
@@ -8969,7 +8739,6 @@ window.saveNotificationPreferences = async function() {
     lostFound: document.getElementById('pref-lostfound')?.checked ?? true,
     messages: document.getElementById('pref-messages')?.checked ?? true,
     comments: document.getElementById('pref-comments')?.checked ?? true,
-    news: document.getElementById('pref-news')?.checked ?? true,
     marketplace: {
       all: document.getElementById('pref-market-all')?.checked ?? true,
       homes: document.getElementById('pref-market-homes')?.checked ?? true,
@@ -9022,22 +8791,6 @@ window.toggleHomeExtraFields = function() {
     extra.classList.remove('hidden');
   } else {
     extra.classList.add('hidden');
-  }
-};
-
-// ─── REFRESH USER AFTER BUSINESS VERIFICATION ───────────────────────────────
-window.refreshUserAfterVerification = function(businessId) {
-  if (!currentUser) return;
-
-  currentUser.verifiedBusiness = businessId;
-  currentUser.notificationCredits = 5; // grant 5 free credits locally
-
-  // Re-render nav + profile so "My Business Dashboard" button appears immediately
-  if (typeof renderNav === 'function') renderNav();
-  
-  // If user is currently on profile or owner dashboard, refresh it
-  if (currentPage === 'profile' || currentPage === 'owner-dashboard') {
-    loadPage(currentPage);
   }
 };
 
