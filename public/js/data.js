@@ -4156,47 +4156,60 @@ window.showBusinessPostModal = async function(postId) {
 
   document.body.insertAdjacentHTML('beforeend', `
     <div id="bizPostDetailModal"
-         class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
-      <div class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[95vh] flex flex-col">
-        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
-          <span class="text-sm font-semibold text-white/70">Business Update</span>
-          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
-        </div>
+         onclick="if(event.target.id==='bizPostDetailModal') document.getElementById('bizPostDetailModal').remove()"
+         class="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-[28px] sm:rounded-[28px] overflow-hidden max-h-[95vh] flex flex-col">
+
         <div id="bizPostDetailBody" class="flex-1 overflow-y-auto flex items-center justify-center py-16">
           <div class="w-8 h-8 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
         </div>
+
       </div>
     </div>`);
 
   try {
-    console.log('%c[DEEP LINK] Fetching post...', 'color:yellow');
     const post = await apiGet(`/business-posts/post/${postId}`);
-    console.log('%c[DEEP LINK] Post fetched successfully:', 'color:lime', post);
 
     document.getElementById('bizPostDetailBody').innerHTML = `
-      <div class="w-full bg-black flex items-center justify-center">
-        <img src="${post.image}" class="w-full max-h-[60vh] object-contain" alt="Business photo update">
+
+      <div class="relative bg-black w-full" style="aspect-ratio:4/3; overflow:hidden;">
+        <img src="${post.image}"
+             class="w-full h-full object-cover"
+             alt="Photo update from ${esc(post.bizName)}">
+        <button onclick="document.getElementById('bizPostDetailModal').remove()"
+                class="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-black/55 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 transition text-xl leading-none">
+          ×
+        </button>
+        <div class="absolute bottom-0 left-0 right-0 h-20"
+             style="background:linear-gradient(to top, rgba(15,23,42,0.95), transparent)"></div>
       </div>
-      <div class="p-5 space-y-3">
+
+      <div class="px-5 pt-4 pb-6 flex flex-col gap-3.5">
+
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">📸</div>
-          <div>
-            <p class="font-bold text-white leading-tight">${esc(post.bizName)}</p>
-            <p class="text-xs text-white/40">${timeAgo(post.createdAt)}</p>
+          <div class="w-11 h-11 rounded-[14px] bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+            <span class="text-xl">🏪</span>
           </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-[15px] text-white leading-snug truncate">${esc(post.bizName)}</p>
+            <p class="text-xs text-white/35 mt-0.5">${timeAgo(post.createdAt)}</p>
+          </div>
+          <span class="text-[11px] font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-full px-2.5 py-1 flex-shrink-0">Update</span>
         </div>
-        ${post.caption ? `<p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
-        <div class="flex gap-3 pt-2">
-          <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
-                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
-            🏪 View ${esc(post.bizName)}
-          </button>
-          <button onclick="document.getElementById('bizPostDetailModal').remove()"
-                  class="py-3 px-4 bg-white/5 hover:bg-white/10 text-white/60 rounded-2xl text-sm font-semibold transition">
-            ✕
-          </button>
-        </div>
+
+        ${post.caption ? `
+        <p class="text-sm text-white/75 leading-relaxed border-l-2 border-emerald-500/40 pl-3">
+          ${esc(post.caption)}
+        </p>` : ''}
+
+        <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
+                class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-2xl text-sm font-semibold transition flex items-center justify-center gap-2">
+          🏪 View ${esc(post.bizName)}
+        </button>
+
       </div>`;
+
   } catch (e) {
     console.error('%c[DEEP LINK] ERROR inside showBusinessPostModal:', 'color:red', e);
     document.getElementById('bizPostDetailBody').innerHTML = `
