@@ -149,15 +149,28 @@ window.handlePushNotificationClick = function(data) {
 
   // ─── BUSINESS POST (with image) ──────────────────────────────────────────
   if (page === 'business-post' && id) {
+    // Navigate to 'home' first so the DOM has a stable base (matches the
+    // pattern used by marketplace, events, deals, etc.). Without this the
+    // APK WebView may have no rendered page to attach the modal to.
+    navigate('home');
+
+    // APK cold-start needs more time than desktop — use 900ms like the other
+    // deep-link modals, plus a retry loop in case scripts are still loading.
+    const MAX_ATTEMPTS = 5;
+    let attempts = 0;
     const tryOpen = () => {
+      attempts++;
       if (typeof window.showBusinessPostModal === 'function') {
         window.showBusinessPostModal(id);
+      } else if (attempts < MAX_ATTEMPTS) {
+        console.warn(`[DEEP LINK] showBusinessPostModal not ready, retry ${attempts}/${MAX_ATTEMPTS}`);
+        setTimeout(tryOpen, 400);
       } else {
-        console.warn('showBusinessPostModal not found');
+        console.error('[DEEP LINK] showBusinessPostModal never became available — giving up');
         navigate('home');
       }
     };
-    setTimeout(tryOpen, 450);
+    setTimeout(tryOpen, 900);
     return;
   }
 
