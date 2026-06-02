@@ -185,36 +185,26 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
   });
 
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-    console.log('🔔 Notification tapped:', action);
+    console.log('🔔 APK notification tapped:', action);
 
     const data = action?.notification?.data || {};
-    const page = data.page;
-    const id   = data.id;
+    if (!data.page) return;
 
-    if (!page) return;
-
-    // Navigate to the right page, then scroll to/highlight the specific post
-    if (typeof loadPage === 'function') {
-      loadPage(page).then(() => {
-        if (id && page === 'shoutouts') {
-          // Increased delay for better reliability after page load
-          setTimeout(() => {
-            const el = document.getElementById('shoutout-' + id);
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el.classList.add('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
-              
-              // Remove highlight after 4 seconds
-              setTimeout(() => {
-                el.classList.remove('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
-              }, 4000);
-            } else {
-              console.warn(`Could not find shoutout-${id} element`);
-            }
-          }, 800);
-        }
-      });
-    }
+    // Defer until the app's JS is fully initialised (APK cold-start needs time)
+    const MAX_ATTEMPTS = 8;
+    let attempts = 0;
+    const tryHandle = () => {
+      attempts++;
+      if (typeof window.handlePushNotificationClick === 'function') {
+        window.handlePushNotificationClick({ page: data.page, id: data.id || '' });
+      } else if (attempts < MAX_ATTEMPTS) {
+        setTimeout(tryHandle, 300);
+      } else {
+        console.error('[APK Push] handlePushNotificationClick never became available');
+      }
+    };
+    // Small delay so the DOM and app scripts finish loading before we try to open modals
+    setTimeout(tryHandle, 600);
   });
 }
 
