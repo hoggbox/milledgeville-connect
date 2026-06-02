@@ -136,11 +136,12 @@ window.handlePushNotificationClick = function(data) {
     if (id) setTimeout(() => openConversation(id), 800);
   } 
   else if (page === 'business-post') {
-    if (id) showBusinessPostModal(id);
-    else navigate('home');
+    // Always navigate home first so the app has a page behind the modal.
+    // Then wait for the page + auth to settle before opening the modal.
+    navigate('home');
+    if (id) setTimeout(() => showBusinessPostModal(id), 1200);
   }
   else if (page === 'directory') {
-    // Text-only custom biz notification — navigate to directory then open their card
     navigate('directory');
     if (id) setTimeout(() => showBusinessDetail(id), 900);
   }
@@ -172,11 +173,12 @@ if ('serviceWorker' in navigator) {
     const id   = params.get('notif_id');
     if (page) {
       window.history.replaceState({}, document.title, window.location.pathname);
+      // Wait long enough for auth check + initial page render to complete
       setTimeout(() => {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 2200);
+      }, 3200);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);

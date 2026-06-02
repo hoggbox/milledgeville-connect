@@ -1895,8 +1895,8 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     }
 
     // Deep-link routing:
-    //   • Photo notification  → open BusinessPost modal (bigger image + biz info card)
-    //   • Text-only notification → open the business's directory card directly
+    //   • Photo notification  → open BusinessPost modal (image + biz info + directory button)
+    //   • Text-only           → open the business's directory card directly
     let deepLinkData;
     if (notifImageUrl && notifImageUrl.includes('/business-post-thumb/')) {
       const postIdMatch = notifImageUrl.match(/business-post-thumb\/([a-f0-9]{24})/i);
