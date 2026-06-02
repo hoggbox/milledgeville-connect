@@ -8222,50 +8222,20 @@ window.showOnboardingTour = function() {
   window.currentTourSlide = 1;
 };
 
-// ─── FINAL FIXED SHOUTOUT POST (Only 1 notification) ───────────────────────
-let isPostingShoutout = false;
-
-// ─── POST TRAFFIC ALERT WITH CREDIT CHECK ───────────────────────────────────
-window.postShoutoutWithPhoto = async function() {
-  if (isPostingShoutout) return;
-  isPostingShoutout = true;
-
-  try {
-    const input = document.getElementById('shoutoutInput');
-    const text = input ? input.value.trim() : '';
-
-    if (!text) {
-      showToast('Please write a traffic alert', 'error');
-      return;
-    }
-
-    const images = window._shoutoutImages || [];
-
-    showToast('Posting...', 'success');
-
-    const res = await apiPost('/shoutouts', { text, images });
-
-    if (res && res._id) {
-      showToast('🚦 Traffic alert posted!', 'success');
-      
-      if (input) input.value = '';
-      window._shoutoutImages = [];
-      const previewContainer = document.getElementById('shoutoutImagePreviews');
-      if (previewContainer) previewContainer.innerHTML = '';
-
-      loadShoutoutsPage(document.getElementById('content'));
-    } else {
-      showToast(res?.message || 'Failed to post', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Network error — try again', 'error');
-  } finally {
-    isPostingShoutout = false;
-  }
-};
+// ─── NOTE ────────────────────────────────────────────────────────────────────
+// postShoutoutWithPhoto is defined above (search for "window.postShoutoutWithPhoto")
+// near handleShoutoutImages / _pendingShoutoutImages. DO NOT redefine it here.
+// A previous version here used window._shoutoutImages (never populated) instead
+// of _pendingShoutoutImages, silently dropping all attached photos.
+// The correct definition uses _pendingShoutoutImages — keep it that way.
+// ─────────────────────────────────────────────────────────────────────────────
+let isPostingShoutout = false; // guard used by the correct postShoutoutWithPhoto above
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
+// ⚠️  NOTE: This old sendCustomNotification button path MUST send imageUrl.
+//     The API route /owner/custom-notification accepts { title, body, imageUrl }.
+//     Omitting imageUrl here means images never show in notifications from this path.
+//     DO NOT remove the imageUrl field from the apiPost call below.
 window.sendCustomNotification = async function() {
   const title = document.getElementById('customTitle')?.value.trim();
   const body  = document.getElementById('customBody')?.value.trim();
@@ -8286,7 +8256,12 @@ window.sendCustomNotification = async function() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
   try {
-    const res = await apiPost('/owner/custom-notification', { title, body });
+    // ⚠️  Always pass imageUrl — the API will handle base64 → thumb URL conversion.
+    //     Omitting it here means notification images never show in this code path.
+    const payload = { title, body };
+    if (_bizPostPendingImage) payload.imageUrl = _bizPostPendingImage;
+
+    const res = await apiPost('/owner/custom-notification', payload);
 
     if (res.success) {
       showToast('✅ Custom notification sent to all users!', 'success');

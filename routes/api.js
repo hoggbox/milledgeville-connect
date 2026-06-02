@@ -366,112 +366,6 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       });
     }
 
-    router.post('/auth/forgot-password/question', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required' });
- 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-                           .select('securityQuestion');
- 
-    // Always return the same shape — don't reveal whether the email exists
-    if (!user || !user.securityQuestion) {
-      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
-    }
- 
-    res.json({ question: user.securityQuestion });
-  } catch (err) {
-    console.error('Forgot password step 1 error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
- 
-// STEP 2 — Client sends email + answer + new password, server verifies and resets
-// POST /api/auth/forgot-password/reset
-router.post('/auth/forgot-password/reset', async (req, res) => {
-  try {
-    const { email, answer, newPassword } = req.body;
- 
-    if (!email || !answer || !newPassword) {
-      return res.status(400).json({ message: 'Email, answer, and new password are required' });
-    }
- 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
- 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-                           .select('+securityAnswer +password');
- 
-    if (!user || !user.securityAnswer) {
-      return res.status(404).json({ message: 'No account found with that email.' });
-    }
- 
-    // Compare answer (case-insensitive, trimmed) against stored hash
-    const answerMatch = await bcrypt.compare(
-      answer.trim().toLowerCase(),
-      user.securityAnswer
-    );
- 
-    if (!answerMatch) {
-      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
-    }
- 
-    // Hash and save the new password
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
- 
-    res.json({ success: true, message: 'Password reset successfully.' });
-  } catch (err) {
-    console.error('Forgot password reset error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGE PASSWORD ROUTE
-// Paste this into your server api.js above module.exports = router
-// Requires: authenticate middleware, bcrypt, User model (all already imported)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// POST /api/auth/change-password
-router.post('/auth/change-password', authenticate, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
-    if (currentPassword === newPassword) {
-      return res.status(400).json({ message: 'New password must be different from current password' });
-    }
-
-    // Fetch user with password field (select: false on password means we must request it)
-    const user = await User.findById(req.userId).select('+password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
-    }
-
-    // Hash and save new password
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
-
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (err) {
-    console.error('Change password error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
     // ── Spam burst detection ────────────────────────────────────────────────────
     const now = Date.now();
     const windowStart = now - SPAM_WINDOW_MS;
@@ -534,6 +428,113 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// =============================================================================
+// ⚠️  DO NOT MOVE THESE ROUTES — they must stay at the top level of the router,
+//     NOT nested inside any other route handler's try{} block.
+//     Past mistakes: these were accidentally pasted inside the /shoutouts POST
+//     handler, causing unpredictable behavior. Keep them here.
+// =============================================================================
+
+// STEP 1 — Client sends email, server returns the security question
+// POST /api/auth/forgot-password/question
+router.post('/auth/forgot-password/question', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('securityQuestion');
+
+    // Always return the same shape — don't reveal whether the email exists
+    if (!user || !user.securityQuestion) {
+      return res.status(404).json({ message: 'No account found with that email, or no security question set.' });
+    }
+
+    res.json({ question: user.securityQuestion });
+  } catch (err) {
+    console.error('Forgot password step 1 error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// STEP 2 — Client sends email + answer + new password, server verifies and resets
+// POST /api/auth/forgot-password/reset
+router.post('/auth/forgot-password/reset', async (req, res) => {
+  try {
+    const { email, answer, newPassword } = req.body;
+
+    if (!email || !answer || !newPassword) {
+      return res.status(400).json({ message: 'Email, answer, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+                           .select('+securityAnswer +password');
+
+    if (!user || !user.securityAnswer) {
+      return res.status(404).json({ message: 'No account found with that email.' });
+    }
+
+    // Compare answer (case-insensitive, trimmed) against stored hash
+    const answerMatch = await bcrypt.compare(
+      answer.trim().toLowerCase(),
+      user.securityAnswer
+    );
+
+    if (!answerMatch) {
+      return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
+    }
+
+    // Hash and save the new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ success: true, message: 'Password reset successfully.' });
+  } catch (err) {
+    console.error('Forgot password reset error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/auth/change-password
+// ⚠️  DO NOT MOVE — keep at router top level, not inside another handler.
+router.post('/auth/change-password', authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'New password must be different from current password' });
+    }
+
+    const user = await User.findById(req.userId).select('+password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -3508,16 +3509,39 @@ User.schema.methods.findByIdAndUpdate = function(id, update, options) {
 };
 
 // ─── Helper: Sanitize content fields before saving ───────────────────────────
+// ⚠️  IMAGE SAFETY: base64 data URLs (data:image/...) must NOT be passed through
+//     the HTML-strip regex or the 10000-char substring — both will corrupt them.
+//     Any key whose value looks like a data URL is passed through untouched.
+//     The shoutout route stores images[] as base64; the business-post and
+//     custom-notification routes do the same. Do NOT add substring/replace logic
+//     that would touch these fields.
 function sanitizeContent(fields = {}) {
   const out = {};
   for (const [key, val] of Object.entries(fields)) {
     if (typeof val === 'string') {
-      out[key] = val
-        .replace(/<script[\s\S]*?<\/script>/gi, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/\0/g, '')
-        .trim()
-        .substring(0, 10000);
+      // Skip HTML sanitization for base64 image data URLs — they are binary
+      // payloads, not user-supplied text, and the regex + substring will corrupt them
+      if (/^data:image\/(jpeg|png|webp|gif);base64,/i.test(val)) {
+        out[key] = val;
+      } else {
+        out[key] = val
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<[^>]+>/g, '')
+          .replace(/\0/g, '')
+          .trim()
+          .substring(0, 10000);
+      }
+    } else if (Array.isArray(val)) {
+      // Handle arrays (e.g. images: [...]) — sanitize each element individually
+      out[key] = val.map(item => {
+        if (typeof item === 'string' && /^data:image\/(jpeg|png|webp|gif);base64,/i.test(item)) {
+          return item; // base64 image — pass through untouched
+        }
+        if (typeof item === 'string') {
+          return item.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '').replace(/\0/g, '').trim().substring(0, 10000);
+        }
+        return item;
+      });
     } else {
       out[key] = val;
     }
