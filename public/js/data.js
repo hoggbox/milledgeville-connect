@@ -136,14 +136,27 @@ window.handlePushNotificationClick = function(data) {
     if (id) setTimeout(() => openConversation(id), 800);
   } 
   else if (page === 'business-post') {
-    // Always navigate home first so the app has a page behind the modal.
-    // Then wait for the page + auth to settle before opening the modal.
-    navigate('home');
-    if (id) setTimeout(() => showBusinessPostModal(id), 1200);
+    if (id) {
+      // Can't use navigate() here — loadPage() strips all *Modal elements before
+      // rendering, which would kill the modal we're about to open.
+      // Instead: load home directly into the content div (same as loadDirectoryAndOpen),
+      // then open the modal on top once the page has painted.
+      const content = document.getElementById('content');
+      if (content) {
+        loadHomePage(content).then(() => showBusinessPostModal(id));
+      } else {
+        showBusinessPostModal(id);
+      }
+    } else {
+      navigate('home');
+    }
   }
   else if (page === 'directory') {
-    navigate('directory');
-    if (id) setTimeout(() => showBusinessDetail(id), 900);
+    if (id) {
+      loadDirectoryAndOpen(id);
+    } else {
+      navigate('directory');
+    }
   }
   else {
     navigate(page);
@@ -173,12 +186,12 @@ if ('serviceWorker' in navigator) {
     const id   = params.get('notif_id');
     if (page) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Wait long enough for auth check + initial page render to complete
+      // Wait for auth + initial render before firing deep-link
       setTimeout(() => {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 3200);
+      }, 2500);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
