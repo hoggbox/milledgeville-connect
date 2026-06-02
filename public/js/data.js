@@ -94,6 +94,7 @@ window.submitRating = async function (businessId, score) {
 };
 
 // ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
+// ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
 window.handlePushNotificationClick = function(data) {
   if (!data?.page) {
     navigate('home');
@@ -135,20 +136,33 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
+
+  // ─── BUSINESS POST (with image in notification) ───────────────────────────
   else if (page === 'business-post') {
     if (id) {
-      // Step 1: kick off the home page load in the background (don't await it)
-      // Step 2: open the modal immediately — it appends to document.body so
-      //         loadPage's modal-killer never touches it, and loadHomePage
-      //         renders into #content which is a separate DOM node.
+      const openBizPostModal = () => {
+        if (typeof window.showBusinessPostModal === 'function') {
+          window.showBusinessPostModal(id);
+        } else {
+          // Retry a few times if the function isn't registered yet (common on cold launch)
+          setTimeout(openBizPostModal, 250);
+        }
+      };
+
+      // On APK cold launch we need to make sure we're not stuck on a loading spinner
       const contentEl = document.getElementById('content');
-      if (contentEl) loadHomePage(contentEl); // fire and forget — don't .then()
-      // Small tick to let the home page shell paint before modal opens
-      setTimeout(() => window.showBusinessPostModal(id), 100);
+      if (contentEl && currentPage !== 'home') {
+        loadHomePage(contentEl).then(() => {
+          setTimeout(openBizPostModal, 120);
+        });
+      } else {
+        setTimeout(openBizPostModal, 80);
+      }
     } else {
       navigate('home');
     }
   }
+
   else if (page === 'directory') {
     if (id) {
       loadDirectoryAndOpen(id);
@@ -189,7 +203,7 @@ if ('serviceWorker' in navigator) {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 2500);
+      }, 600);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
