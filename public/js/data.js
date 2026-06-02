@@ -140,6 +140,7 @@ window.handlePushNotificationClick = function(data) {
     else navigate('home');
   }
   else if (page === 'directory') {
+    // Text-only custom biz notification — navigate to directory then open their card
     navigate('directory');
     if (id) setTimeout(() => showBusinessDetail(id), 900);
   }
