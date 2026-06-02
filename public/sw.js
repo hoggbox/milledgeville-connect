@@ -32,10 +32,13 @@ self.addEventListener('notificationclick', event => {
   const page = data.page || 'home';
   const id   = data.id   || '';
 
+  const deepLinkUrl = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}`;
+
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
 
-      // Case 1: App is already open and visible
+      // Case 1: App is already open AND visible (foreground tab/window)
+      // postMessage is safe here — JS context is live and DOM is ready.
       const visibleClient = windowClients.find(c => c.visibilityState === 'visible');
       if (visibleClient) {
         visibleClient.focus();
@@ -43,19 +46,18 @@ self.addEventListener('notificationclick', event => {
         return;
       }
 
-      // Case 2: App is open but backgrounded
-      // ── FIX 2: no setTimeout in service workers — post the message immediately,
-      //    then focus. The app's 'message' listener handles sequencing via its own
-      //    setTimeout internally (already in data.js). ─────────────────────────
-      const backgroundClient = windowClients.find(c => c.url.includes(self.location.origin));
-      if (backgroundClient) {
-        backgroundClient.postMessage({ type: 'PUSH_NOTIFICATION_CLICK', data: { page, id } });
-        return backgroundClient.focus();
+      // Case 2: App is backgrounded/suspended OR completely closed.
+      // On Android, focus() triggers a full app resume (300-800ms) but postMessage
+      // already fired — the JS context isn't ready yet so the message is lost.
+      // Solution: navigate to the deep-link URL instead. The cold-launch handler
+      // in data.js reads notif_page + notif_id after the app fully initializes.
+      const anyClient = windowClients.find(c => c.url.includes(self.location.origin));
+      if (anyClient) {
+        return anyClient.navigate(deepLinkUrl).then(client => client && client.focus());
       }
 
-      // Case 3: App was completely closed → open with query params
-      const url = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}`;
-      return self.clients.openWindow(url);
+      // Case 3: App was completely closed → open fresh with query params
+      return self.clients.openWindow(deepLinkUrl);
     })
   );
 });
