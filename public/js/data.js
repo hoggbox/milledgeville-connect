@@ -102,7 +102,6 @@ window.handlePushNotificationClick = function(data) {
 
   const { page, id } = data;
 
-  // Standard navigation cases
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
     if (id) setTimeout(() => {
@@ -148,36 +147,35 @@ window.handlePushNotificationClick = function(data) {
     return;
   }
 
-  // ─── BUSINESS POST (with image) - Cold launch friendly ────────────────────
+  // ─── BUSINESS POST (with image) — This pattern worked before ──────────────
   if (page === 'business-post' && id) {
-    // Give the app more time to fully initialize on cold launch
-    setTimeout(() => {
-      let attempts = 0;
-      const maxAttempts = 15;
+    const contentEl = document.getElementById('content');
 
-      const tryOpen = () => {
-        attempts++;
-        if (typeof window.showBusinessPostModal === 'function') {
-          try {
+    if (contentEl) {
+      // Fire home page load in background (don't await it)
+      loadHomePage(contentEl);
+    }
+
+    // Short delay then open the modal directly
+    setTimeout(() => {
+      if (typeof window.showBusinessPostModal === 'function') {
+        window.showBusinessPostModal(id);
+      } else {
+        // One retry if it's still not ready
+        setTimeout(() => {
+          if (typeof window.showBusinessPostModal === 'function') {
             window.showBusinessPostModal(id);
-          } catch (err) {
-            console.error('showBusinessPostModal error:', err);
+          } else {
             navigate('home');
           }
-        } else if (attempts < maxAttempts) {
-          setTimeout(tryOpen, 300);
-        } else {
-          console.warn('showBusinessPostModal never became available after cold launch');
-          navigate('home');
-        }
-      };
+        }, 400);
+      }
+    }, 150);
 
-      tryOpen();
-    }, 800); // Extra delay on cold launch
     return;
   }
 
-  // No image → open business card directly
+  // No image → open business card
   if (page === 'directory' && id) {
     loadDirectoryAndOpen(id);
     return;
