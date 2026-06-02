@@ -139,6 +139,10 @@ window.handlePushNotificationClick = function(data) {
     if (id) showBusinessPostModal(id);
     else navigate('home');
   }
+  else if (page === 'directory') {
+    navigate('directory');
+    if (id) setTimeout(() => showBusinessDetail(id), 900);
+  }
   else {
     navigate(page);
   }

@@ -1894,10 +1894,22 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       }
     }
 
+    // Deep-link: photo notif → open business-post modal; text-only → open directory card
+    let deepLinkData;
+    if (notifImageUrl && notifImageUrl.includes('/business-post-thumb/')) {
+      const postIdMatch = notifImageUrl.match(/business-post-thumb\/([a-f0-9]{24})/i);
+      const postId = postIdMatch ? postIdMatch[1] : null;
+      deepLinkData = postId
+        ? { page: 'business-post', id: postId }
+        : { page: 'directory',     id: String(user.verifiedBusiness) };
+    } else {
+      deepLinkData = { page: 'directory', id: String(user.verifiedBusiness) };
+    }
+
     await broadcastPush(
       title.trim(),
       stampedBody,
-      { page: 'home' },
+      deepLinkData,
       { type: 'custom', imageUrl: notifImageUrl }
     );
 
