@@ -137,16 +137,11 @@ window.handlePushNotificationClick = function(data) {
   } 
   else if (page === 'business-post') {
     if (id) {
-      // Can't use navigate() here — loadPage() strips all *Modal elements before
-      // rendering, which would kill the modal we're about to open.
-      // Instead: load home directly into the content div (same as loadDirectoryAndOpen),
-      // then open the modal on top once the page has painted.
-      const content = document.getElementById('content');
-      if (content) {
-        loadHomePage(content).then(() => showBusinessPostModal(id));
-      } else {
-        showBusinessPostModal(id);
-      }
+      // showBusinessPostModal is fully self-contained — it fetches its own data
+      // and appends directly to document.body. No page load needed at all.
+      // Navigate home in the background so there's a sensible page behind the modal.
+      navigate('home');
+      showBusinessPostModal(id);
     } else {
       navigate('home');
     }
@@ -191,7 +186,7 @@ if ('serviceWorker' in navigator) {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 2500);
+      }, 400);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
