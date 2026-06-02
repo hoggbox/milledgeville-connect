@@ -93,8 +93,7 @@ window.submitRating = async function (businessId, score) {
   }
 };
 
-// ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
-// ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
+// ─── HANDLE PUSH NOTIFICATION DEEP LINK ─────────────────────────────────────
 window.handlePushNotificationClick = function(data) {
   if (!data?.page) {
     navigate('home');
@@ -103,67 +102,88 @@ window.handlePushNotificationClick = function(data) {
 
   const { page, id } = data;
 
+  // Standard navigation cases
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
     if (id) setTimeout(() => {
       const el = document.getElementById(`shoutout-${id}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 700);
-  } 
-  else if (page === 'marketplace' || page === 'market') {
-    navigate('marketplace');
-    if (id) setTimeout(() => showMarketplaceDetail(id), 700);
-  } 
-  else if (page === 'lostfound' || page === 'lost') {
-    navigate('lostfound');
-    if (id) setTimeout(() => showLostDetail(id), 700);
-  } 
-  else if (page === 'events' || page === 'event') {
-    navigate('events');
-    if (id) setTimeout(() => showEventDetail(id), 700);
-  } 
-  else if (page === 'deals' || page === 'deal') {
-    navigate('deals');
-    if (id) setTimeout(() => showDealDetail(id), 700);
-  } 
-  else if (page === 'news') {
-    navigate('news');
-    if (id) setTimeout(() => openNewsArticle(id), 700);
-  } 
-  else if (page === 'messages') {
-    navigate('messages');
-    if (id) setTimeout(() => openConversation(id), 700);
-  } 
+    }, 600);
+    return;
+  }
 
-  // Business post notification (with image)
-  else if (page === 'business-post') {
-    if (id) {
-      const tryOpen = (attempt = 0) => {
+  if (page === 'marketplace' || page === 'market') {
+    navigate('marketplace');
+    if (id) setTimeout(() => showMarketplaceDetail(id), 600);
+    return;
+  }
+
+  if (page === 'lostfound' || page === 'lost') {
+    navigate('lostfound');
+    if (id) setTimeout(() => showLostDetail(id), 600);
+    return;
+  }
+
+  if (page === 'events' || page === 'event') {
+    navigate('events');
+    if (id) setTimeout(() => showEventDetail(id), 600);
+    return;
+  }
+
+  if (page === 'deals' || page === 'deal') {
+    navigate('deals');
+    if (id) setTimeout(() => showDealDetail(id), 600);
+    return;
+  }
+
+  if (page === 'news') {
+    navigate('news');
+    if (id) setTimeout(() => openNewsArticle(id), 600);
+    return;
+  }
+
+  if (page === 'messages') {
+    navigate('messages');
+    if (id) setTimeout(() => openConversation(id), 600);
+    return;
+  }
+
+  // ─── BUSINESS POST (with image) - Cold launch friendly ────────────────────
+  if (page === 'business-post' && id) {
+    // Give the app more time to fully initialize on cold launch
+    setTimeout(() => {
+      let attempts = 0;
+      const maxAttempts = 15;
+
+      const tryOpen = () => {
+        attempts++;
         if (typeof window.showBusinessPostModal === 'function') {
-          window.showBusinessPostModal(id);
-        } else if (attempt < 8) {
-          setTimeout(() => tryOpen(attempt + 1), 200);
+          try {
+            window.showBusinessPostModal(id);
+          } catch (err) {
+            console.error('showBusinessPostModal error:', err);
+            navigate('home');
+          }
+        } else if (attempts < maxAttempts) {
+          setTimeout(tryOpen, 300);
         } else {
+          console.warn('showBusinessPostModal never became available after cold launch');
           navigate('home');
         }
       };
+
       tryOpen();
-    } else {
-      navigate('home');
-    }
+    }, 800); // Extra delay on cold launch
+    return;
   }
 
-  // No image in notification → open business card directly
-  else if (page === 'directory') {
-    if (id) {
-      loadDirectoryAndOpen(id);
-    } else {
-      navigate('directory');
-    }
+  // No image → open business card directly
+  if (page === 'directory' && id) {
+    loadDirectoryAndOpen(id);
+    return;
   }
-  else {
-    navigate(page);
-  }
+
+  navigate(page);
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
