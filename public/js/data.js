@@ -139,11 +139,6 @@ window.handlePushNotificationClick = function(data) {
     if (id) showBusinessPostModal(id);
     else navigate('home');
   }
-  else if (page === 'directory') {
-    // Text-only custom biz notification — open their directory card directly
-    navigate('directory');
-    if (id) setTimeout(() => showBusinessDetail(id), 900);
-  }
   else {
     navigate(page);
   }
@@ -3002,8 +2997,8 @@ async function loadEventsPage(content) {
       <div class="flex gap-2 mb-4">
         <input id="eventSearchInput" type="text" placeholder="Search events…"
                class="flex-1 bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400"
-               oninput="window._eventSearch=this.value; renderEventsFiltered()">
-        <select id="eventTimeSelect" onchange="window._eventTime=this.value; renderEventsFiltered()"
+               oninput="window._eventSearch=this.value; renderEventsFiltered(true)">
+        <select id="eventTimeSelect" onchange="window._eventTime=this.value; renderEventsFiltered(true)"
                 class="border border-white/20 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-400"
                 style="background:#1e293b;color-scheme:dark;">
           <option value="upcoming">Upcoming</option>
@@ -3019,7 +3014,8 @@ async function loadEventsPage(content) {
   renderEventsFiltered();
 }
 
-window.renderEventsFiltered = function () {
+window.renderEventsFiltered = function (resetPage = false) {
+  if (resetPage) window._eventsPage = 1;
   const search    = (window._eventSearch || '').toLowerCase();
   const filter    = window._eventFilter  || 'All';
   const time      = window._eventTime    || 'upcoming';
@@ -3036,14 +3032,14 @@ window.renderEventsFiltered = function () {
   const chips = document.getElementById('eventChips');
   if (chips) {
     chips.innerHTML = `
-      <button onclick="window._eventFilter='All'; renderEventsFiltered()"
+      <button onclick="window._eventFilter='All'; renderEventsFiltered(true)"
               class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === 'All' ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
         All
       </button>
       ${activeCats.map(cat => {
         const safe = cat.name.replace(/'/g, "\\'");
         return `
-        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered()"
+        <button onclick="window._eventFilter='${safe}'; renderEventsFiltered(true)"
                 class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition ${currentFilter === cat.name ? 'bg-emerald-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white/80'}">
           <span>${cat.icon}</span><span>${cat.name}</span>
         </button>`;
@@ -3078,14 +3074,21 @@ let events = allEvents.filter(e => {
       <div class="text-center py-16 bg-white/5 border border-white/10 rounded-3xl">
         <p class="text-4xl mb-3">📅</p>
         <p class="text-white/50 text-sm">${msg}</p>
-        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered()" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
+        ${currentFilter !== 'All' ? `<button onclick="window._eventFilter='All';renderEventsFiltered(true)" class="mt-3 text-emerald-400 text-sm font-semibold hover:text-emerald-300 transition">Clear filter</button>` : ''}
       </div>`;
     return;
   }
 
+  // ── Pagination ──
+  const EVENTS_PAGE_SIZE = 8;
+  if (window._eventsPage === undefined) window._eventsPage = 1;
+  const totalEventPages = Math.ceil(events.length / EVENTS_PAGE_SIZE);
+  window._eventsPage = Math.min(window._eventsPage, Math.max(1, totalEventPages));
+  const pagedEvents = events.slice((window._eventsPage - 1) * EVENTS_PAGE_SIZE, window._eventsPage * EVENTS_PAGE_SIZE);
+
   if (time !== 'past') {
     const grouped = {};
-    events.forEach(e => {
+    pagedEvents.forEach(e => {
       const key = new Date(e.date).toLocaleDateString('en-US', { month:'long', year:'numeric' });
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(e);
@@ -3099,7 +3102,27 @@ let events = allEvents.filter(e => {
         <div class="space-y-3">${mes.map(e => renderEventCard(e, now)).join('')}</div>
       </div>`).join('');
   } else {
-    container.innerHTML = `<div class="space-y-3">${events.map(e => renderEventCard(e, now)).join('')}</div>`;
+    container.innerHTML = `<div class="space-y-3">${pagedEvents.map(e => renderEventCard(e, now)).join('')}</div>`;
+  }
+
+  if (totalEventPages > 1) {
+    const paginationHTML = `
+      <div class="flex items-center justify-between mt-6 px-1">
+        <button onclick="window._eventsPage = Math.max(1, window._eventsPage - 1); renderEventsFiltered()"
+                ${window._eventsPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+        <div class="text-sm text-white/50">
+          Page <span class="font-semibold text-white">${window._eventsPage}</span> of ${totalEventPages}
+        </div>
+        <button onclick="window._eventsPage = Math.min(${totalEventPages}, window._eventsPage + 1); renderEventsFiltered()"
+                ${window._eventsPage === totalEventPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>
+      </div>`;
+    container.innerHTML += paginationHTML;
   }
 }
 
@@ -7205,6 +7228,9 @@ async function renderAdminDashboard() {
 }
 
 // ─── USERS MANAGEMENT (Tab 1) ────────────────────────────────────────────────
+const ADMIN_USERS_PAGE_SIZE = 15;
+window._adminUsersPage = 1;
+
 async function renderAdminUsers() {
   const container = document.getElementById('adminMainContent');
   
@@ -7215,22 +7241,30 @@ async function renderAdminUsers() {
       throw new Error('Invalid users data');
     }
 
-    container.innerHTML = `
-      <div class="mb-4">
-        <input type="text" id="userSearch" placeholder="🔍 Search by name or email…" 
-               class="w-full bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 text-base">
-      </div>
-      <div id="usersCardList" class="space-y-3"></div>`;
+    window._adminUsersPage = 1;
+    window._adminUsersFiltered = window._adminUsersData;
 
-    renderUsersTable(window._adminUsersData);
+    container.innerHTML = `
+      <div class="mb-4 flex items-center gap-3">
+        <input type="text" id="userSearch" placeholder="🔍 Search by name or email…" 
+               class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 text-base">
+        <span id="userCount" class="text-sm text-white/40 flex-shrink-0">${window._adminUsersData.length} users</span>
+      </div>
+      <div id="usersCardList" class="space-y-3"></div>
+      <div id="adminUsersPagination" class="flex items-center justify-between mt-6 px-1"></div>`;
+
+    renderUsersTable(window._adminUsersFiltered);
 
     document.getElementById('userSearch').addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase();
-      const filtered = window._adminUsersData.filter(u => 
+      window._adminUsersFiltered = window._adminUsersData.filter(u => 
         (u.name || '').toLowerCase().includes(term) || 
         (u.email || '').toLowerCase().includes(term)
       );
-      renderUsersTable(filtered);
+      window._adminUsersPage = 1;
+      const countEl = document.getElementById('userCount');
+      if (countEl) countEl.textContent = window._adminUsersFiltered.length + ' users';
+      renderUsersTable(window._adminUsersFiltered);
     });
   } catch (err) {
     console.error(err);
@@ -7238,10 +7272,46 @@ async function renderAdminUsers() {
   }
 }
 
+window.adminUsersPageNav = function(dir) {
+  const total = Math.ceil((window._adminUsersFiltered || []).length / ADMIN_USERS_PAGE_SIZE);
+  window._adminUsersPage = Math.max(1, Math.min(total, window._adminUsersPage + dir));
+  renderUsersTable(window._adminUsersFiltered);
+};
+
 function renderUsersTable(users) {
   const list = document.getElementById('usersCardList');
   if (!list) return;
-  list.innerHTML = users.map(u => `
+
+  // Paginate
+  const total = users.length;
+  const totalPages = Math.ceil(total / ADMIN_USERS_PAGE_SIZE) || 1;
+  window._adminUsersPage = Math.min(window._adminUsersPage || 1, totalPages);
+  const start = (window._adminUsersPage - 1) * ADMIN_USERS_PAGE_SIZE;
+  const pageUsers = users.slice(start, start + ADMIN_USERS_PAGE_SIZE);
+
+  // Pagination controls
+  const pagEl = document.getElementById('adminUsersPagination');
+  if (pagEl) {
+    if (totalPages > 1) {
+      pagEl.innerHTML = `
+        <button onclick="adminUsersPageNav(-1)" ${window._adminUsersPage === 1 ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          ← Previous
+        </button>
+        <div class="text-sm text-white/50">
+          Page <span class="font-semibold text-white">${window._adminUsersPage}</span> of ${totalPages}
+          <span class="text-white/30 ml-2">(${total} total)</span>
+        </div>
+        <button onclick="adminUsersPageNav(1)" ${window._adminUsersPage === totalPages ? 'disabled' : ''}
+                class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
+          Next →
+        </button>`;
+    } else {
+      pagEl.innerHTML = '';
+    }
+  }
+
+  list.innerHTML = pageUsers.map(u => `
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
