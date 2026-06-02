@@ -149,25 +149,15 @@ window.handlePushNotificationClick = function(data) {
 
   // ─── BUSINESS POST (with image) ──────────────────────────────────────────
   if (page === 'business-post' && id) {
-    const contentEl = document.getElementById('content');
-
-    const openModal = () => {
+    const tryOpen = () => {
       if (typeof window.showBusinessPostModal === 'function') {
         window.showBusinessPostModal(id);
       } else {
+        console.warn('showBusinessPostModal not found');
         navigate('home');
       }
     };
-
-    if (contentEl) {
-      // Load home first, open modal only after it resolves — no race condition
-      loadHomePage(contentEl)
-        .then(openModal)
-        .catch(openModal); // still open modal even if home load fails
-    } else {
-      openModal();
-    }
-
+    setTimeout(tryOpen, 450);
     return;
   }
 
@@ -204,12 +194,12 @@ if ('serviceWorker' in navigator) {
     if (page) {
       window.history.replaceState({}, document.title, window.location.pathname);
       // Wait for auth + initial render before firing deep-link
-      // 1200ms — needs to be longer on APK cold start than browser (was 600ms)
+      // 1800ms — needs to be longer on APK cold start than browser (was 600ms)
       setTimeout(() => {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 1200);
+      }, 1800);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
