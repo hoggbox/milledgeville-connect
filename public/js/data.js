@@ -105,64 +105,55 @@ window.handlePushNotificationClick = function(data) {
 
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
-    if (id) {
-      setTimeout(() => {
-        const el = document.getElementById(`shoutout-${id}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 800);
-    }
+    if (id) setTimeout(() => {
+      const el = document.getElementById(`shoutout-${id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 700);
   } 
   else if (page === 'marketplace' || page === 'market') {
     navigate('marketplace');
-    if (id) setTimeout(() => showMarketplaceDetail(id), 800);
+    if (id) setTimeout(() => showMarketplaceDetail(id), 700);
   } 
   else if (page === 'lostfound' || page === 'lost') {
     navigate('lostfound');
-    if (id) setTimeout(() => showLostDetail(id), 800);
+    if (id) setTimeout(() => showLostDetail(id), 700);
   } 
   else if (page === 'events' || page === 'event') {
     navigate('events');
-    if (id) setTimeout(() => showEventDetail(id), 800);
+    if (id) setTimeout(() => showEventDetail(id), 700);
   } 
   else if (page === 'deals' || page === 'deal') {
     navigate('deals');
-    if (id) setTimeout(() => showDealDetail(id), 800);
+    if (id) setTimeout(() => showDealDetail(id), 700);
   } 
   else if (page === 'news') {
     navigate('news');
-    if (id) setTimeout(() => openNewsArticle(id), 800);
+    if (id) setTimeout(() => openNewsArticle(id), 700);
   } 
   else if (page === 'messages') {
     navigate('messages');
-    if (id) setTimeout(() => openConversation(id), 800);
+    if (id) setTimeout(() => openConversation(id), 700);
   } 
 
-  // ─── BUSINESS POST (with image in notification) ───────────────────────────
+  // Business post notification (with image)
   else if (page === 'business-post') {
     if (id) {
-      const openBizPostModal = () => {
+      const tryOpen = (attempt = 0) => {
         if (typeof window.showBusinessPostModal === 'function') {
           window.showBusinessPostModal(id);
+        } else if (attempt < 8) {
+          setTimeout(() => tryOpen(attempt + 1), 200);
         } else {
-          // Retry a few times if the function isn't registered yet (common on cold launch)
-          setTimeout(openBizPostModal, 250);
+          navigate('home');
         }
       };
-
-      // On APK cold launch we need to make sure we're not stuck on a loading spinner
-      const contentEl = document.getElementById('content');
-      if (contentEl && currentPage !== 'home') {
-        loadHomePage(contentEl).then(() => {
-          setTimeout(openBizPostModal, 120);
-        });
-      } else {
-        setTimeout(openBizPostModal, 80);
-      }
+      tryOpen();
     } else {
       navigate('home');
     }
   }
 
+  // No image in notification → open business card directly
   else if (page === 'directory') {
     if (id) {
       loadDirectoryAndOpen(id);
