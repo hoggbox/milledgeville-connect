@@ -135,17 +135,17 @@ window.handlePushNotificationClick = function(data) {
     navigate('messages');
     if (id) setTimeout(() => openConversation(id), 800);
   } 
-  else if (page === 'business-post') {
-    if (id) {
-      // showBusinessPostModal is fully self-contained — it fetches its own data
-      // and appends directly to document.body. No page load needed at all.
-      // Navigate home in the background so there's a sensible page behind the modal.
-      navigate('home');
-      showBusinessPostModal(id);
-    } else {
-      navigate('home');
-    }
+else if (page === 'business-post') {
+  if (id) {
+    setTimeout(() => {
+      if (typeof window.showBusinessPostModal === 'function') {
+        window.showBusinessPostModal(id);
+      }
+    }, 50);
+  } else {
+    navigate('home');
   }
+}
   else if (page === 'directory') {
     if (id) {
       loadDirectoryAndOpen(id);
@@ -440,7 +440,7 @@ async function loadPage(page) {
 
   // Also close any other floating modals (safe cleanup)
   // Exclude permanent modals that live in the HTML and must never be removed
-  const PERMANENT_MODALS = new Set(['authModal', 'profileSheet', 'userProfileModal']);
+  const PERMANENT_MODALS = new Set(['authModal', 'profileSheet', 'userProfileModal', 'businessPostModal']);
   document.querySelectorAll('[id$="Modal"], [id$="modal"], .modal').forEach(el => {
     if (el.id !== 'content' && !PERMANENT_MODALS.has(el.id)) el.remove();
   });
