@@ -417,11 +417,6 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     // servers attempt to fetch the thumb URL.  Without this delay the thumb
     // endpoint returns 404 because the document isn't yet readable by a fresh
     // DB connection, causing FCM to silently drop the notification image.
-    const shoutoutId   = shoutout._id.toString();
-    const shoutoutThumb = (shoutout.images && shoutout.images.length > 0)
-      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutoutId}`
-      : null;
-
     // 800 ms is enough for Mongo to flush and for a replica-set secondary read
     // to catch up; adjust upward (e.g. 1500) if you still see missing images.
     const shoutoutId   = shoutout._id.toString();
