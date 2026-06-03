@@ -1,42 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notification Scheduler</title>
-<style>
-  :root {
-    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    
-    --color-text-primary: #ffffff;
-    --color-text-secondary: #a1a1aa;
-    --color-text-tertiary: #71717a;
-    
-    --color-background-primary: #18181b;
-    --color-background-secondary: #27272a;
-    
-    --color-border-tertiary: #3f3f46;
-    
-    --border-radius-md: 8px;
-    --border-radius-lg: 12px;
-    
-    --emerald: #0F6E56;
-    --emerald-mid: #1D9E75;
-    --amber: #BA7517;
-    --red: #A32D2D;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body, .page { background: #18181b !important; color: #ffffff !important; font-family: var(--font-sans); }
-  .topbar { background: #18181b !important; border-bottom: 1px solid #3f3f46 !important; }
-  .metric-card { background: #27272a !important; border: 1px solid #3f3f46 !important; border-radius: 12px !important; }
-  .notif-card { background: #27272a !important; border: 1px solid #3f3f46 !important; border-radius: 12px !important; }
-  .modal { background: #18181b !important; border: 1px solid #3f3f46 !important; }
-  input, select, textarea { background: #27272a !important; border: 1px solid #3f3f46 !important; color: white !important; }
-  .btn-primary { background: #0F6E56 !important; color: white !important; }
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notification Scheduler — Admin</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+<style>
+  :root {
+    /* Typography */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    /* Backgrounds */
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-background-info: #EEF4FF;
+
+    /* Text */
+    --color-text-primary: #111827;
+    --color-text-secondary: #6b7280;
+    --color-text-tertiary: #9ca3af;
+    --color-text-info: #3b5bdb;
+
+    /* Borders */
+    --color-border-primary: #d1d5db;
+    --color-border-secondary: #e5e7eb;
+    --color-border-tertiary: #f0f0f0;
+
+    /* Radius */
+    --border-radius-sm: 4px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+  }
+
+  h2.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body,div,span,p,input,select,textarea,button{font-family:var(--font-sans)}
+  :root{--emerald:#0F6E56;--emerald-light:#E1F5EE;--emerald-mid:#1D9E75;--amber:#BA7517;--amber-light:#FAEEDA;--red:#A32D2D;--red-light:#FCEBEB}
+  .page{padding:0 0 2rem}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem 1rem;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .topbar-left{display:flex;align-items:center;gap:10px}
+  .topbar-title{font-size:17px;font-weight:500;color:var(--color-text-primary)}
+  .topbar-sub{font-size:12px;color:var(--color-text-secondary)}
+  .btn-primary{background:var(--emerald);color:#fff;border:none;border-radius:var(--border-radius-md);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s}
+  .btn-primary:hover{opacity:.85}
+  .btn-ghost{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 14px;font-size:13px;color:var(--color-text-secondary);cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s}
+  .btn-ghost:hover{background:var(--color-background-secondary)}
+  .btn-danger{background:var(--red-light);color:var(--red);border:0.5px solid #F09595;border-radius:var(--border-radius-md);padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:opacity .15s}
+  .btn-danger:hover{opacity:.8}
+  .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:1.25rem 1.5rem}
+  .metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px 16px}
+  .metric-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+  .metric-value{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+  .metric-sub{font-size:11px;color:var(--color-text-secondary);margin-top:3px}
+  .metric-up{color:var(--emerald-mid)}
+  .metric-down{color:var(--red)}
+  .section-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.5rem;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .section-title{font-size:14px;font-weight:500;color:var(--color-text-primary);display:flex;align-items:center;gap:8px}
+  .filters{display:flex;align-items:center;gap:8px}
+  .filter-select{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:5px 10px;font-size:12px;color:var(--color-text-secondary);cursor:pointer}
+  .notif-list{padding:.75rem 1.5rem;display:flex;flex-direction:column;gap:10px}
+  .notif-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;transition:border-color .15s}
+  .notif-card:hover{border-color:var(--color-border-secondary)}
+  .notif-card.active{border-left:3px solid var(--emerald-mid)}
+  .notif-card.scheduled{border-left:3px solid var(--amber)}
+  .notif-card.draft{border-left:3px solid var(--color-border-secondary)}
+  .notif-card.sent{border-left:3px solid #9FE1CB}
+  .biz-avatar{width:40px;height:40px;border-radius:var(--border-radius-md);object-fit:cover;background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .notif-body{}
+  .notif-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .biz-name{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+  .status-pill{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px}
+  .pill-active{background:#E1F5EE;color:#0F6E56}
+  .pill-scheduled{background:#FAEEDA;color:#BA7517}
+  .pill-draft{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+  .pill-sent{background:#E1F5EE;color:#085041}
+  .notif-title{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:3px}
+  .notif-msg{font-size:12px;color:var(--color-text-secondary);line-height:1.5;margin-bottom:8px}
+  .notif-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .meta-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--color-text-tertiary)}
+  .notif-stats{display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--color-border-tertiary)}
+  .stat-box{text-align:center}
+  .stat-num{font-size:14px;font-weight:500;color:var(--color-text-primary)}
+  .stat-lbl{font-size:10px;color:var(--color-text-secondary)}
+  .notif-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .action-btn{background:none;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:5px 9px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:background .15s}
+  .action-btn:hover{background:var(--color-background-secondary)}
+  .action-btn.del:hover{background:var(--red-light);color:var(--red);border-color:#F09595}
+  .notif-link-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--color-background-info);color:var(--color-text-info);padding:2px 8px;border-radius:20px}
+  .has-img-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px}
+
+  /* MODAL */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999;padding:1rem}
+  .modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+  .modal-header{padding:1.25rem 1.5rem 1rem;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--color-background-primary);z-index:2}
+  .modal-title{font-size:16px;font-weight:500;color:var(--color-text-primary)}
+  .modal-close{background:none;border:none;font-size:20px;color:var(--color-text-secondary);cursor:pointer;padding:0 4px;line-height:1}
+  .modal-body{padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:16px}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form-group{display:flex;flex-direction:column;gap:5px}
+  .form-group.full{grid-column:1/-1}
+  .form-label{font-size:12px;color:var(--color-text-secondary);font-weight:500}
+  .form-input{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 12px;font-size:13px;color:var(--color-text-primary);width:100%;outline:none;transition:border-color .15s}
+  .form-input:focus{border-color:var(--emerald-mid)}
+  .form-input::placeholder{color:var(--color-text-tertiary)}
+  .form-select{appearance:none;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 12px;font-size:13px;color:var(--color-text-primary);width:100%;outline:none;cursor:pointer}
+  .form-textarea{resize:vertical;min-height:80px;line-height:1.5}
+  .img-upload-area{border:0.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-md);padding:20px;text-align:center;cursor:pointer;transition:background .15s;position:relative}
+  .img-upload-area:hover{background:var(--color-background-secondary)}
+  .img-upload-area input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .img-preview{max-height:120px;max-width:100%;border-radius:var(--border-radius-md);object-fit:contain;margin-top:8px}
+  .link-type-tabs{display:flex;gap:6px;margin-bottom:4px}
+  .link-tab{padding:5px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);font-size:12px;cursor:pointer;color:var(--color-text-secondary);background:transparent;transition:all .15s}
+  .link-tab.active{background:var(--emerald-light);color:var(--emerald);border-color:#9FE1CB}
+  .schedule-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .modal-footer{padding:1rem 1.5rem;border-top:0.5px solid var(--color-border-tertiary);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--color-background-primary)}
+  .chart-wrap{padding:.25rem 1.5rem 1.5rem}
+  .section-divider{height:0.5px;background:var(--color-border-tertiary);margin:0 1.5rem}
+  .empty-state{text-align:center;padding:3rem 1.5rem;color:var(--color-text-secondary)}
+  .repeat-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .repeat-day{padding:4px 10px;border-radius:20px;border:0.5px solid var(--color-border-tertiary);font-size:11px;cursor:pointer;color:var(--color-text-secondary);transition:all .15s}
+  .repeat-day.sel{background:var(--emerald-light);color:var(--emerald);border-color:#9FE1CB}
+  .tab-row{display:flex;gap:0;border-bottom:0.5px solid var(--color-border-tertiary);padding:0 1.5rem}
+  .tab{padding:10px 14px;font-size:13px;color:var(--color-text-secondary);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+  .tab.active{color:var(--emerald);border-bottom-color:var(--emerald);font-weight:500}
+</style>
 
 <h2 class="sr-only">Notification scheduler — manage and schedule push notifications for businesses</h2>
 <div class="page" id="nsApp">
@@ -556,3 +648,5 @@ function buildReachChart(){
 
 init();
 </script>
+</body>
+</html>
