@@ -3869,53 +3869,39 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
 
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   const id = req.params.shoutoutId;
-  console.log(`[Thumb] 🔥 REQUEST RECEIVED for ID: ${id}`);
+  console.log(`[Thumb] 🔥 REQUEST for ${id}`);
 
   try {
     const shoutout = await Shoutout.findById(id).select('images');
-    if (!shoutout) {
-      console.log(`[Thumb] ❌ Shoutout not found: ${id}`);
-      return res.status(404).send('Shoutout not found');
-    }
-    if (!shoutout.images || shoutout.images.length === 0) {
-      console.log(`[Thumb] ❌ No images array or empty for ${id}`);
+    if (!shoutout?.images?.length) {
+      console.log(`[Thumb] ❌ No image data for ${id}`);
       return res.status(404).send('No image');
     }
 
     const raw = shoutout.images[0];
-    console.log(`[Thumb] Raw image string length: ${raw.length}`);
-
     const markerIndex = raw.indexOf(';base64,');
+
     if (markerIndex === -1) {
-      console.error(`[Thumb] ❌ No ;base64, marker found`);
-      return res.status(400).send('Invalid image format');
+      console.error(`[Thumb] ❌ Bad format`);
+      return res.status(400).send('Bad format');
     }
 
-    let base64Data = raw.substring(markerIndex + 8);
-    base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
-
+    let base64Data = raw.substring(markerIndex + 8).replace(/[^A-Za-z0-9+/=]/g, '');
     const buffer = Buffer.from(base64Data, 'base64');
-    console.log(`[Thumb] ✅ Decoded buffer size: ${buffer.length} bytes`);
 
-    if (buffer.length < 100) {
-      console.error(`[Thumb] ❌ Buffer too small, probably corrupt`);
-      return res.status(400).send('Corrupt image');
-    }
+    console.log(`[Thumb] ✅ Serving ${buffer.length} bytes`);
 
     res.set({
       'Content-Type': 'image/jpeg',
       'Content-Disposition': 'inline; filename="alert.jpg"',
       'Cache-Control': 'public, max-age=86400',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
     });
 
-    console.log(`[Thumb] ✅ SUCCESS - Serving image for ${id}`);
     return res.send(buffer);
-
   } catch (err) {
-    console.error(`[Thumb] 💥 CRITICAL ERROR for ${id}:`, err);
-    res.status(500).send('Server error');
+    console.error(`[Thumb] 💥 ERROR:`, err);
+    res.status(500).send('Error');
   }
 });
 
