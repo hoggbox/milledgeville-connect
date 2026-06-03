@@ -764,7 +764,7 @@ async function init() {
     notifications = [];
     showToast('Could not load notifications — make sure you are logged in as admin.', 'error');
   }
-  
+
   renderList();
   updateTopMetrics();
   buildReachChart();
@@ -906,28 +906,39 @@ function openEdit(id){
 function closeCompose(){document.getElementById('composeModal').style.display='none';}
 
 function resetForm(){
-  document.getElementById('fBusiness').value='';
-  document.getElementById('fStatus').value='scheduled';
-  document.getElementById('fTitle').value='';
-  document.getElementById('fBody').value='';
-  document.getElementById('fRepeat').value='once';
-  document.getElementById('fLinkValue').value='';
-  document.getElementById('fLinkValue').disabled=true;
-  document.getElementById('fLinkValue').placeholder='Auto — opens business directory card';
-  imgBase64=null;
-  document.getElementById('imgPreview').style.display='none';
-  document.getElementById('imgClear').style.display='none';
-  document.getElementById('customDaysWrap').style.display='none';
-  document.getElementById('endDateWrap').style.display='none';
-  document.querySelectorAll('.repeat-day').forEach(d=>d.classList.remove('sel'));
-  document.querySelector('[data-d="Mon"]').classList.add('sel');
-  setLinkTypeActive('directory');
-  currentLinkType='directory';
-  setTodayDate();
-
-  // NEW: Clear business search
-  clearSelectedBusiness();
+  // Clear business selection
+  document.getElementById('fBusiness').value = '';
+  document.getElementById('selectedBusinessDisplay').style.display = 'none';
+  document.getElementById('businessSearch').value = '';
   document.getElementById('businessSearchResults').style.display = 'none';
+
+  // Clear form fields
+  document.getElementById('fStatus').value = 'scheduled';
+  document.getElementById('fTitle').value = '';
+  document.getElementById('fBody').value = '';
+  document.getElementById('fLinkValue').value = '';
+  document.getElementById('fLinkValue').disabled = true;
+  document.getElementById('fLinkValue').placeholder = 'Auto — opens business directory card';
+
+  // Clear image
+  imgBase64 = null;
+  document.getElementById('imgPreview').style.display = 'none';
+  document.getElementById('imgClear').style.display = 'none';
+  document.getElementById('fImage').value = '';
+
+  // Reset recurring schedule UI
+  document.getElementById('fRecurType').value = 'once';
+  document.getElementById('fRecurTime').value = '09:00';
+  document.getElementById('dayCheckboxes').style.display = 'none';
+
+  // Uncheck all day checkboxes
+  document.querySelectorAll('.day-check').forEach(cb => cb.checked = false);
+
+  // Reset link type
+  setLinkTypeActive('directory');
+  currentLinkType = 'directory';
+
+  editingId = null;
 }
 
 function setLinkType(t,btn){
