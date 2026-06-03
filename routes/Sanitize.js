@@ -91,7 +91,7 @@ function securityHeaders(req, res, next) {
     // ✅ FIX: Added generic googleapis wildcard and android push API endpoints
     "connect-src 'self' https://*.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseinstallations.googleapis.com https://identitytoolkit.googleapis.com https://google.com wss://*.firebaseio.com",
     // ✅ FIX: Allow the service worker to process external blob pipelines and secure targets
-    "worker-src 'self' blob: https://milledgevilleconnect.com",
+    "worker-src 'self' blob:",
     "frame-ancestors 'none'"
   ].join('; '));
   next();
