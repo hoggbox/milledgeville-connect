@@ -746,13 +746,9 @@ function _renderSpotlight(businesses) {
   if (!sb.length) sb = [...businesses].slice(0, 8);
 
   spotEl.innerHTML = sb.map(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
-
     return `
       <div onclick="showBusinessDetail('${b._id}')"
-           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
-        
-        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
+           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative">
 
         <div class="flex items-center gap-3 mb-3">
           ${b.logo
@@ -1474,13 +1470,9 @@ function renderDirectory(businesses) {
   let html = '<div class="space-y-3">';
 
   pageBusinesses.forEach(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
-
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
-        
-        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow z-10">PRO</div>` : ''}
+           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative">
 
         ${b.logo 
           ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/10" alt="">` 
@@ -3600,14 +3592,11 @@ const tabs = [
   { id: 'deals',         label: 'Deals',          icon: '🔥' },
   { id: 'events',        label: 'Events',         icon: '📅' },
   { id: 'homes',         label: 'Marketplace Items', icon: '🛒' },
-  { id: 'notifications', label: 'Notifications',  icon: '📢' },
+  // { id: 'notifications', label: 'Notifications',  icon: '📢' }, // removed
   { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
 
-  // === GET SUBSCRIPTION STATUS ===
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  const isPro = sub.tier === 'pro';
-  const credits = sub.credits || 0;
+  // Subscription/Pro tier removed
 
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
@@ -3618,38 +3607,7 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
-<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
-  <div class="flex justify-between items-start">
-    <div>
-      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
-        ⭐ PRO TIER
-      </div>
-      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
-      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
-    </div>
-          
-          ${isPro ? `
-            <div class="text-right">
-              <div class="text-emerald-300 font-bold">ACTIVE</div>
-              <div class="text-xs opacity-75">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
-            </div>
-          ` : `
-            <button onclick="buyProTier()" 
-                    class="bg-white text-purple-700 px-7 py-3 rounded-3xl font-bold hover:bg-white/90 transition shadow-xl">
-              Upgrade Now
-            </button>
-          `}
-        </div>
 
-        <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <div class="text-xs opacity-75">Notification Credits</div>
-            <div class="text-4xl font-black">${credits}</div>
-          </div>
-          <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
-        </div>
-      </div>
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
@@ -3911,7 +3869,7 @@ const tabs = [
             <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
               <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
               <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-                📢 Notify all users when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
+                📢 Notify all users when posted
               </label>
             </div>
 
@@ -3932,29 +3890,7 @@ const tabs = [
   </div>
 </div>
 
-<!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
-<div id="dtabContent-notifications" class="hidden">
-  ${!isPro ? `
-  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
-    <div class="text-5xl mb-4">📢</div>
-    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
-    <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
-    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
-    </div>
-    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-      🚀 Upgrade to Business Pro
-    </button>
-  </div>
-  ` : `
-  <div id="notificationsContent">
-    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
-  </div>
-  `}
-</div>
+<!-- Notifications tab removed -->
 
       </div>
     </div>`;
@@ -3982,7 +3918,7 @@ window.switchDashTab = function (tabId) {
   if (tabId === 'deals')         loadOwnerDeals();
   if (tabId === 'events')        loadOwnerEvents();
   if (tabId === 'photos')        renderOwnerPhotoGrid();
-  if (tabId === 'notifications') loadNotificationsTab();
+  // notifications tab removed
   if (tabId === 'homes')         loadOwnerHomes();
   if (tabId === 'analytics')     loadOwnerAnalytics();
 };
@@ -4052,7 +3988,7 @@ window.submitBizPhotoPost = async function() {
   const caption    = document.getElementById('bizPostCaption')?.value.trim() || '';
   const sendNotify = document.getElementById('bizPostNotify')?.checked ?? true;
 
-  if (sendNotify && !(await checkNotificationCredits(2))) return;
+
 
   const btn = document.querySelector('#notificationsContent button[onclick="submitBizPhotoPost()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
@@ -4260,275 +4196,15 @@ window.insertNotifEmoji = function(emoji) {
   ta.dispatchEvent(new Event('input'));
 };
 
-async function loadNotificationsTab() {
-  const el = document.getElementById('notificationsContent');
-  if (!el) return;
+// loadNotificationsTab — REMOVED (notifications/credits system removed)
+async function loadNotificationsTab() { /* removed */ }
 
-  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
+// toggleUnifiedPhotoPanel — REMOVED
+window.toggleUnifiedPhotoPanel = function() {};
 
-  let credits = 0;
-  let tier = 'free';
-  try {
-    const sub = await apiGet('/owner/subscription');
-    credits = sub.credits ?? 0;
-    tier    = sub.tier   ?? 'free';
-  } catch (e) {
-    console.error('Failed to load subscription', e);
-  }
-
-  const isPro   = tier === 'pro';
-  const bizName = currentUser?.verifiedBusiness?.name || currentUser?.name || 'Your Business';
-
-  el.innerHTML = `
-    <div class="space-y-5 p-4">
-
-      <!-- Credit balance -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <div class="text-xs text-white/50 mb-1">Available Credits</div>
-            <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
-          </div>
-          <div class="text-right">
-            <div class="text-xs text-white/40">Photo post notify = 2 credits</div>
-            <div class="text-xs text-white/40">Custom notification = 2 credits</div>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-          ${!isPro ? `
-            <button onclick="buyProTier()" 
-                    class="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition">
-              🚀 Upgrade to Pro (12 credits/mo)
-            </button>
-          ` : ''}
-
-          <button onclick="buyCreditPack()" 
-                  class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition flex items-center justify-center gap-2">
-            💳 Buy 10 Credits <span class="text-[10px] opacity-75">($4.99)</span>
-          </button>
-        </div>
-
-        <p class="text-[10px] text-white/40 mt-2 text-center">One-time credit packs never expire. Pro members get 12 fresh credits every month.</p>
-      </div>
-
-      <!-- ── Unified notification form ── -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
-        <div>
-          <h4 class="font-bold text-white">📢 Send Notification</h4>
-          <p class="text-xs text-white/50 mt-0.5">Broadcast to all users — 2 credits. Add a photo to make it visual.</p>
-        </div>
-
-        <!-- From badge -->
-        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-          <span class="text-xs text-white/40">From:</span>
-          <span class="text-sm font-semibold text-emerald-400">${bizName}</span>
-          <span class="text-xs text-white/30 ml-auto">shown to all recipients</span>
-        </div>
-
-        <!-- Title input -->
-        <input id="customTitle"
-               placeholder="Notification title (e.g. Big Sale Today!)"
-               class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500" />
-
-        <!-- ── Mini rich-text toolbar + body ── -->
-        <div>
-          <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-t-xl px-3 py-2 border-b-0">
-            <span class="text-xs text-white/30 mr-1">Format:</span>
-            <button onclick="applyNotifFormat('bold')" title="Bold — select text first"
-                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm transition flex items-center justify-center">B</button>
-            <button onclick="applyNotifFormat('italic')" title="Italic — select text first"
-                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white italic font-semibold text-sm transition flex items-center justify-center">I</button>
-            <div class="w-px h-5 bg-white/10 mx-1"></div>
-            <span class="text-xs text-white/30 mr-1">Add:</span>
-            ${['🔥','🎉','⏰','🏷️','📍','✅','💥','👋'].map(e =>
-              `<button onclick="insertNotifEmoji('${e}')"
-                      class="w-8 h-8 rounded-lg hover:bg-white/10 text-base transition flex items-center justify-center">${e}</button>`
-            ).join('')}
-            <div class="ml-auto text-xs text-white/20 hidden sm:block">Select text → tap B or I</div>
-          </div>
-          <textarea id="customBody" rows="3"
-                    placeholder="Message body — select any text then tap B or I to style it…"
-                    class="w-full bg-white/10 border border-white/10 rounded-b-xl rounded-t-none px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none font-mono"></textarea>
-        </div>
-
-        <!-- ── Optional photo add-on (collapsed) ── -->
-        <div>
-          <button onclick="toggleUnifiedPhotoPanel()"
-                  id="unifiedPhotoToggle"
-                  class="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition text-sm">
-            <span class="flex items-center gap-2 text-white/70">
-              <span>📷</span>
-              <span>Add a photo <span class="text-white/30 font-normal">(optional)</span></span>
-            </span>
-            <span id="unifiedPhotoChevron" class="text-white/30 text-xs">▼ expand</span>
-          </button>
-
-          <div id="unifiedPhotoPanel" class="hidden mt-3 space-y-3">
-            <div id="bizPostImageWrap" class="relative">
-              <div id="bizPostImagePreview"
-                   class="w-full aspect-video bg-white/5 border-2 border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400/50 hover:bg-white/10 transition-all overflow-hidden"
-                   onclick="document.getElementById('bizPostImageInput').click()">
-                <span class="text-3xl">📷</span>
-                <span class="text-sm text-white/50">Tap to add photo</span>
-                <span class="text-xs text-white/30">JPEG · PNG · WebP · max 4 MB</span>
-              </div>
-              <input id="bizPostImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
-                     onchange="handleBizPostImageSelect(this)">
-              <button id="bizPostImageClear" onclick="clearBizPostImage()"
-                      class="hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center hover:bg-red-600 transition">×</button>
-            </div>
-            <p class="text-[11px] text-white/30 text-center">When a photo is attached the notification opens a full-image view, then links to your directory card.</p>
-          </div>
-        </div>
-
-        <!-- Live device preview -->
-        <div class="bg-black/40 border border-white/10 rounded-xl p-3 space-y-1">
-          <div class="text-[10px] text-white/25 uppercase tracking-widest mb-1.5">Preview on device</div>
-          <div class="flex items-start gap-2.5">
-            <div class="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">MC</div>
-            <div class="flex-1 min-w-0">
-              <div class="text-xs font-bold text-white leading-snug" id="previewTitle">Your title here</div>
-              <div class="text-xs text-white/55 leading-snug mt-0.5" id="previewBody">${bizName} · Your message here</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cost badge + send button -->
-        <div class="flex items-center gap-2 text-xs text-white/30 justify-center">
-          <span>💳 2 credits</span>
-          <span>·</span>
-          <span id="unifiedCostNote">text-only broadcast</span>
-        </div>
-
-        <button onclick="sendUnifiedNotification()"
-                id="unifiedSendBtn"
-                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg">
-          📢 Send to All Users
-        </button>
-      </div>
-
-      <!-- ── Past photo posts ── -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
-        <h4 class="font-bold text-white text-sm">Your Photo Posts</h4>
-        <div id="bizPostHistory" class="space-y-3">
-          <div class="text-white/30 text-xs text-center py-4">Loading…</div>
-        </div>
-      </div>
-
-    </div>`;
-
-  // Wire up live preview
-  const titleInput   = document.getElementById('customTitle');
-  const bodyInput    = document.getElementById('customBody');
-  const previewTitle = document.getElementById('previewTitle');
-  const previewBody  = document.getElementById('previewBody');
-
-  function updatePreview() {
-    if (previewTitle) previewTitle.textContent = titleInput?.value.trim() || 'Your title here';
-    if (previewBody)  previewBody.textContent  = `${bizName} · ${bodyInput?.value.trim() || 'Your message here'}`;
-  }
-
-  titleInput?.addEventListener('input', updatePreview);
-  bodyInput?.addEventListener('input',  updatePreview);
-
-  // Load past photo posts
-  loadBizPostHistory();
-}
-
-// ── Toggle the optional photo panel ──────────────────────────────────────────
-window.toggleUnifiedPhotoPanel = function() {
-  const panel   = document.getElementById('unifiedPhotoPanel');
-  const chevron = document.getElementById('unifiedPhotoChevron');
-  const note    = document.getElementById('unifiedCostNote');
-  if (!panel) return;
-  const nowHidden = panel.classList.toggle('hidden');
-  if (chevron) chevron.textContent = nowHidden ? '▼ expand' : '▲ collapse';
-  if (note)    note.textContent    = nowHidden ? 'text-only broadcast' : 'photo + text broadcast';
-};
-
-// ── Unified send: handles both text-only and photo+text in one call ───────────
+// sendUnifiedNotification — REMOVED
 window.sendUnifiedNotification = async function() {
-  const title = document.getElementById('customTitle')?.value.trim();
-  const body  = document.getElementById('customBody')?.value.trim();
-
-  if (!title || !body) {
-    showToast('Title and message are required', 'error');
-    return;
-  }
-
-  const hasPhoto = !!_bizPostPendingImage;
-
-  // Credit pre-check (2 credits either way)
-  const canSend = await window.canSendNotification(true);
-  if (!canSend) {
-    showToast('Not enough credits. Buy more or upgrade to Pro!', 'error');
-    return;
-  }
-
-  const btn = document.getElementById('unifiedSendBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
-
-  try {
-    let res;
-
-    if (hasPhoto) {
-      // Photo path — POST /owner/business-posts with sendNotify: true
-      res = await apiPost('/owner/business-posts', {
-        image:      _bizPostPendingImage,
-        caption:    body,
-        notifTitle: title,
-        sendNotify: true,
-      });
-
-      if (res._id) {
-        showToast('\uD83D\uDCF8 Photo posted & notification sent!', 'success');
-        clearBizPostImage();
-        // Collapse photo panel
-        const panel   = document.getElementById('unifiedPhotoPanel');
-        const chevron = document.getElementById('unifiedPhotoChevron');
-        const note    = document.getElementById('unifiedCostNote');
-        if (panel && !panel.classList.contains('hidden')) {
-          panel.classList.add('hidden');
-          if (chevron) chevron.textContent = '\u25BC expand';
-          if (note)    note.textContent    = 'text-only broadcast';
-        }
-        loadBizPostHistory();
-      } else {
-        showToast(res.message || 'Failed to post', 'error');
-        return;
-      }
-    } else {
-      // Text-only path — POST /owner/custom-notification
-      res = await apiPost('/owner/custom-notification', { title, body });
-
-      if (res.success) {
-        showToast('\u2705 Notification sent to all users!', 'success');
-      } else {
-        showToast(res.message || 'Failed to send notification', 'error');
-        return;
-      }
-    }
-
-    // Clear text fields
-    const titleEl = document.getElementById('customTitle');
-    const bodyEl  = document.getElementById('customBody');
-    if (titleEl) { titleEl.value = ''; titleEl.dispatchEvent(new Event('input')); }
-    if (bodyEl)  { bodyEl.value  = ''; bodyEl.dispatchEvent(new Event('input')); }
-
-    // Refresh credit counter
-    const newCredits = res.credits ?? res.notificationCredits;
-    if (newCredits !== undefined) {
-      const creditEl = document.getElementById('notifCreditDisplay');
-      if (creditEl) creditEl.textContent = newCredits;
-    }
-
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to send \u2014 please try again', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCE2 Send to All Users'; }
-  }
+  showToast('Custom notifications have been removed', 'info');
 };
 
 window.saveOwnerBusinessChanges = async function () {
@@ -4612,7 +4288,7 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
+
 
   const title = document.getElementById('dealTitle').value.trim();
   const desc = document.getElementById('dealDesc').value.trim();
@@ -4646,7 +4322,7 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
+
 
   const title = document.getElementById('eventTitle').value.trim();
   const date = document.getElementById('eventDate').value;
@@ -8390,18 +8066,9 @@ window.viewReportedContent = async function (type, id) {
   }
 };
 
-// Credit check helper for other posting functions
+// Credit check helper — REMOVED (no longer used)
 async function checkNotificationCredits(required = 2) {
-  // Only verified business owners have a credit system at all
-  if (!currentUser || !currentUser.verifiedBusiness) return true;
-  if (currentUser.subscriptionTier === 'pro') return true;
-
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  if ((sub.credits || 0) < required) {
-    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
-    return false;
-  }
-  return true;
+  return true; // always allow, credits system removed
 }
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
@@ -8430,130 +8097,25 @@ window.handleOwnerLogoUpload = async function(input) {
   }
 };
 
-// Client-side credit helpers
-window.canSendNotification = async function(isCustom = false) {
-  if (!currentUser) return false;
-  try {
-    const sub = await apiGet('/owner/subscription');
-    const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
-    return credits >= cost;
-  } catch (e) {
-    console.error('Credit check failed', e);
-    return false;
-  }
-};
+// canSendNotification — REMOVED (credits system removed)
+window.canSendNotification = async function() { return true; };
 
-// ─── GOOGLE PLAY BILLING - BUY PRO TIER ─────────────────────────────────────
-window.buyProTier = async function() {
-  if (!window.Capacitor) {
-    showToast('Google Play Billing only works in the Android app', 'error');
-    return;
-  }
+// buyProTier — REMOVED
+window.buyProTier = function() { showToast('Pro tier is not available', 'info'); };
 
-  try {
-    showToast('Opening Google Play...', 'success');
+// buyCreditPack — REMOVED
+window.buyCreditPack = function() { showToast('Credit packs are not available', 'info'); };
 
-    const { InAppPurchase2 } = window.Capacitor.Plugins;
-
-    // Replace with your actual Google Play product ID
-    const productId = 'pro_monthly';   // ← Change this if your product ID is different
-
-    await InAppPurchase2.buy({
-      productId: productId,
-      type: 'subs'   // recurring subscription in Play Console
-    });
-
-    // This will be called by the purchase listener below when successful
-  } catch (err) {
-    console.error(err);
-    showToast('Purchase failed or cancelled', 'error');
-  }
-};
-
-// ─── BUY CREDIT PACK (10 credits for $4.99) ─────────────────────────────────
-window.buyCreditPack = async function() {
-  if (!window.Capacitor) {
-    showToast('Credit purchases are only available in the Android app', 'error');
-    return;
-  }
-
-  try {
-    showToast('Opening Google Play...', 'success');
-
-    const { InAppPurchase2 } = window.Capacitor.Plugins;
-
-    // ←←← CHANGE THIS if your product ID in Google Play Console is different
-    const productId = 'credits_10_pack';
-
-    await InAppPurchase2.buy({
-      productId: productId,
-      type: 'consumable'   // Important: this is a one-time consumable, not a subscription
-    });
-
-    // The actual credit grant happens in purchaseSucceeded listener below
-  } catch (err) {
-    console.error(err);
-    showToast('Purchase failed or cancelled', 'error');
-  }
-};
-
-// Listen for successful purchase and activate Pro on backend
-function setupBillingListener() {
-  if (!window.Capacitor) return;
-
-  const { InAppPurchase2 } = window.Capacitor.Plugins;
-
-InAppPurchase2.addListener('purchaseSucceeded', async (purchase) => {
-  try {
-    const productId = purchase.productId || '';
-
-    if (productId.includes('pro_monthly')) {
-      // Existing Pro subscription flow
-      const res = await apiPost('/owner/upgrade', {
-        orderId: purchase.orderId || purchase.transactionId,
-        productId: productId
-      });
-
-      if (res.success) {
-        showToast('🎉 Thank you! You are now Business Pro!', 'success');
-        loadOwnerDashboard(document.getElementById('content'));
-      }
-    } 
-    else if (productId.includes('credits_10_pack') || productId.includes('credit')) {
-      // New credit pack flow
-      const res = await apiPost('/owner/buy-credits', {
-        orderId: purchase.orderId || purchase.transactionId,
-        productId: productId,
-        credits: 10
-      });
-
-      if (res.success) {
-        showToast('✅ 10 credits added to your account!', 'success');
-        // Refresh the notifications tab so credit count updates
-        if (typeof loadNotificationsTab === 'function') {
-          loadNotificationsTab();
-        }
-      }
-    }
-  } catch (e) {
-    showToast('Failed to activate purchase', 'error');
-  }
-});
-
-  InAppPurchase2.addListener('purchaseFailed', () => {
-    showToast('Purchase failed or cancelled', 'error');
-  });
-}
+// setupBillingListener — REMOVED
+function setupBillingListener() { /* credits/billing removed */ }
 
 // Call this once when app loads (add near the bottom of your file)
 document.addEventListener('DOMContentLoaded', () => {
   setupBillingListener();
 });
 
-window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
-};
+// showCreditInfo — REMOVED
+window.showCreditInfo = function() {};
 
 window.saveOwnerBusinessLogo = async function() {
   if (!pendingOwnerLogo) {
@@ -8947,7 +8509,7 @@ window.postHomeListing = async function() {
     return;
   }
 
-  if (notify && !(await checkNotificationCredits(2))) return;
+
 
   const btn = document.querySelector('#dtabContent-homes button[onclick="postHomeListing()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
