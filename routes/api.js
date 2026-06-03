@@ -435,7 +435,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       } catch (pushErr) {
         console.error('[Push] Shoutout broadcast failed:', pushErr);
       }
-    }, 800);
+    }, 1500);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
@@ -3878,17 +3878,22 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
-// GET /api/shoutout-thumb/:shoutoutId
+// GET /api/shoutout-thumb/:shoutoutId — WORKING VERSION FROM OLD FILE
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
-    if (!shoutout?.images?.length) return res.status(404).send('No image');
+    if (!shoutout?.images?.length) {
+      console.log('[Thumb] No image found for shoutout', req.params.shoutoutId);
+      return res.status(404).send('No image');
+    }
 
     const raw = shoutout.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    
+    // More tolerant regex — matches what the frontend actually sends
+    const match = raw.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
     if (!match) {
-      console.error('[Thumb] Bad shoutout image format');
-      return res.status(400).send('Invalid format');
+      console.error('[Thumb] Bad shoutout image format. Raw starts with:', raw.substring(0, 100));
+      return res.status(400).send('Invalid image format');
     }
 
     const [, mimeType, base64Data] = match;
@@ -3903,7 +3908,7 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Shoutout thumb error:', err);
-    res.status(500).send('Error');
+    res.status(500).send('Error serving image');
   }
 });
 
