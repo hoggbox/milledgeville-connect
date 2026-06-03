@@ -774,6 +774,66 @@ router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (
   }
 });
 
+// PATCH /api/admin/scheduled-notifications/:id
+// Cancel a pending notification or save/update a draft
+router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const notification = await ScheduledNotification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    const { action, title, body, image, targetType, targetId, scheduledFor } = req.body;
+
+    if (action === 'cancel') {
+      if (notification.status !== 'pending') {
+        return res.status(400).json({ message: 'Only pending notifications can be cancelled' });
+      }
+      notification.status = 'cancelled';
+      await notification.save();
+      return res.json({ success: true, message: 'Notification cancelled', notification });
+    }
+
+    if (action === 'update') {
+      if (notification.status !== 'pending' && notification.status !== 'draft') {
+        return res.status(400).json({ message: 'Only pending or draft notifications can be updated' });
+      }
+      if (title !== undefined) notification.title = title.trim();
+      if (body !== undefined) notification.body = body.trim();
+      if (image !== undefined) notification.image = image || null;
+      if (targetType !== undefined) notification.targetType = targetType;
+      if (targetId !== undefined) notification.targetId = targetId || null;
+      if (scheduledFor !== undefined) notification.scheduledFor = scheduledFor ? new Date(scheduledFor) : null;
+      await notification.save();
+      return res.json({ success: true, message: 'Notification updated', notification });
+    }
+
+    return res.status(400).json({ message: 'Invalid action. Use "cancel" or "update".' });
+  } catch (err) {
+    console.error('PATCH scheduled-notification error:', err);
+    res.status(500).json({ message: 'Failed to update notification' });
+  }
+});
+
+// DELETE /api/admin/scheduled-notifications/:id
+// Permanently delete a draft or cancelled notification
+router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const notification = await ScheduledNotification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    if (notification.status === 'sent') {
+      return res.status(400).json({ message: 'Sent notifications cannot be deleted' });
+    }
+    await notification.deleteOne();
+    res.json({ success: true, message: 'Notification deleted' });
+  } catch (err) {
+    console.error('DELETE scheduled-notification error:', err);
+    res.status(500).json({ message: 'Failed to delete notification' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 5.  ADMIN — UPDATE REPORT STATUS
 //     PATCH /api/admin/reports/:id
