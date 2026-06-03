@@ -1060,30 +1060,26 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
-// Send push to a single user (supports both native FCM and web VAPID)
-// Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
   if (!sub) {
-    console.log(`[Push] No subscription record for user ${userId}`);
+    console.log(`[Push] No subscription for ${userId}`);
     return false;
   }
 
-  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
   const BASE_URL = 'https://www.milledgevilleconnect.com';
-
-  // Force absolute HTTPS URL
   let notifImage = null;
+
   if (imageUrl) {
     if (imageUrl.startsWith('http')) {
       notifImage = imageUrl;
     } else {
-      const cleanPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-      notifImage = `${BASE_URL}/${cleanPath}`;
+      const cleanPath = imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl;
+      notifImage = BASE_URL + cleanPath;
     }
   }
 
-  console.log(`[Push] Sending to ${userId} | image: ${notifImage ? 'YES' : 'NO'}`);
+  console.log(`[Push] Sending to ${userId} | imageUrl passed: ${imageUrl || 'null'} | final notifImage: ${notifImage || 'null'}`);
 
   if (sub.nativeToken) {
     try {
@@ -1093,41 +1089,46 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         data: { page: data.page || '', id: data.id || '', url: data.url || '' },
         android: {
           priority: 'high',
-          notification: { sound: 'default', channelId: 'default', ...(notifImage ? { image: notifImage } : {}) }
+          notification: { 
+            sound: 'default', 
+            channelId: 'default', 
+            ...(notifImage ? { image: notifImage } : {}) 
+          }
         },
-        ...(notifImage ? { apns: { payload: { aps: { 'mutable-content': 1 } }, fcmOptions: { image: notifImage } } } : {})
+        ...(notifImage ? { 
+          apns: { 
+            payload: { aps: { 'mutable-content': 1 } }, 
+            fcmOptions: { image: notifImage } 
+          } 
+        } : {})
       };
 
       await admin.messaging().send(message);
-      console.log(`✅ Native FCM sent to ${userId} with image`);
+      console.log(`✅ Native FCM sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
       return true;
     } catch (err) {
       console.error(`[Push] FCM failed for ${userId}:`, err.message);
-      if (err.code === 'messaging/registration-token-not-registered') {
-        sub.nativeToken = null;
-        await sub.save();
-      }
       return false;
     }
   }
 
   // Web Push
-  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+  if (sub.subscription?.endpoint) {
     try {
       const pushPayload = {
-        title, body, data, icon: APP_ICON, badge: APP_ICON
+        title, 
+        body, 
+        data, 
+        icon: 'https://www.milledgevilleconnect.com/icon-192.png',
+        badge: 'https://www.milledgevilleconnect.com/icon-192.png'
       };
       if (notifImage) pushPayload.image = notifImage;
 
       await webpush.sendNotification(sub.subscription, JSON.stringify(pushPayload));
-      console.log(`✅ Web push sent to ${userId} with image`);
+      console.log(`✅ Web push sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
       return true;
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        sub.subscription = null;
-        await sub.save();
-      }
       return false;
     }
   }
