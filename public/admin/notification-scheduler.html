@@ -208,12 +208,29 @@
     <div class="modal-body">
 
       <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Business</label>
-          <select class="form-select" id="fBusiness" onchange="onBizChange()">
-            <option value="">— select business —</option>
-          </select>
-        </div>
+<div class="form-group">
+  <label class="form-label">Business</label>
+  
+  <!-- Search Input -->
+  <input type="text" id="businessSearch" 
+         class="form-input" 
+         placeholder="Type to search businesses..."
+         oninput="filterBusinessSearch()">
+  
+  <!-- Selected Business Display -->
+  <div id="selectedBusinessDisplay" 
+       style="margin-top:6px; font-size:13px; color:#10b981; display:none;">
+    ✓ Selected: <span id="selectedBusinessName"></span>
+  </div>
+
+  <!-- Search Results -->
+  <div id="businessSearchResults" 
+       style="max-height:180px; overflow-y:auto; border:0.5px solid #334155; border-radius:8px; margin-top:4px; background:#0f172a; display:none;">
+  </div>
+
+  <!-- Hidden field to store selected business ID -->
+  <input type="hidden" id="fBusiness">
+</div>
         <div class="form-group">
           <label class="form-label">Status</label>
           <select class="form-select" id="fStatus">
@@ -307,6 +324,7 @@
     <div class="modal-body" id="analyticsBody"></div>
   </div>
 </div>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
@@ -420,6 +438,65 @@ function showToast(msg, type = 'info') {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3000);
+}
+
+let selectedBusinessId = null;
+
+function filterBusinessSearch() {
+  const searchInput = document.getElementById('businessSearch').value.toLowerCase().trim();
+  const resultsContainer = document.getElementById('businessSearchResults');
+  resultsContainer.innerHTML = '';
+  resultsContainer.style.display = 'block';
+
+  if (!searchInput) {
+    resultsContainer.style.display = 'none';
+    return;
+  }
+
+  const filtered = BUSINESSES.filter(b => 
+    b.name.toLowerCase().includes(searchInput) ||
+    (b.category && b.category.toLowerCase().includes(searchInput))
+  );
+
+  if (filtered.length === 0) {
+    resultsContainer.innerHTML = `<div style="padding:10px 12px; color:#94a3b8; font-size:13px;">No businesses found</div>`;
+    return;
+  }
+
+  filtered.forEach(b => {
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:8px 12px; cursor:pointer; border-bottom:0.5px solid #334155; display:flex; align-items:center; gap:8px;';
+    div.innerHTML = `
+      <span style="font-size:18px;">${b.emoji}</span>
+      <span style="flex:1; font-size:14px;">${b.name}</span>
+      <span style="font-size:11px; color:#64748b;">${b.category}</span>
+    `;
+    
+    div.onclick = () => {
+      selectBusiness(b);
+    };
+    
+    resultsContainer.appendChild(div);
+  });
+}
+
+function selectBusiness(business) {
+  selectedBusinessId = business.id;
+  document.getElementById('fBusiness').value = business.id;
+
+  document.getElementById('selectedBusinessName').textContent = `${business.emoji} ${business.name}`;
+  document.getElementById('selectedBusinessDisplay').style.display = 'block';
+
+  document.getElementById('businessSearch').value = '';
+  document.getElementById('businessSearchResults').style.display = 'none';
+}
+
+function clearSelectedBusiness() {
+  selectedBusinessId = null;
+  document.getElementById('fBusiness').value = '';
+  document.getElementById('selectedBusinessDisplay').style.display = 'none';
+  document.getElementById('businessSearch').value = '';
+  document.getElementById('businessSearchResults').style.display = 'none';
 }
 
 async function init() {
@@ -544,26 +621,44 @@ function openCompose(){
 }
 
 function openEdit(id){
-  const n=notifications.find(x=>x.id===id);
-  if(!n) return;
-  editingId=id;
+  const n = notifications.find(x => x.id === id);
+  if (!n) return;
+
+  editingId = id;
   resetForm();
-  document.getElementById('modalTitleLabel').textContent='Edit notification';
-  document.getElementById('saveBtnLabel').textContent='Update';
-  document.getElementById('fBusiness').value=n.bizId;
-  document.getElementById('fStatus').value=n.status==='sent'?'scheduled':n.status;
-  document.getElementById('fTitle').value=n.title;
-  document.getElementById('fBody').value=n.body;
-  document.getElementById('fRepeat').value=n.repeat;
+
+  document.getElementById('modalTitleLabel').textContent = 'Edit notification';
+  document.getElementById('saveBtnLabel').textContent = 'Update';
+
+  document.getElementById('fTitle').value = n.title || '';
+  document.getElementById('fBody').value = n.body || '';
+  document.getElementById('fStatus').value = (n.status === 'sent' ? 'scheduled' : n.status) || 'scheduled';
+
+  // Business selection
+  if (n.bizId) {
+    const biz = BUSINESSES.find(b => b.id === n.bizId);
+    if (biz) {
+      document.getElementById('fBusiness').value = n.bizId;
+      document.getElementById('selectedBusinessName').textContent = `${biz.emoji} ${biz.name}`;
+      document.getElementById('selectedBusinessDisplay').style.display = 'block';
+      selectedBusinessId = n.bizId;
+    }
+  }
+
+  document.getElementById('fRepeat').value = n.repeat || 'once';
   toggleRepeat();
-  if(n.days.length){
-    document.querySelectorAll('.repeat-day').forEach(d=>{
-      d.classList.toggle('sel',n.days.includes(d.dataset.d));
+
+  if (n.days && n.days.length) {
+    document.querySelectorAll('.repeat-day').forEach(d => {
+      d.classList.toggle('sel', n.days.includes(d.dataset.d));
     });
   }
-  setLinkTypeActive(n.link.type);
-  if(n.link.value) document.getElementById('fLinkValue').value=n.link.value;
-  document.getElementById('composeModal').style.display='flex';
+
+  const linkType = n.link?.type || 'directory';
+  setLinkTypeActive(linkType);
+  if (n.link?.value) document.getElementById('fLinkValue').value = n.link.value;
+
+  document.getElementById('composeModal').style.display = 'flex';
 }
 
 function closeCompose(){document.getElementById('composeModal').style.display='none';}
@@ -587,6 +682,10 @@ function resetForm(){
   setLinkTypeActive('directory');
   currentLinkType='directory';
   setTodayDate();
+
+  // NEW: Clear business search
+  clearSelectedBusiness();
+  document.getElementById('businessSearchResults').style.display = 'none';
 }
 
 function setLinkType(t,btn){
