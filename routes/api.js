@@ -4069,8 +4069,54 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── SCHEDULED NOTIFICATIONS (Admin) ─────────────────────────────────────────
+// ─── SCHEDULED NOTIFICATION RUNNER ─────────────────────────────────────────
 const ScheduledNotification = require('../models/ScheduledNotification');
+
+async function processScheduledNotifications() {
+  try {
+    const now = new Date();
+
+    const due = await ScheduledNotification.find({
+      status: 'scheduled',
+      scheduledFor: { $lte: now }
+    }).populate('business');
+
+    for (const notif of due) {
+      try {
+        await broadcastPush(
+          notif.title,
+          notif.body,
+          { 
+            page: notif.targetType || 'home', 
+            id: notif.targetId || '' 
+          },
+          { 
+            type: notif.targetType || 'custom', 
+            imageUrl: notif.image 
+              ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}` 
+              : null 
+          }
+        );
+
+        notif.status = 'sent';
+        notif.sentAt = new Date();
+        await notif.save();
+
+        console.log(`✅ Scheduled notification sent: ${notif.title}`);
+      } catch (err) {
+        console.error(`Failed to send scheduled notif ${notif._id}:`, err);
+        notif.status = 'failed';
+        await notif.save();
+      }
+    }
+  } catch (err) {
+    console.error('Scheduled notification processor error:', err);
+  }
+}
+
+// Run every 30 seconds
+setInterval(processScheduledNotifications, 30 * 1000);
+processScheduledNotifications(); // run once on startup
 
 // GET  /api/admin/scheduled-notifications
 router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
