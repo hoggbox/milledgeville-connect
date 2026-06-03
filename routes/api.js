@@ -1068,10 +1068,19 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     return false;
   }
 
-  const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
-  // Only use a real https:// URL as the notification image.
-  // data: URLs are blocked by browsers/FCM in push notifications.
-  const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
+  const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
+  const BASE_URL = 'https://www.milledgevilleconnect.com';
+
+  // ✅ FIX: If imageUrl is a relative path (like /api/...), convert it to a full HTTPS URL first
+  let finalImageUrl = imageUrl;
+  if (finalImageUrl && !finalImageUrl.startsWith('http://') && !finalImageUrl.startsWith('https://')) {
+    // Strips leading slash if present to avoid doubling up slashes
+    const cleanPath = finalImageUrl.startsWith('/') ? finalImageUrl.substring(1) : finalImageUrl;
+    finalImageUrl = `${BASE_URL}/${cleanPath}`;
+  }
+
+  // Double check that we now have a clean, valid https:// string
+  const notifImage = (finalImageUrl && finalImageUrl.startsWith('https://')) ? finalImageUrl : null;
 
   if (sub.nativeToken) {
     try {
@@ -1080,20 +1089,18 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         notification: {
           title,
           body,
-          // ✅ FIX: Firebase Admin SDK uses "image", NOT "imageUrl"
           ...(notifImage ? { image: notifImage } : {})
         },
         data: {
           page: data.page || '',
-          id:   data.id   || '',
-          url:  data.url  || ''
+          id: data.id || '',
+          url: data.url || ''
         },
         android: {
           priority: 'high',
           notification: {
-            sound:     'default',
+            sound: 'default',
             channelId: 'default',
-            // ✅ FIX: "image" not "imageUrl" here too
             ...(notifImage ? { image: notifImage } : {})
           }
         },
@@ -1105,8 +1112,9 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           }
         } : {})
       };
+
       await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+      console.log(`✅ Native push sent to ${userId}${notifImage ? ` (with image: ${notifImage})` : ''}`);
       return true;
     } catch (err) {
       console.error(`[Push] FCM failed for ${userId}:`, err.message);
@@ -3885,7 +3893,7 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
-// GET /api/shoutout-thumb/:shoutoutId — WORKING VERSION FROM OLD FILE
+// GET /api/shoutout-thumb/:shoutoutId — BULLETPROOF VERSION FOR ANDROID
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
@@ -3896,28 +3904,41 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
 
     const raw = shoutout.images[0];
     
-    // More tolerant regex — matches what the frontend actually sends
-    const match = raw.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
-    if (!match) {
-      console.error('[Thumb] Bad shoutout image format. Raw starts with:', raw.substring(0, 100));
+    // 1. More permissive format check to cleanly split the header from the content
+    const base64Marker = ';base64,';
+    const markerIndex = raw.indexOf(base64Marker);
+    
+    if (markerIndex === -1) {
+      console.error('[Thumb] Bad shoutout image format. No base64 marker.');
       return res.status(400).send('Invalid image format');
     }
 
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
+    // Extract base64 data and strip out web-safe formatting or accidental whitespaces
+    let base64Data = raw.substring(markerIndex + base64Marker.length);
+    base64Data = base64Data.replace(/[^A-Za-z0-9+/]/g, ''); // Ensure strict base64 character set
 
+    const buffer = Buffer.from(base64Data, 'base64');
+    if (buffer.length === 0) {
+      return res.status(400).send('Corrupt image data payload');
+    }
+
+    // 2. Strict, reliable header declarations for Android background down-loaders
     res.set({
-      'Content-Type': mimeType,
+      'Content-Type': 'image/jpeg', // Force fallback to standard format layout
+      'Content-Disposition': 'inline; filename="notification.jpg"', // Tells Android this is a file asset
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
     });
-    res.send(buffer);
+    
+    return res.send(buffer);
   } catch (err) {
     console.error('Shoutout thumb error:', err);
     res.status(500).send('Error serving image');
   }
 });
+
 
 // GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
 // MUST come BEFORE the generic /:businessId route
