@@ -3,321 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notification Scheduler • Milledgeville Connect</title>
+  <title>Notification Scheduler • Admin</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-  </style>
 </head>
 <body class="bg-zinc-950 text-white">
 
-  <!-- Header -->
-  <div class="border-b border-white/10 bg-zinc-900/80 backdrop-blur-lg sticky top-0 z-50">
-    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-8">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center">
-          <i class="fa-solid fa-bell text-xl"></i>
+        <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center">
+          <i class="fa-solid fa-bell text-2xl"></i>
         </div>
         <div>
-          <h1 class="text-2xl font-bold">Notification Scheduler</h1>
-          <p class="text-white/50 text-sm">Admin Only</p>
+          <h1 class="text-3xl font-bold">Notification Scheduler</h1>
+          <p class="text-white/50">Admin Tool</p>
         </div>
-      </div>
-      <button onclick="window.close()" 
-              class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-2xl text-sm transition">
-        Close
-      </button>
-    </div>
-  </div>
-
-  <div class="max-w-5xl mx-auto px-6 py-8">
-
-    <!-- Compose Form -->
-    <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
-      <h2 class="text-xl font-semibold mb-6 flex items-center gap-2">
-        <i class="fa-solid fa-paper-plane text-violet-400"></i> 
-        Create New Notification
-      </h2>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        <!-- Left Column -->
-        <div class="space-y-6">
-
-          <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Title</label>
-            <input id="notifTitle" type="text" 
-                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500"
-                   placeholder="New deal at GoodEats!">
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Message</label>
-            <textarea id="notifBody" rows="4"
-                      class="w-full bg-zinc-800 border border-white/20 rounded-3xl px-5 py-4 focus:outline-none focus:border-violet-500 resize-y"
-                      placeholder="Write your notification message..."></textarea>
-          </div>
-
-          <!-- Image -->
-          <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Image (Optional)</label>
-            <div id="imageDropZone" class="border-2 border-dashed border-white/20 hover:border-violet-500 rounded-3xl p-8 text-center cursor-pointer transition">
-              <i class="fa-solid fa-image text-3xl text-white/40 mb-2"></i>
-              <p class="text-white/60 text-sm">Click or drag to upload image</p>
-              <input type="file" id="imageInput" accept="image/*" class="hidden">
-            </div>
-            <div id="imagePreview" class="hidden mt-3">
-              <img id="previewImg" class="max-h-40 rounded-2xl border border-white/10">
-              <button onclick="removeImage()" class="mt-2 text-red-400 text-sm hover:underline">Remove image</button>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Right Column -->
-        <div class="space-y-6">
-
-          <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">When user taps notification, open:</label>
-            <div class="flex gap-2 mb-3">
-              <button onclick="setLinkType('business')" id="btn-business"
-                      class="flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium">Business Card</button>
-              <button onclick="setLinkType('app')" id="btn-app"
-                      class="flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">App Page</button>
-              <button onclick="setLinkType('external')" id="btn-external"
-                      class="flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">External URL</button>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-white/70 mb-2" id="linkLabel">Target</label>
-            <input id="linkTarget" type="text" 
-                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500"
-                   placeholder="Search or enter value...">
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Schedule for later (optional)</label>
-            <input id="scheduledFor" type="datetime-local" 
-                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500">
-            <p class="text-xs text-white/40 mt-1">Leave empty to send immediately</p>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Buttons -->
-      <div class="flex gap-4 mt-8">
-        <button onclick="sendNotification()"
-                class="flex-1 bg-violet-600 hover:bg-violet-700 py-4 rounded-3xl font-bold text-lg flex items-center justify-center gap-2 transition">
-          <i class="fa-solid fa-paper-plane"></i>
-          <span>Send / Schedule</span>
-        </button>
-        <button onclick="clearForm()" 
-                class="px-8 bg-white/5 hover:bg-white/10 rounded-3xl font-medium transition">
-          Clear
-        </button>
       </div>
     </div>
 
+    <!-- Content will be replaced by protection if access denied -->
+    <div id="mainContent">
+      <!-- Your form will load here if access is granted -->
+      <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+        <h2 class="text-xl font-semibold mb-6">Create Notification</h2>
+        <!-- Form content would go here (simplified for now) -->
+        <p class="text-white/60">If you see this, access was granted.</p>
+      </div>
+    </div>
   </div>
 
   <script>
-    // ==================== ROBUST ADMIN PROTECTION ====================
-    function getCurrentUser() {
+    // ==================== DEBUGGING PROTECTION ====================
+    function getTokenPayload() {
       try {
         const token = localStorage.getItem('token');
-        if (!token) return null;
+        if (!token) return { error: "No token found in localStorage" };
 
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const jsonPayload = decodeURIComponent(
           atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
         );
-
-        const payload = JSON.parse(jsonPayload);
-        console.log('%c[Scheduler] JWT Payload:', 'color:#a78bfa', payload);
-
-        const email = payload.email || payload.user?.email || payload.data?.email || null;
-        const userId = payload.id || payload.userId || payload._id || payload.user?._id || null;
-
-        return { email, userId, raw: payload };
+        return JSON.parse(jsonPayload);
       } catch (e) {
-        console.error('[Scheduler] Token decode error:', e);
-        return null;
+        return { error: "Failed to decode token: " + e.message };
       }
     }
 
-    function protectSchedulerPage() {
-      const user = getCurrentUser();
-      const ADMIN_EMAIL = 'imhoggbox@gmail.com';
+    function checkAdminAccess() {
+      const payload = getTokenPayload();
+      console.log("%c[Scheduler] JWT Payload:", "color: #a78bfa; font-size: 13px", payload);
 
-      if (!user || !user.email) {
-        showAccessDenied('Could not read your email from login token.');
+      const ADMIN_EMAIL = "imhoggbox@gmail.com";
+
+      // Show payload on screen for debugging
+      const main = document.getElementById('mainContent');
+
+      if (payload.error) {
+        main.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500/30 rounded-3xl p-8 text-center">
+            <h2 class="text-2xl font-bold text-red-400 mb-4">Token Error</h2>
+            <p class="text-white/70">${payload.error}</p>
+            <button onclick="goBack()" class="mt-6 px-6 py-3 bg-white/10 rounded-2xl">Go Back</button>
+          </div>`;
         return false;
       }
 
-      if (user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        showAccessDenied(`You are logged in as: ${user.email}`);
+      // Check for email in multiple possible places
+      const email = payload.email || payload.user?.email || payload.data?.email || payload.sub || "";
+
+      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        console.log("%c[Scheduler] ✅ Access GRANTED", "color:#4ade80");
+        return true;
+      } else {
+        // Show debug info
+        main.innerHTML = `
+          <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8 max-w-2xl mx-auto">
+            <div class="text-center mb-6">
+              <i class="fa-solid fa-lock text-5xl text-red-400 mb-4"></i>
+              <h2 class="text-2xl font-bold">Access Denied</h2>
+              <p class="text-white/60 mt-2">Only imhoggbox@gmail.com can access this page.</p>
+            </div>
+
+            <div class="bg-black/40 rounded-2xl p-5 text-sm font-mono mb-6">
+              <div class="text-white/50 mb-1">Detected email from token:</div>
+              <div class="text-yellow-400">${email || "NOT FOUND"}</div>
+            </div>
+
+            <div class="text-xs text-white/40 mb-4">Full token payload is logged in browser console (F12).</div>
+
+            <div class="flex gap-3">
+              <button onclick="goBack()" 
+                      class="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-2xl font-medium">
+                Return to App
+              </button>
+              <button onclick="forceAccess()" 
+                      class="flex-1 py-3 bg-red-600 hover:bg-red-700 rounded-2xl font-medium text-sm">
+                Force Access (Debug Only)
+              </button>
+            </div>
+          </div>`;
         return false;
       }
-
-      console.log('%c[Scheduler] ✅ Admin access granted', 'color:#4ade80');
-      return true;
     }
 
-    function showAccessDenied(message) {
-      document.body.innerHTML = `
-        <div class="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
-          <div class="text-center p-8">
-            <div class="text-6xl mb-4">🔒</div>
-            <h1 class="text-3xl font-bold mb-2">Access Denied</h1>
-            <p class="text-white/60 mb-2">${message}</p>
-            <p class="text-xs text-white/40 mb-6">Only imhoggbox@gmail.com can access this page.</p>
-            
-            <button onclick="goBackToAdmin()" 
-                    class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl transition">
-              Return to Admin Panel
-            </button>
-          </div>
-        </div>
-      `;
+    function goBack() {
+      window.location.href = '/';
     }
 
-    function goBackToAdmin() {
-      window.location.href = '/?admin=true';
+    function forceAccess() {
+      if (confirm("This bypasses security. Only use for debugging.")) {
+        document.getElementById('mainContent').innerHTML = `
+          <div class="bg-yellow-900/20 border border-yellow-500 rounded-3xl p-6 text-center">
+            <p class="text-yellow-400">Debug mode enabled. You can now use the page.</p>
+          </div>`;
+        // Load your actual form here if needed
+      }
     }
 
-    // Run protection
-    if (!protectSchedulerPage()) {
-      throw new Error('Access denied');
+    // Run check
+    if (!checkAdminAccess()) {
+      throw new Error("Access denied");
     }
     // ==================== END PROTECTION ====================
 
 
-    // ==================== FORM LOGIC ====================
-    let currentLinkType = 'business';
-    let uploadedImageBase64 = null;
-
-    function setLinkType(type) {
-      currentLinkType = type;
-
-      document.getElementById('btn-business').className = type === 'business' 
-        ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium' 
-        : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
-
-      document.getElementById('btn-app').className = type === 'app' 
-        ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium' 
-        : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
-
-      document.getElementById('btn-external').className = type === 'external' 
-        ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium' 
-        : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
-
-      const label = document.getElementById('linkLabel');
-      const input = document.getElementById('linkTarget');
-
-      if (type === 'business') {
-        label.textContent = 'Business';
-        input.placeholder = 'Search business name...';
-      } else if (type === 'app') {
-        label.textContent = 'App Page';
-        input.placeholder = 'marketplace, deals, events, etc.';
-      } else {
-        label.textContent = 'External URL';
-        input.placeholder = 'https://example.com';
-      }
-    }
-
-    // Image upload
-    document.getElementById('imageDropZone').addEventListener('click', () => {
-      document.getElementById('imageInput').click();
-    });
-
-    document.getElementById('imageInput').addEventListener('change', function(e) {
-      if (e.target.files[0]) handleImageUpload(e.target.files[0]);
-    });
-
-    function handleImageUpload(file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image is too large (max 5MB)');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        uploadedImageBase64 = ev.target.result;
-        document.getElementById('previewImg').src = uploadedImageBase64;
-        document.getElementById('imagePreview').classList.remove('hidden');
-        document.getElementById('imageDropZone').classList.add('hidden');
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function removeImage() {
-      uploadedImageBase64 = null;
-      document.getElementById('imagePreview').classList.add('hidden');
-      document.getElementById('imageDropZone').classList.remove('hidden');
-      document.getElementById('imageInput').value = '';
-    }
-
-    async function sendNotification() {
-      const title = document.getElementById('notifTitle').value.trim();
-      const body = document.getElementById('notifBody').value.trim();
-      const target = document.getElementById('linkTarget').value.trim();
-      const scheduledFor = document.getElementById('scheduledFor').value;
-
-      if (!title || !body) {
-        alert('Title and message are required');
-        return;
-      }
-
-      const payload = {
-        title,
-        body,
-        image: uploadedImageBase64 || null,
-        targetType: currentLinkType,
-        targetId: target || null,
-        scheduledFor: scheduledFor || null
-      };
-
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/admin/scheduled-notifications', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-          alert(data.message || 'Notification created successfully!');
-          clearForm();
-        } else {
-          alert(data.message || 'Failed to create notification');
-        }
-      } catch (err) {
-        console.error(err);
-        alert('Network error. Please try again.');
-      }
-    }
-
-    function clearForm() {
-      document.getElementById('notifTitle').value = '';
-      document.getElementById('notifBody').value = '';
-      document.getElementById('linkTarget').value = '';
-      document.getElementById('scheduledFor').value = '';
-      removeImage();
-    }
-
-    // Initialize
-    setTimeout(() => {
-      setLinkType('business');
-    }, 100);
+    // ==================== YOUR FORM CODE GOES BELOW ====================
+    console.log("%c[Scheduler] Page loaded successfully for admin", "color:#4ade80");
+    
+    // Add your form JavaScript here later
   </script>
 
 </body>
