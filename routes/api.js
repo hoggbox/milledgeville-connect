@@ -3845,8 +3845,7 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
 
     const raw = notif.image;
 
-    // More tolerant regex (handles jpeg, png, webp, etc.)
-    const match = raw.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) {
       console.error('[Thumb] Bad scheduled notification image format');
       return res.status(400).send('Invalid image format');
@@ -3875,8 +3874,7 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     if (!shoutout?.images?.length) return res.status(404).send('No image');
 
     const raw = shoutout.images[0];
-    // More tolerant regex for different base64 image types
-    const match = raw.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) {
       console.error('[Thumb] Bad shoutout image format');
       return res.status(400).send('Invalid format');
