@@ -365,24 +365,20 @@
 
   <div class="metrics-row">
     <div class="metric-card">
-      <div class="metric-label"><i class="ti ti-send" style="font-size:13px" aria-hidden="true"></i> Sent this month</div>
-      <div class="metric-value" id="mSent">24</div>
-      <div class="metric-sub metric-up">↑ 6 vs last month</div>
+      <div class="metric-label"><i class="ti ti-send"></i> Total Sent</div>
+      <div class="metric-value" id="mSent">0</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label"><i class="ti ti-eye" style="font-size:13px" aria-hidden="true"></i> Avg open rate</div>
-      <div class="metric-value" id="mOpen">38%</div>
-      <div class="metric-sub metric-up">↑ 4% vs last month</div>
+      <div class="metric-label"><i class="ti ti-clock"></i> Currently Scheduled</div>
+      <div class="metric-value" id="mSched">0</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label"><i class="ti ti-cursor-text" style="font-size:13px" aria-hidden="true"></i> Avg click rate</div>
-      <div class="metric-value" id="mClick">19%</div>
-      <div class="metric-sub metric-down">↓ 2% vs last month</div>
+      <div class="metric-label"><i class="ti ti-repeat"></i> Repeating</div>
+      <div class="metric-value" id="mRepeating">0</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label"><i class="ti ti-clock" style="font-size:13px" aria-hidden="true"></i> Scheduled</div>
-      <div class="metric-value" id="mSched">3</div>
-      <div class="metric-sub">upcoming in queue</div>
+      <div class="metric-label"><i class="ti ti-chart-bar"></i> Created This Month</div>
+      <div class="metric-value" id="mThisMonth">0</div>
     </div>
   </div>
 
@@ -773,6 +769,7 @@ async function init() {
   renderList();
   updateTopMetrics();
   buildReachChart();
+  startLiveRefresh();
 }
 
 function setTodayDate(){
@@ -1133,9 +1130,35 @@ async function sendNow(id) {
   }
 }
 
-function updateTopMetrics(){
-  const sched=notifications.filter(n=>n.status==='scheduled'||n.status==='draft').length;
-  document.getElementById('mSched').textContent=sched;
+function updateTopMetrics() {
+  const totalSent   = notifications.filter(n => n.status === 'sent').length;
+  const scheduled   = notifications.filter(n => n.status === 'scheduled').length;
+  const repeating   = notifications.filter(n => n.repeat && n.repeat !== 'once').length;
+
+  const now = new Date();
+  const thisMonth = notifications.filter(n => {
+    if (!n.raw?.createdAt) return false;
+    const d = new Date(n.raw.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
+  document.getElementById('mSent').textContent     = totalSent;
+  document.getElementById('mSched').textContent    = scheduled;
+  document.getElementById('mRepeating').textContent = repeating;
+  document.getElementById('mThisMonth').textContent = thisMonth;
+}
+
+function startLiveRefresh() {
+  setInterval(async () => {
+    try {
+      const fresh = await apiGet('/admin/scheduled-notifications');
+      notifications = (fresh || []).map(normalizeNotification);
+      renderList();
+      updateTopMetrics();
+    } catch (e) {
+      console.log('Live refresh error');
+    }
+  }, 30000); // refreshes every 30 seconds
 }
 
 function openAnalytics(id){
