@@ -576,7 +576,10 @@ const ScheduledNotification = require('../models/ScheduledNotification');
 // ─── ADMIN: CREATE SCHEDULED NOTIFICATION ─────────────────────────────────────
 router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { title, body, image, targetType, targetId, scheduledFor } = req.body;
+    const { 
+      title, body, image, targetType, targetId, targetUrl, 
+      scheduledFor, business, repeat, days, endDate 
+    } = req.body;
 
     if (!title || !body) {
       return res.status(400).json({ message: 'Title and body are required' });
@@ -588,21 +591,23 @@ router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async 
       image: image || null,
       targetType: targetType || 'home',
       targetId: targetId || null,
+      targetUrl: targetUrl || null,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-      status: scheduledFor ? 'pending' : 'sent',   // immediate = sent, future = pending
+      business: business || null,           // ← NEW
+      repeat: repeat || 'once',             // ← NEW
+      days: days || [],
+      endDate: endDate ? new Date(endDate) : null,
+      status: scheduledFor ? 'pending' : 'sent',
       createdBy: req.userId
     });
 
-    // If it's meant to be sent immediately, send it now
     if (!scheduledFor) {
       await sendScheduledNotification(notification);
     }
 
     res.json({ 
       success: true, 
-      message: scheduledFor 
-        ? 'Notification scheduled successfully' 
-        : 'Notification sent successfully',
+      message: scheduledFor ? 'Notification scheduled successfully' : 'Notification sent successfully',
       notification 
     });
 

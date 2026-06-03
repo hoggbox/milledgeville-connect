@@ -362,9 +362,36 @@ async function loadBusinesses() {
   try {
     const data = await apiGet('/directory');
     BUSINESSES = (data.businesses || []).map(b => ({
-      id: b._id, name: b.name, category: b.category?.name || 'Business', emoji: b.category?.icon || '🏪'
+      id: b._id,
+      name: b.name,
+      category: b.category?.name || 'Business',
+      emoji: b.category?.icon || '🏪'
     }));
-  } catch (e) { BUSINESSES = []; }
+  } catch (e) {
+    console.error('Failed to load businesses', e);
+    BUSINESSES = [];
+  }
+}
+
+function populateBizDropdowns() {
+  const sel = document.getElementById('fBusiness');
+  const fsel = document.getElementById('bizFilter');
+
+  // Clear existing options first
+  sel.innerHTML = '<option value="">— select business —</option>';
+  fsel.innerHTML = '<option value="">All businesses</option>';
+
+  BUSINESSES.forEach(b => {
+    const opt1 = document.createElement('option');
+    opt1.value = b.id;
+    opt1.textContent = `${b.emoji} ${b.name}`;
+    sel.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = b.id;
+    opt2.textContent = `${b.emoji} ${b.name}`;
+    fsel.appendChild(opt2);
+  });
 }
 
 function normalizeNotification(n) {
@@ -663,15 +690,21 @@ async function saveNotif(){
     targetType = currentLinkType;
   }
 
-  const payload = {
-    title,
-    body,
-    image: imgBase64 || null,
-    targetType,
-    targetId,
-    targetUrl,
-    scheduledFor
-  };
+const payload = {
+  title,
+  body,
+  image: imgBase64 || null,
+  targetType,
+  targetId,
+  targetUrl,
+  scheduledFor,
+  business: bizId,                    // ← Important fix
+  repeat: document.getElementById('fRepeat').value,
+  days: repeat === 'custom' 
+    ? [...document.querySelectorAll('.repeat-day.sel')].map(d => d.dataset.d) 
+    : (repeat === 'weekly' ? ['Mon'] : []),
+  endDate: document.getElementById('fEndDate')?.value || null
+};
 
   const btn = document.querySelector('#composeModal .btn-primary');
   if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
