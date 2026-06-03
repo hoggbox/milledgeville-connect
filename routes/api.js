@@ -794,6 +794,14 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
       return res.json({ success: true, message: 'Notification cancelled', notification });
     }
 
+    if (action === 'send-now') {
+      if (notification.status === 'sent') {
+        return res.status(400).json({ message: 'Notification has already been sent' });
+      }
+      await sendScheduledNotification(notification);
+      return res.json({ success: true, message: 'Notification sent immediately', notification });
+    }
+
     if (action === 'update') {
       if (notification.status !== 'pending' && notification.status !== 'draft') {
         return res.status(400).json({ message: 'Only pending or draft notifications can be updated' });

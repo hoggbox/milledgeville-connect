@@ -314,29 +314,112 @@ let editingId = null;
 let currentLinkType = 'directory';
 let currentTab = 'all';
 let imgBase64 = null;
+let BUSINESSES = [];
+let notifications = [];
 
-const BUSINESSES = [
-  {id:'b1', name:'The Brick', category:'Restaurant', emoji:'🍕'},
-  {id:'b2', name:'Barefoot Boutique', category:'Retail', emoji:'👗'},
-  {id:'b3', name:'Lake House Spa', category:'Wellness', emoji:'🧖'},
-  {id:'b4', name:'Milledgeville Hardware', category:'Home', emoji:'🔧'},
-  {id:'b5', name:"Copper's Coffee", category:'Cafe', emoji:'☕'},
-  {id:'b6', name:'Oconee Outdoors', category:'Sports', emoji:'🏕️'},
-];
+const API_BASE = '/api';
+let authToken = localStorage.getItem('token') || '';
 
-let notifications = [
-  {id:'n1', bizId:'b1', bizName:'The Brick', bizEmoji:'🍕', status:'active', title:'Happy Hour starts NOW 🍺', body:'2-for-1 drinks until 7pm every Friday. Come join us downtown!', link:{type:'directory'}, hasImg:true, scheduledAt:'Fri 6:00 PM', repeat:'weekly', days:['Fri'], stats:{sent:1240,opens:471,clicks:218,ctr:18}},
-  {id:'n2', bizId:'b2', bizName:'Barefoot Boutique', bizEmoji:'👗', status:'scheduled', title:'Summer collection drops tomorrow', body:'New arrivals from 15+ local designers. Early access for app members!', link:{type:'url',value:'https://milledgevilleconnect.com'}, hasImg:true, scheduledAt:'Tomorrow 9:00 AM', repeat:'once', days:[], stats:{sent:0,opens:0,clicks:0,ctr:0}},
-  {id:'n3', bizId:'b3', bizName:'Lake House Spa', bizEmoji:'🧖', status:'scheduled', title:'Book your Mother\'s Day massage', body:'Limited slots available. 20% off all services this Sunday only.', link:{type:'events'}, hasImg:false, scheduledAt:'Sat 10:00 AM', repeat:'once', days:[], stats:{sent:0,opens:0,clicks:0,ctr:0}},
-  {id:'n4', bizId:'b5', bizName:"Copper's Coffee", bizEmoji:'☕', status:'sent', title:'New seasonal latte is here!', body:'Honey lavender oat latte — only while supplies last. Stop in today!', link:{type:'business-post'}, hasImg:true, scheduledAt:'Mon 7:30 AM', repeat:'once', days:[], stats:{sent:1890,opens:832,clicks:401,ctr:21}},
-  {id:'n5', bizId:'b4', bizName:'Milledgeville Hardware', bizEmoji:'🔧', status:'sent', title:'Storm prep checklist 🌪️', body:'Generators, flashlights & bottled water fully stocked. Be ready!', link:{type:'directory'}, hasImg:false, scheduledAt:'Wed 8:00 AM', repeat:'once', days:[], stats:{sent:2100,opens:756,clicks:189,ctr:9}},
-  {id:'n6', bizId:'b6', bizName:'Oconee Outdoors', bizEmoji:'🏕️', status:'draft', title:'Kayak rentals open this weekend', body:'Lake Sinclair access, gear included. Book now before it fills up.', link:{type:'deals'}, hasImg:false, scheduledAt:'—', repeat:'once', days:[], stats:{sent:0,opens:0,clicks:0,ctr:0}},
-];
+function apiHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+  return h;
+}
 
-function init() {
+async function apiGet(endpoint) {
+  const res = await fetch(API_BASE + endpoint, { headers: apiHeaders() });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}
+
+async function apiPost(endpoint, data) {
+  const res = await fetch(API_BASE + endpoint, {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}
+
+async function apiPatch(endpoint, data) {
+  const res = await fetch(API_BASE + endpoint, {
+    method: 'PATCH',
+    headers: apiHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}
+
+async function apiDelete(endpoint) {
+  const res = await fetch(API_BASE + endpoint, { method: 'DELETE', headers: apiHeaders() });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}
+
+async function loadBusinesses() {
+  try {
+    const data = await apiGet('/directory');
+    BUSINESSES = (data.businesses || []).map(b => ({
+      id: b._id, name: b.name, category: b.category?.name || 'Business', emoji: b.category?.icon || '🏪'
+    }));
+  } catch (e) { BUSINESSES = []; }
+}
+
+function normalizeNotification(n) {
+  const biz = BUSINESSES.find(b => b.id === n.business) || { name: 'System', emoji: '🔔' };
+  return {
+    id: n._id,
+    bizId: n.business || null,
+    bizName: n.business ? (BUSINESSES.find(b => b.id === n.business)?.name || 'Business') : 'Admin',
+    bizEmoji: biz.emoji || '🔔',
+    status: n.status === 'pending' ? 'scheduled' : (n.status === 'draft' ? 'draft' : n.status),
+    title: n.title,
+    body: n.body,
+    link: { type: n.targetType || 'home', value: n.targetUrl || n.targetId || '' },
+    hasImg: !!n.image,
+    scheduledAt: n.scheduledFor ? new Date(n.scheduledFor).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + new Date(n.scheduledFor).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : (n.status === 'sent' ? 'Sent' : '—'),
+    repeat: n.repeat || 'once',
+    days: n.days || [],
+    stats: n.deliveryStats || { sent: n.status === 'sent' ? 1 : 0, opens: 0, clicks: 0, ctr: 0 },
+    raw: n
+  };
+}
+
+function showToast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:${type==='error'?'#ef4444':'#10b981'};color:white;padding:10px 18px;border-radius:9999px;font-size:13px;z-index:999999`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+async function init() {
+  console.log('🚀 Notification Scheduler (wired to real backend)');
+
+  if (!authToken) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:#fee2e2;color:#991b1b;padding:12px 16px;margin:12px 1.5rem;border-radius:12px;font-size:13px';
+    banner.innerHTML = `⚠️ No login token found. Log into the main app as admin first, then refresh this page.`;
+    document.querySelector('.page').prepend(banner);
+  }
+
+  await loadBusinesses();
   populateBizDropdowns();
+
+  try {
+    const data = await apiGet('/admin/scheduled-notifications');
+    notifications = Array.isArray(data) ? data.map(normalizeNotification) : [];
+  } catch (e) {
+    console.error(e);
+    notifications = [];
+    showToast('Could not load notifications — make sure you are logged in as admin.', 'error');
+  }
+
   setTodayDate();
   renderList();
+  updateTopMetrics();
   buildReachChart();
 }
 
@@ -538,62 +621,119 @@ function clearImg(e){
 
 function onBizChange(){}
 
-function saveNotif(){
-  const bizId=document.getElementById('fBusiness').value;
-  const biz=BUSINESSES.find(b=>b.id===bizId);
-  const title=document.getElementById('fTitle').value.trim();
-  const body=document.getElementById('fBody').value.trim();
-  const status=document.getElementById('fStatus').value;
-  const repeat=document.getElementById('fRepeat').value;
-  const dateVal=document.getElementById('fDate').value;
-  const timeVal=document.getElementById('fTime').value;
-  if(!bizId||!title||!body){
+async function saveNotif(){
+  const bizId = document.getElementById('fBusiness').value;
+  const biz = BUSINESSES.find(b => b.id === bizId);
+  const title = document.getElementById('fTitle').value.trim();
+  const body = document.getElementById('fBody').value.trim();
+  const status = document.getElementById('fStatus').value;
+  const dateVal = document.getElementById('fDate').value;
+  const timeVal = document.getElementById('fTime').value;
+
+  if (!bizId || !title || !body) {
     alert('Please fill in business, title, and message.');
     return;
   }
-  const days=repeat==='custom'?[...document.querySelectorAll('.repeat-day.sel')].map(d=>d.dataset.d):
-             repeat==='weekly'?['Mon']:[];
-  const linkVal=document.getElementById('fLinkValue').value.trim();
-  const link={type:currentLinkType};
-  if(linkVal) link.value=linkVal;
-  let scheduledAt='—';
-  if(dateVal&&timeVal){
-    const d=new Date(dateVal+'T'+timeVal);
-    scheduledAt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+
+  let scheduledFor = null;
+  if (dateVal && timeVal) {
+    scheduledFor = new Date(dateVal + 'T' + timeVal).toISOString();
   }
-  if(editingId){
-    const idx=notifications.findIndex(n=>n.id===editingId);
-    if(idx>-1){
-      notifications[idx]={...notifications[idx],bizId,bizName:biz.name,bizEmoji:biz.emoji,title,body,status,repeat,days,link,hasImg:!!imgBase64,scheduledAt};
-    }
+
+  let targetType = 'home';
+  let targetId = null;
+  let targetUrl = null;
+
+  if (currentLinkType === 'directory' || currentLinkType === 'business') {
+    targetType = 'business';
+    targetId = bizId;
+  } else if (currentLinkType === 'business-post') {
+    targetType = 'business-post';
+    targetId = bizId;
+  } else if (currentLinkType === 'url') {
+    targetType = 'external';
+    targetUrl = document.getElementById('fLinkValue').value.trim() || null;
+  } else if (currentLinkType === 'deals') {
+    targetType = 'app';
+    targetId = 'deals';
+  } else if (currentLinkType === 'events') {
+    targetType = 'app';
+    targetId = 'events';
   } else {
-    const id='n'+(Date.now());
-    notifications.unshift({id,bizId,bizName:biz.name,bizEmoji:biz.emoji,status,title,body,link,hasImg:!!imgBase64,scheduledAt,repeat,days,stats:{sent:0,opens:0,clicks:0,ctr:0}});
+    targetType = currentLinkType;
   }
-  closeCompose();
-  renderList();
-  updateTopMetrics();
+
+  const payload = {
+    title,
+    body,
+    image: imgBase64 || null,
+    targetType,
+    targetId,
+    targetUrl,
+    scheduledFor
+  };
+
+  const btn = document.querySelector('#composeModal .btn-primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
+
+  try {
+    if (editingId) {
+      await apiPatch(`/admin/scheduled-notifications/${editingId}`, {
+        action: 'update',
+        ...payload
+      });
+      showToast('Notification updated', 'success');
+    } else {
+      const createPayload = { ...payload };
+      if (status === 'draft') createPayload.scheduledFor = null;
+      await apiPost('/admin/scheduled-notifications', createPayload);
+      showToast(scheduledFor ? 'Notification scheduled!' : 'Notification sent!', 'success');
+    }
+
+    closeCompose();
+
+    const fresh = await apiGet('/admin/scheduled-notifications');
+    notifications = (fresh || []).map(normalizeNotification);
+    renderList();
+    updateTopMetrics();
+
+  } catch (e) {
+    console.error(e);
+    showToast(e.message || 'Failed to save', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>'; }
+  }
 }
 
-function deleteNotif(id){
-  if(!confirm('Delete this notification?')) return;
-  notifications=notifications.filter(n=>n.id!==id);
-  renderList();
-  updateTopMetrics();
+async function deleteNotif(id) {
+  if (!confirm('Permanently delete this notification?')) return;
+  try {
+    await apiDelete(`/admin/scheduled-notifications/${id}`);
+    showToast('Deleted', 'success');
+    notifications = notifications.filter(n => n.id !== id);
+    renderList();
+    updateTopMetrics();
+  } catch (e) {
+    showToast(e.message || 'Delete failed', 'error');
+  }
 }
 
-function sendNow(id){
-  const n=notifications.find(x=>x.id===id);
-  if(!n) return;
-  if(!confirm(`Send "${n.title}" to all subscribers now?`)) return;
-  n.status='sent';
-  n.scheduledAt='Just now';
-  n.stats={sent:Math.floor(1200+Math.random()*1000),opens:0,clicks:0,ctr:0};
-  n.stats.opens=Math.floor(n.stats.sent*.3+Math.random()*n.stats.sent*.2);
-  n.stats.clicks=Math.floor(n.stats.opens*.4+Math.random()*n.stats.opens*.2);
-  n.stats.ctr=Math.round(n.stats.clicks/n.stats.sent*100);
-  renderList();
-  updateTopMetrics();
+async function sendNow(id) {
+  const n = notifications.find(x => x.id === id);
+  if (!n) return;
+  if (!confirm(`Send "${n.title}" to all users RIGHT NOW?`)) return;
+
+  try {
+    await apiPatch(`/admin/scheduled-notifications/${id}`, { action: 'send-now' });
+    showToast('Notification sent to all users!', 'success');
+
+    const fresh = await apiGet('/admin/scheduled-notifications');
+    notifications = (fresh || []).map(normalizeNotification);
+    renderList();
+    updateTopMetrics();
+  } catch (e) {
+    showToast(e.message || 'Send now failed', 'error');
+  }
 }
 
 function updateTopMetrics(){
@@ -646,7 +786,7 @@ function buildReachChart(){
   );
 }
 
-init();
+init().catch(e => console.error('Init error:', e));
 </script>
 </body>
 </html>
