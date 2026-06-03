@@ -4133,23 +4133,37 @@ router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (
 // GET /api/scheduled-notification-thumb/:id
 router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   try {
-    const doc = await ScheduledNotification.findById(req.params.id).select('image');
-    if (!doc?.image) return res.status(404).send('Not found');
+    console.log(`[SchedThumb] Request for ${req.params.id}`);
 
-    const match = doc.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+    const notif = await ScheduledNotification.findById(req.params.id).select('image');
+    if (!notif?.image) {
+      console.log(`[SchedThumb] No image found`);
+      return res.status(404).send('No image');
+    }
+
+    const raw = notif.image;
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) {
+      console.error('[SchedThumb] Bad image format');
+      return res.status(400).send('Bad format');
+    }
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
+    console.log(`[SchedThumb] Serving ${buffer.length} bytes`);
+
     res.set({
       'Content-Type': mimeType,
+      'Content-Disposition': 'inline; filename="notif.jpg"',
       'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
     });
-    res.send(buffer);
+
+    return res.send(buffer);
   } catch (err) {
+    console.error('[SchedThumb] Error:', err);
     res.status(500).send('Error');
   }
 });
