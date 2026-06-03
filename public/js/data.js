@@ -2410,7 +2410,7 @@ window.handleShoutoutImages = async function (input) {
 
     try {
       showToast('Compressing image...', 'success');
-      const compressed = await compressImage(file, 1100, 0.72);
+      const compressed = await compressImage(file, 800, 0.60);
       const reader = new FileReader();
       reader.onload = e => {
         _pendingShoutoutImages.push(e.target.result);
@@ -5300,7 +5300,7 @@ window.postLostItem = async function() {
         continue;
       }
       try {
-        const compressed = await compressImage(file, 1100, 0.72);
+        const compressed = await compressImage(file, 800, 0.60);
         const base64 = await new Promise(resolve => {
           const r = new FileReader();
           r.onload = e => resolve(e.target.result);
