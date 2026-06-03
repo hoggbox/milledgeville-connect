@@ -1141,6 +1141,14 @@ async function sendNow(id) {
   if (!n) return;
   if (!confirm(`Send "${n.title}" to all users RIGHT NOW?`)) return;
 
+  // Optimistically flip to sent instantly — no waiting for the server
+  const prevStatus = n.status;
+  const prevScheduledAt = n.scheduledAt;
+  n.status = 'sent';
+  n.scheduledAt = 'Sent';
+  renderList();
+  updateTopMetrics();
+
   try {
     await apiPatch(`/admin/scheduled-notifications/${id}`, { action: 'send-now' });
     showToast('Notification sent to all users!', 'success');
@@ -1150,6 +1158,11 @@ async function sendNow(id) {
     renderList();
     updateTopMetrics();
   } catch (e) {
+    // Revert on failure
+    n.status = prevStatus;
+    n.scheduledAt = prevScheduledAt;
+    renderList();
+    updateTopMetrics();
     showToast(e.message || 'Send now failed', 'error');
   }
 }
@@ -1182,7 +1195,7 @@ function startLiveRefresh() {
     } catch (e) {
       console.log('Live refresh error');
     }
-  }, 30000); // refreshes every 30 seconds
+  }, 5000); // refreshes every 5 seconds
 }
 
 function openAnalytics(id){
