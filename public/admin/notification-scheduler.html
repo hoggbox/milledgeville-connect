@@ -16,12 +16,16 @@
           <i class="fa-solid fa-bell text-violet-500"></i> 
           Notification Scheduler
         </h1>
-        <p class="text-white/50">Admin Only Tool</p>
+        <p class="text-white/50">Admin Tool • Milledgeville Connect</p>
       </div>
+      <button onclick="window.close()" 
+              class="px-5 py-2 bg-white/5 hover:bg-white/10 rounded-2xl text-sm transition">
+        Close
+      </button>
     </div>
 
     <div id="content">
-      <!-- Content loads here after admin check -->
+      <!-- Content is loaded dynamically after admin check -->
     </div>
   </div>
 
@@ -35,15 +39,11 @@
       }
 
       try {
-        // Try to call an admin-only endpoint
         const res = await fetch('/api/admin/stats', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (res.ok) {
-          // If the request succeeds, user is admin
           console.log('%c[Scheduler] ✅ Admin verified via backend', 'color:#4ade80');
           loadSchedulerUI();
           return true;
@@ -64,8 +64,7 @@
           <i class="fa-solid fa-lock text-5xl text-red-400 mb-4"></i>
           <h2 class="text-2xl font-bold mb-2">Access Denied</h2>
           <p class="text-white/60 mb-6">${message}</p>
-          
-          <button onclick="goBackToApp()" 
+          <button onclick="window.location.href='/'" 
                   class="w-full py-3.5 bg-white/10 hover:bg-white/20 rounded-2xl font-medium transition">
             Return to App
           </button>
@@ -73,22 +72,236 @@
       `;
     }
 
-    function goBackToApp() {
-      window.location.href = '/';
-    }
-
+    // ==================== MAIN SCHEDULER UI ====================
     function loadSchedulerUI() {
-      document.getElementById('content').innerHTML = `
+      const content = document.getElementById('content');
+      content.innerHTML = `
         <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
-          <h3 class="font-semibold text-lg mb-4">Create Notification</h3>
-          <p class="text-white/60">Scheduler UI will load here once we finish connecting the form.</p>
-          
-          <!-- We can add the full form later -->
+          <h2 class="text-xl font-semibold mb-6 flex items-center gap-2">
+            <i class="fa-solid fa-paper-plane text-violet-400"></i> Create Notification
+          </h2>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Left Column -->
+            <div class="space-y-6">
+              <div>
+                <label class="block text-sm font-medium text-white/70 mb-2">Title</label>
+                <input id="notifTitle" type="text" 
+                       class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500"
+                       placeholder="New deal at GoodEats!">
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-white/70 mb-2">Message Body</label>
+                <textarea id="notifBody" rows="4"
+                          class="w-full bg-zinc-800 border border-white/20 rounded-3xl px-5 py-4 focus:outline-none focus:border-violet-500 resize-y"
+                          placeholder="Write your notification message..."></textarea>
+              </div>
+
+              <!-- Image Upload -->
+              <div>
+                <label class="block text-sm font-medium text-white/70 mb-2">Image (Optional)</label>
+                <div id="imageDropZone" 
+                     class="border-2 border-dashed border-white/20 hover:border-violet-500 rounded-3xl p-8 text-center cursor-pointer transition">
+                  <i class="fa-solid fa-image text-3xl text-white/40 mb-2"></i>
+                  <p class="text-white/60 text-sm">Click or drag image here</p>
+                  <input type="file" id="imageInput" accept="image/*" class="hidden">
+                </div>
+                <div id="imagePreview" class="hidden mt-3">
+                  <img id="previewImg" class="max-h-40 rounded-2xl border border-white/10">
+                  <button onclick="removeImage()" class="mt-2 text-red-400 text-sm hover:underline">Remove image</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="space-y-6">
+              <div>
+                <label class="block text-sm font-medium text-white/70 mb-2">When tapped, open:</label>
+                <div class="flex gap-2 mb-3">
+                  <button onclick="setLinkType('business')" id="btn-business"
+                          class="flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium">Business Card</button>
+                  <button onclick="setLinkType('app')" id="btn-app"
+                          class="flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">App Page</button>
+                  <button onclick="setLinkType('external')" id="btn-external"
+                          class="flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">External URL</button>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-white/70 mb-2" id="linkLabel">Target</label>
+                <input id="linkTarget" type="text" 
+                       class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500"
+                       placeholder="Search or enter value...">
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-white/70 mb-2">Schedule for later (optional)</label>
+                <input id="scheduledFor" type="datetime-local" 
+                       class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500">
+                <p class="text-xs text-white/40 mt-1">Leave blank to send immediately</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-4 mt-8">
+            <button onclick="sendNotification()"
+                    class="flex-1 bg-violet-600 hover:bg-violet-700 py-4 rounded-3xl font-bold text-lg flex items-center justify-center gap-2 transition">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>Send / Schedule Notification</span>
+            </button>
+            <button onclick="clearForm()" 
+                    class="px-8 bg-white/5 hover:bg-white/10 rounded-3xl font-medium transition">
+              Clear
+            </button>
+          </div>
         </div>
       `;
+
+      // Initialize form
+      setTimeout(() => {
+        setLinkType('business');
+        setupImageUpload();
+      }, 100);
     }
 
-    // Run verification when page loads
+    // ==================== FORM FUNCTIONS ====================
+    let currentLinkType = 'business';
+    let uploadedImageBase64 = null;
+
+    function setLinkType(type) {
+      currentLinkType = type;
+
+      const btns = {
+        business: document.getElementById('btn-business'),
+        app: document.getElementById('btn-app'),
+        external: document.getElementById('btn-external')
+      };
+
+      Object.keys(btns).forEach(key => {
+        if (btns[key]) {
+          btns[key].className = key === type 
+            ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium'
+            : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+        }
+      });
+
+      const label = document.getElementById('linkLabel');
+      const input = document.getElementById('linkTarget');
+
+      if (type === 'business') {
+        label.textContent = 'Business';
+        input.placeholder = 'Search business name or ID...';
+      } else if (type === 'app') {
+        label.textContent = 'App Page';
+        input.placeholder = 'marketplace, deals, events, etc.';
+      } else {
+        label.textContent = 'External URL';
+        input.placeholder = 'https://example.com';
+      }
+    }
+
+    function setupImageUpload() {
+      const dropZone = document.getElementById('imageDropZone');
+      const input = document.getElementById('imageInput');
+
+      if (!dropZone || !input) return;
+
+      dropZone.addEventListener('click', () => input.click());
+
+      input.addEventListener('change', function(e) {
+        if (e.target.files[0]) handleImageUpload(e.target.files[0]);
+      });
+    }
+
+    function handleImageUpload(file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image too large (max 5MB)');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        uploadedImageBase64 = ev.target.result;
+        const preview = document.getElementById('imagePreview');
+        const drop = document.getElementById('imageDropZone');
+        if (preview && drop) {
+          document.getElementById('previewImg').src = uploadedImageBase64;
+          preview.classList.remove('hidden');
+          drop.classList.add('hidden');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeImage() {
+      uploadedImageBase64 = null;
+      const preview = document.getElementById('imagePreview');
+      const drop = document.getElementById('imageDropZone');
+      if (preview && drop) {
+        preview.classList.add('hidden');
+        drop.classList.remove('hidden');
+      }
+      const input = document.getElementById('imageInput');
+      if (input) input.value = '';
+    }
+
+    async function sendNotification() {
+      const title = document.getElementById('notifTitle').value.trim();
+      const body = document.getElementById('notifBody').value.trim();
+      const target = document.getElementById('linkTarget').value.trim();
+      const scheduledFor = document.getElementById('scheduledFor').value;
+
+      if (!title || !body) {
+        alert('Title and message are required');
+        return;
+      }
+
+      const payload = {
+        title,
+        body,
+        image: uploadedImageBase64 || null,
+        targetType: currentLinkType,
+        targetId: target || null,
+        scheduledFor: scheduledFor || null
+      };
+
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/admin/scheduled-notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          alert(data.message || 'Notification created successfully!');
+          clearForm();
+        } else {
+          alert(data.message || 'Failed to create notification');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Network error. Please try again.');
+      }
+    }
+
+    function clearForm() {
+      document.getElementById('notifTitle').value = '';
+      document.getElementById('notifBody').value = '';
+      document.getElementById('linkTarget').value = '';
+      document.getElementById('scheduledFor').value = '';
+      removeImage();
+    }
+
+    // Start everything
     verifyAdminAccess();
   </script>
 
