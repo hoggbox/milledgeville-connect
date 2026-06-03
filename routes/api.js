@@ -720,15 +720,20 @@ async function sendScheduledNotification(notification) {
       data = { page: 'external', url: notification.targetId };
     }
 
-    await broadcastPush(
-      notification.title,
-      notification.body,
-      data,
-      { 
-        imageUrl: notification.image || null,
-        type: 'custom'
-      }
-    );
+  // Use real HTTPS URL for the image (base64 is blocked in push)
+  const imageUrl = notification.image 
+    ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notification._id}`
+    : null;
+
+  await broadcastPush(
+    notification.title,
+    notification.body,
+    data,
+    { 
+      imageUrl,
+      type: 'custom'
+    }
+  );
 
     // Mark as sent
     notification.status = 'sent';
@@ -3826,6 +3831,31 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Thumb fetch error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// GET /api/scheduled-notification-thumb/:id
+router.get('/scheduled-notification-thumb/:id', async (req, res) => {
+  try {
+    const notif = await ScheduledNotification.findById(req.params.id).select('image');
+    if (!notif?.image) return res.status(404).send('Not found');
+
+    const match = notif.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Scheduled notification thumb error:', err);
     res.status(500).send('Error');
   }
 });
