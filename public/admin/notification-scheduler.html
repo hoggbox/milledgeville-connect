@@ -1,25 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notification Scheduler</title>
-  <style>
-:root {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #a1a1aa;
-  --color-text-tertiary: #71717a;
-  --color-background-primary: #18181b;
-  --color-background-secondary: #27272a;
-  --color-border-primary: #3f3f46;
-  --color-border-secondary: #3f3f46;
-  --color-border-tertiary: #27272a;
-  --border-radius-md: 8px;
-  --border-radius-lg: 12px;
-}
 
-/* ========== YOUR ORIGINAL STYLES (unchanged) ========== */
+<style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-sans)}
 .ns{padding:1rem 0;color:var(--color-text-primary)}
@@ -105,9 +85,6 @@ select option{background:var(--color-background-primary)}
 .bar-fill{height:100%;border-radius:99px}
 .bar-val{width:36px;font-weight:500;text-align:right;color:var(--color-text-primary)}
 </style>
-</head>
-<body>
-
 <h2 class="sr-only">Notification scheduler admin panel</h2>
 
 <div class="ns">
@@ -340,13 +317,6 @@ select option{background:var(--color-background-primary)}
 </div>
 
 <script>
-// ==================== WORKING JAVASCRIPT ====================
-
-let currentLinkType = 'business';
-let selectedBizId = null;
-let selectedPage = null;
-let imageData = null;
-
 const BUSINESSES = [
   {id:'b1',name:'Rose Garden Café',category:'Food & Drink'},
   {id:'b2',name:'Milledgeville Hardware',category:'Home & Garden'},
@@ -358,112 +328,89 @@ const BUSINESSES = [
   {id:'b8',name:'Milledgeville Urgent Care',category:'Health'},
 ];
 
-let allNotifs = [];
+const NOTIFICATIONS = [
+  {id:'n1',title:'Grand Opening — Rose Garden Café',body:'Join us Saturday for free samples and live music! First 50 guests get a free coffee.',status:'sent',sentAt:'2026-06-01T10:00',business:'Rose Garden Café',businessId:'b1',audience:'all',delivered:3241,opened:1487,tapped:624,linkType:'business',hasImage:true},
+  {id:'n2',title:'Weekend Deal at The Brick House',body:'Buy one entrée, get one 50% off this Saturday & Sunday only.',status:'sent',sentAt:'2026-05-30T09:00',business:'The Brick House Grille',businessId:'b7',audience:'all',delivered:3198,opened:1102,tapped:481,linkType:'business',hasImage:false},
+  {id:'n3',title:'New summer inventory at Main Street Boutique',body:'Fresh arrivals every week — stop in and see what\'s new!',status:'scheduled',scheduledFor:'2026-06-05T08:30',business:'Main Street Boutique',businessId:'b3',audience:'all',delivered:0,opened:0,tapped:0,linkType:'business',hasImage:true},
+  {id:'n4',title:'Milledgeville Community Events — June',body:'Farmers market, art walk, and lake fest all this month.',status:'sent',sentAt:'2026-06-01T07:00',business:null,audience:'all',delivered:3301,opened:2011,tapped:877,linkType:'page',page:'events',hasImage:false},
+  {id:'n5',title:'Marketplace spotlight — featured listings',body:'Check out this week\'s best marketplace finds from your neighbors.',status:'draft',business:null,audience:'all',delivered:0,opened:0,tapped:0,linkType:'page',page:'marketplace',hasImage:false},
+  {id:'n6',title:'Capital City Barbershop — walk-ins welcome',body:'No appointment needed this Friday. Come in before 6pm.',status:'failed',sentAt:'2026-05-28T14:00',business:'Capital City Barbershop',businessId:'b4',audience:'all',delivered:0,opened:0,tapped:0,linkType:'business',hasImage:false},
+];
 
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-}
+let currentLinkType = 'business';
+let selectedBizId = null;
+let selectedPage = null;
+let imageData = null;
+let openDetailId = null;
+let allNotifs = [...NOTIFICATIONS];
 
-async function apiFetch(path, opts = {}) {
-  const res = await fetch(path, { headers: authHeaders(), ...opts });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, data };
-}
-
-function updatePreview() {
-  const title = document.getElementById('notif-title').value || 'Your notification title';
-  const body  = document.getElementById('notif-body').value  || 'Body text will appear here…';
-  document.getElementById('preview-title').textContent = title;
-  document.getElementById('preview-body').textContent  = body;
-
-  let linkText = '';
-  if (currentLinkType === 'business' && selectedBizId) {
-    const biz = BUSINESSES.find(b => b.id === selectedBizId);
-    if (biz) linkText = '→ ' + biz.name;
-  } else if (currentLinkType === 'page' && selectedPage) {
-    linkText = '→ ' + selectedPage;
-  } else if (currentLinkType === 'url') {
-    const url = document.getElementById('custom-url').value;
-    if (url) linkText = '→ ' + url;
-  }
-  document.getElementById('preview-link').textContent = linkText;
-
-  const imgWrap = document.getElementById('preview-img-wrap');
-  const imgEl = document.getElementById('preview-thumb');
-  if (imageData) {
-    imgEl.src = imageData;
-    imgWrap.style.display = 'block';
-  } else {
-    imgWrap.style.display = 'none';
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('notif-title').addEventListener('input', () => {
-    document.getElementById('title-counter').textContent = document.getElementById('notif-title').value.length + ' / 65';
-    updatePreview();
-  });
-  document.getElementById('notif-body').addEventListener('input', () => {
-    document.getElementById('body-counter').textContent = document.getElementById('notif-body').value.length + ' / 200';
-    updatePreview();
-  });
-  document.getElementById('custom-url')?.addEventListener('input', updatePreview);
-
-  renderBizList();
-  updateEstimates();
-});
-
-function setLinkType(type, el) {
-  currentLinkType = type;
-  document.querySelectorAll('.lt').forEach(b => b.classList.remove('active'));
+function switchTab(tabId, btnId, el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('visible'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(tabId).classList.add('visible');
   el.classList.add('active');
-  document.querySelectorAll('.link-panel').forEach(p => p.style.display = 'none');
-  document.getElementById('link-' + type).style.display = 'block';
-  updatePreview();
+  if(tabId==='sent-tab') renderSentList(allNotifs);
+  if(tabId==='analytics-tab') renderAnalytics();
 }
 
-function selectPage(el) {
-  document.querySelectorAll('.page-chip').forEach(c => c.classList.remove('selected'));
+function setLinkType(type, el){
+  currentLinkType = type;
+  document.querySelectorAll('.lt').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.link-panel').forEach(p=>p.style.display='none');
+  document.getElementById('link-'+type).style.display='block';
+  updatePreviewLink();
+}
+
+function selectPage(el){
+  document.querySelectorAll('.page-chip').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
   selectedPage = el.dataset.page;
-  updatePreview();
+  updatePreviewLink();
 }
 
-function filterBizList(q) {
+function filterBizList(q){
   renderBizList(q);
 }
 
-function renderBizList(q = '') {
+function renderBizList(q=''){
   const container = document.getElementById('biz-list');
-  const filtered = BUSINESSES.filter(b => b.name.toLowerCase().includes(q.toLowerCase()));
-  if (!filtered.length) {
-    container.innerHTML = '<p style="padding:8px;font-size:13px;color:var(--color-text-tertiary)">No businesses found</p>';
-    return;
-  }
-  container.innerHTML = filtered.map(b => `
+  const filtered = BUSINESSES.filter(b=>b.name.toLowerCase().includes(q.toLowerCase()));
+  if(!filtered.length){container.innerHTML='<p style="padding:8px;font-size:13px;color:var(--color-text-tertiary)">No businesses found</p>';return;}
+  container.innerHTML = filtered.map(b=>`
     <label class="biz-option">
-      <input type="radio" name="biz-select" value="${b.id}" onchange="selectBiz('${b.id}')">
+      <input type="radio" name="biz-select" value="${b.id}" onchange="selectBiz('${b.id}','${b.name}')">
       <div>
         <p style="font-size:13px;font-weight:500">${b.name}</p>
         <p style="font-size:11px;color:var(--color-text-secondary)">${b.category}</p>
       </div>
-    </label>
-  `).join('');
+    </label>`).join('');
 }
 
-function selectBiz(id) {
+function selectBiz(id,name){
   selectedBizId = id;
-  updatePreview();
+  updatePreviewLink();
 }
 
-function handleImageUpload(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 4 * 1024 * 1024) {
-    alert('Image must be under 4 MB');
-    return;
+function updatePreviewLink(){
+  const el = document.getElementById('preview-link');
+  if(currentLinkType==='business'&&selectedBizId){
+    const biz = BUSINESSES.find(b=>b.id===selectedBizId);
+    el.innerHTML = biz ? `<i class="ti ti-arrow-right" style="font-size:12px" aria-hidden="true"></i> Opens ${biz.name} directory card` : '';
+  } else if(currentLinkType==='page'&&selectedPage){
+    el.innerHTML = `<i class="ti ti-arrow-right" style="font-size:12px" aria-hidden="true"></i> Opens ${selectedPage} page`;
+  } else if(currentLinkType==='url'){
+    const url = document.getElementById('custom-url').value;
+    el.innerHTML = url ? `<i class="ti ti-external-link" style="font-size:12px" aria-hidden="true"></i> ${url}` : '';
+  } else {
+    el.textContent = '';
   }
+}
+
+function handleImageUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 4*1024*1024){alert('Image must be under 4 MB');return;}
   const reader = new FileReader();
   reader.onload = e => {
     imageData = e.target.result;
@@ -471,117 +418,299 @@ function handleImageUpload(input) {
     prev.src = imageData;
     prev.style.display = 'block';
     document.getElementById('clear-img-btn').style.display = 'inline-flex';
-    const wrap = document.getElementById('preview-img-wrap');
+    const previewWrap = document.getElementById('preview-img-wrap');
     document.getElementById('preview-thumb').src = imageData;
-    wrap.style.display = 'block';
-    updatePreview();
+    previewWrap.style.display = 'block';
+    const drop = document.getElementById('img-drop');
+    drop.style.borderStyle = 'solid';
+    drop.style.borderColor = 'var(--color-border-primary)';
   };
   reader.readAsDataURL(file);
 }
 
-function clearImage() {
+function clearImage(){
   imageData = null;
   document.getElementById('notif-image').value = '';
   document.getElementById('image-preview-el').style.display = 'none';
   document.getElementById('clear-img-btn').style.display = 'none';
   document.getElementById('preview-img-wrap').style.display = 'none';
-  updatePreview();
+  const drop = document.getElementById('img-drop');
+  drop.style.borderStyle = 'dashed';
+  drop.style.borderColor = 'var(--color-border-secondary)';
 }
 
-async function sendNotification() {
-  const title = document.getElementById('notif-title').value.trim();
-  const body = document.getElementById('notif-body').value.trim();
-  if (!title || !body) {
-    alert('Title and body are required');
-    return;
-  }
-
-  const timeType = document.getElementById('send-time-type').value;
-  const scheduledFor = timeType === 'scheduled' ? document.getElementById('schedule-dt').value : null;
-
-  const payload = {
-    title,
-    body,
-    image: imageData || null,
-    targetType: currentLinkType,
-    targetId: currentLinkType === 'business' ? selectedBizId :
-              currentLinkType === 'page' ? selectedPage :
-              currentLinkType === 'url' ? document.getElementById('custom-url').value : null,
-    scheduledFor: scheduledFor || null
-  };
-
-  try {
-    const { ok, data } = await apiFetch('/api/admin/scheduled-notifications', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    if (ok) {
-      alert(data.message || 'Notification created!');
-      clearForm();
-    } else {
-      alert(data.message || 'Failed');
-    }
-  } catch (e) {
-    alert('Network error');
-  }
-}
-
-function clearForm() {
-  document.getElementById('notif-title').value = '';
-  document.getElementById('notif-body').value = '';
-  document.getElementById('image-preview-el').style.display = 'none';
-  document.getElementById('clear-img-btn').style.display = 'none';
-  imageData = null;
-  selectedBizId = null;
-  selectedPage = null;
-  currentLinkType = 'business';
-  document.querySelectorAll('.lt').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.link-panel').forEach(p => p.style.display = 'none');
-  document.getElementById('link-business').style.display = 'block';
-  document.querySelector('.lt').classList.add('active');
-  updatePreview();
-}
-
-function saveDraft() { alert('Draft saved (demo)'); }
-function previewNotif() { alert('Preview coming soon'); }
-function toggleScheduleFields() {
+function toggleScheduleFields(){
   const type = document.getElementById('send-time-type').value;
-  document.getElementById('schedule-datetime-field').style.display = type === 'scheduled' ? 'block' : 'none';
+  document.getElementById('schedule-datetime-field').style.display = type==='scheduled'?'block':'none';
+  document.getElementById('send-btn').innerHTML = type==='scheduled'
+    ? '<i class="ti ti-calendar" aria-hidden="true"></i> Schedule notification'
+    : '<i class="ti ti-send" aria-hidden="true"></i> Send notification';
 }
-function filterSentList() {}
-function renderSentList() {}
-function renderAnalytics() {}
-function showCompose() {
-  switchTab('compose-tab', 'compose-btn', document.getElementById('compose-btn'));
+
+document.getElementById('notif-title').addEventListener('input',function(){
+  document.getElementById('title-counter').textContent = this.value.length+' / 65';
+  document.getElementById('preview-title').textContent = this.value || 'Your notification title';
+});
+document.getElementById('notif-body').addEventListener('input',function(){
+  document.getElementById('body-counter').textContent = this.value.length+' / 200';
+  document.getElementById('preview-body').textContent = this.value || 'Body text will appear here…';
+});
+document.getElementById('custom-url').addEventListener('input', updatePreviewLink);
+document.getElementById('audience').addEventListener('change', updateEstimates);
+
+function updateEstimates(){
+  const audience = document.getElementById('audience').value;
+  const total = audience==='all'?3301:audience==='business-owners'?87:842;
+  const delivery = Math.round(total * 0.89);
+  document.getElementById('est-subscribers').textContent = total.toLocaleString();
+  document.getElementById('est-delivery').textContent = delivery.toLocaleString();
+}
+
+function saveDraft(){
+  const title = document.getElementById('notif-title').value;
+  if(!title.trim()){
+    showToastLocal('Add a title before saving draft','warn');return;
+  }
+  const n = buildNotifObject('draft');
+  allNotifs.unshift(n);
+  showToastLocal('Draft saved','ok');
+}
+
+function sendNotification(){
+  const title = document.getElementById('notif-title').value;
+  const body = document.getElementById('notif-body').value;
+  if(!title.trim()||!body.trim()){showToastLocal('Title and body are required','warn');return;}
+  const timeType = document.getElementById('send-time-type').value;
+  const status = timeType==='scheduled'?'scheduled':'sent';
+  const n = buildNotifObject(status);
+  allNotifs.unshift(n);
+  renderRecentMini();
+  if(status==='sent'){
+    showToastLocal('Notification sent to '+n.delivered.toLocaleString()+' subscribers','ok');
+  } else {
+    showToastLocal('Notification scheduled','ok');
+  }
+  clearForm();
+}
+
+function buildNotifObject(status){
+  const biz = selectedBizId ? BUSINESSES.find(b=>b.id===selectedBizId) : null;
+  const delivered = status==='sent' ? Math.round(3241 * 0.87 + Math.random()*200) : 0;
+  const opened = status==='sent' ? Math.round(delivered * (0.38+Math.random()*0.12)) : 0;
+  const tapped = status==='sent' ? Math.round(opened * (0.38+Math.random()*0.12)) : 0;
+  const now = new Date().toISOString().slice(0,16);
+  const dt = document.getElementById('schedule-dt').value;
+  return {
+    id:'n'+Date.now(),
+    title:document.getElementById('notif-title').value,
+    body:document.getElementById('notif-body').value,
+    status,
+    sentAt:status==='sent'?now:undefined,
+    scheduledFor:status==='scheduled'?dt:undefined,
+    business:biz?biz.name:null,
+    businessId:biz?biz.id:null,
+    audience:document.getElementById('audience').value,
+    delivered,opened,tapped,
+    linkType:currentLinkType,
+    page:currentLinkType==='page'?selectedPage:undefined,
+    hasImage:!!imageData,
+  };
+}
+
+function clearForm(){
+  document.getElementById('notif-title').value='';
+  document.getElementById('notif-body').value='';
+  document.getElementById('title-counter').textContent='0 / 65';
+  document.getElementById('body-counter').textContent='0 / 200';
+  document.getElementById('preview-title').textContent='Your notification title';
+  document.getElementById('preview-body').textContent='Body text will appear here…';
+  clearImage();
+}
+
+function previewNotif(){
+  const title = document.getElementById('notif-title').value||'Your notification title';
+  const body = document.getElementById('notif-body').value||'Body text here…';
+  showToastLocal('Preview: "'+title.substring(0,40)+'"','info');
+}
+
+function showCompose(){
+  switchTab('compose-tab','compose-btn',document.getElementById('compose-btn'));
   document.getElementById('notif-title').focus();
 }
-function updateEstimates() {
-  document.getElementById('est-subscribers').textContent = '3,301';
-  document.getElementById('est-delivery').textContent = '~2,900';
+
+function filterSentList(q){
+  const statusF = document.getElementById('status-filter').value;
+  let filtered = allNotifs.filter(n=>{
+    const matchQ = !q||n.title.toLowerCase().includes(q.toLowerCase())||(n.business||'').toLowerCase().includes(q.toLowerCase());
+    const matchS = statusF==='all'||n.status===statusF;
+    return matchQ&&matchS;
+  });
+  renderSentList(filtered);
 }
 
-function renderBizList(q = '') {
-  const container = document.getElementById('biz-list');
-  const filtered = BUSINESSES.filter(b => b.name.toLowerCase().includes(q.toLowerCase()));
-  container.innerHTML = filtered.map(b => `
-    <label class="biz-option">
-      <input type="radio" name="biz-select" value="${b.id}" onchange="selectBiz('${b.id}')">
-      <div>
-        <p style="font-size:13px;font-weight:500">${b.name}</p>
-        <p style="font-size:11px;color:var(--color-text-secondary)">${b.category}</p>
+function renderSentList(list){
+  const container = document.getElementById('sent-list');
+  if(!list.length){container.innerHTML='<div class="empty"><i class="ti ti-inbox" style="font-size:32px;margin-bottom:8px;display:block" aria-hidden="true"></i>No notifications found</div>';return;}
+  container.innerHTML = list.map(n=>{
+    const openRate = n.delivered>0 ? Math.round(n.opened/n.delivered*100)+'%' : '—';
+    const tapRate = n.opened>0 ? Math.round(n.tapped/n.opened*100)+'%' : '—';
+    const dateStr = n.sentAt||n.scheduledFor||'';
+    const dateLabel = dateStr ? new Date(dateStr).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const badge = `<span class="badge badge-${n.status}">${n.status.charAt(0).toUpperCase()+n.status.slice(1)}</span>`;
+    const progress = n.delivered>0 ? `<div class="progress-bar"><div class="progress-fill" style="width:${Math.round(n.opened/n.delivered*100)}%"></div></div>` : '';
+    return `
+    <div class="notif-item" onclick="toggleDetail('${n.id}')">
+      <div class="notif-item-header">
+        <div class="notif-title-row">
+          <div class="notif-thumb">${n.hasImage?'<i class="ti ti-photo" style="font-size:16px;color:var(--color-text-tertiary)" aria-hidden="true"></i>':'<i class="ti ti-bell" style="font-size:16px;color:var(--color-text-tertiary)" aria-hidden="true"></i>'}</div>
+          <div>
+            <p style="font-size:13px;font-weight:500">${n.title}</p>
+            ${n.business?`<p style="font-size:11px;color:var(--color-text-secondary);margin-top:1px">${n.business}</p>`:''}
+          </div>
+        </div>
+        <div class="actions-row">
+          ${badge}
+          ${n.status==='scheduled'?`<button class="btn btn-sm" onclick="event.stopPropagation();cancelScheduled('${n.id}')"><i class="ti ti-x" aria-hidden="true"></i></button>`:''}
+          ${n.status==='draft'?`<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();sendDraft('${n.id}')"><i class="ti ti-send" aria-hidden="true"></i> Send</button>`:''}
+        </div>
       </div>
-    </label>
-  `).join('');
+      <p class="notif-body">${n.body}</p>
+      <div class="notif-meta">
+        ${dateLabel?`<span><i class="ti ti-calendar" style="font-size:12px" aria-hidden="true"></i>${dateLabel}</span>`:''}
+        ${n.delivered>0?`<span><i class="ti ti-users" style="font-size:12px" aria-hidden="true"></i>${n.delivered.toLocaleString()} delivered</span>`:''}
+        ${n.delivered>0?`<span><i class="ti ti-eye" style="font-size:12px" aria-hidden="true"></i>${openRate} open rate</span>`:''}
+        ${n.tapped>0?`<span><i class="ti ti-hand-click" style="font-size:12px" aria-hidden="true"></i>${tapRate} tap rate</span>`:''}
+      </div>
+      ${progress}
+      <div class="detail-panel${openDetailId===n.id?' open':''}" id="detail-${n.id}">
+        <div class="stat-row">
+          <div class="stat-box"><div class="v">${n.delivered.toLocaleString()}</div><div class="l">Delivered</div></div>
+          <div class="stat-box"><div class="v">${n.opened.toLocaleString()}</div><div class="l">Opened</div></div>
+          <div class="stat-box"><div class="v">${n.tapped.toLocaleString()}</div><div class="l">Tapped</div></div>
+        </div>
+        <div class="bar-chart">
+          <div class="bar-row">
+            <span class="bar-label">Delivery rate</span>
+            <div class="bar-track"><div class="bar-fill" style="width:89%;background:#63991a"></div></div>
+            <span class="bar-val">89%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Open rate</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${n.delivered>0?Math.round(n.opened/n.delivered*100):0}%;background:#185fa5"></div></div>
+            <span class="bar-val">${openRate}</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tap rate</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${n.opened>0?Math.round(n.tapped/n.opened*100):0}%;background:#854f0b"></div></div>
+            <span class="bar-val">${tapRate}</span>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px">
+          Link: ${n.linkType==='business'&&n.business?'→ '+n.business+' directory card':n.linkType==='page'&&n.page?'→ '+n.page+' page':n.linkType==='url'?'→ external URL':'No link'} · Audience: ${n.audience}
+        </p>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function selectBiz(id) {
-  selectedBizId = id;
-  updatePreview();
+function toggleDetail(id){
+  openDetailId = openDetailId===id?null:id;
+  renderSentList(allNotifs);
+}
+
+function cancelScheduled(id){
+  allNotifs = allNotifs.map(n=>n.id===id?{...n,status:'draft'}:n);
+  renderSentList(allNotifs);
+  showToastLocal('Notification moved to drafts','ok');
+}
+
+function sendDraft(id){
+  const n = allNotifs.find(x=>x.id===id);
+  if(!n) return;
+  n.status='sent';
+  n.sentAt=new Date().toISOString().slice(0,16);
+  n.delivered=Math.round(3200*0.87+Math.random()*200);
+  n.opened=Math.round(n.delivered*0.42);
+  n.tapped=Math.round(n.opened*0.40);
+  renderSentList(allNotifs);
+  showToastLocal('Draft sent to '+n.delivered.toLocaleString()+' subscribers','ok');
+}
+
+function renderAnalytics(){
+  const sent = allNotifs.filter(n=>n.status==='sent');
+  const totalDelivered = sent.reduce((s,n)=>s+n.delivered,0);
+  const totalOpened = sent.reduce((s,n)=>s+n.opened,0);
+  const totalTapped = sent.reduce((s,n)=>s+n.tapped,0);
+  const avgOpen = totalDelivered>0 ? Math.round(totalOpened/totalDelivered*100) : 0;
+  const avgTap = totalOpened>0 ? Math.round(totalTapped/totalOpened*100) : 0;
+  document.getElementById('a-total').textContent = sent.length;
+  document.getElementById('a-total-d').textContent = '+2 vs last month';
+  document.getElementById('a-open').textContent = avgOpen+'%';
+  document.getElementById('a-open-d').textContent = '+3% vs last month';
+  document.getElementById('a-tap').textContent = avgTap+'%';
+  document.getElementById('a-tap-d').textContent = '+1% vs last month';
+  document.getElementById('a-subs').textContent = '3,301';
+  document.getElementById('a-subs-d').textContent = '+47 this week';
+
+  const topSorted = [...sent].sort((a,b)=>(b.opened/Math.max(b.delivered,1))-(a.opened/Math.max(a.delivered,1))).slice(0,5);
+  document.getElementById('top-notifs').innerHTML = topSorted.map(n=>{
+    const rate = Math.round(n.opened/Math.max(n.delivered,1)*100);
+    return `<div class="bar-row">
+      <span class="bar-label" title="${n.title}">${n.title.substring(0,18)}…</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${rate}%;background:#185fa5"></div></div>
+      <span class="bar-val">${rate}%</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('delivery-breakdown').innerHTML = `
+    <div class="bar-row"><span class="bar-label">Delivered</span><div class="bar-track"><div class="bar-fill" style="width:89%;background:#63991a"></div></div><span class="bar-val">89%</span></div>
+    <div class="bar-row"><span class="bar-label">Opened</span><div class="bar-track"><div class="bar-fill" style="width:${avgOpen}%;background:#185fa5"></div></div><span class="bar-val">${avgOpen}%</span></div>
+    <div class="bar-row"><span class="bar-label">Tapped link</span><div class="bar-track"><div class="bar-fill" style="width:${avgTap}%;background:#854f0b"></div></div><span class="bar-val">${avgTap}%</span></div>
+    <div class="bar-row"><span class="bar-label">Dismissed</span><div class="bar-track"><div class="bar-fill" style="width:${100-avgOpen}%;background:#888780"></div></div><span class="bar-val">${100-avgOpen}%</span></div>`;
+
+  const bizClicks = sent.filter(n=>n.linkType==='business').reduce((s,n)=>s+n.tapped,0);
+  const pageClicks = sent.filter(n=>n.linkType==='page').reduce((s,n)=>s+n.tapped,0);
+  const total = Math.max(bizClicks+pageClicks,1);
+  document.getElementById('link-clicks').innerHTML = `
+    <div class="bar-row"><span class="bar-label">Business cards</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(bizClicks/total*100)}%;background:#534ab7"></div></div><span class="bar-val">${bizClicks.toLocaleString()}</span></div>
+    <div class="bar-row"><span class="bar-label">App pages</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(pageClicks/total*100)}%;background:#0f6e56"></div></div><span class="bar-val">${pageClicks.toLocaleString()}</span></div>`;
+
+  const history = [...allNotifs].slice(0,8);
+  document.getElementById('history-timeline').innerHTML = history.map(n=>{
+    const dotClass = n.status==='sent'?'green':n.status==='scheduled'?'amber':'gray';
+    const dateStr = n.sentAt||n.scheduledFor||'draft';
+    const dateLabel = dateStr!=='draft'?new Date(dateStr).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Draft';
+    return `<div class="tl-item"><div class="tl-dot ${dotClass}"></div><span style="width:72px;flex-shrink:0">${dateLabel}</span><span style="flex:1;font-size:13px;color:var(--color-text-primary)">${n.title}</span><span style="color:var(--color-text-tertiary)">${n.delivered>0?n.delivered.toLocaleString()+' delivered':n.status}</span></div>`;
+  }).join('');
+}
+
+function renderRecentMini(){
+  const container = document.getElementById('recent-sends-mini');
+  const recent = allNotifs.filter(n=>n.status==='sent').slice(0,3);
+  container.innerHTML = recent.map(n=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);font-size:12px">
+      <span class="badge badge-sent">Sent</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.title}</span>
+      <span style="color:var(--color-text-tertiary)">${n.delivered.toLocaleString()}</span>
+    </div>`).join('');
+}
+
+let toastT;
+function showToastLocal(msg, type){
+  const old = document.getElementById('local-toast');
+  if(old) old.remove();
+  clearTimeout(toastT);
+  const colors = {ok:'#eaf3de',warn:'#faeeda',info:'#e6f1fb'};
+  const textColors = {ok:'#3b6d11',warn:'#854f0b',info:'#185fa5'};
+  const div = document.createElement('div');
+  div.id='local-toast';
+  div.style.cssText=`position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:${colors[type]||'#eaf3de'};color:${textColors[type]||'#3b6d11'};padding:10px 18px;border-radius:99px;font-size:13px;font-weight:500;z-index:9999;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.12)`;
+  div.textContent=msg;
+  document.body.appendChild(div);
+  toastT=setTimeout(()=>div.remove(),3000);
 }
 
 renderBizList();
+renderRecentMini();
 updateEstimates();
 </script>
-
-</body>
-</html>
