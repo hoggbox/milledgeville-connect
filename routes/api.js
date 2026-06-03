@@ -3839,10 +3839,18 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
 router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   try {
     const notif = await ScheduledNotification.findById(req.params.id).select('image');
-    if (!notif?.image) return res.status(404).send('Not found');
+    if (!notif?.image) {
+      return res.status(404).send('No image');
+    }
 
-    const match = notif.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+    const raw = notif.image;
+
+    // More tolerant regex (handles jpeg, png, webp, etc.)
+    const match = raw.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+    if (!match) {
+      console.error('[Thumb] Bad scheduled notification image format');
+      return res.status(400).send('Invalid image format');
+    }
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -3860,23 +3868,26 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
-// GET /api/shoutout-thumb/:shoutoutId — serves a shoutout's first image as a real HTTP response
-// Required because data: URLs are blocked by browsers/FCM in push notification image fields
+// GET /api/shoutout-thumb/:shoutoutId
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
-    if (!shoutout?.images?.length) return res.status(404).send('Not found');
+    if (!shoutout?.images?.length) return res.status(404).send('No image');
 
     const raw = shoutout.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+    // More tolerant regex for different base64 image types
+    const match = raw.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+    if (!match) {
+      console.error('[Thumb] Bad shoutout image format');
+      return res.status(400).send('Invalid format');
+    }
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
     });
