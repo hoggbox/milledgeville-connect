@@ -4084,6 +4084,30 @@ router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (
   }
 });
 
+// GET /api/scheduled-notification-thumb/:id
+router.get('/scheduled-notification-thumb/:id', async (req, res) => {
+  try {
+    const doc = await ScheduledNotification.findById(req.params.id).select('image');
+    if (!doc?.image) return res.status(404).send('Not found');
+
+    const match = doc.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).send('Error');
+  }
+});
+
 // POST /api/admin/scheduled-notifications
 router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -4106,10 +4130,12 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
 
     if (action === 'send-now') {
       // Fire immediately via your existing broadcastPush
-      await broadcastPush(doc.title, doc.body,
-        { page: doc.targetType || 'home', id: doc.targetId || '' },
-        { type: doc.targetType, imageUrl: doc.image || undefined }
-      );
+await broadcastPush(doc.title, doc.body,
+  { page: doc.targetType || 'home', id: doc.targetId || '' },
+  { type: doc.targetType, imageUrl: doc.image
+      ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${doc._id}`
+      : undefined }
+);
       doc.status = 'sent';
       doc.sentAt  = new Date();
     } else {
