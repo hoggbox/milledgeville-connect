@@ -3,197 +3,329 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notification Scheduler • Admin</title>
+  <title>Notification Scheduler • Milledgeville Connect</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .section-header { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; }
+  </style>
 </head>
 <body class="bg-zinc-950 text-white">
 
-<div class="max-w-6xl mx-auto p-8">
-  <h1 class="text-3xl font-bold mb-2">Notification Scheduler</h1>
-  <p class="text-zinc-400 mb-8">Create and schedule push notifications for businesses</p>
-
-  <!-- Compose Form -->
-  <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      
-      <!-- Left Column -->
-      <div>
-        <h3 class="font-semibold mb-4 flex items-center gap-2 text-lg">
-          <i class="ti ti-edit"></i> Create Notification
-        </h3>
-
-        <!-- Title -->
-        <div class="mb-5">
-          <label class="block text-sm text-zinc-400 mb-1.5">Notification Title</label>
-          <input id="title" type="text" maxlength="65" 
-                 class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500"
-                 placeholder="e.g. Grand Opening at Rose Garden Café">
+  <!-- Header -->
+  <div class="border-b border-white/10 bg-zinc-900/80 backdrop-blur-lg sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center">
+          <i class="fa-solid fa-bell text-xl"></i>
         </div>
-
-        <!-- Body -->
-        <div class="mb-5">
-          <label class="block text-sm text-zinc-400 mb-1.5">Body Text</label>
-          <textarea id="body" rows="4" maxlength="200"
-                    class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 resize-y"
-                    placeholder="Share details, a special offer, or an announcement…"></textarea>
-        </div>
-
-        <!-- Image Upload -->
-        <div class="mb-6">
-          <label class="block text-sm text-zinc-400 mb-1.5">Photo (optional)</label>
-          <div onclick="document.getElementById('image-input').click()" 
-               class="border border-dashed border-zinc-700 hover:border-zinc-500 rounded-2xl p-8 text-center cursor-pointer transition">
-            <i class="ti ti-photo text-3xl text-zinc-500 mb-2"></i>
-            <p class="text-sm">Click to upload image</p>
-            <p class="text-xs text-zinc-500 mt-1">Max 4MB • JPEG, PNG, WebP</p>
-          </div>
-          <input type="file" id="image-input" accept="image/*" class="hidden" onchange="handleImageSelect(this)">
-          
-          <div id="image-preview-container" class="hidden mt-3">
-            <img id="image-preview" class="max-h-48 rounded-2xl border border-zinc-700">
-            <button onclick="removeImage()" class="mt-2 text-xs text-red-400 hover:text-red-500 flex items-center gap-1">
-              <i class="ti ti-trash"></i> Remove photo
-            </button>
-          </div>
-        </div>
-
-        <!-- Deep Link -->
-        <div class="mb-6">
-          <label class="block text-sm text-zinc-400 mb-2">Deep Link Destination</label>
-          <div class="flex gap-2 mb-3">
-            <button onclick="setLinkType('business')" id="btn-business"
-                    class="flex-1 py-2 text-sm rounded-2xl border border-emerald-600 bg-emerald-600">Business Card</button>
-            <button onclick="setLinkType('page')" id="btn-page"
-                    class="flex-1 py-2 text-sm rounded-2xl border border-zinc-700 hover:bg-zinc-800">App Page</button>
-            <button onclick="setLinkType('url')" id="btn-url"
-                    class="flex-1 py-2 text-sm rounded-2xl border border-zinc-700 hover:bg-zinc-800">External URL</button>
-          </div>
-
-          <!-- Business Search -->
-          <div id="business-section">
-            <input type="text" id="business-search" placeholder="Search businesses..." 
-                   onkeyup="searchBusinesses(this.value)"
-                   class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm mb-2">
-            <div id="business-results" class="max-h-44 overflow-auto border border-zinc-800 rounded-2xl p-1"></div>
-          </div>
-
-          <!-- Page Selection -->
-          <div id="page-section" class="hidden">
-            <select id="page-select" class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
-              <option value="home">Home</option>
-              <option value="events">Events</option>
-              <option value="deals">Deals</option>
-              <option value="marketplace">Marketplace</option>
-              <option value="directory">Directory</option>
-              <option value="shoutouts">Shoutouts / Traffic Alerts</option>
-            </select>
-          </div>
-
-          <!-- External URL -->
-          <div id="url-section" class="hidden">
-            <input type="text" id="external-url" placeholder="https://..." 
-                   class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
-          </div>
-        </div>
-
-        <!-- Schedule -->
-        <div class="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <label class="block text-sm text-zinc-400 mb-1.5">When to Send</label>
-            <select id="schedule-type" onchange="toggleDateField()" 
-                    class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
-              <option value="now">Send Immediately</option>
-              <option value="later">Schedule for Later</option>
-            </select>
-          </div>
-          <div id="date-field" class="hidden">
-            <label class="block text-sm text-zinc-400 mb-1.5">Date & Time</label>
-            <input type="datetime-local" id="schedule-datetime" 
-                   class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
-          </div>
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="saveDraft()" 
-                  class="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-semibold">Save Draft</button>
-          <button onclick="sendNotification()" 
-                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-semibold">Send / Schedule</button>
+        <div>
+          <h1 class="text-2xl font-bold">Notification Scheduler</h1>
+          <p class="text-white/50 text-sm">Admin Only • Milledgeville Connect</p>
         </div>
       </div>
-
-      <!-- Live Preview -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-        <h3 class="font-semibold mb-4">Live Preview</h3>
-        <div class="bg-zinc-950 border border-zinc-700 rounded-3xl p-5">
-          <div class="flex gap-3">
-            <div class="w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center flex-shrink-0">
-              <i class="ti ti-building-store text-white"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p id="preview-title" class="font-semibold text-sm">Notification Title</p>
-              <p id="preview-body" class="text-sm text-zinc-300 mt-1 leading-snug">Body text will appear here...</p>
-              <p id="preview-link" class="text-xs text-emerald-400 mt-2"></p>
-            </div>
-          </div>
+      <div class="flex items-center gap-3">
+        <div id="adminStatus" class="px-4 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-2xl text-sm flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>Admin Access</span>
         </div>
+        <button onclick="window.close()" 
+                class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-2xl text-sm transition">
+          Close
+        </button>
       </div>
-
     </div>
   </div>
-</div>
 
-<script>
-// ==================== ADMIN PROTECTION ====================
-function getCurrentUserEmail() {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    
-    // Decode JWT payload (simple base64 decode)
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.email || null;
-  } catch (e) {
-    return null;
-  }
-}
+  <div class="max-w-5xl mx-auto px-6 py-8">
 
-function protectSchedulerPage() {
-  const userEmail = getCurrentUserEmail();
-  const ADMIN_EMAIL = 'imhoggbox@gmail.com';
+    <!-- Compose Form -->
+    <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+      <h2 class="section-header mb-6 flex items-center gap-2">
+        <i class="fa-solid fa-paper-plane"></i> 
+        Create Notification
+      </h2>
 
-  if (!userEmail || userEmail.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-    document.body.innerHTML = `
-      <div class="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
-        <div class="text-center">
-          <div class="text-6xl mb-4">🔒</div>
-          <h1 class="text-3xl font-bold mb-2">Access Denied</h1>
-          <p class="text-white/60">This page is restricted to administrators only.</p>
-          <button onclick="window.location.href='/admin'" 
-                  class="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl">
-            Go to Admin Panel
-          </button>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Left Column -->
+        <div class="space-y-6">
+
+          <!-- Title -->
+          <div>
+            <label class="block text-sm font-medium text-white/70 mb-2">Notification Title</label>
+            <input id="notifTitle" type="text" 
+                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 text-white placeholder:text-white/40 focus:outline-none focus:border-violet-500"
+                   placeholder="New deal at GoodEats!">
+          </div>
+
+          <!-- Message Body -->
+          <div>
+            <label class="block text-sm font-medium text-white/70 mb-2">Message Body</label>
+            <textarea id="notifBody" rows="4"
+                      class="w-full bg-zinc-800 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-violet-500 resize-y"
+                      placeholder="Write your notification message here..."></textarea>
+          </div>
+
+          <!-- Image Upload -->
+          <div>
+            <label class="block text-sm font-medium text-white/70 mb-2">Image (Optional)</label>
+            <div id="imageDropZone"
+                 class="border-2 border-dashed border-white/20 hover:border-violet-500/50 rounded-3xl p-8 text-center cursor-pointer transition">
+              <i class="fa-solid fa-image text-4xl text-white/40 mb-3"></i>
+              <p class="text-white/60">Click or drag image here</p>
+              <p class="text-xs text-white/40 mt-1">PNG, JPG up to 5MB</p>
+              <input type="file" id="imageInput" accept="image/*" class="hidden">
+            </div>
+            <div id="imagePreview" class="hidden mt-4">
+              <img id="previewImg" class="max-h-48 rounded-2xl border border-white/10">
+              <button onclick="removeImage()" 
+                      class="mt-2 text-red-400 text-sm hover:text-red-500 flex items-center gap-1">
+                <i class="fa-solid fa-trash"></i> Remove Image
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column -->
+        <div class="space-y-6">
+
+          <!-- Link Type -->
+          <div>
+            <label class="block text-sm font-medium text-white/70 mb-2">When tapped, open:</label>
+            <div class="flex gap-2">
+              <button onclick="setLinkType('business')" id="btn-business"
+                      class="flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium">Business Card</button>
+              <button onclick="setLinkType('app')" id="btn-app"
+                      class="flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">App Page</button>
+              <button onclick="setLinkType('external')" id="btn-external"
+                      class="flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">External Link</button>
+            </div>
+          </div>
+
+          <!-- Dynamic Link Input -->
+          <div id="linkInputContainer">
+            <label class="block text-sm font-medium text-white/70 mb-2" id="linkLabel">Business Name or ID</label>
+            <input id="linkTarget" type="text" 
+                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 text-white focus:outline-none focus:border-violet-500"
+                   placeholder="Search or enter value...">
+            <div id="businessSearchResults" class="mt-2 max-h-40 overflow-auto hidden"></div>
+          </div>
+
+          <!-- Schedule -->
+          <div>
+            <label class="block text-sm font-medium text-white/70 mb-2">Schedule (Optional)</label>
+            <input id="scheduledFor" type="datetime-local" 
+                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 text-white focus:outline-none focus:border-violet-500">
+            <p class="text-xs text-white/40 mt-1">Leave blank to send immediately</p>
+          </div>
+
         </div>
       </div>
-    `;
-    return false;
-  }
-  return true;
-}
 
-// Run protection immediately
-if (!protectSchedulerPage()) {
-  // Stop further execution if not admin
-  throw new Error('Access denied');
-}
+      <!-- Action Buttons -->
+      <div class="flex gap-4 mt-8">
+        <button onclick="sendNotification()"
+                class="flex-1 bg-violet-600 hover:bg-violet-700 py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Send / Schedule Notification</span>
+        </button>
+        
+        <button onclick="clearForm()"
+                class="px-8 bg-white/5 hover:bg-white/10 rounded-3xl font-medium transition">
+          Clear
+        </button>
+      </div>
+    </div>
 
-// ==================== REST OF YOUR SCRIPT ====================
-const API_BASE = '/api';
-let selectedBusinessId = null;
-let uploadedImageBase64 = null;
-let currentLinkType = 'business';
+  </div>
 
-// ... (keep the rest of your existing JavaScript code below this)
-</script>
+  <script>
+    // ==================== IMPROVED ADMIN PROTECTION ====================
+    function getCurrentUserEmail() {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.log('[Scheduler] No token found');
+          return null;
+        }
+
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join('')
+        );
+
+        const payload = JSON.parse(jsonPayload);
+        console.log('[Scheduler] JWT Payload:', payload);
+
+        return payload.email || payload.user?.email || payload.data?.email || null;
+      } catch (e) {
+        console.error('[Scheduler] Token decode error:', e);
+        return null;
+      }
+    }
+
+    function protectSchedulerPage() {
+      const userEmail = getCurrentUserEmail();
+      const ADMIN_EMAIL = 'imhoggbox@gmail.com';
+
+      if (!userEmail || userEmail.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        document.body.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
+            <div class="text-center p-8">
+              <div class="text-6xl mb-4">🔒</div>
+              <h1 class="text-3xl font-bold mb-2">Access Denied</h1>
+              <p class="text-white/60">This page is restricted to administrators only.</p>
+              <p class="text-xs text-white/40 mt-4">Logged in as: ${userEmail || 'Unknown user'}</p>
+              <button onclick="window.location.href='/admin'" 
+                      class="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl">
+                Return to Admin Panel
+              </button>
+            </div>
+          </div>
+        `;
+        return false;
+      }
+      return true;
+    }
+
+    // Run protection immediately
+    if (!protectSchedulerPage()) {
+      throw new Error('Access denied');
+    }
+    // ==================== END PROTECTION ====================
+
+    // Your existing JavaScript for the form goes below this line
+    let currentLinkType = 'business';
+    let uploadedImageBase64 = null;
+
+    function setLinkType(type) {
+      currentLinkType = type;
+      
+      // Update button styles
+      document.getElementById('btn-business').className = type === 'business' 
+        ? 'flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium' 
+        : 'flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+      
+      document.getElementById('btn-app').className = type === 'app' 
+        ? 'flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium' 
+        : 'flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+      
+      document.getElementById('btn-external').className = type === 'external' 
+        ? 'flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium' 
+        : 'flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+
+      // Update placeholder
+      const input = document.getElementById('linkTarget');
+      if (type === 'business') {
+        document.getElementById('linkLabel').textContent = 'Business Name or ID';
+        input.placeholder = 'Search for a business...';
+      } else if (type === 'app') {
+        document.getElementById('linkLabel').textContent = 'App Page';
+        input.placeholder = 'e.g. marketplace, deals, events';
+      } else {
+        document.getElementById('linkLabel').textContent = 'External URL';
+        input.placeholder = 'https://example.com';
+      }
+    }
+
+    // Image upload handling
+    document.getElementById('imageDropZone').addEventListener('click', () => {
+      document.getElementById('imageInput').click();
+    });
+
+    document.getElementById('imageInput').addEventListener('change', function(e) {
+      if (e.target.files.length > 0) {
+        handleImageUpload(e.target.files[0]);
+      }
+    });
+
+    function handleImageUpload(file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image too large (max 5MB)');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        uploadedImageBase64 = ev.target.result;
+        document.getElementById('previewImg').src = uploadedImageBase64;
+        document.getElementById('imagePreview').classList.remove('hidden');
+        document.getElementById('imageDropZone').classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeImage() {
+      uploadedImageBase64 = null;
+      document.getElementById('imagePreview').classList.add('hidden');
+      document.getElementById('imageDropZone').classList.remove('hidden');
+      document.getElementById('imageInput').value = '';
+    }
+
+    async function sendNotification() {
+      const title = document.getElementById('notifTitle').value.trim();
+      const body = document.getElementById('notifBody').value.trim();
+      const target = document.getElementById('linkTarget').value.trim();
+      const scheduled = document.getElementById('scheduledFor').value;
+
+      if (!title || !body) {
+        alert('Title and message are required');
+        return;
+      }
+
+      const payload = {
+        title,
+        body,
+        image: uploadedImageBase64,
+        targetType: currentLinkType,
+        targetId: target || null,
+        scheduledFor: scheduled || null
+      };
+
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/admin/scheduled-notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          alert(data.message || 'Notification created successfully!');
+          clearForm();
+        } else {
+          alert(data.message || 'Failed to create notification');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Network error. Please try again.');
+      }
+    }
+
+    function clearForm() {
+      document.getElementById('notifTitle').value = '';
+      document.getElementById('notifBody').value = '';
+      document.getElementById('linkTarget').value = '';
+      document.getElementById('scheduledFor').value = '';
+      removeImage();
+    }
+
+    // Initialize default link type
+    setTimeout(() => {
+      setLinkType('business');
+    }, 100);
+  </script>
+
 </body>
 </html>
