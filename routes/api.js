@@ -4069,5 +4069,69 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── SCHEDULED NOTIFICATIONS (Admin) ─────────────────────────────────────────
+const ScheduledNotification = require('../models/ScheduledNotification');
+
+// GET  /api/admin/scheduled-notifications
+router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const items = await ScheduledNotification.find()
+      .populate('business', 'name category')
+      .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/admin/scheduled-notifications
+router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ScheduledNotification.create({ ...req.body });
+    // If status is 'scheduled' with no scheduledFor, treat as draft
+    if (!doc.scheduledFor) doc.status = 'pending';
+    await doc.save();
+    res.status(201).json(doc);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/admin/scheduled-notifications/:id
+router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { action, ...fields } = req.body;
+    const doc = await ScheduledNotification.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Not found' });
+
+    if (action === 'send-now') {
+      // Fire immediately via your existing broadcastPush
+      await broadcastPush(doc.title, doc.body,
+        { page: doc.targetType || 'home', id: doc.targetId || '' },
+        { type: doc.targetType, imageUrl: doc.image || undefined }
+      );
+      doc.status = 'sent';
+      doc.sentAt  = new Date();
+    } else {
+      Object.assign(doc, fields);
+    }
+    await doc.save();
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/admin/scheduled-notifications/:id
+router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ScheduledNotification.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Not found' });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
