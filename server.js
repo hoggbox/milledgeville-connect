@@ -12,6 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── CRITICAL FIX: Increased body size limit for photo uploads ───
+// 10 MB covers base64 images (~4 MB raw ≈ 5.5 MB base64) with headroom.
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 

@@ -647,18 +647,26 @@ function populateBizDropdowns() {
 }
 
 function normalizeNotification(n) {
-  const biz = BUSINESSES.find(b => b.id === n.business) || { name: 'System', emoji: '🔔' };
+  const bizId = n.business?._id || n.business || null;
+  const biz = BUSINESSES.find(b => b.id === bizId) || { name: 'System', emoji: '🔔' };
+  // Map DB status → display status
+  let displayStatus = n.status;
+  if (n.status === 'pending') displayStatus = n.scheduledFor ? 'scheduled' : 'draft';
+  if (n.status === 'failed')  displayStatus = 'draft';
   return {
     id: n._id,
-    bizId: n.business || null,
-    bizName: n.business ? (BUSINESSES.find(b => b.id === n.business)?.name || 'Business') : 'Admin',
+    bizId,
+    bizName: biz.name || 'Admin',
     bizEmoji: biz.emoji || '🔔',
-    status: n.status === 'pending' ? 'scheduled' : (n.status === 'draft' ? 'draft' : n.status),
+    status: displayStatus,
     title: n.title,
     body: n.body,
     link: { type: n.targetType || 'home', value: n.targetUrl || n.targetId || '' },
     hasImg: !!n.image,
-    scheduledAt: n.scheduledFor ? new Date(n.scheduledFor).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + new Date(n.scheduledFor).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : (n.status === 'sent' ? 'Sent' : '—'),
+    scheduledAt: n.scheduledFor
+      ? new Date(n.scheduledFor).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' +
+        new Date(n.scheduledFor).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
+      : (n.status === 'sent' ? 'Sent' : '—'),
     repeat: n.repeat || 'once',
     days: n.days || [],
     stats: n.deliveryStats || { sent: n.status === 'sent' ? 1 : 0, opens: 0, clicks: 0, ctr: 0 },
@@ -777,11 +785,15 @@ function setTodayDate(){
 }
 
 function populateBizDropdowns(){
-  const sel=document.getElementById('fBusiness');
-  const fsel=document.getElementById('bizFilter');
-  BUSINESSES.forEach(b=>{
-    sel.innerHTML+=`<option value="${b.id}">${b.emoji} ${b.name}</option>`;
-    fsel.innerHTML+=`<option value="${b.id}">${b.emoji} ${b.name}</option>`;
+  // fBusiness is a hidden input — business selection uses the search UI.
+  // Only populate the filter dropdown here.
+  const fsel = document.getElementById('bizFilter');
+  fsel.innerHTML = '<option value="">All businesses</option>';
+  BUSINESSES.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = `${b.emoji} ${b.name}`;
+    fsel.appendChild(opt);
   });
 }
 
@@ -887,8 +899,8 @@ function openEdit(id){
     }
   }
 
-  document.getElementById('fRepeat').value = n.repeat || 'once';
-  toggleRepeat();
+  document.getElementById('fRecurType').value = (n.repeat && n.repeat !== 'once') ? 'recurring' : 'once';
+  toggleRecurType();
 
   if (n.days && n.days.length) {
     document.querySelectorAll('.repeat-day').forEach(d => {
@@ -967,11 +979,7 @@ function setLinkTypeActive(t){
   }
 }
 
-function toggleRepeat(){
-  const v=document.getElementById('fRepeat').value;
-  document.getElementById('customDaysWrap').style.display=v==='custom'?'block':'none';
-  document.getElementById('endDateWrap').style.display=(v==='daily'||v==='weekly'||v==='custom')?'block':'none';
-}
+// toggleRepeat() removed — replaced by toggleRecurType() which uses the correct #fRecurType element
 
 function toggleDay(el){el.classList.toggle('sel');}
 
@@ -1004,16 +1012,16 @@ async function saveNotif(){
   const bizId = document.getElementById('fBusiness').value;
   const title = document.getElementById('fTitle').value.trim();
   const body = document.getElementById('fBody').value.trim();
-  const status = document.getElementById('fStatus').value;
+  const status = document.getElementById('fStatus').value; // 'scheduled' | 'draft'
 
   if (!bizId || !title || !body) {
     alert('Please fill in business, title, and message.');
     return;
   }
 
-  // === Recurring Logic ===
+  // === Schedule / Recurring Logic ===
   const recurType = document.getElementById('fRecurType').value;
-  const recurTime = document.getElementById('fRecurTime').value;
+  const recurTime = document.getElementById('fRecurTime').value; // "HH:MM"
   const selectedDays = getSelectedRecurDays();
 
   let scheduledFor = null;
@@ -1021,18 +1029,25 @@ async function saveNotif(){
   let days = [];
 
   if (recurType === 'recurring' && selectedDays.length > 0 && recurTime) {
+    // Recurring: next matching day at recurTime
     repeat = 'custom';
     days = selectedDays;
-
-    const [hour, minute] = recurTime.split(':');
+    const [hour, minute] = recurTime.split(':').map(Number);
     const nextDate = new Date();
-    nextDate.setHours(parseInt(hour), parseInt(minute), 0, 0);
-
-    if (nextDate < new Date()) {
-      nextDate.setDate(nextDate.getDate() + 1);
-    }
+    nextDate.setHours(hour, minute, 0, 0);
+    if (nextDate <= new Date()) nextDate.setDate(nextDate.getDate() + 1);
     scheduledFor = nextDate.toISOString();
+  } else if (recurType === 'once' && recurTime && status !== 'draft') {
+    // One-time send at a specific time
+    const [hour, minute] = recurTime.split(':').map(Number);
+    const onceDate = new Date();
+    onceDate.setHours(hour, minute, 0, 0);
+    if (onceDate <= new Date()) onceDate.setDate(onceDate.getDate() + 1);
+    scheduledFor = onceDate.toISOString();
   }
+
+  // Draft = hold as pending with no scheduledFor (server won't auto-send without a time)
+  if (status === 'draft') scheduledFor = null;
 
   // Link type
   let targetType = 'home';
@@ -1077,16 +1092,17 @@ async function saveNotif(){
 
   try {
     if (editingId) {
-      await apiPatch(`/admin/scheduled-notifications/${editingId}`, {
-        action: 'update',
-        ...payload
-      });
+      await apiPatch(`/admin/scheduled-notifications/${editingId}`, payload);
       showToast('Notification updated', 'success');
     } else {
-      const createPayload = { ...payload };
-      if (status === 'draft') createPayload.scheduledFor = null;
-      await apiPost('/admin/scheduled-notifications', createPayload);
-      showToast(scheduledFor ? 'Notification scheduled!' : 'Notification sent!', 'success');
+      await apiPost('/admin/scheduled-notifications', payload);
+      if (status === 'draft') {
+        showToast('Saved as draft', 'success');
+      } else if (scheduledFor) {
+        showToast('Notification scheduled!', 'success');
+      } else {
+        showToast('Notification sent to all users!', 'success');
+      }
     }
 
     closeCompose();
@@ -1100,9 +1116,9 @@ async function saveNotif(){
     console.error(e);
     showToast(e.message || 'Failed to save', 'error');
   } finally {
-    if (btn) { 
-      btn.disabled = false; 
-      btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>'; 
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>';
     }
   }
 }

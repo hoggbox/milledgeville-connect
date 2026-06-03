@@ -1,31 +1,40 @@
+// models/ScheduledNotification.js
 const mongoose = require('mongoose');
 
 const scheduledNotificationSchema = new mongoose.Schema({
-  title: { type: String, required: true, trim: true },
-  body: { type: String, required: true, trim: true },
-  image: { type: String, default: null },           // base64 or URL
-  targetType: { 
-    type: String, 
-    enum: ['all', 'business', 'page', 'external', 'none'], 
-    default: 'all' 
-  },
-  targetId: { type: String, default: null },        // businessId or page name
-  targetUrl: { type: String, default: null },       // for external links
-  scheduledFor: { type: Date, required: true },
-  status: { 
-    type: String, 
-    enum: ['draft', 'pending', 'sent', 'failed', 'cancelled'], 
-    default: 'pending' 
-  },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  business: { type: mongoose.Schema.Types.ObjectId, ref: 'Business' }, // optional link to business
-  sentAt: { type: Date },
+  title:       { type: String, required: true, trim: true, maxlength: 200 },
+  body:        { type: String, required: true, trim: true, maxlength: 1000 },
+
+  // Optional image stored as base64 data URL (same pattern as shoutout/business-post)
+  image:       { type: String, default: null },
+
+  // Which business this notification is for (optional — null = system/admin)
+  business:    { type: mongoose.Schema.Types.ObjectId, ref: 'Business', default: null },
+
+  // Deep-link routing
+  targetType:  { type: String, default: 'home' },   // 'home','business','external','app','business-post'
+  targetId:    { type: String, default: null },
+  targetUrl:   { type: String, default: null },
+
+  // Scheduling
+  status:      { type: String, enum: ['draft','pending','sent','failed'], default: 'pending' },
+  scheduledFor:{ type: Date, default: null },
+  sentAt:      { type: Date, default: null },
+
+  // Recurring
+  repeat:      { type: String, default: 'once' },   // 'once' | 'daily' | 'weekly' | 'custom'
+  days:        [{ type: String }],                  // ['Mon','Tue',…]
+  endDate:     { type: Date, default: null },
+
+  // Lightweight delivery stats (updated by broadcastPush wrapper)
   deliveryStats: {
-    attempted: { type: Number, default: 0 },
-    delivered: { type: Number, default: 0 },
-    failed: { type: Number, default: 0 }
+    sent:   { type: Number, default: 0 },
+    opens:  { type: Number, default: 0 },
+    clicks: { type: Number, default: 0 },
+    ctr:    { type: Number, default: 0 },
   },
-  error: { type: String }
+
+  createdBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('ScheduledNotification', scheduledNotificationSchema);

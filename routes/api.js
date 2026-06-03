@@ -30,6 +30,7 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
+const ScheduledNotification = require('../models/ScheduledNotification'); // ← SCHEDULED PUSH NOTIFICATIONS
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
@@ -4068,6 +4069,260 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+
+// ─── SCHEDULED NOTIFICATIONS (Admin) ─────────────────────────────────────────
+// GET    /api/admin/scheduled-notifications
+// POST   /api/admin/scheduled-notifications
+// PATCH  /api/admin/scheduled-notifications/:id   (update or send-now)
+// DELETE /api/admin/scheduled-notifications/:id
+// GET    /api/notification-thumb/:id              (serves image for push notifications)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function scheduledNotifThumbUrl(notifId) {
+  return `https://www.milledgevilleconnect.com/api/notification-thumb/${notifId}`;
+}
+
+async function fireScheduledNotification(notif) {
+  const imageUrl = notif.image ? scheduledNotifThumbUrl(notif._id) : null;
+
+  const data = { page: notif.targetType || 'home' };
+  if (notif.targetId)  data.id  = notif.targetId;
+  if (notif.targetUrl) data.url = notif.targetUrl;
+
+  await broadcastPush(
+    notif.title,
+    notif.body,
+    data,
+    { type: 'custom', imageUrl }
+  );
+
+  const subCount = await PushSubscription.countDocuments();
+  notif.status  = 'sent';
+  notif.sentAt  = new Date();
+  notif.deliveryStats = { sent: subCount, opens: 0, clicks: 0, ctr: 0 };
+  await notif.save();
+}
+
+// GET /api/admin/scheduled-notifications
+router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const items = await ScheduledNotification
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('business', 'name category');
+    res.json(items);
+  } catch (err) {
+    console.error('Scheduled notif list error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/admin/scheduled-notifications
+router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const {
+      title, body, image,
+      business, targetType, targetId, targetUrl,
+      scheduledFor, repeat, days, endDate
+    } = req.body;
+
+    if (!title?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'title and body are required' });
+    }
+
+    if (image && !/^data:image\/(jpeg|png|webp);base64,/.test(image)) {
+      return res.status(400).json({ message: 'Image must be a valid JPEG, PNG, or WebP data URL' });
+    }
+    if (image && image.length > 5600000) {
+      return res.status(400).json({ message: 'Image is too large (max ~4 MB)' });
+    }
+
+    const notif = await ScheduledNotification.create({
+      title:        title.trim(),
+      body:         body.trim(),
+      image:        image || null,
+      business:     business || null,
+      targetType:   targetType  || 'home',
+      targetId:     targetId    || null,
+      targetUrl:    targetUrl   || null,
+      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      repeat:       repeat || 'once',
+      days:         days   || [],
+      endDate:      endDate ? new Date(endDate) : null,
+      status:       'pending',
+      createdBy:    req.userId,
+    });
+
+    // No scheduledFor = send immediately
+    if (!scheduledFor) {
+      await fireScheduledNotification(notif);
+    }
+
+    res.json(notif);
+  } catch (err) {
+    console.error('Scheduled notif create error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/admin/scheduled-notifications/:id
+router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const notif = await ScheduledNotification.findById(req.params.id);
+    if (!notif) return res.status(404).json({ message: 'Notification not found' });
+
+    const { action, title, body, image, business, targetType, targetId, targetUrl,
+            scheduledFor, repeat, days, endDate } = req.body;
+
+    if (action === 'send-now') {
+      if (notif.status === 'sent') {
+        return res.status(400).json({ message: 'Already sent' });
+      }
+      await fireScheduledNotification(notif);
+      return res.json(notif);
+    }
+
+    if (title)                    notif.title       = title.trim();
+    if (body)                     notif.body        = body.trim();
+    if (business  !== undefined)  notif.business    = business  || null;
+    if (targetType)               notif.targetType  = targetType;
+    if (targetId  !== undefined)  notif.targetId    = targetId  || null;
+    if (targetUrl !== undefined)  notif.targetUrl   = targetUrl || null;
+    if (repeat)                   notif.repeat      = repeat;
+    if (days)                     notif.days        = days;
+    if (endDate   !== undefined)  notif.endDate     = endDate ? new Date(endDate) : null;
+    if (scheduledFor !== undefined) {
+      notif.scheduledFor = scheduledFor ? new Date(scheduledFor) : null;
+    }
+
+    if (image !== undefined) {
+      if (image && !/^data:image\/(jpeg|png|webp);base64,/.test(image)) {
+        return res.status(400).json({ message: 'Image must be a valid JPEG, PNG, or WebP data URL' });
+      }
+      if (image && image.length > 5600000) {
+        return res.status(400).json({ message: 'Image too large (max ~4 MB)' });
+      }
+      notif.image = image || null;
+    }
+
+    // Reset to pending if rescheduling a previously sent notification
+    if (notif.status === 'sent' && scheduledFor) {
+      notif.status = 'pending';
+      notif.sentAt = null;
+    }
+
+    await notif.save();
+    res.json(notif);
+  } catch (err) {
+    console.error('Scheduled notif update error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/admin/scheduled-notifications/:id
+router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const notif = await ScheduledNotification.findByIdAndDelete(req.params.id);
+    if (!notif) return res.status(404).json({ message: 'Notification not found' });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error('Scheduled notif delete error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/notification-thumb/:id
+// Serves stored base64 image as a real HTTP response so push notifications can show it
+// (same pattern as the working shoutout-thumb and business-post-thumb endpoints above)
+router.get('/notification-thumb/:id', async (req, res) => {
+  try {
+    const notif = await ScheduledNotification.findById(req.params.id).select('image');
+    if (!notif || !notif.image) return res.status(404).send('Not found');
+
+    const match = notif.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Notification thumb error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// Recurring scheduler — polls every 60 seconds for due notifications
+const _DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function _nextRecurringDate(notif) {
+  const now    = new Date();
+  const hour   = notif.scheduledFor ? notif.scheduledFor.getHours()   : 9;
+  const minute = notif.scheduledFor ? notif.scheduledFor.getMinutes() : 0;
+
+  for (let offset = 1; offset <= 7; offset++) {
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + offset);
+    candidate.setHours(hour, minute, 0, 0);
+    const dayName = _DAY_NAMES[candidate.getDay()];
+    if (!notif.days || notif.days.length === 0 || notif.days.includes(dayName)) {
+      if (!notif.endDate || candidate <= notif.endDate) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+setInterval(async () => {
+  try {
+    const due = await ScheduledNotification.find({
+      status:       'pending',
+      scheduledFor: { $lte: new Date() },
+    });
+
+    for (const notif of due) {
+      try {
+        await fireScheduledNotification(notif);
+
+        if (notif.repeat && notif.repeat !== 'once') {
+          const next = _nextRecurringDate(notif);
+          if (next) {
+            await ScheduledNotification.create({
+              title:        notif.title,
+              body:         notif.body,
+              image:        notif.image,
+              business:     notif.business,
+              targetType:   notif.targetType,
+              targetId:     notif.targetId,
+              targetUrl:    notif.targetUrl,
+              scheduledFor: next,
+              repeat:       notif.repeat,
+              days:         notif.days,
+              endDate:      notif.endDate,
+              status:       'pending',
+              createdBy:    notif.createdBy,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fire scheduled notification ' + notif._id + ':', e);
+        notif.status = 'failed';
+        await notif.save();
+      }
+    }
+  } catch (err) {
+    console.error('Scheduled notification poll error:', err);
+  }
+}, 60 * 1000);
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
