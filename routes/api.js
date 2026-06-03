@@ -424,6 +424,11 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     // 800 ms is enough for Mongo to flush and for a replica-set secondary read
     // to catch up; adjust upward (e.g. 1500) if you still see missing images.
+    const shoutoutId   = shoutout._id.toString();
+    const shoutoutThumb = (shoutout.images && shoutout.images.length > 0)
+      ? `/api/shoutout-thumb/${shoutoutId}`   // relative is fine now
+      : null;
+
     setTimeout(async () => {
       try {
         await broadcastPush(
@@ -435,7 +440,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
       } catch (pushErr) {
         console.error('[Push] Shoutout broadcast failed:', pushErr);
       }
-    }, 1500);
+    }, 1200);   // 1200ms delay
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
@@ -1061,6 +1066,7 @@ function requireAdminOrModerator(req, res, next) {
 }
 
 // Send push to a single user (supports both native FCM and web VAPID)
+// Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
   if (!sub) {
@@ -1071,50 +1077,34 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const APP_ICON = 'https://www.milledgevilleconnect.com/icon-192.png';
   const BASE_URL = 'https://www.milledgevilleconnect.com';
 
-  // ✅ FIX: If imageUrl is a relative path (like /api/...), convert it to a full HTTPS URL first
-  let finalImageUrl = imageUrl;
-  if (finalImageUrl && !finalImageUrl.startsWith('http://') && !finalImageUrl.startsWith('https://')) {
-    // Strips leading slash if present to avoid doubling up slashes
-    const cleanPath = finalImageUrl.startsWith('/') ? finalImageUrl.substring(1) : finalImageUrl;
-    finalImageUrl = `${BASE_URL}/${cleanPath}`;
+  // Force absolute HTTPS URL
+  let notifImage = null;
+  if (imageUrl) {
+    if (imageUrl.startsWith('http')) {
+      notifImage = imageUrl;
+    } else {
+      const cleanPath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+      notifImage = `${BASE_URL}/${cleanPath}`;
+    }
   }
 
-  // Double check that we now have a clean, valid https:// string
-  const notifImage = (finalImageUrl && finalImageUrl.startsWith('https://')) ? finalImageUrl : null;
+  console.log(`[Push] Sending to ${userId} | image: ${notifImage ? 'YES' : 'NO'}`);
 
   if (sub.nativeToken) {
     try {
       const message = {
         token: sub.nativeToken,
-        notification: {
-          title,
-          body,
-          ...(notifImage ? { image: notifImage } : {})
-        },
-        data: {
-          page: data.page || '',
-          id: data.id || '',
-          url: data.url || ''
-        },
+        notification: { title, body, ...(notifImage ? { image: notifImage } : {}) },
+        data: { page: data.page || '', id: data.id || '', url: data.url || '' },
         android: {
           priority: 'high',
-          notification: {
-            sound: 'default',
-            channelId: 'default',
-            ...(notifImage ? { image: notifImage } : {})
-          }
+          notification: { sound: 'default', channelId: 'default', ...(notifImage ? { image: notifImage } : {}) }
         },
-        // iOS support
-        ...(notifImage ? {
-          apns: {
-            payload: { aps: { 'mutable-content': 1 } },
-            fcmOptions: { image: notifImage }
-          }
-        } : {})
+        ...(notifImage ? { apns: { payload: { aps: { 'mutable-content': 1 } }, fcmOptions: { image: notifImage } } } : {})
       };
 
       await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}${notifImage ? ` (with image: ${notifImage})` : ''}`);
+      console.log(`✅ Native FCM sent to ${userId} with image`);
       return true;
     } catch (err) {
       console.error(`[Push] FCM failed for ${userId}:`, err.message);
@@ -1126,29 +1116,17 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     }
   }
 
+  // Web Push
   if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
     try {
       const pushPayload = {
-        title,
-        body,
-        data,
-        icon: APP_ICON,
-        badge: APP_ICON,
+        title, body, data, icon: APP_ICON, badge: APP_ICON
       };
+      if (notifImage) pushPayload.image = notifImage;
 
-      // Attach image only if we have a valid URL
-      if (notifImage) {
-        pushPayload.image = notifImage;
-      }
-
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify(pushPayload)
-      );
-
-      console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+      await webpush.sendNotification(sub.subscription, JSON.stringify(pushPayload));
+      console.log(`✅ Web push sent to ${userId} with image`);
       return true;
-
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
       if (err.statusCode === 410 || err.statusCode === 404) {
