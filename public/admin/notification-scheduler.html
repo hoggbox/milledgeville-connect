@@ -5,28 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Notification Scheduler</title>
   <style>
-/* ========== ADD THIS ROOT BLOCK ========== */
+/* ========== COMPLETE COLOR SYSTEM (Added to fix white areas) ========== */
 :root {
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  
-  /* Main color system */
+
+  /* Main dark theme colors (matching your app) */
   --color-text-primary: #ffffff;
   --color-text-secondary: #a1a1aa;
   --color-text-tertiary: #71717a;
   --color-text-info: #0F6E56;
-  
+
   --color-background-primary: #18181b;
   --color-background-secondary: #27272a;
   --color-background-info: #E1F5EE;
-  
+
   --color-border-primary: #3f3f46;
   --color-border-secondary: #3f3f46;
   --color-border-tertiary: #27272a;
-  
+
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
-  
-  /* Your existing custom colors */
+
+  /* Your existing accent colors */
   --emerald: #0F6E56;
   --emerald-light: #E1F5EE;
   --emerald-mid: #1D9E75;
@@ -36,7 +36,7 @@
   --red-light: #FCEBEB;
 }
 
-/* ========== REST OF YOUR ORIGINAL STYLE (unchanged) ========== */
+/* ========== YOUR ORIGINAL STYLES (kept exactly as you had them) ========== */
 h2.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
 *{box-sizing:border-box;margin:0;padding:0}
 body,div,span,p,input,select,textarea,button{font-family:var(--font-sans)}
@@ -93,7 +93,7 @@ body,div,span,p,input,select,textarea,button{font-family:var(--font-sans)}
 .notif-link-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--color-background-info);color:var(--color-text-info);padding:2px 8px;border-radius:20px}
 .has-img-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px}
 
-/* MODAL */
+/* MODAL STYLES */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999;padding:1rem}
 .modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
 .modal-header{padding:1.25rem 1.5rem 1rem;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--color-background-primary);z-index:2}
