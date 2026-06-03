@@ -11,128 +11,85 @@
 
   <div class="max-w-5xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-8">
-      <div class="flex items-center gap-3">
-        <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center">
-          <i class="fa-solid fa-bell text-2xl"></i>
-        </div>
-        <div>
-          <h1 class="text-3xl font-bold">Notification Scheduler</h1>
-          <p class="text-white/50">Admin Tool</p>
-        </div>
+      <div>
+        <h1 class="text-3xl font-bold flex items-center gap-3">
+          <i class="fa-solid fa-bell text-violet-500"></i> 
+          Notification Scheduler
+        </h1>
+        <p class="text-white/50">Admin Only Tool</p>
       </div>
     </div>
 
-    <!-- Content will be replaced by protection if access denied -->
-    <div id="mainContent">
-      <!-- Your form will load here if access is granted -->
-      <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
-        <h2 class="text-xl font-semibold mb-6">Create Notification</h2>
-        <!-- Form content would go here (simplified for now) -->
-        <p class="text-white/60">If you see this, access was granted.</p>
-      </div>
+    <div id="content">
+      <!-- Content loads here after admin check -->
     </div>
   </div>
 
   <script>
-    // ==================== DEBUGGING PROTECTION ====================
-    function getTokenPayload() {
+    // ==================== ADMIN VERIFICATION ====================
+    async function verifyAdminAccess() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        showAccessDenied("You are not logged in.");
+        return false;
+      }
+
       try {
-        const token = localStorage.getItem('token');
-        if (!token) return { error: "No token found in localStorage" };
+        // Try to call an admin-only endpoint
+        const res = await fetch('/api/admin/stats', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-          atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-        );
-        return JSON.parse(jsonPayload);
-      } catch (e) {
-        return { error: "Failed to decode token: " + e.message };
-      }
-    }
-
-    function checkAdminAccess() {
-      const payload = getTokenPayload();
-      console.log("%c[Scheduler] JWT Payload:", "color: #a78bfa; font-size: 13px", payload);
-
-      const ADMIN_EMAIL = "imhoggbox@gmail.com";
-
-      // Show payload on screen for debugging
-      const main = document.getElementById('mainContent');
-
-      if (payload.error) {
-        main.innerHTML = `
-          <div class="bg-red-900/20 border border-red-500/30 rounded-3xl p-8 text-center">
-            <h2 class="text-2xl font-bold text-red-400 mb-4">Token Error</h2>
-            <p class="text-white/70">${payload.error}</p>
-            <button onclick="goBack()" class="mt-6 px-6 py-3 bg-white/10 rounded-2xl">Go Back</button>
-          </div>`;
-        return false;
-      }
-
-      // Check for email in multiple possible places
-      const email = payload.email || payload.user?.email || payload.data?.email || payload.sub || "";
-
-      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        console.log("%c[Scheduler] ✅ Access GRANTED", "color:#4ade80");
-        return true;
-      } else {
-        // Show debug info
-        main.innerHTML = `
-          <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8 max-w-2xl mx-auto">
-            <div class="text-center mb-6">
-              <i class="fa-solid fa-lock text-5xl text-red-400 mb-4"></i>
-              <h2 class="text-2xl font-bold">Access Denied</h2>
-              <p class="text-white/60 mt-2">Only imhoggbox@gmail.com can access this page.</p>
-            </div>
-
-            <div class="bg-black/40 rounded-2xl p-5 text-sm font-mono mb-6">
-              <div class="text-white/50 mb-1">Detected email from token:</div>
-              <div class="text-yellow-400">${email || "NOT FOUND"}</div>
-            </div>
-
-            <div class="text-xs text-white/40 mb-4">Full token payload is logged in browser console (F12).</div>
-
-            <div class="flex gap-3">
-              <button onclick="goBack()" 
-                      class="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-2xl font-medium">
-                Return to App
-              </button>
-              <button onclick="forceAccess()" 
-                      class="flex-1 py-3 bg-red-600 hover:bg-red-700 rounded-2xl font-medium text-sm">
-                Force Access (Debug Only)
-              </button>
-            </div>
-          </div>`;
+        if (res.ok) {
+          // If the request succeeds, user is admin
+          console.log('%c[Scheduler] ✅ Admin verified via backend', 'color:#4ade80');
+          loadSchedulerUI();
+          return true;
+        } else {
+          showAccessDenied("You do not have admin access.");
+          return false;
+        }
+      } catch (err) {
+        console.error(err);
+        showAccessDenied("Could not verify admin status.");
         return false;
       }
     }
 
-    function goBack() {
+    function showAccessDenied(message) {
+      document.getElementById('content').innerHTML = `
+        <div class="max-w-md mx-auto bg-zinc-900 border border-white/10 rounded-3xl p-8 text-center">
+          <i class="fa-solid fa-lock text-5xl text-red-400 mb-4"></i>
+          <h2 class="text-2xl font-bold mb-2">Access Denied</h2>
+          <p class="text-white/60 mb-6">${message}</p>
+          
+          <button onclick="goBackToApp()" 
+                  class="w-full py-3.5 bg-white/10 hover:bg-white/20 rounded-2xl font-medium transition">
+            Return to App
+          </button>
+        </div>
+      `;
+    }
+
+    function goBackToApp() {
       window.location.href = '/';
     }
 
-    function forceAccess() {
-      if (confirm("This bypasses security. Only use for debugging.")) {
-        document.getElementById('mainContent').innerHTML = `
-          <div class="bg-yellow-900/20 border border-yellow-500 rounded-3xl p-6 text-center">
-            <p class="text-yellow-400">Debug mode enabled. You can now use the page.</p>
-          </div>`;
-        // Load your actual form here if needed
-      }
+    function loadSchedulerUI() {
+      document.getElementById('content').innerHTML = `
+        <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+          <h3 class="font-semibold text-lg mb-4">Create Notification</h3>
+          <p class="text-white/60">Scheduler UI will load here once we finish connecting the form.</p>
+          
+          <!-- We can add the full form later -->
+        </div>
+      `;
     }
 
-    // Run check
-    if (!checkAdminAccess()) {
-      throw new Error("Access denied");
-    }
-    // ==================== END PROTECTION ====================
-
-
-    // ==================== YOUR FORM CODE GOES BELOW ====================
-    console.log("%c[Scheduler] Page loaded successfully for admin", "color:#4ade80");
-    
-    // Add your form JavaScript here later
+    // Run verification when page loads
+    verifyAdminAccess();
   </script>
 
 </body>
