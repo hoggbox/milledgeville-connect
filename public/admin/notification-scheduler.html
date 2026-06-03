@@ -764,8 +764,7 @@ async function init() {
     notifications = [];
     showToast('Could not load notifications — make sure you are logged in as admin.', 'error');
   }
-
-  setTodayDate();
+  
   renderList();
   updateTopMetrics();
   buildReachChart();
@@ -773,10 +772,8 @@ async function init() {
 }
 
 function setTodayDate(){
-  const d=new Date();
-  const s=d.toISOString().split('T')[0];
-  document.getElementById('fDate').value=s;
-  document.getElementById('fDate').min=s;
+  // No longer needed with new recurring UI
+  // Keeping it here so it doesn't break anything
 }
 
 function populateBizDropdowns(){
