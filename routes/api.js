@@ -1081,6 +1081,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 
   console.log(`[Push] Sending to ${userId} | imageUrl passed: ${imageUrl || 'null'} | final notifImage: ${notifImage || 'null'}`);
 
+  // ─── NATIVE FCM (APK) ────────────────────────────────────────────────────
   if (sub.nativeToken) {
     try {
       const message = {
@@ -1089,20 +1090,19 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         data: { page: data.page || '', id: data.id || '', url: data.url || '' },
         android: {
           priority: 'high',
-          notification: { 
-            sound: 'default', 
-            channelId: 'default', 
-            ...(notifImage ? { image: notifImage } : {}) 
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            ...(notifImage ? { image: notifImage } : {})
           }
         },
-        ...(notifImage ? { 
-          apns: { 
-            payload: { aps: { 'mutable-content': 1 } }, 
-            fcmOptions: { image: notifImage } 
-          } 
+        ...(notifImage ? {
+          apns: {
+            payload: { aps: { 'mutable-content': 1 } },
+            fcmOptions: { image: notifImage }
+          }
         } : {})
       };
-
       await admin.messaging().send(message);
       console.log(`✅ Native FCM sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
       return true;
@@ -1112,20 +1112,51 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     }
   }
 
-  // Web Push
+  // ─── WEB PUSH via FCM HTTP v1 (browser) ─────────────────────────────────
+  // Uses Firebase Admin instead of legacy web-push package so images work
   if (sub.subscription?.endpoint) {
     try {
+      const endpoint = sub.subscription.endpoint;
+
+      // Only use FCM v1 path for FCM endpoints
+      if (endpoint.includes('fcm.googleapis.com')) {
+        // Extract FCM registration token from the endpoint URL
+        const fcmToken = endpoint.split('/').pop();
+
+        const message = {
+          token: fcmToken,
+          notification: { title, body },
+          webpush: {
+            notification: {
+              title,
+              body,
+              icon: 'https://www.milledgevilleconnect.com/icon-192.png',
+              badge: 'https://www.milledgevilleconnect.com/icon-192.png',
+              ...(notifImage ? { image: notifImage } : {}),
+              data: data
+            },
+            fcmOptions: {
+              link: 'https://www.milledgevilleconnect.com'
+            }
+          }
+        };
+
+        await admin.messaging().send(message);
+        console.log(`✅ Web FCM v1 sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
+        return true;
+      }
+
+      // Fallback: non-FCM endpoints (Firefox etc) — use legacy web-push, no image support
       const pushPayload = {
-        title, 
-        body, 
-        data, 
+        title,
+        body,
+        data,
         icon: 'https://www.milledgevilleconnect.com/icon-192.png',
         badge: 'https://www.milledgevilleconnect.com/icon-192.png'
       };
       if (notifImage) pushPayload.image = notifImage;
-
       await webpush.sendNotification(sub.subscription, JSON.stringify(pushPayload));
-      console.log(`✅ Web push sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
+      console.log(`✅ Web push (legacy) sent to ${userId}`);
       return true;
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
