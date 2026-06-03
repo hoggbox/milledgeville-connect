@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    .section-header { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; }
   </style>
 </head>
 <body class="bg-zinc-950 text-white">
@@ -22,19 +21,13 @@
         </div>
         <div>
           <h1 class="text-2xl font-bold">Notification Scheduler</h1>
-          <p class="text-white/50 text-sm">Admin Only • Milledgeville Connect</p>
+          <p class="text-white/50 text-sm">Admin Only</p>
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        <div id="adminStatus" class="px-4 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-2xl text-sm flex items-center gap-2">
-          <i class="fa-solid fa-shield-halved"></i>
-          <span>Admin Access</span>
-        </div>
-        <button onclick="window.close()" 
-                class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-2xl text-sm transition">
-          Close
-        </button>
-      </div>
+      <button onclick="window.close()" 
+              class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-2xl text-sm transition">
+        Close
+      </button>
     </div>
   </div>
 
@@ -42,9 +35,9 @@
 
     <!-- Compose Form -->
     <div class="bg-zinc-900 border border-white/10 rounded-3xl p-8">
-      <h2 class="section-header mb-6 flex items-center gap-2">
-        <i class="fa-solid fa-paper-plane"></i> 
-        Create Notification
+      <h2 class="text-xl font-semibold mb-6 flex items-center gap-2">
+        <i class="fa-solid fa-paper-plane text-violet-400"></i> 
+        Create New Notification
       </h2>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -52,38 +45,31 @@
         <!-- Left Column -->
         <div class="space-y-6">
 
-          <!-- Title -->
           <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Notification Title</label>
+            <label class="block text-sm font-medium text-white/70 mb-2">Title</label>
             <input id="notifTitle" type="text" 
-                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 text-white placeholder:text-white/40 focus:outline-none focus:border-violet-500"
+                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500"
                    placeholder="New deal at GoodEats!">
           </div>
 
-          <!-- Message Body -->
           <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Message Body</label>
+            <label class="block text-sm font-medium text-white/70 mb-2">Message</label>
             <textarea id="notifBody" rows="4"
-                      class="w-full bg-zinc-800 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-violet-500 resize-y"
-                      placeholder="Write your notification message here..."></textarea>
+                      class="w-full bg-zinc-800 border border-white/20 rounded-3xl px-5 py-4 focus:outline-none focus:border-violet-500 resize-y"
+                      placeholder="Write your notification message..."></textarea>
           </div>
 
-          <!-- Image Upload -->
+          <!-- Image -->
           <div>
             <label class="block text-sm font-medium text-white/70 mb-2">Image (Optional)</label>
-            <div id="imageDropZone"
-                 class="border-2 border-dashed border-white/20 hover:border-violet-500/50 rounded-3xl p-8 text-center cursor-pointer transition">
-              <i class="fa-solid fa-image text-4xl text-white/40 mb-3"></i>
-              <p class="text-white/60">Click or drag image here</p>
-              <p class="text-xs text-white/40 mt-1">PNG, JPG up to 5MB</p>
+            <div id="imageDropZone" class="border-2 border-dashed border-white/20 hover:border-violet-500 rounded-3xl p-8 text-center cursor-pointer transition">
+              <i class="fa-solid fa-image text-3xl text-white/40 mb-2"></i>
+              <p class="text-white/60 text-sm">Click or drag to upload image</p>
               <input type="file" id="imageInput" accept="image/*" class="hidden">
             </div>
-            <div id="imagePreview" class="hidden mt-4">
-              <img id="previewImg" class="max-h-48 rounded-2xl border border-white/10">
-              <button onclick="removeImage()" 
-                      class="mt-2 text-red-400 text-sm hover:text-red-500 flex items-center gap-1">
-                <i class="fa-solid fa-trash"></i> Remove Image
-              </button>
+            <div id="imagePreview" class="hidden mt-3">
+              <img id="previewImg" class="max-h-40 rounded-2xl border border-white/10">
+              <button onclick="removeImage()" class="mt-2 text-red-400 text-sm hover:underline">Remove image</button>
             </div>
           </div>
 
@@ -92,48 +78,43 @@
         <!-- Right Column -->
         <div class="space-y-6">
 
-          <!-- Link Type -->
           <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">When tapped, open:</label>
-            <div class="flex gap-2">
+            <label class="block text-sm font-medium text-white/70 mb-2">When user taps notification, open:</label>
+            <div class="flex gap-2 mb-3">
               <button onclick="setLinkType('business')" id="btn-business"
-                      class="flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium">Business Card</button>
+                      class="flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium">Business Card</button>
               <button onclick="setLinkType('app')" id="btn-app"
-                      class="flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">App Page</button>
+                      class="flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">App Page</button>
               <button onclick="setLinkType('external')" id="btn-external"
-                      class="flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">External Link</button>
+                      class="flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium">External URL</button>
             </div>
           </div>
 
-          <!-- Dynamic Link Input -->
-          <div id="linkInputContainer">
-            <label class="block text-sm font-medium text-white/70 mb-2" id="linkLabel">Business Name or ID</label>
+          <div>
+            <label class="block text-sm font-medium text-white/70 mb-2" id="linkLabel">Target</label>
             <input id="linkTarget" type="text" 
-                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 text-white focus:outline-none focus:border-violet-500"
+                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500"
                    placeholder="Search or enter value...">
-            <div id="businessSearchResults" class="mt-2 max-h-40 overflow-auto hidden"></div>
           </div>
 
-          <!-- Schedule -->
           <div>
-            <label class="block text-sm font-medium text-white/70 mb-2">Schedule (Optional)</label>
+            <label class="block text-sm font-medium text-white/70 mb-2">Schedule for later (optional)</label>
             <input id="scheduledFor" type="datetime-local" 
-                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 text-white focus:outline-none focus:border-violet-500">
-            <p class="text-xs text-white/40 mt-1">Leave blank to send immediately</p>
+                   class="w-full bg-zinc-800 border border-white/20 rounded-2xl px-5 py-3.5 focus:outline-none focus:border-violet-500">
+            <p class="text-xs text-white/40 mt-1">Leave empty to send immediately</p>
           </div>
 
         </div>
       </div>
 
-      <!-- Action Buttons -->
+      <!-- Buttons -->
       <div class="flex gap-4 mt-8">
         <button onclick="sendNotification()"
-                class="flex-1 bg-violet-600 hover:bg-violet-700 py-4 rounded-3xl font-bold text-lg transition flex items-center justify-center gap-2">
+                class="flex-1 bg-violet-600 hover:bg-violet-700 py-4 rounded-3xl font-bold text-lg flex items-center justify-center gap-2 transition">
           <i class="fa-solid fa-paper-plane"></i>
-          <span>Send / Schedule Notification</span>
+          <span>Send / Schedule</span>
         </button>
-        
-        <button onclick="clearForm()"
+        <button onclick="clearForm()" 
                 class="px-8 bg-white/5 hover:bg-white/10 rounded-3xl font-medium transition">
           Clear
         </button>
@@ -143,27 +124,25 @@
   </div>
 
   <script>
-    // ==================== IMPROVED ADMIN PROTECTION ====================
-    function getCurrentUserEmail() {
+    // ==================== ROBUST ADMIN PROTECTION ====================
+    function getCurrentUser() {
       try {
         const token = localStorage.getItem('token');
-        if (!token) {
-          console.log('[Scheduler] No token found');
-          return null;
-        }
+        if (!token) return null;
 
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const jsonPayload = decodeURIComponent(
-          atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join('')
+          atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
         );
 
         const payload = JSON.parse(jsonPayload);
-        console.log('[Scheduler] JWT Payload:', payload);
+        console.log('%c[Scheduler] JWT Payload:', 'color:#a78bfa', payload);
 
-        return payload.email || payload.user?.email || payload.data?.email || null;
+        const email = payload.email || payload.user?.email || payload.data?.email || null;
+        const userId = payload.id || payload.userId || payload._id || payload.user?._id || null;
+
+        return { email, userId, raw: payload };
       } catch (e) {
         console.error('[Scheduler] Token decode error:', e);
         return null;
@@ -171,88 +150,102 @@
     }
 
     function protectSchedulerPage() {
-      const userEmail = getCurrentUserEmail();
+      const user = getCurrentUser();
       const ADMIN_EMAIL = 'imhoggbox@gmail.com';
 
-      if (!userEmail || userEmail.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        document.body.innerHTML = `
-          <div class="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
-            <div class="text-center p-8">
-              <div class="text-6xl mb-4">🔒</div>
-              <h1 class="text-3xl font-bold mb-2">Access Denied</h1>
-              <p class="text-white/60">This page is restricted to administrators only.</p>
-              <p class="text-xs text-white/40 mt-4">Logged in as: ${userEmail || 'Unknown user'}</p>
-              <button onclick="window.location.href='/admin'" 
-                      class="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl">
-                Return to Admin Panel
-              </button>
-            </div>
-          </div>
-        `;
+      if (!user || !user.email) {
+        showAccessDenied('Could not read your email from login token.');
         return false;
       }
+
+      if (user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        showAccessDenied(`You are logged in as: ${user.email}`);
+        return false;
+      }
+
+      console.log('%c[Scheduler] ✅ Admin access granted', 'color:#4ade80');
       return true;
     }
 
-    // Run protection immediately
+    function showAccessDenied(message) {
+      document.body.innerHTML = `
+        <div class="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
+          <div class="text-center p-8">
+            <div class="text-6xl mb-4">🔒</div>
+            <h1 class="text-3xl font-bold mb-2">Access Denied</h1>
+            <p class="text-white/60 mb-2">${message}</p>
+            <p class="text-xs text-white/40 mb-6">Only imhoggbox@gmail.com can access this page.</p>
+            
+            <button onclick="goBackToAdmin()" 
+                    class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl transition">
+              Return to Admin Panel
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function goBackToAdmin() {
+      window.location.href = '/?admin=true';
+    }
+
+    // Run protection
     if (!protectSchedulerPage()) {
       throw new Error('Access denied');
     }
     // ==================== END PROTECTION ====================
 
-    // Your existing JavaScript for the form goes below this line
+
+    // ==================== FORM LOGIC ====================
     let currentLinkType = 'business';
     let uploadedImageBase64 = null;
 
     function setLinkType(type) {
       currentLinkType = type;
-      
-      // Update button styles
-      document.getElementById('btn-business').className = type === 'business' 
-        ? 'flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium' 
-        : 'flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
-      
-      document.getElementById('btn-app').className = type === 'app' 
-        ? 'flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium' 
-        : 'flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
-      
-      document.getElementById('btn-external').className = type === 'external' 
-        ? 'flex-1 px-4 py-3 rounded-2xl bg-violet-600 text-sm font-medium' 
-        : 'flex-1 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
 
-      // Update placeholder
+      document.getElementById('btn-business').className = type === 'business' 
+        ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium' 
+        : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+
+      document.getElementById('btn-app').className = type === 'app' 
+        ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium' 
+        : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+
+      document.getElementById('btn-external').className = type === 'external' 
+        ? 'flex-1 px-4 py-2.5 rounded-2xl bg-violet-600 text-sm font-medium' 
+        : 'flex-1 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium';
+
+      const label = document.getElementById('linkLabel');
       const input = document.getElementById('linkTarget');
+
       if (type === 'business') {
-        document.getElementById('linkLabel').textContent = 'Business Name or ID';
-        input.placeholder = 'Search for a business...';
+        label.textContent = 'Business';
+        input.placeholder = 'Search business name...';
       } else if (type === 'app') {
-        document.getElementById('linkLabel').textContent = 'App Page';
-        input.placeholder = 'e.g. marketplace, deals, events';
+        label.textContent = 'App Page';
+        input.placeholder = 'marketplace, deals, events, etc.';
       } else {
-        document.getElementById('linkLabel').textContent = 'External URL';
+        label.textContent = 'External URL';
         input.placeholder = 'https://example.com';
       }
     }
 
-    // Image upload handling
+    // Image upload
     document.getElementById('imageDropZone').addEventListener('click', () => {
       document.getElementById('imageInput').click();
     });
 
     document.getElementById('imageInput').addEventListener('change', function(e) {
-      if (e.target.files.length > 0) {
-        handleImageUpload(e.target.files[0]);
-      }
+      if (e.target.files[0]) handleImageUpload(e.target.files[0]);
     });
 
     function handleImageUpload(file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image too large (max 5MB)');
+        alert('Image is too large (max 5MB)');
         return;
       }
-
       const reader = new FileReader();
-      reader.onload = function(ev) {
+      reader.onload = (ev) => {
         uploadedImageBase64 = ev.target.result;
         document.getElementById('previewImg').src = uploadedImageBase64;
         document.getElementById('imagePreview').classList.remove('hidden');
@@ -272,7 +265,7 @@
       const title = document.getElementById('notifTitle').value.trim();
       const body = document.getElementById('notifBody').value.trim();
       const target = document.getElementById('linkTarget').value.trim();
-      const scheduled = document.getElementById('scheduledFor').value;
+      const scheduledFor = document.getElementById('scheduledFor').value;
 
       if (!title || !body) {
         alert('Title and message are required');
@@ -282,10 +275,10 @@
       const payload = {
         title,
         body,
-        image: uploadedImageBase64,
+        image: uploadedImageBase64 || null,
         targetType: currentLinkType,
         targetId: target || null,
-        scheduledFor: scheduled || null
+        scheduledFor: scheduledFor || null
       };
 
       try {
@@ -321,7 +314,7 @@
       removeImage();
     }
 
-    // Initialize default link type
+    // Initialize
     setTimeout(() => {
       setLinkType('business');
     }, 100);
