@@ -1120,20 +1120,27 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
 
   if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
     try {
+      const pushPayload = {
+        title,
+        body,
+        data,
+        icon: APP_ICON,
+        badge: APP_ICON,
+      };
+
+      // Attach image only if we have a valid URL
+      if (notifImage) {
+        pushPayload.image = notifImage;
+      }
+
       await webpush.sendNotification(
         sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data,
-          icon:  APP_ICON,
-          badge: APP_ICON,
-          // ✅ Only attach image when it's a real https:// URL
-          ...(notifImage ? { image: notifImage } : {})
-        })
+        JSON.stringify(pushPayload)
       );
+
       console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
       return true;
+
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
       if (err.statusCode === 410 || err.statusCode === 404) {
