@@ -6905,6 +6905,17 @@ async function renderAdminDashboard() {
       </div>
     </div>
 
+    <!-- NOTIFICATION SCHEDULER BUTTON -->
+    <div class="mb-8">
+      <button onclick="window.open('/admin/notification-scheduler.html', '_blank')"
+              class="w-full flex items-center justify-center gap-3 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 transition px-6 py-4 rounded-3xl font-bold text-lg shadow-xl">
+        <span class="text-2xl">🔔</span>
+        <span>Notification Scheduler</span>
+        <span class="text-xs bg-white/20 px-3 py-1 rounded-full font-medium">NEW</span>
+      </button>
+      <p class="text-center text-white/40 text-xs mt-2">Schedule custom push notifications for businesses</p>
+    </div>
+
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
       <h3 class="font-bold mb-4">Recent Activity</h3>
       <div id="recentActivity" class="space-y-3 text-sm">

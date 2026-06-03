@@ -144,170 +144,56 @@
 </div>
 
 <script>
-// ==================== CONFIG ====================
+// ==================== ADMIN PROTECTION ====================
+function getCurrentUserEmail() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    
+    // Decode JWT payload (simple base64 decode)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.email || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function protectSchedulerPage() {
+  const userEmail = getCurrentUserEmail();
+  const ADMIN_EMAIL = 'imhoggbox@gmail.com';
+
+  if (!userEmail || userEmail.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    document.body.innerHTML = `
+      <div class="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
+        <div class="text-center">
+          <div class="text-6xl mb-4">🔒</div>
+          <h1 class="text-3xl font-bold mb-2">Access Denied</h1>
+          <p class="text-white/60">This page is restricted to administrators only.</p>
+          <button onclick="window.location.href='/admin'" 
+                  class="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl">
+            Go to Admin Panel
+          </button>
+        </div>
+      </div>
+    `;
+    return false;
+  }
+  return true;
+}
+
+// Run protection immediately
+if (!protectSchedulerPage()) {
+  // Stop further execution if not admin
+  throw new Error('Access denied');
+}
+
+// ==================== REST OF YOUR SCRIPT ====================
 const API_BASE = '/api';
 let selectedBusinessId = null;
 let uploadedImageBase64 = null;
 let currentLinkType = 'business';
 
-// ==================== LINK TYPE HANDLING ====================
-function setLinkType(type) {
-  currentLinkType = type;
-  
-  // Reset buttons
-  document.querySelectorAll('[id^="btn-"]').forEach(btn => btn.classList.remove('border-emerald-600', 'bg-emerald-600'));
-  document.getElementById('btn-' + type).classList.add('border-emerald-600', 'bg-emerald-600');
-
-  // Show/hide sections
-  document.getElementById('business-section').classList.toggle('hidden', type !== 'business');
-  document.getElementById('page-section').classList.toggle('hidden', type !== 'page');
-  document.getElementById('url-section').classList.toggle('hidden', type !== 'url');
-}
-
-function toggleDateField() {
-  const type = document.getElementById('schedule-type').value;
-  document.getElementById('date-field').classList.toggle('hidden', type === 'now');
-}
-
-// ==================== IMAGE HANDLING ====================
-function handleImageSelect(input) {
-  const file = input.files[0];
-  if (!file) return;
-
-  if (file.size > 4 * 1024 * 1024) {
-    alert("Image must be under 4MB");
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    uploadedImageBase64 = e.target.result;
-    document.getElementById('image-preview').src = uploadedImageBase64;
-    document.getElementById('image-preview-container').classList.remove('hidden');
-  };
-  reader.readAsDataURL(file);
-}
-
-function removeImage() {
-  uploadedImageBase64 = null;
-  document.getElementById('image-preview-container').classList.add('hidden');
-  document.getElementById('image-input').value = '';
-}
-
-// ==================== BUSINESS SEARCH ====================
-async function searchBusinesses(query) {
-  if (!query || query.length < 2) {
-    document.getElementById('business-results').innerHTML = '';
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/directory?search=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    
-    const container = document.getElementById('business-results');
-    container.innerHTML = '';
-
-    if (!data.businesses || data.businesses.length === 0) {
-      container.innerHTML = `<p class="p-3 text-sm text-zinc-400">No businesses found</p>`;
-      return;
-    }
-
-    data.businesses.forEach(biz => {
-      const div = document.createElement('div');
-      div.className = `p-3 hover:bg-zinc-800 rounded-xl cursor-pointer flex items-center gap-3`;
-      div.innerHTML = `
-        <div>
-          <p class="font-medium">${biz.name}</p>
-          <p class="text-xs text-zinc-400">${biz.category?.name || ''}</p>
-        </div>
-      `;
-      div.onclick = () => selectBusiness(biz);
-      container.appendChild(div);
-    });
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-function selectBusiness(biz) {
-  selectedBusinessId = biz._id;
-  document.getElementById('business-results').innerHTML = `
-    <div class="p-3 bg-emerald-900/30 border border-emerald-600 rounded-xl">
-      <p class="font-medium">${biz.name}</p>
-      <p class="text-xs text-emerald-400">Selected</p>
-    </div>
-  `;
-}
-
-// ==================== SEND NOTIFICATION ====================
-async function sendNotification() {
-  const title = document.getElementById('title').value.trim();
-  const body = document.getElementById('body').value.trim();
-  const scheduleType = document.getElementById('schedule-type').value;
-  const scheduledFor = document.getElementById('schedule-datetime').value;
-
-  if (!title || !body) {
-    alert("Title and body are required");
-    return;
-  }
-
-  let payload = {
-    title,
-    body,
-    image: uploadedImageBase64 || null,
-    targetType: currentLinkType,
-    targetId: currentLinkType === 'business' ? selectedBusinessId : null,
-    targetUrl: currentLinkType === 'url' ? document.getElementById('external-url').value : null,
-    scheduledFor: scheduleType === 'later' ? scheduledFor : null,
-    status: scheduleType === 'now' ? 'pending' : 'pending'
-  };
-
-  try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${API_BASE}/admin/scheduled-notifications`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert(scheduleType === 'now' 
-        ? "Notification queued for immediate delivery!" 
-        : "Notification scheduled successfully!");
-      
-      // Clear form
-      document.getElementById('title').value = '';
-      document.getElementById('body').value = '';
-      uploadedImageBase64 = null;
-      document.getElementById('image-preview-container').classList.add('hidden');
-      selectedBusinessId = null;
-      document.getElementById('business-results').innerHTML = '';
-    } else {
-      alert("Error: " + (data.message || "Failed to create notification"));
-    }
-  } catch (err) {
-    console.error(err);
-    alert("Failed to send notification. Check console.");
-  }
-}
-
-function saveDraft() {
-  alert("Draft saving coming in next update.");
-}
-
-// ==================== INIT ====================
-function init() {
-  setLinkType('business');
-  document.getElementById('schedule-type').value = 'now';
-}
-
-init();
+// ... (keep the rest of your existing JavaScript code below this)
 </script>
 </body>
 </html>
