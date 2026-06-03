@@ -3866,49 +3866,50 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
-// GET /api/shoutout-thumb/:shoutoutId — BULLETPROOF VERSION FOR ANDROID
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   try {
+    console.log(`[Thumb] Request received for shoutout: ${req.params.shoutoutId}`);
+
     const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
     if (!shoutout?.images?.length) {
-      console.log('[Thumb] No image found for shoutout', req.params.shoutoutId);
+      console.log(`[Thumb] No images found for ${req.params.shoutoutId}`);
       return res.status(404).send('No image');
     }
 
     const raw = shoutout.images[0];
-    
-    // 1. More permissive format check to cleanly split the header from the content
-    const base64Marker = ';base64,';
-    const markerIndex = raw.indexOf(base64Marker);
-    
+    console.log(`[Thumb] Raw image length: ${raw.length} chars`);
+
+    const markerIndex = raw.indexOf(';base64,');
     if (markerIndex === -1) {
-      console.error('[Thumb] Bad shoutout image format. No base64 marker.');
-      return res.status(400).send('Invalid image format');
+      console.error('[Thumb] No ;base64, marker found');
+      return res.status(400).send('Invalid format');
     }
 
-    // Extract base64 data and strip out web-safe formatting or accidental whitespaces
-    let base64Data = raw.substring(markerIndex + base64Marker.length);
-    base64Data = base64Data.replace(/[^A-Za-z0-9+/]/g, ''); // Ensure strict base64 character set
+    let base64Data = raw.substring(markerIndex + 8);
+    base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
 
     const buffer = Buffer.from(base64Data, 'base64');
+    console.log(`[Thumb] Decoded buffer size: ${buffer.length} bytes`);
+
     if (buffer.length === 0) {
-      return res.status(400).send('Corrupt image data payload');
+      return res.status(400).send('Corrupt image');
     }
 
-    // 2. Strict, reliable header declarations for Android background down-loaders
     res.set({
-      'Content-Type': 'image/jpeg', // Force fallback to standard format layout
-      'Content-Disposition': 'inline; filename="notification.jpg"', // Tells Android this is a file asset
+      'Content-Type': 'image/jpeg',
+      'Content-Disposition': 'inline; filename="alert.jpg"',
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
     });
-    
+
+    console.log(`[Thumb] ✅ Serving image for ${req.params.shoutoutId}`);
     return res.send(buffer);
+
   } catch (err) {
-    console.error('Shoutout thumb error:', err);
-    res.status(500).send('Error serving image');
+    console.error('[Thumb] CRITICAL ERROR:', err);
+    res.status(500).send('Server error');
   }
 });
 
