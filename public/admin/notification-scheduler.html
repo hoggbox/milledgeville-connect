@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification Scheduler • Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+</head>
+<body class="bg-zinc-950 text-white">
+
+<div class="max-w-6xl mx-auto p-8">
+  <h1 class="text-3xl font-bold mb-2">Notification Scheduler</h1>
+  <p class="text-zinc-400 mb-8">Create and schedule push notifications for businesses</p>
+
+  <!-- Compose Form -->
+  <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      
+      <!-- Left Column -->
+      <div>
+        <h3 class="font-semibold mb-4 flex items-center gap-2 text-lg">
+          <i class="ti ti-edit"></i> Create Notification
+        </h3>
+
+        <!-- Title -->
+        <div class="mb-5">
+          <label class="block text-sm text-zinc-400 mb-1.5">Notification Title</label>
+          <input id="title" type="text" maxlength="65" 
+                 class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500"
+                 placeholder="e.g. Grand Opening at Rose Garden Café">
+        </div>
+
+        <!-- Body -->
+        <div class="mb-5">
+          <label class="block text-sm text-zinc-400 mb-1.5">Body Text</label>
+          <textarea id="body" rows="4" maxlength="200"
+                    class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 resize-y"
+                    placeholder="Share details, a special offer, or an announcement…"></textarea>
+        </div>
+
+        <!-- Image Upload -->
+        <div class="mb-6">
+          <label class="block text-sm text-zinc-400 mb-1.5">Photo (optional)</label>
+          <div onclick="document.getElementById('image-input').click()" 
+               class="border border-dashed border-zinc-700 hover:border-zinc-500 rounded-2xl p-8 text-center cursor-pointer transition">
+            <i class="ti ti-photo text-3xl text-zinc-500 mb-2"></i>
+            <p class="text-sm">Click to upload image</p>
+            <p class="text-xs text-zinc-500 mt-1">Max 4MB • JPEG, PNG, WebP</p>
+          </div>
+          <input type="file" id="image-input" accept="image/*" class="hidden" onchange="handleImageSelect(this)">
+          
+          <div id="image-preview-container" class="hidden mt-3">
+            <img id="image-preview" class="max-h-48 rounded-2xl border border-zinc-700">
+            <button onclick="removeImage()" class="mt-2 text-xs text-red-400 hover:text-red-500 flex items-center gap-1">
+              <i class="ti ti-trash"></i> Remove photo
+            </button>
+          </div>
+        </div>
+
+        <!-- Deep Link -->
+        <div class="mb-6">
+          <label class="block text-sm text-zinc-400 mb-2">Deep Link Destination</label>
+          <div class="flex gap-2 mb-3">
+            <button onclick="setLinkType('business')" id="btn-business"
+                    class="flex-1 py-2 text-sm rounded-2xl border border-emerald-600 bg-emerald-600">Business Card</button>
+            <button onclick="setLinkType('page')" id="btn-page"
+                    class="flex-1 py-2 text-sm rounded-2xl border border-zinc-700 hover:bg-zinc-800">App Page</button>
+            <button onclick="setLinkType('url')" id="btn-url"
+                    class="flex-1 py-2 text-sm rounded-2xl border border-zinc-700 hover:bg-zinc-800">External URL</button>
+          </div>
+
+          <!-- Business Search -->
+          <div id="business-section">
+            <input type="text" id="business-search" placeholder="Search businesses..." 
+                   onkeyup="searchBusinesses(this.value)"
+                   class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm mb-2">
+            <div id="business-results" class="max-h-44 overflow-auto border border-zinc-800 rounded-2xl p-1"></div>
+          </div>
+
+          <!-- Page Selection -->
+          <div id="page-section" class="hidden">
+            <select id="page-select" class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
+              <option value="home">Home</option>
+              <option value="events">Events</option>
+              <option value="deals">Deals</option>
+              <option value="marketplace">Marketplace</option>
+              <option value="directory">Directory</option>
+              <option value="shoutouts">Shoutouts / Traffic Alerts</option>
+            </select>
+          </div>
+
+          <!-- External URL -->
+          <div id="url-section" class="hidden">
+            <input type="text" id="external-url" placeholder="https://..." 
+                   class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
+          </div>
+        </div>
+
+        <!-- Schedule -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="block text-sm text-zinc-400 mb-1.5">When to Send</label>
+            <select id="schedule-type" onchange="toggleDateField()" 
+                    class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
+              <option value="now">Send Immediately</option>
+              <option value="later">Schedule for Later</option>
+            </select>
+          </div>
+          <div id="date-field" class="hidden">
+            <label class="block text-sm text-zinc-400 mb-1.5">Date & Time</label>
+            <input type="datetime-local" id="schedule-datetime" 
+                   class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
+          </div>
+        </div>
+
+        <div class="flex gap-3">
+          <button onclick="saveDraft()" 
+                  class="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl font-semibold">Save Draft</button>
+          <button onclick="sendNotification()" 
+                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-semibold">Send / Schedule</button>
+        </div>
+      </div>
+
+      <!-- Live Preview -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+        <h3 class="font-semibold mb-4">Live Preview</h3>
+        <div class="bg-zinc-950 border border-zinc-700 rounded-3xl p-5">
+          <div class="flex gap-3">
+            <div class="w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <i class="ti ti-building-store text-white"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p id="preview-title" class="font-semibold text-sm">Notification Title</p>
+              <p id="preview-body" class="text-sm text-zinc-300 mt-1 leading-snug">Body text will appear here...</p>
+              <p id="preview-link" class="text-xs text-emerald-400 mt-2"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== CONFIG ====================
+const API_BASE = '/api';
+let selectedBusinessId = null;
+let uploadedImageBase64 = null;
+let currentLinkType = 'business';
+
+// ==================== LINK TYPE HANDLING ====================
+function setLinkType(type) {
+  currentLinkType = type;
+  
+  // Reset buttons
+  document.querySelectorAll('[id^="btn-"]').forEach(btn => btn.classList.remove('border-emerald-600', 'bg-emerald-600'));
+  document.getElementById('btn-' + type).classList.add('border-emerald-600', 'bg-emerald-600');
+
+  // Show/hide sections
+  document.getElementById('business-section').classList.toggle('hidden', type !== 'business');
+  document.getElementById('page-section').classList.toggle('hidden', type !== 'page');
+  document.getElementById('url-section').classList.toggle('hidden', type !== 'url');
+}
+
+function toggleDateField() {
+  const type = document.getElementById('schedule-type').value;
+  document.getElementById('date-field').classList.toggle('hidden', type === 'now');
+}
+
+// ==================== IMAGE HANDLING ====================
+function handleImageSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 4 * 1024 * 1024) {
+    alert("Image must be under 4MB");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    uploadedImageBase64 = e.target.result;
+    document.getElementById('image-preview').src = uploadedImageBase64;
+    document.getElementById('image-preview-container').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  uploadedImageBase64 = null;
+  document.getElementById('image-preview-container').classList.add('hidden');
+  document.getElementById('image-input').value = '';
+}
+
+// ==================== BUSINESS SEARCH ====================
+async function searchBusinesses(query) {
+  if (!query || query.length < 2) {
+    document.getElementById('business-results').innerHTML = '';
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/directory?search=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    
+    const container = document.getElementById('business-results');
+    container.innerHTML = '';
+
+    if (!data.businesses || data.businesses.length === 0) {
+      container.innerHTML = `<p class="p-3 text-sm text-zinc-400">No businesses found</p>`;
+      return;
+    }
+
+    data.businesses.forEach(biz => {
+      const div = document.createElement('div');
+      div.className = `p-3 hover:bg-zinc-800 rounded-xl cursor-pointer flex items-center gap-3`;
+      div.innerHTML = `
+        <div>
+          <p class="font-medium">${biz.name}</p>
+          <p class="text-xs text-zinc-400">${biz.category?.name || ''}</p>
+        </div>
+      `;
+      div.onclick = () => selectBusiness(biz);
+      container.appendChild(div);
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function selectBusiness(biz) {
+  selectedBusinessId = biz._id;
+  document.getElementById('business-results').innerHTML = `
+    <div class="p-3 bg-emerald-900/30 border border-emerald-600 rounded-xl">
+      <p class="font-medium">${biz.name}</p>
+      <p class="text-xs text-emerald-400">Selected</p>
+    </div>
+  `;
+}
+
+// ==================== SEND NOTIFICATION ====================
+async function sendNotification() {
+  const title = document.getElementById('title').value.trim();
+  const body = document.getElementById('body').value.trim();
+  const scheduleType = document.getElementById('schedule-type').value;
+  const scheduledFor = document.getElementById('schedule-datetime').value;
+
+  if (!title || !body) {
+    alert("Title and body are required");
+    return;
+  }
+
+  let payload = {
+    title,
+    body,
+    image: uploadedImageBase64 || null,
+    targetType: currentLinkType,
+    targetId: currentLinkType === 'business' ? selectedBusinessId : null,
+    targetUrl: currentLinkType === 'url' ? document.getElementById('external-url').value : null,
+    scheduledFor: scheduleType === 'later' ? scheduledFor : null,
+    status: scheduleType === 'now' ? 'pending' : 'pending'
+  };
+
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/admin/scheduled-notifications`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(scheduleType === 'now' 
+        ? "Notification queued for immediate delivery!" 
+        : "Notification scheduled successfully!");
+      
+      // Clear form
+      document.getElementById('title').value = '';
+      document.getElementById('body').value = '';
+      uploadedImageBase64 = null;
+      document.getElementById('image-preview-container').classList.add('hidden');
+      selectedBusinessId = null;
+      document.getElementById('business-results').innerHTML = '';
+    } else {
+      alert("Error: " + (data.message || "Failed to create notification"));
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Failed to send notification. Check console.");
+  }
+}
+
+function saveDraft() {
+  alert("Draft saving coming in next update.");
+}
+
+// ==================== INIT ====================
+function init() {
+  setLinkType('business');
+  document.getElementById('schedule-type').value = 'now';
+}
+
+init();
+</script>
+</body>
+</html>

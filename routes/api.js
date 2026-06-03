@@ -570,6 +570,52 @@ router.get('/admin/flagged', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// ─── SCHEDULED NOTIFICATIONS (for Admin Scheduler Page) ──────────────────────
+const ScheduledNotification = require('../models/ScheduledNotification');
+
+// POST /api/admin/scheduled-notifications
+// Creates a new scheduled or immediate notification
+router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const {
+      title,
+      body,
+      image,
+      targetType,
+      targetId,
+      targetUrl,
+      scheduledFor,
+      status
+    } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({ message: 'Title and body are required' });
+    }
+
+    const notification = await ScheduledNotification.create({
+      title: title.trim(),
+      body: body.trim(),
+      image: image || null,
+      targetType: targetType || 'none',
+      targetId: targetId || null,
+      targetUrl: targetUrl || null,
+      scheduledFor: scheduledFor ? new Date(scheduledFor) : new Date(), // default to now
+      status: status || 'pending',
+      createdBy: req.userId
+    });
+
+    res.json({
+      success: true,
+      message: 'Notification created successfully',
+      notification
+    });
+
+  } catch (err) {
+    console.error('Create scheduled notification error:', err);
+    res.status(500).json({ message: 'Failed to create notification' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/flagged/:reportId/restore
 // • Clears autoHidden + flaggedBy on the content doc
@@ -679,6 +725,18 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
       .populate('reportedShoutout',  'text author authorId createdAt');
 
     res.json(reports);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/admin/scheduled-notifications
+router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const notifications = await ScheduledNotification.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
+    res.json(notifications);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
