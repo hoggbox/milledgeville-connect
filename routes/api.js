@@ -573,20 +573,10 @@ router.get('/admin/flagged', authenticate, requireAdmin, async (req, res) => {
 // ─── SCHEDULED NOTIFICATIONS (for Admin Scheduler Page) ──────────────────────
 const ScheduledNotification = require('../models/ScheduledNotification');
 
-// POST /api/admin/scheduled-notifications
-// Creates a new scheduled or immediate notification
+// ─── ADMIN: CREATE SCHEDULED NOTIFICATION ─────────────────────────────────────
 router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
   try {
-    const {
-      title,
-      body,
-      image,
-      targetType,
-      targetId,
-      targetUrl,
-      scheduledFor,
-      status
-    } = req.body;
+    const { title, body, image, targetType, targetId, scheduledFor } = req.body;
 
     if (!title || !body) {
       return res.status(400).json({ message: 'Title and body are required' });
@@ -596,18 +586,24 @@ router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async 
       title: title.trim(),
       body: body.trim(),
       image: image || null,
-      targetType: targetType || 'none',
+      targetType: targetType || 'home',
       targetId: targetId || null,
-      targetUrl: targetUrl || null,
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : new Date(), // default to now
-      status: status || 'pending',
+      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      status: scheduledFor ? 'pending' : 'sent',   // immediate = sent, future = pending
       createdBy: req.userId
     });
 
-    res.json({
-      success: true,
-      message: 'Notification created successfully',
-      notification
+    // If it's meant to be sent immediately, send it now
+    if (!scheduledFor) {
+      await sendScheduledNotification(notification);
+    }
+
+    res.json({ 
+      success: true, 
+      message: scheduledFor 
+        ? 'Notification scheduled successfully' 
+        : 'Notification sent successfully',
+      notification 
     });
 
   } catch (err) {
@@ -705,6 +701,42 @@ router.delete('/admin/flagged/:reportId', authenticate, requireAdmin, async (req
     res.status(500).json({ message: err.message });
   }
 });
+
+// ─── HELPER: Send a scheduled notification ────────────────────────────────────
+async function sendScheduledNotification(notification) {
+  try {
+    let data = { page: 'home' };
+
+    if (notification.targetType === 'business' && notification.targetId) {
+      data = { page: 'directory', id: notification.targetId };
+    } else if (notification.targetType === 'app' && notification.targetId) {
+      data = { page: notification.targetId };
+    } else if (notification.targetType === 'external' && notification.targetId) {
+      data = { page: 'external', url: notification.targetId };
+    }
+
+    await broadcastPush(
+      notification.title,
+      notification.body,
+      data,
+      { 
+        imageUrl: notification.image || null,
+        type: 'custom'
+      }
+    );
+
+    // Mark as sent
+    notification.status = 'sent';
+    notification.sentAt = new Date();
+    await notification.save();
+
+    console.log(`✅ Sent scheduled notification: ${notification.title}`);
+  } catch (err) {
+    console.error('Failed to send scheduled notification:', err);
+    notification.status = 'failed';
+    await notification.save();
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4.  ADMIN — GET ALL PENDING REPORTS
@@ -3816,3 +3848,11 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
+
+// ─── Export helper functions for server.js background job ───────────────────
+module.exports.broadcastPush = broadcastPush;
+
+// If you also added the sendScheduledNotification helper earlier, export it too:
+if (typeof sendScheduledNotification === 'function') {
+  module.exports.sendScheduledNotification = sendScheduledNotification;
+}
