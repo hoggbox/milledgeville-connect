@@ -1008,6 +1008,8 @@ async function saveNotif(){
     targetType = currentLinkType;
   }
 
+const repeatValue = document.getElementById('fRepeat').value;
+
 const payload = {
   title,
   body,
@@ -1016,11 +1018,11 @@ const payload = {
   targetId,
   targetUrl,
   scheduledFor,
-  business: bizId,                    // ← Important fix
-  repeat: document.getElementById('fRepeat').value,
-  days: repeat === 'custom' 
+  business: bizId,
+  repeat: repeatValue,
+  days: repeatValue === 'custom' 
     ? [...document.querySelectorAll('.repeat-day.sel')].map(d => d.dataset.d) 
-    : (repeat === 'weekly' ? ['Mon'] : []),
+    : (repeatValue === 'weekly' ? ['Mon'] : []),
   endDate: document.getElementById('fEndDate')?.value || null
 };
 
