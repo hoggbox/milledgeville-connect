@@ -496,33 +496,52 @@
       </div>
 
       <div class="form-group full">
-        <label class="form-label">Schedule — date &amp; time</label>
-        <div class="schedule-grid">
-          <input type="date" class="form-input" id="fDate">
-          <input type="time" class="form-input" id="fTime" value="09:00">
-          <select class="form-select" id="fRepeat" onchange="toggleRepeat()">
-            <option value="once">Send once</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="custom">Custom days</option>
-          </select>
-        </div>
-        <div id="customDaysWrap" style="display:none;margin-top:8px">
-          <div class="repeat-row" id="dayPills">
-            <span class="repeat-day sel" onclick="toggleDay(this)" data-d="Mon">Mon</span>
-            <span class="repeat-day" onclick="toggleDay(this)" data-d="Tue">Tue</span>
-            <span class="repeat-day" onclick="toggleDay(this)" data-d="Wed">Wed</span>
-            <span class="repeat-day" onclick="toggleDay(this)" data-d="Thu">Thu</span>
-            <span class="repeat-day" onclick="toggleDay(this)" data-d="Fri">Fri</span>
-            <span class="repeat-day" onclick="toggleDay(this)" data-d="Sat">Sat</span>
-            <span class="repeat-day" onclick="toggleDay(this)" data-d="Sun">Sun</span>
+        <label class="form-label">Recurring Schedule</label>
+        
+        <div style="display:flex; gap:12px; align-items:flex-end; margin-bottom:12px;">
+          <div style="flex:1;">
+            <div class="form-label" style="margin-bottom:4px;">Time</div>
+            <input type="time" class="form-input" id="fRecurTime" value="09:00">
+          </div>
+
+          <div style="flex:1;">
+            <div class="form-label" style="margin-bottom:4px;">Type</div>
+            <select class="form-select" id="fRecurType" onchange="toggleRecurType()">
+              <option value="once">Send once (no repeat)</option>
+              <option value="recurring">Recurring (choose days below)</option>
+            </select>
           </div>
         </div>
-      </div>
 
-      <div id="endDateWrap" style="display:none" class="form-group full">
-        <label class="form-label">End date (for repeating)</label>
-        <input type="date" class="form-input" id="fEndDate">
+        <div id="dayCheckboxes" style="display:none; margin-top:8px;">
+          <div class="form-label" style="margin-bottom:6px;">Run on these days:</div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Mon" class="day-check"> Mon
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Tue" class="day-check"> Tue
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Wed" class="day-check"> Wed
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Thu" class="day-check"> Thu
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Fri" class="day-check"> Fri
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Sat" class="day-check"> Sat
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" value="Sun" class="day-check"> Sun
+            </label>
+          </div>
+          <div style="font-size:11px; color:#64748b; margin-top:6px;">
+            Example: Check Tue + Thu → runs every Tuesday &amp; Thursday at the selected time
+          </div>
+        </div>
       </div>
 
     </div>
@@ -697,6 +716,16 @@ function filterBusinessSearch() {
     
     resultsContainer.appendChild(div);
   });
+}
+
+function toggleRecurType() {
+  const type = document.getElementById('fRecurType').value;
+  const dayWrap = document.getElementById('dayCheckboxes');
+  dayWrap.style.display = (type === 'recurring') ? 'block' : 'none';
+}
+
+function getSelectedRecurDays() {
+  return [...document.querySelectorAll('.day-check:checked')].map(cb => cb.value);
 }
 
 function selectBusiness(business) {
@@ -968,23 +997,39 @@ function onBizChange(){}
 
 async function saveNotif(){
   const bizId = document.getElementById('fBusiness').value;
-  const biz = BUSINESSES.find(b => b.id === bizId);
   const title = document.getElementById('fTitle').value.trim();
   const body = document.getElementById('fBody').value.trim();
   const status = document.getElementById('fStatus').value;
-  const dateVal = document.getElementById('fDate').value;
-  const timeVal = document.getElementById('fTime').value;
 
   if (!bizId || !title || !body) {
     alert('Please fill in business, title, and message.');
     return;
   }
 
+  // === Recurring Logic ===
+  const recurType = document.getElementById('fRecurType').value;
+  const recurTime = document.getElementById('fRecurTime').value;
+  const selectedDays = getSelectedRecurDays();
+
   let scheduledFor = null;
-  if (dateVal && timeVal) {
-    scheduledFor = new Date(dateVal + 'T' + timeVal).toISOString();
+  let repeat = 'once';
+  let days = [];
+
+  if (recurType === 'recurring' && selectedDays.length > 0 && recurTime) {
+    repeat = 'custom';
+    days = selectedDays;
+
+    const [hour, minute] = recurTime.split(':');
+    const nextDate = new Date();
+    nextDate.setHours(parseInt(hour), parseInt(minute), 0, 0);
+
+    if (nextDate < new Date()) {
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+    scheduledFor = nextDate.toISOString();
   }
 
+  // Link type
   let targetType = 'home';
   let targetId = null;
   let targetUrl = null;
@@ -1008,23 +1053,19 @@ async function saveNotif(){
     targetType = currentLinkType;
   }
 
-const repeatValue = document.getElementById('fRepeat').value;
-
-const payload = {
-  title,
-  body,
-  image: imgBase64 || null,
-  targetType,
-  targetId,
-  targetUrl,
-  scheduledFor,
-  business: bizId,
-  repeat: repeatValue,
-  days: repeatValue === 'custom' 
-    ? [...document.querySelectorAll('.repeat-day.sel')].map(d => d.dataset.d) 
-    : (repeatValue === 'weekly' ? ['Mon'] : []),
-  endDate: document.getElementById('fEndDate')?.value || null
-};
+  const payload = {
+    title,
+    body,
+    image: imgBase64 || null,
+    targetType,
+    targetId,
+    targetUrl,
+    scheduledFor,
+    business: bizId,
+    repeat,
+    days,
+    endDate: null
+  };
 
   const btn = document.querySelector('#composeModal .btn-primary');
   if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
@@ -1054,7 +1095,10 @@ const payload = {
     console.error(e);
     showToast(e.message || 'Failed to save', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>'; }
+    if (btn) { 
+      btn.disabled = false; 
+      btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>'; 
+    }
   }
 }
 
