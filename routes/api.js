@@ -3868,31 +3868,37 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
 });
 
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
-  try {
-    console.log(`[Thumb] Request received for shoutout: ${req.params.shoutoutId}`);
+  const id = req.params.shoutoutId;
+  console.log(`[Thumb] 🔥 REQUEST RECEIVED for ID: ${id}`);
 
-    const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
-    if (!shoutout?.images?.length) {
-      console.log(`[Thumb] No images found for ${req.params.shoutoutId}`);
+  try {
+    const shoutout = await Shoutout.findById(id).select('images');
+    if (!shoutout) {
+      console.log(`[Thumb] ❌ Shoutout not found: ${id}`);
+      return res.status(404).send('Shoutout not found');
+    }
+    if (!shoutout.images || shoutout.images.length === 0) {
+      console.log(`[Thumb] ❌ No images array or empty for ${id}`);
       return res.status(404).send('No image');
     }
 
     const raw = shoutout.images[0];
-    console.log(`[Thumb] Raw image length: ${raw.length} chars`);
+    console.log(`[Thumb] Raw image string length: ${raw.length}`);
 
     const markerIndex = raw.indexOf(';base64,');
     if (markerIndex === -1) {
-      console.error('[Thumb] No ;base64, marker found');
-      return res.status(400).send('Invalid format');
+      console.error(`[Thumb] ❌ No ;base64, marker found`);
+      return res.status(400).send('Invalid image format');
     }
 
     let base64Data = raw.substring(markerIndex + 8);
     base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
 
     const buffer = Buffer.from(base64Data, 'base64');
-    console.log(`[Thumb] Decoded buffer size: ${buffer.length} bytes`);
+    console.log(`[Thumb] ✅ Decoded buffer size: ${buffer.length} bytes`);
 
-    if (buffer.length === 0) {
+    if (buffer.length < 100) {
+      console.error(`[Thumb] ❌ Buffer too small, probably corrupt`);
       return res.status(400).send('Corrupt image');
     }
 
@@ -3900,16 +3906,15 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
       'Content-Type': 'image/jpeg',
       'Content-Disposition': 'inline; filename="alert.jpg"',
       'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
     });
 
-    console.log(`[Thumb] ✅ Serving image for ${req.params.shoutoutId}`);
+    console.log(`[Thumb] ✅ SUCCESS - Serving image for ${id}`);
     return res.send(buffer);
 
   } catch (err) {
-    console.error('[Thumb] CRITICAL ERROR:', err);
+    console.error(`[Thumb] 💥 CRITICAL ERROR for ${id}:`, err);
     res.status(500).send('Server error');
   }
 });
