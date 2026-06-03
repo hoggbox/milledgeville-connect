@@ -407,24 +407,35 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-    // ←←← THIS IS THE IMPORTANT PART ←←←
-    // ✅ FIX: if the shoutout has a photo, pass a real https:// thumb URL
-    // so the notification shows the image (data: URLs are blocked in push notifications)
+    // Respond to the client immediately so the UI isn't blocked waiting for push delivery.
+    // We fire the notification AFTER res.json() but we still await it for error logging.
+    res.json(shoutout);
+
+    // ── Send push notification (after responding so client isn't blocked) ──────
+    // IMPORTANT: broadcastPush is called AFTER res.json() AND after a short
+    // delay so MongoDB has fully written the shoutout document before FCM/VAPID
+    // servers attempt to fetch the thumb URL.  Without this delay the thumb
+    // endpoint returns 404 because the document isn't yet readable by a fresh
+    // DB connection, causing FCM to silently drop the notification image.
+    const shoutoutId   = shoutout._id.toString();
     const shoutoutThumb = (shoutout.images && shoutout.images.length > 0)
-      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
+      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutoutId}`
       : null;
 
-    broadcastPush(
-      `🚗 New Traffic Alert from ${user.name}`,
-      text.length > 80 ? text.substring(0, 77) + '...' : text,
-      { 
-        page: 'shoutouts', 
-        id: shoutout._id.toString() 
-      },
-      { type: 'shoutout', imageUrl: shoutoutThumb }
-    );
-
-    res.json(shoutout);
+    // 800 ms is enough for Mongo to flush and for a replica-set secondary read
+    // to catch up; adjust upward (e.g. 1500) if you still see missing images.
+    setTimeout(async () => {
+      try {
+        await broadcastPush(
+          `🚗 New Traffic Alert from ${user.name}`,
+          text.length > 80 ? text.substring(0, 77) + '...' : text,
+          { page: 'shoutouts', id: shoutoutId },
+          { type: 'shoutout', imageUrl: shoutoutThumb }
+        );
+      } catch (pushErr) {
+        console.error('[Push] Shoutout broadcast failed:', pushErr);
+      }
+    }, 800);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
