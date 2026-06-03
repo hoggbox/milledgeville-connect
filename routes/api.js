@@ -407,35 +407,24 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     user.recentPostTimes = [...recentPosts, new Date(now)].slice(-10);
     await user.save();
 
-    // Respond to the client immediately so the UI isn't blocked waiting for push delivery.
-    // We fire the notification AFTER res.json() but we still await it for error logging.
-    res.json(shoutout);
-
-    // ── Send push notification (after responding so client isn't blocked) ──────
-    // IMPORTANT: broadcastPush is called AFTER res.json() AND after a short
-    // delay so MongoDB has fully written the shoutout document before FCM/VAPID
-    // servers attempt to fetch the thumb URL.  Without this delay the thumb
-    // endpoint returns 404 because the document isn't yet readable by a fresh
-    // DB connection, causing FCM to silently drop the notification image.
-    // 800 ms is enough for Mongo to flush and for a replica-set secondary read
-    // to catch up; adjust upward (e.g. 1500) if you still see missing images.
-    const shoutoutId   = shoutout._id.toString();
+    // ←←← THIS IS THE IMPORTANT PART ←←←
+    // ✅ FIX: if the shoutout has a photo, pass a real https:// thumb URL
+    // so the notification shows the image (data: URLs are blocked in push notifications)
     const shoutoutThumb = (shoutout.images && shoutout.images.length > 0)
-      ? `/api/shoutout-thumb/${shoutoutId}`   // relative is fine now
+      ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
       : null;
 
-    setTimeout(async () => {
-      try {
-        await broadcastPush(
-          `🚗 New Traffic Alert from ${user.name}`,
-          text.length > 80 ? text.substring(0, 77) + '...' : text,
-          { page: 'shoutouts', id: shoutoutId },
-          { type: 'shoutout', imageUrl: shoutoutThumb }
-        );
-      } catch (pushErr) {
-        console.error('[Push] Shoutout broadcast failed:', pushErr);
-      }
-    }, 1200);   // 1200ms delay
+    broadcastPush(
+      `🚗 New Traffic Alert from ${user.name}`,
+      text.length > 80 ? text.substring(0, 77) + '...' : text,
+      { 
+        page: 'shoutouts', 
+        id: shoutout._id.toString() 
+      },
+      { type: 'shoutout', imageUrl: shoutoutThumb }
+    );
+
+    res.json(shoutout);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
@@ -581,53 +570,6 @@ router.get('/admin/flagged', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// ─── SCHEDULED NOTIFICATIONS (for Admin Scheduler Page) ──────────────────────
-const ScheduledNotification = require('../models/ScheduledNotification');
-
-// ─── ADMIN: CREATE SCHEDULED NOTIFICATION ─────────────────────────────────────
-router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { 
-      title, body, image, targetType, targetId, targetUrl, 
-      scheduledFor, business, repeat, days, endDate 
-    } = req.body;
-
-    if (!title || !body) {
-      return res.status(400).json({ message: 'Title and body are required' });
-    }
-
-    const notification = await ScheduledNotification.create({
-      title: title.trim(),
-      body: body.trim(),
-      image: image || null,
-      targetType: targetType || 'home',
-      targetId: targetId || null,
-      targetUrl: targetUrl || null,
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-      business: business || null,           // ← NEW
-      repeat: repeat || 'once',             // ← NEW
-      days: days || [],
-      endDate: endDate ? new Date(endDate) : null,
-      status: scheduledFor ? 'pending' : 'sent',
-      createdBy: req.userId
-    });
-
-    if (!scheduledFor) {
-      await sendScheduledNotification(notification);
-    }
-
-    res.json({ 
-      success: true, 
-      message: scheduledFor ? 'Notification scheduled successfully' : 'Notification sent successfully',
-      notification 
-    });
-
-  } catch (err) {
-    console.error('Create scheduled notification error:', err);
-    res.status(500).json({ message: 'Failed to create notification' });
-  }
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/flagged/:reportId/restore
 // • Clears autoHidden + flaggedBy on the content doc
@@ -718,47 +660,6 @@ router.delete('/admin/flagged/:reportId', authenticate, requireAdmin, async (req
   }
 });
 
-// ─── HELPER: Send a scheduled notification ────────────────────────────────────
-async function sendScheduledNotification(notification) {
-  try {
-    let data = { page: 'home' };
-
-    if (notification.targetType === 'business' && notification.targetId) {
-      data = { page: 'directory', id: notification.targetId };
-    } else if (notification.targetType === 'app' && notification.targetId) {
-      data = { page: notification.targetId };
-    } else if (notification.targetType === 'external' && notification.targetId) {
-      data = { page: 'external', url: notification.targetId };
-    }
-
-  // Use real HTTPS URL for the image (base64 is blocked in push)
-  const imageUrl = notification.image 
-    ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notification._id}`
-    : null;
-
-  await broadcastPush(
-    notification.title,
-    notification.body,
-    data,
-    { 
-      imageUrl,
-      type: 'custom'
-    }
-  );
-
-    // Mark as sent
-    notification.status = 'sent';
-    notification.sentAt = new Date();
-    await notification.save();
-
-    console.log(`✅ Sent scheduled notification: ${notification.title}`);
-  } catch (err) {
-    console.error('Failed to send scheduled notification:', err);
-    notification.status = 'failed';
-    await notification.save();
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 4.  ADMIN — GET ALL PENDING REPORTS
 //     GET /api/admin/reports
@@ -780,86 +681,6 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
     res.json(reports);
   } catch (err) {
     res.status(500).json({ message: err.message });
-  }
-});
-
-// GET /api/admin/scheduled-notifications
-router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const notifications = await ScheduledNotification.find()
-      .sort({ createdAt: -1 })
-      .limit(100);
-    res.json(notifications);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// PATCH /api/admin/scheduled-notifications/:id
-// Cancel a pending notification or save/update a draft
-router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const notification = await ScheduledNotification.findById(req.params.id);
-    if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
-    }
-
-    const { action, title, body, image, targetType, targetId, scheduledFor } = req.body;
-
-    if (action === 'cancel') {
-      if (notification.status !== 'pending') {
-        return res.status(400).json({ message: 'Only pending notifications can be cancelled' });
-      }
-      notification.status = 'cancelled';
-      await notification.save();
-      return res.json({ success: true, message: 'Notification cancelled', notification });
-    }
-
-    if (action === 'send-now') {
-      if (notification.status === 'sent') {
-        return res.status(400).json({ message: 'Notification has already been sent' });
-      }
-      await sendScheduledNotification(notification);
-      return res.json({ success: true, message: 'Notification sent immediately', notification });
-    }
-
-    if (action === 'update') {
-      if (notification.status !== 'pending' && notification.status !== 'draft') {
-        return res.status(400).json({ message: 'Only pending or draft notifications can be updated' });
-      }
-      if (title !== undefined) notification.title = title.trim();
-      if (body !== undefined) notification.body = body.trim();
-      if (image !== undefined) notification.image = image || null;
-      if (targetType !== undefined) notification.targetType = targetType;
-      if (targetId !== undefined) notification.targetId = targetId || null;
-      if (scheduledFor !== undefined) notification.scheduledFor = scheduledFor ? new Date(scheduledFor) : null;
-      await notification.save();
-      return res.json({ success: true, message: 'Notification updated', notification });
-    }
-
-    return res.status(400).json({ message: 'Invalid action. Use "cancel" or "update".' });
-  } catch (err) {
-    console.error('PATCH scheduled-notification error:', err);
-    res.status(500).json({ message: 'Failed to update notification' });
-  }
-});
-
-// DELETE /api/admin/scheduled-notifications/:id
-// Permanently delete a draft or cancelled notification
-router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const notification = await ScheduledNotification.findById(req.params.id);
-    if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
-    }
-    if (notification.status === 'sent') {
-      return res.status(400).json({ message: 'Sent notifications cannot be deleted' });
-    }
-    await notification.deleteOne();
-    res.json({ success: true, message: 'Notification deleted' });
-  } catch (err) {
-    console.error('DELETE scheduled-notification error:', err);
-    res.status(500).json({ message: 'Failed to delete notification' });
   }
 });
 
@@ -1060,42 +881,44 @@ function requireAdminOrModerator(req, res, next) {
   }).catch(() => res.status(500).json({ message: 'Server error' }));
 }
 
+// Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const sub = await PushSubscription.findOne({ user: userId });
   if (!sub) {
-    console.log(`[Push] No subscription for ${userId}`);
+    console.log(`[Push] No subscription record for user ${userId}`);
     return false;
   }
 
-  const BASE_URL = 'https://www.milledgevilleconnect.com';
-  let notifImage = null;
+  const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
+  // Only use a real https:// URL as the notification image.
+  // data: URLs are blocked by browsers/FCM in push notifications.
+  const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
 
-  if (imageUrl) {
-    if (imageUrl.startsWith('http')) {
-      notifImage = imageUrl;
-    } else {
-      const cleanPath = imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl;
-      notifImage = BASE_URL + cleanPath;
-    }
-  }
-
-  console.log(`[Push] Sending to ${userId} | imageUrl passed: ${imageUrl || 'null'} | final notifImage: ${notifImage || 'null'}`);
-
-  // ─── NATIVE FCM (APK) ────────────────────────────────────────────────────
   if (sub.nativeToken) {
     try {
       const message = {
         token: sub.nativeToken,
-        notification: { title, body, ...(notifImage ? { image: notifImage } : {}) },
-        data: { page: data.page || '', id: data.id || '', url: data.url || '' },
+        notification: {
+          title,
+          body,
+          // ✅ FIX: Firebase Admin SDK uses "image", NOT "imageUrl"
+          ...(notifImage ? { image: notifImage } : {})
+        },
+        data: {
+          page: data.page || '',
+          id:   data.id   || '',
+          url:  data.url  || ''
+        },
         android: {
           priority: 'high',
           notification: {
-            sound: 'default',
+            sound:     'default',
             channelId: 'default',
+            // ✅ FIX: "image" not "imageUrl" here too
             ...(notifImage ? { image: notifImage } : {})
           }
         },
+        // iOS support
         ...(notifImage ? {
           apns: {
             payload: { aps: { 'mutable-content': 1 } },
@@ -1104,62 +927,40 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         } : {})
       };
       await admin.messaging().send(message);
-      console.log(`✅ Native FCM sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
+      console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
       return true;
     } catch (err) {
       console.error(`[Push] FCM failed for ${userId}:`, err.message);
+      if (err.code === 'messaging/registration-token-not-registered') {
+        sub.nativeToken = null;
+        await sub.save();
+      }
       return false;
     }
   }
 
-  // ─── WEB PUSH via FCM HTTP v1 (browser) ─────────────────────────────────
-  // Uses Firebase Admin instead of legacy web-push package so images work
-  if (sub.subscription?.endpoint) {
+  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
     try {
-      const endpoint = sub.subscription.endpoint;
-
-      // Only use FCM v1 path for FCM endpoints
-      if (endpoint.includes('fcm.googleapis.com')) {
-        // Extract FCM registration token from the endpoint URL
-        const fcmToken = endpoint.split('/').pop();
-
-        const message = {
-          token: fcmToken,
-          notification: { title, body },
-          webpush: {
-            notification: {
-              title,
-              body,
-              icon: 'https://www.milledgevilleconnect.com/icon-192.png',
-              badge: 'https://www.milledgevilleconnect.com/icon-192.png',
-              ...(notifImage ? { image: notifImage } : {}),
-              data: data
-            },
-            fcmOptions: {
-              link: 'https://www.milledgevilleconnect.com'
-            }
-          }
-        };
-
-        await admin.messaging().send(message);
-        console.log(`✅ Web FCM v1 sent to ${userId} with image: ${notifImage ? 'YES' : 'NO'}`);
-        return true;
-      }
-
-      // Fallback: non-FCM endpoints (Firefox etc) — use legacy web-push, no image support
-      const pushPayload = {
-        title,
-        body,
-        data,
-        icon: 'https://www.milledgevilleconnect.com/icon-192.png',
-        badge: 'https://www.milledgevilleconnect.com/icon-192.png'
-      };
-      if (notifImage) pushPayload.image = notifImage;
-      await webpush.sendNotification(sub.subscription, JSON.stringify(pushPayload));
-      console.log(`✅ Web push (legacy) sent to ${userId}`);
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({
+          title,
+          body,
+          data,
+          icon:  APP_ICON,
+          badge: APP_ICON,
+          // ✅ Only attach image when it's a real https:// URL
+          ...(notifImage ? { image: notifImage } : {})
+        })
+      );
+      console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
       return true;
     } catch (err) {
       console.error(`[Push] Web push failed for ${userId}:`, err.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        sub.subscription = null;
+        await sub.save();
+      }
       return false;
     }
   }
@@ -2038,6 +1839,89 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
   }
 });
 
+// ─── OWNER: CUSTOM NOTIFICATION ─────────────────────────────────────────────
+router.post('/owner/custom-notification', authenticate, async (req, res) => {
+  try {
+    // ✅ FIX: also read imageUrl from request body so biz dashboard images work
+    const { title, body, imageUrl } = req.body;
+    if (!title?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'Title and body required' });
+    }
+
+    // Must have a verified business
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can send notifications' });
+    }
+
+    // Fetch business name to stamp on the notification
+    const business = await Business.findById(user.verifiedBusiness).select('name');
+    const bizName  = business?.name || user.name;
+
+    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
+    const deducted = await deductNotificationCredit(req.userId);
+    if (!deducted) {
+      return res.status(403).json({
+        message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
+        outOfCredits: true
+      });
+    }
+
+    // Prepend business name to the body so recipients always know who sent it
+    const stampedBody = `${bizName} · ${body.trim()}`;
+
+    // ✅ FIX: resolve the notification image URL
+    // - If it's already an https:// URL (e.g. previously uploaded), use it directly
+    // - If it's a base64 data URL, persist it as a BusinessPost and use the thumb endpoint
+    // - Otherwise send with no image
+    let notifImageUrl = null;
+    if (imageUrl) {
+      if (imageUrl.startsWith('https://')) {
+        notifImageUrl = imageUrl;
+      } else if (/^data:image\/(jpeg|png|webp);base64,/.test(imageUrl)) {
+        if (imageUrl.length > 5_600_000) {
+          return res.status(400).json({ message: 'Image too large (max ~4MB)' });
+        }
+        // Store via BusinessPost so we can serve it at a real https:// URL
+        const tempPost = await BusinessPost.create({
+          business: user.verifiedBusiness,
+          owner:    user._id,
+          bizName,
+          caption:  `[notification image: ${title.trim()}]`,
+          image:    imageUrl
+        });
+        notifImageUrl = `https://www.milledgevilleconnect.com/api/business-post-thumb/${tempPost._id}`;
+      }
+    }
+
+    let deepLinkData;
+    if (notifImageUrl && notifImageUrl.includes('/business-post-thumb/')) {
+      const postIdMatch = notifImageUrl.match(/business-post-thumb\/([a-f0-9]{24})/i);
+      const postId = postIdMatch ? postIdMatch[1] : null;
+      deepLinkData = postId
+        ? { page: 'business-post', id: postId }
+        : { page: 'directory',     id: String(user.verifiedBusiness) };
+    } else {
+      deepLinkData = { page: 'directory', id: String(user.verifiedBusiness) };
+    }
+
+    await broadcastPush(
+      title.trim(),
+      stampedBody,
+      deepLinkData,
+      { type: 'custom', imageUrl: notifImageUrl }
+    );
+
+    // Return updated credit balance so the frontend can refresh the display
+    const updated = await User.findById(req.userId).select('notificationCredits');
+    res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
+  } catch (err) {
+    console.error('Custom notification error:', err);
+    res.status(500).json({ message: 'Failed to send notification' });
+  }
+});
+
 // ─── REGISTER ───────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
@@ -2701,15 +2585,17 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
       await claim.save();
       await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
 
+      // Grant 5 free starter credits as a one-time registration gift
       await User.findByIdAndUpdate(req.userId, {
         verifiedBusiness: business._id,
+        notificationCredits: 5
       });
 
       // Send a personal welcome push to the new owner
       sendPushToUser(
         req.userId,
-        '🎉 Business Verified!',
-        `Welcome to Milledgeville Connect, ${business.name}! Your business dashboard is ready — start posting deals, events, and updates to the community.`,
+        '🎉 Business Verified! You have 5 free credits',
+        `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
         { page: 'home' }
       );
 
@@ -2718,7 +2604,8 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
         autoApproved: true,
         score,
         signals,
-        message: "✅ Verified automatically! Your business dashboard is ready."
+        notificationCredits: 5,
+        message: "✅ Verified automatically! Your business dashboard is ready. We've gifted you 5 free notification credits to get started!"
       });
     }
 
@@ -2804,8 +2691,10 @@ router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
       isRestaurant: !!isRestaurant 
     });
 
+    // Grant 5 free starter credits as a one-time registration gift
     await User.findByIdAndUpdate(req.userId, {
       verifiedBusiness: business._id,
+      notificationCredits: 5
     });
 
     // Log to admin for audit
@@ -2814,15 +2703,16 @@ router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
     // Send a personal welcome push to the new owner
     sendPushToUser(
       req.userId,
-      '🎉 Business Verified!',
-      `Welcome to Milledgeville Connect, ${business.name}! Your business dashboard is ready — start posting deals, events, and updates to the community.`,
+      '🎉 Business Verified! You have 5 free credits',
+      `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
       { page: 'home' }
     );
 
     res.json({
       status: 'approved',
       pinVerified: true,
-      message: "✅ Business successfully verified and claimed! Your dashboard is ready."
+      notificationCredits: 5,
+      message: "✅ Business successfully verified and claimed! We've gifted you 5 free notification credits to get started!"
     });
   } catch (err) {
     console.error('PIN verify error:', err);
@@ -3093,7 +2983,7 @@ router.post('/owner/homes', authenticate, async (req, res) => {
     }
 
     const clean = sanitizeContent(req.body);
-    const { title, description, price, condition, address } = clean;
+    const { title, description, price, condition, address, sendNotify } = clean;
 
     if (!title?.trim()) return res.status(400).json({ message: 'Title is required' });
     if (!condition || !['rent','sale'].includes(condition)) {
@@ -3117,6 +3007,25 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       condition,                   // 'rent' | 'sale'
       address:     address || ''
     });
+
+    // Optional push notification — costs 2 credits
+if (sendNotify) {
+  const deducted = await deductNotificationCredit(req.userId, 2, false);
+  if (deducted) {
+    broadcastPush(
+      `🏠 New Home Listing`,
+      `${bizName} posted: ${title}`,
+      { 
+        page: 'marketplace', 
+        id: item._id.toString() 
+      },
+      { 
+        type: 'marketplace', 
+        subCategory: 'Homes'     // ← Important
+      }
+    );
+  }
+}
 
     res.json(item);
   } catch (err) {
@@ -3269,13 +3178,16 @@ if (decision === 'approved') {
   if (user) {
     user.verifiedBusiness = claim.business._id;
 
+    // Always grant 5 free starter credits as a one-time registration gift
+    user.notificationCredits = 5;
+
     await user.save();
 
     // Send a personal welcome push to the newly verified owner
     sendPushToUser(
       user._id.toString(),
-      '🎉 Business Verified!',
-      `Welcome to Milledgeville Connect, ${claim.business.name}! Your business dashboard is ready — start posting deals, events, and updates to the community.`,
+      '🎉 Business Verified! You have 5 free credits',
+      `Welcome to Milledgeville Connect, ${claim.business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
       { page: 'home' }
     );
   }
@@ -3637,6 +3549,109 @@ function sanitizeContent(fields = {}) {
   return out;
 }
 
+// ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
+router.get('/owner/subscription', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Normal users (no verified business) have zero access to credits
+    if (!user.verifiedBusiness) {
+      return res.json({
+        tier: 'free',
+        credits: 0,
+        expires: null
+      });
+    }
+
+    // Verified business owners start with 5 free credits if field was never set.
+    // Grant those 5 credits now and persist so we don't keep re-granting.
+    if (user.notificationCredits === undefined || user.notificationCredits === null) {
+      user.notificationCredits = 5;
+      await user.save();
+    }
+
+    res.json({
+      tier: user.subscriptionTier || 'free',
+      credits: user.notificationCredits,
+      expires: user.subscriptionExpiry
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ─── GOOGLE PLAY SUBSCRIPTION VALIDATION ────────────────────────────────────
+// Called by the Android app after a purchase/renewal to verify with Google
+// and activate / refresh the user's Pro tier + 12 monthly credits.
+router.post('/owner/validate-subscription', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Must be a verified business owner to have a subscription
+    if (!user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can subscribe' });
+    }
+
+    const { purchaseToken } = req.body;
+    if (!purchaseToken) {
+      return res.status(400).json({ message: 'purchaseToken required' });
+    }
+
+    const packageName  = 'com.ghogg.milledgevilleconnect';
+    const productId    = 'pro_monthly_29_99';
+
+    const response = await fetch(
+      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GOOGLE_PLAY_ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.expiryTimeMillis && parseInt(data.expiryTimeMillis) > Date.now()) {
+      // Subscription is active — upgrade user and grant 12 credits for this cycle
+      const newExpiry = new Date(parseInt(data.expiryTimeMillis));
+
+      // Only reset credits when the expiry has actually rolled forward
+      // (avoid double-granting if the app sends the token twice in the same cycle)
+      const creditReset = !user.subscriptionExpiry ||
+                          newExpiry.getTime() > new Date(user.subscriptionExpiry).getTime();
+
+      user.subscriptionTier   = 'pro';
+      user.subscriptionExpiry = newExpiry;
+      if (creditReset) user.notificationCredits = 12;
+      await user.save();
+
+      return res.json({
+        success: true,
+        tier: 'pro',
+        credits: user.notificationCredits,
+        expires: user.subscriptionExpiry
+      });
+    } else {
+      // Subscription expired or cancelled — downgrade to free, keep remaining credits
+      user.subscriptionTier = 'free';
+      await user.save();
+      return res.json({
+        success: true,
+        tier: 'free',
+        credits: user.notificationCredits
+      });
+    }
+
+  } catch (err) {
+    console.error('Subscription validation error:', err);
+    res.status(500).json({ message: 'Validation failed' });
+  }
+});
+
 // Test both native + web
 router.post('/test-push', authenticate, async (req, res) => {
   await broadcastPush(
@@ -3645,6 +3660,30 @@ router.post('/test-push', authenticate, async (req, res) => {
     { page: 'home', id: 'test123' }
   );
   res.json({ success: true });
+});
+
+// ─── BUY CREDIT PACK (one-time purchase) ─────────────────────────────────────
+router.post('/owner/buy-credits', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || !user.verifiedBusiness) {
+      return res.status(403).json({ message: 'Only verified business owners can buy credits' });
+    }
+
+    const { credits = 10 } = req.body;
+
+    user.notificationCredits = (user.notificationCredits || 0) + Number(credits);
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      credits: user.notificationCredits,
+      message: `${credits} credits added successfully`
+    });
+  } catch (err) {
+    console.error('Buy credits error:', err);
+    res.status(500).json({ message: 'Failed to add credits' });
+  }
 });
 
 // VAPID Public Key route is defined earlier in the PUSH NOTIFICATION ROUTES section
@@ -3788,6 +3827,62 @@ router.delete('/user/delete-account', authenticate, async (req, res) => {
   }
 });
 
+// ─── CREDIT DEDUCTION SYSTEM ───────────────────────────────────────────────
+// All notification sends cost 2 credits regardless of tier.
+// Pro users have their 12 monthly credits refreshed each billing cycle.
+// Normal users (no verifiedBusiness) should never reach this function,
+// but we guard against it anyway.
+async function deductNotificationCredit(userId) {
+  const user = await User.findById(userId);
+  if (!user) return false;
+
+  // Non-owners cannot use notification credits at all
+  if (!user.verifiedBusiness) return false;
+
+  const cost = 2;
+
+  if ((user.notificationCredits || 0) < cost) {
+    return false; // Out of credits — blocked for both free and pro owners
+  }
+
+  user.notificationCredits -= cost;
+  await user.save();
+  return true;
+}
+
+// ─── PRO TIER MONTHLY CREDIT RESET ──────────────────────────────────────────
+// Runs daily but only resets credits for users whose subscriptionExpiry has
+// rolled over into a new billing cycle (i.e. expiry advanced since last reset).
+async function resetProCredits() {
+  try {
+    const now = new Date();
+    // Only reset users whose billing cycle just renewed:
+    // their subscriptionExpiry is in the future AND creditsLastReset is before
+    // the start of the current billing period (i.e. before their last expiry rollover).
+    const result = await User.updateMany(
+      {
+        subscriptionTier: 'pro',
+        subscriptionExpiry: { $gt: now },
+        // creditsLastReset is either unset or older than one billing period ago
+        $or: [
+          { creditsLastReset: { $exists: false } },
+          { $expr: { $lt: ['$creditsLastReset', { $subtract: ['$subscriptionExpiry', 30 * 24 * 60 * 60 * 1000] }] } }
+        ]
+      },
+      {
+        $set: { notificationCredits: 12, creditsLastReset: now }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(`✅ Reset ${result.modifiedCount} Pro users to 12 credits (billing cycle rollover)`);
+    }
+  } catch (err) {
+    console.error('Monthly credit reset failed:', err);
+  }
+}
+
+
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
 // Bump CURRENT_VERSION here on each release. The client's checkForAppUpdate()
 // compares against this — no client-side code deploy needed to show the banner.
@@ -3796,6 +3891,10 @@ const CURRENT_VERSION = '1.2.5';
 router.get('/app/version', (req, res) => {
   res.json({ latest: CURRENT_VERSION });
 });
+
+// Check daily whether any billing cycles have rolled over
+setInterval(resetProCredits, 24 * 60 * 60 * 1000); // every 24 hours
+resetProCredits(); // run once on server start
 
 // ─── BUSINESS POSTS (Photo Updates) ──────────────────────────────────────────
 // Verified business owners can create a photo post with a caption.
@@ -3808,7 +3907,7 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
     if (!user)                  return res.status(404).json({ message: 'User not found' });
     if (!user.verifiedBusiness) return res.status(403).json({ message: 'Only verified business owners can post updates' });
 
-    const { caption, image } = req.body;
+    const { caption, image, sendNotify, notifTitle } = req.body;
 
     if (!image?.trim()) return res.status(400).json({ message: 'An image is required' });
 
@@ -3832,7 +3931,22 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       image,
     });
 
-    res.json(post.toObject());
+    // Optional push notification — costs 2 credits
+    if (sendNotify) {
+      const deducted = await deductNotificationCredit(req.userId);
+      if (deducted) {
+        const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
+        await broadcastPush(
+          pushTitle,
+          caption?.trim() || 'Posted a new photo update — tap to see it!',
+          { page: 'business-post', id: post._id.toString() },
+          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
+        );
+      }
+    }
+
+    const updated = await User.findById(req.userId).select('notificationCredits');
+    res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
   } catch (err) {
     console.error('Business post create error:', err);
     res.status(500).json({ message: err.message });
@@ -3866,76 +3980,32 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
   }
 });
 
-// GET /api/scheduled-notification-thumb/:id
-router.get('/scheduled-notification-thumb/:id', async (req, res) => {
+// GET /api/shoutout-thumb/:shoutoutId — serves a shoutout's first image as a real HTTP response
+// Required because data: URLs are blocked by browsers/FCM in push notification image fields
+router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   try {
-    const notif = await ScheduledNotification.findById(req.params.id).select('image');
-    if (!notif?.image) {
-      return res.status(404).send('No image');
-    }
+    const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
+    if (!shoutout?.images?.length) return res.status(404).send('Not found');
 
-    const raw = notif.image;
-
+    const raw = shoutout.images[0];
     const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) {
-      console.error('[Thumb] Bad scheduled notification image format');
-      return res.status(400).send('Invalid image format');
-    }
+    if (!match) return res.status(400).send('Invalid image format');
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
-    console.error('Scheduled notification thumb error:', err);
+    console.error('Shoutout thumb error:', err);
     res.status(500).send('Error');
   }
 });
-
-router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
-  const id = req.params.shoutoutId;
-  console.log(`[Thumb] 🔥 REQUEST for ${id}`);
-
-  try {
-    const shoutout = await Shoutout.findById(id).select('images');
-    if (!shoutout?.images?.length) {
-      console.log(`[Thumb] ❌ No image data for ${id}`);
-      return res.status(404).send('No image');
-    }
-
-    const raw = shoutout.images[0];
-    const markerIndex = raw.indexOf(';base64,');
-
-    if (markerIndex === -1) {
-      console.error(`[Thumb] ❌ Bad format`);
-      return res.status(400).send('Bad format');
-    }
-
-    let base64Data = raw.substring(markerIndex + 8).replace(/[^A-Za-z0-9+/=]/g, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    console.log(`[Thumb] ✅ Serving ${buffer.length} bytes`);
-
-    res.set({
-      'Content-Type': 'image/jpeg',
-      'Content-Disposition': 'inline; filename="alert.jpg"',
-      'Cache-Control': 'public, max-age=86400',
-      'Access-Control-Allow-Origin': '*',
-    });
-
-    return res.send(buffer);
-  } catch (err) {
-    console.error(`[Thumb] 💥 ERROR:`, err);
-    res.status(500).send('Error');
-  }
-});
-
 
 // GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
 // MUST come BEFORE the generic /:businessId route
@@ -4001,11 +4071,3 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
-
-// ─── Export helper functions for server.js background job ───────────────────
-module.exports.broadcastPush = broadcastPush;
-
-// If you also added the sendScheduledNotification helper earlier, export it too:
-if (typeof sendScheduledNotification === 'function') {
-  module.exports.sendScheduledNotification = sendScheduledNotification;
-}

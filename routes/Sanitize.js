@@ -83,20 +83,19 @@ function sanitizeBody(req, res, next) {
 }
 
 function securityHeaders(req, res, next) {
-  res.setHeader('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://www.gstatic.com",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:", 
-    // ✅ FIX: Added generic googleapis wildcard and android push API endpoints
-    "connect-src 'self' https://*.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseinstallations.googleapis.com https://identitytoolkit.googleapis.com https://google.com wss://*.firebaseio.com",
-    // ✅ FIX: Allow the service worker to process external blob pipelines and secure targets
-    "worker-src 'self' blob:",
-    "frame-ancestors 'none'"
-  ].join('; '));
+res.setHeader('Content-Security-Policy', [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://www.gstatic.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  // Allow connections to Firebase/FCM and browser push endpoints
+  "connect-src 'self' https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseinstallations.googleapis.com https://identitytoolkit.googleapis.com",
+  // Required for the service worker that handles web push
+  "worker-src 'self'",
+  "frame-ancestors 'none'"
+].join('; '));
   next();
 }
-
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 module.exports = {

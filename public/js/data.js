@@ -93,7 +93,7 @@ window.submitRating = async function (businessId, score) {
   }
 };
 
-// ─── HANDLE PUSH NOTIFICATION DEEP LINK ─────────────────────────────────────
+// ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
 window.handlePushNotificationClick = function(data) {
   if (!data?.page) {
     navigate('home');
@@ -104,83 +104,61 @@ window.handlePushNotificationClick = function(data) {
 
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
-    if (id) setTimeout(() => {
-      const el = document.getElementById(`shoutout-${id}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 600);
-    return;
-  }
-
-  if (page === 'marketplace' || page === 'market') {
+    if (id) {
+      setTimeout(() => {
+        const el = document.getElementById(`shoutout-${id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 800);
+    }
+  } 
+  else if (page === 'marketplace' || page === 'market') {
     navigate('marketplace');
-    if (id) setTimeout(() => showMarketplaceDetail(id), 600);
-    return;
-  }
-
-  if (page === 'lostfound' || page === 'lost') {
+    if (id) setTimeout(() => showMarketplaceDetail(id), 800);
+  } 
+  else if (page === 'lostfound' || page === 'lost') {
     navigate('lostfound');
-    if (id) setTimeout(() => showLostDetail(id), 600);
-    return;
-  }
-
-  if (page === 'events' || page === 'event') {
+    if (id) setTimeout(() => showLostDetail(id), 800);
+  } 
+  else if (page === 'events' || page === 'event') {
     navigate('events');
-    if (id) setTimeout(() => showEventDetail(id), 600);
-    return;
-  }
-
-  if (page === 'deals' || page === 'deal') {
+    if (id) setTimeout(() => showEventDetail(id), 800);
+  } 
+  else if (page === 'deals' || page === 'deal') {
     navigate('deals');
-    if (id) setTimeout(() => showDealDetail(id), 600);
-    return;
-  }
-
-  if (page === 'news') {
+    if (id) setTimeout(() => showDealDetail(id), 800);
+  } 
+  else if (page === 'news') {
     navigate('news');
-    if (id) setTimeout(() => openNewsArticle(id), 600);
-    return;
-  }
-
-  if (page === 'messages') {
+    if (id) setTimeout(() => openNewsArticle(id), 800);
+  } 
+  else if (page === 'messages') {
     navigate('messages');
-    if (id) setTimeout(() => openConversation(id), 600);
-    return;
+    if (id) setTimeout(() => openConversation(id), 800);
+  } 
+  else if (page === 'business-post') {
+    if (id) {
+      // Step 1: kick off the home page load in the background (don't await it)
+      // Step 2: open the modal immediately — it appends to document.body so
+      //         loadPage's modal-killer never touches it, and loadHomePage
+      //         renders into #content which is a separate DOM node.
+      const contentEl = document.getElementById('content');
+      if (contentEl) loadHomePage(contentEl); // fire and forget — don't .then()
+      // Small tick to let the home page shell paint before modal opens
+      setTimeout(() => window.showBusinessPostModal(id), 100);
+    } else {
+      navigate('home');
+    }
   }
-
-  // ─── BUSINESS POST (with image) ──────────────────────────────────────────
-  if (page === 'business-post' && id) {
-    // Navigate to 'home' first so the DOM has a stable base (matches the
-    // pattern used by marketplace, events, deals, etc.). Without this the
-    // APK WebView may have no rendered page to attach the modal to.
-    navigate('home');
-
-    // APK cold-start needs more time than desktop — use 900ms like the other
-    // deep-link modals, plus a retry loop in case scripts are still loading.
-    const MAX_ATTEMPTS = 5;
-    let attempts = 0;
-    const tryOpen = () => {
-      attempts++;
-      if (typeof window.showBusinessPostModal === 'function') {
-        window.showBusinessPostModal(id);
-      } else if (attempts < MAX_ATTEMPTS) {
-        console.warn(`[DEEP LINK] showBusinessPostModal not ready, retry ${attempts}/${MAX_ATTEMPTS}`);
-        setTimeout(tryOpen, 400);
-      } else {
-        console.error('[DEEP LINK] showBusinessPostModal never became available — giving up');
-        navigate('home');
-      }
-    };
-    setTimeout(tryOpen, 900);
-    return;
+  else if (page === 'directory') {
+    if (id) {
+      loadDirectoryAndOpen(id);
+    } else {
+      navigate('directory');
+    }
   }
-
-  // No image → open business card
-  if (page === 'directory' && id) {
-    loadDirectoryAndOpen(id);
-    return;
+  else {
+    navigate(page);
   }
-
-  navigate(page);
 };
 
 // ─── Service Worker → App message bridge ────────────────────────────────────
@@ -207,12 +185,11 @@ if ('serviceWorker' in navigator) {
     if (page) {
       window.history.replaceState({}, document.title, window.location.pathname);
       // Wait for auth + initial render before firing deep-link
-      // 1800ms — needs to be longer on APK cold start than browser (was 600ms)
       setTimeout(() => {
         if (typeof window.handlePushNotificationClick === 'function') {
           window.handlePushNotificationClick({ page, id });
         }
-      }, 1800);
+      }, 2500);
     }
   } catch (e) {
     console.warn('Cold launch deep-link handler failed:', e);
@@ -769,10 +746,13 @@ function _renderSpotlight(businesses) {
   if (!sb.length) sb = [...businesses].slice(0, 8);
 
   spotEl.innerHTML = sb.map(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
 
     return `
       <div onclick="showBusinessDetail('${b._id}')"
-           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative">
+           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
+        
+        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
 
         <div class="flex items-center gap-3 mb-3">
           ${b.logo
@@ -1494,11 +1474,13 @@ function renderDirectory(businesses) {
   let html = '<div class="space-y-3">';
 
   pageBusinesses.forEach(b => {
+    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
 
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative">
+           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
         
+        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow z-10">PRO</div>` : ''}
 
         ${b.logo 
           ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/10" alt="">` 
@@ -3587,7 +3569,7 @@ window.closeResourceDetail = function () {
   if (el) el.remove();
 };
 
-// ─── OWNER DASHBOARD ──────────────────────────────────────────────────────────
+// ─── OWNER DASHBOARD (with Business Pro Tier) ─────────────────────────────────
 async function loadOwnerDashboard(content) {
   await ensureDirCategories();
 
@@ -3618,11 +3600,15 @@ const tabs = [
   { id: 'deals',         label: 'Deals',          icon: '🔥' },
   { id: 'events',        label: 'Events',         icon: '📅' },
   { id: 'homes',         label: 'Marketplace Items', icon: '🛒' },
+  { id: 'notifications', label: 'Notifications',  icon: '📢' },
   { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
 
   // === GET SUBSCRIPTION STATUS ===
   const sub = await apiGet('/owner/subscription').catch(() => ({}));
+  const isPro = sub.tier === 'pro';
+  const credits = sub.credits || 0;
+
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
 
@@ -3630,6 +3616,39 @@ const tabs = [
       <div class="px-4 pt-2 pb-4">
         <h2 class="text-2xl font-bold">🏪 My Dashboard</h2>
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
+      </div>
+
+      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
+<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
+  <div class="flex justify-between items-start">
+    <div>
+      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
+        ⭐ PRO TIER
+      </div>
+      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
+      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
+    </div>
+          
+          ${isPro ? `
+            <div class="text-right">
+              <div class="text-emerald-300 font-bold">ACTIVE</div>
+              <div class="text-xs opacity-75">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
+            </div>
+          ` : `
+            <button onclick="buyProTier()" 
+                    class="bg-white text-purple-700 px-7 py-3 rounded-3xl font-bold hover:bg-white/90 transition shadow-xl">
+              Upgrade Now
+            </button>
+          `}
+        </div>
+
+        <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <div class="text-xs opacity-75">Notification Credits</div>
+            <div class="text-4xl font-black">${credits}</div>
+          </div>
+          <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
+        </div>
       </div>
 
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
@@ -3888,6 +3907,14 @@ const tabs = [
               </label>
             </div>
 
+            <!-- Notify -->
+            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
+              <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
+              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
+                📢 Notify all users when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
+              </label>
+            </div>
+
             <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 py-4 rounded-3xl font-semibold transition-all">
               🛒 Post to Marketplace
             </button>
@@ -3905,13 +3932,37 @@ const tabs = [
   </div>
 </div>
 
+<!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
+<div id="dtabContent-notifications" class="hidden">
+  ${!isPro ? `
+  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
+    <div class="text-5xl mb-4">📢</div>
+    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
+    <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
+    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
+      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
+    </div>
+    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
+      🚀 Upgrade to Business Pro
+    </button>
+  </div>
+  ` : `
+  <div id="notificationsContent">
+    <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
+  </div>
+  `}
+</div>
+
       </div>
     </div>`;
 
 }
 
 window.switchDashTab = function (tabId) {
-  const allIds = ['listing', 'photos', 'menu', 'deals', 'events', 'homes', 'analytics'];
+  const allIds = ['listing', 'photos', 'menu', 'deals', 'events', 'homes', 'notifications', 'analytics'];
   allIds.forEach(id => {
     const btn     = document.getElementById(`dtab-${id}`);
     const content = document.getElementById(`dtabContent-${id}`);
@@ -3931,6 +3982,7 @@ window.switchDashTab = function (tabId) {
   if (tabId === 'deals')         loadOwnerDeals();
   if (tabId === 'events')        loadOwnerEvents();
   if (tabId === 'photos')        renderOwnerPhotoGrid();
+  if (tabId === 'notifications') loadNotificationsTab();
   if (tabId === 'homes')         loadOwnerHomes();
   if (tabId === 'analytics')     loadOwnerAnalytics();
 };
@@ -3997,7 +4049,10 @@ window.submitBizPhotoPost = async function() {
     return;
   }
 
-  const caption = document.getElementById('bizPostCaption')?.value.trim() || '';
+  const caption    = document.getElementById('bizPostCaption')?.value.trim() || '';
+  const sendNotify = document.getElementById('bizPostNotify')?.checked ?? true;
+
+  if (sendNotify && !(await checkNotificationCredits(2))) return;
 
   const btn = document.querySelector('#notificationsContent button[onclick="submitBizPhotoPost()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
@@ -4005,15 +4060,21 @@ window.submitBizPhotoPost = async function() {
   try {
     const res = await apiPost('/owner/business-posts', {
       image: _bizPostPendingImage,
-      caption
+      caption,
+      sendNotify
     });
 
     if (res._id) {
-      showToast('📸 Photo posted!', 'success');
+      showToast(sendNotify ? '📸 Photo posted & notification sent!' : '📸 Photo posted!', 'success');
       // Reset form
       clearBizPostImage();
       const captionEl = document.getElementById('bizPostCaption');
       if (captionEl) captionEl.value = '';
+      // Refresh credit display
+      if (res.credits !== undefined) {
+        const creditEl = document.getElementById('notifCreditDisplay');
+        if (creditEl) creditEl.textContent = res.credits;
+      }
       // Refresh post history
       loadBizPostHistory();
     } else {
@@ -4065,22 +4126,25 @@ window.deleteBizPost = async function(id) {
 
 // ─── BUSINESS POST DETAIL MODAL (deep-link target) ───────────────────────────
 window.showBusinessPostModal = async function(postId) {
-  console.log('%c[DEEP LINK] showBusinessPostModal called with id:', 'color:lime', postId);
-
+  // Remove any existing instance
   const existing = document.getElementById('bizPostDetailModal');
   if (existing) existing.remove();
 
+  // Show a quick loading shell
   document.body.insertAdjacentHTML('beforeend', `
     <div id="bizPostDetailModal"
          onclick="if(event.target.id==='bizPostDetailModal') document.getElementById('bizPostDetailModal').remove()"
-         class="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
+         class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-[20000] p-0 sm:p-4">
       <div onclick="event.stopPropagation()"
-           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-[28px] sm:rounded-[28px] overflow-hidden max-h-[95vh] flex flex-col">
-
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <span class="text-sm font-semibold text-white/70">Business Update</span>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
         <div id="bizPostDetailBody" class="flex-1 overflow-y-auto flex items-center justify-center py-16">
           <div class="w-8 h-8 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
         </div>
-
       </div>
     </div>`);
 
@@ -4088,50 +4152,44 @@ window.showBusinessPostModal = async function(postId) {
     const post = await apiGet(`/business-posts/post/${postId}`);
 
     document.getElementById('bizPostDetailBody').innerHTML = `
-
-      <div class="relative bg-black w-full" style="aspect-ratio:4/3; overflow:hidden;">
-        <img src="${post.image}"
-             class="w-full h-full object-cover"
-             alt="Photo update from ${esc(post.bizName)}">
-        <button onclick="document.getElementById('bizPostDetailModal').remove()"
-                class="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-black/55 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 transition text-xl leading-none">
-          ×
-        </button>
-        <div class="absolute bottom-0 left-0 right-0 h-20"
-             style="background:linear-gradient(to top, rgba(15,23,42,0.95), transparent)"></div>
+      <!-- Full image -->
+      <div class="w-full bg-black flex items-center justify-center">
+        <img src="${post.image}" class="w-full max-h-[60vh] object-contain" alt="Business photo update">
       </div>
 
-      <div class="px-5 pt-4 pb-6 flex flex-col gap-3.5">
-
+      <!-- Meta -->
+      <div class="p-5 space-y-3">
         <div class="flex items-center gap-3">
-          <div class="w-11 h-11 rounded-[14px] bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
-            <span class="text-xl">🏪</span>
+          <div class="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">📸</div>
+          <div>
+            <p class="font-bold text-white leading-tight">${esc(post.bizName)}</p>
+            <p class="text-xs text-white/40">${timeAgo(post.createdAt)}</p>
           </div>
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold text-[15px] text-white leading-snug truncate">${esc(post.bizName)}</p>
-            <p class="text-xs text-white/35 mt-0.5">${timeAgo(post.createdAt)}</p>
-          </div>
-          <span class="text-[11px] font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-full px-2.5 py-1 flex-shrink-0">Update</span>
         </div>
 
         ${post.caption ? `
-        <p class="text-sm text-white/75 leading-relaxed border-l-2 border-emerald-500/40 pl-3">
-          ${esc(post.caption)}
-        </p>` : ''}
+        <p class="text-white/90 text-sm leading-relaxed">${esc(post.caption)}</p>` : ''}
 
-        <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
-                class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-2xl text-sm font-semibold transition flex items-center justify-center gap-2">
-          🏪 View ${esc(post.bizName)}
-        </button>
-
+        <div class="flex gap-3 pt-2">
+          <button onclick="document.getElementById('bizPostDetailModal').remove(); if(typeof loadDirectoryAndOpen==='function'){ loadDirectoryAndOpen('${post.business}') } else { navigate('directory'); }"
+                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-2xl text-sm font-semibold transition">
+            🏪 View ${esc(post.bizName)}
+          </button>
+          <button onclick="shareContent('business-post', '${esc(post.bizName)}', '${esc(post.caption || '')}')"
+                  class="py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-semibold transition">
+            🔗
+          </button>
+          <button onclick="document.getElementById('bizPostDetailModal').remove()"
+                  class="py-3 px-4 bg-white/5 hover:bg-white/10 text-white/60 rounded-2xl text-sm font-semibold transition">
+            ✕
+          </button>
+        </div>
       </div>`;
-
   } catch (e) {
-    console.error('%c[DEEP LINK] ERROR inside showBusinessPostModal:', 'color:red', e);
     document.getElementById('bizPostDetailBody').innerHTML = `
       <div class="p-8 text-center text-white/40">
         <p class="text-4xl mb-3">😕</p>
-        <p class="text-sm">Failed to load post.<br>Check console for error.</p>
+        <p class="text-sm">This post could not be loaded.</p>
       </div>`;
   }
 };
@@ -4202,6 +4260,276 @@ window.insertNotifEmoji = function(emoji) {
   ta.dispatchEvent(new Event('input'));
 };
 
+async function loadNotificationsTab() {
+  const el = document.getElementById('notificationsContent');
+  if (!el) return;
+
+  el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
+
+  let credits = 0;
+  let tier = 'free';
+  try {
+    const sub = await apiGet('/owner/subscription');
+    credits = sub.credits ?? 0;
+    tier    = sub.tier   ?? 'free';
+  } catch (e) {
+    console.error('Failed to load subscription', e);
+  }
+
+  const isPro   = tier === 'pro';
+  const bizName = currentUser?.verifiedBusiness?.name || currentUser?.name || 'Your Business';
+
+  el.innerHTML = `
+    <div class="space-y-5 p-4">
+
+      <!-- Credit balance -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="text-xs text-white/50 mb-1">Available Credits</div>
+            <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-white/40">Photo post notify = 2 credits</div>
+            <div class="text-xs text-white/40">Custom notification = 2 credits</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          ${!isPro ? `
+            <button onclick="buyProTier()" 
+                    class="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition">
+              🚀 Upgrade to Pro (12 credits/mo)
+            </button>
+          ` : ''}
+
+          <button onclick="buyCreditPack()" 
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition flex items-center justify-center gap-2">
+            💳 Buy 10 Credits <span class="text-[10px] opacity-75">($4.99)</span>
+          </button>
+        </div>
+
+        <p class="text-[10px] text-white/40 mt-2 text-center">One-time credit packs never expire. Pro members get 12 fresh credits every month.</p>
+      </div>
+
+      <!-- ── Unified notification form ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+        <div>
+          <h4 class="font-bold text-white">📢 Send Notification</h4>
+          <p class="text-xs text-white/50 mt-0.5">Broadcast to all users — 2 credits. Add a photo to make it visual.</p>
+        </div>
+
+        <!-- From badge -->
+        <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+          <span class="text-xs text-white/40">From:</span>
+          <span class="text-sm font-semibold text-emerald-400">${bizName}</span>
+          <span class="text-xs text-white/30 ml-auto">shown to all recipients</span>
+        </div>
+
+        <!-- Title input -->
+        <input id="customTitle"
+               placeholder="Notification title (e.g. Big Sale Today!)"
+               class="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500" />
+
+        <!-- ── Mini rich-text toolbar + body ── -->
+        <div>
+          <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-t-xl px-3 py-2 border-b-0">
+            <span class="text-xs text-white/30 mr-1">Format:</span>
+            <button onclick="applyNotifFormat('bold')" title="Bold — select text first"
+                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white font-black text-sm transition flex items-center justify-center">B</button>
+            <button onclick="applyNotifFormat('italic')" title="Italic — select text first"
+                    class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white italic font-semibold text-sm transition flex items-center justify-center">I</button>
+            <div class="w-px h-5 bg-white/10 mx-1"></div>
+            <span class="text-xs text-white/30 mr-1">Add:</span>
+            ${['🔥','🎉','⏰','🏷️','📍','✅','💥','👋'].map(e =>
+              `<button onclick="insertNotifEmoji('${e}')"
+                      class="w-8 h-8 rounded-lg hover:bg-white/10 text-base transition flex items-center justify-center">${e}</button>`
+            ).join('')}
+            <div class="ml-auto text-xs text-white/20 hidden sm:block">Select text → tap B or I</div>
+          </div>
+          <textarea id="customBody" rows="3"
+                    placeholder="Message body — select any text then tap B or I to style it…"
+                    class="w-full bg-white/10 border border-white/10 rounded-b-xl rounded-t-none px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500 resize-none font-mono"></textarea>
+        </div>
+
+        <!-- ── Optional photo add-on (collapsed) ── -->
+        <div>
+          <button onclick="toggleUnifiedPhotoPanel()"
+                  id="unifiedPhotoToggle"
+                  class="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition text-sm">
+            <span class="flex items-center gap-2 text-white/70">
+              <span>📷</span>
+              <span>Add a photo <span class="text-white/30 font-normal">(optional)</span></span>
+            </span>
+            <span id="unifiedPhotoChevron" class="text-white/30 text-xs">▼ expand</span>
+          </button>
+
+          <div id="unifiedPhotoPanel" class="hidden mt-3 space-y-3">
+            <div id="bizPostImageWrap" class="relative">
+              <div id="bizPostImagePreview"
+                   class="w-full aspect-video bg-white/5 border-2 border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400/50 hover:bg-white/10 transition-all overflow-hidden"
+                   onclick="document.getElementById('bizPostImageInput').click()">
+                <span class="text-3xl">📷</span>
+                <span class="text-sm text-white/50">Tap to add photo</span>
+                <span class="text-xs text-white/30">JPEG · PNG · WebP · max 4 MB</span>
+              </div>
+              <input id="bizPostImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+                     onchange="handleBizPostImageSelect(this)">
+              <button id="bizPostImageClear" onclick="clearBizPostImage()"
+                      class="hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center hover:bg-red-600 transition">×</button>
+            </div>
+            <p class="text-[11px] text-white/30 text-center">When a photo is attached the notification opens a full-image view, then links to your directory card.</p>
+          </div>
+        </div>
+
+        <!-- Live device preview -->
+        <div class="bg-black/40 border border-white/10 rounded-xl p-3 space-y-1">
+          <div class="text-[10px] text-white/25 uppercase tracking-widest mb-1.5">Preview on device</div>
+          <div class="flex items-start gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">MC</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white leading-snug" id="previewTitle">Your title here</div>
+              <div class="text-xs text-white/55 leading-snug mt-0.5" id="previewBody">${bizName} · Your message here</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cost badge + send button -->
+        <div class="flex items-center gap-2 text-xs text-white/30 justify-center">
+          <span>💳 2 credits</span>
+          <span>·</span>
+          <span id="unifiedCostNote">text-only broadcast</span>
+        </div>
+
+        <button onclick="sendUnifiedNotification()"
+                id="unifiedSendBtn"
+                class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg">
+          📢 Send to All Users
+        </button>
+      </div>
+
+      <!-- ── Past photo posts ── -->
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+        <h4 class="font-bold text-white text-sm">Your Photo Posts</h4>
+        <div id="bizPostHistory" class="space-y-3">
+          <div class="text-white/30 text-xs text-center py-4">Loading…</div>
+        </div>
+      </div>
+
+    </div>`;
+
+  // Wire up live preview
+  const titleInput   = document.getElementById('customTitle');
+  const bodyInput    = document.getElementById('customBody');
+  const previewTitle = document.getElementById('previewTitle');
+  const previewBody  = document.getElementById('previewBody');
+
+  function updatePreview() {
+    if (previewTitle) previewTitle.textContent = titleInput?.value.trim() || 'Your title here';
+    if (previewBody)  previewBody.textContent  = `${bizName} · ${bodyInput?.value.trim() || 'Your message here'}`;
+  }
+
+  titleInput?.addEventListener('input', updatePreview);
+  bodyInput?.addEventListener('input',  updatePreview);
+
+  // Load past photo posts
+  loadBizPostHistory();
+}
+
+// ── Toggle the optional photo panel ──────────────────────────────────────────
+window.toggleUnifiedPhotoPanel = function() {
+  const panel   = document.getElementById('unifiedPhotoPanel');
+  const chevron = document.getElementById('unifiedPhotoChevron');
+  const note    = document.getElementById('unifiedCostNote');
+  if (!panel) return;
+  const nowHidden = panel.classList.toggle('hidden');
+  if (chevron) chevron.textContent = nowHidden ? '▼ expand' : '▲ collapse';
+  if (note)    note.textContent    = nowHidden ? 'text-only broadcast' : 'photo + text broadcast';
+};
+
+// ── Unified send: handles both text-only and photo+text in one call ───────────
+window.sendUnifiedNotification = async function() {
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  const hasPhoto = !!_bizPostPendingImage;
+
+  // Credit pre-check (2 credits either way)
+  const canSend = await window.canSendNotification(true);
+  if (!canSend) {
+    showToast('Not enough credits. Buy more or upgrade to Pro!', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('unifiedSendBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+
+  try {
+    let res;
+
+    if (hasPhoto) {
+      // Photo path — POST /owner/business-posts with sendNotify: true
+      res = await apiPost('/owner/business-posts', {
+        image:      _bizPostPendingImage,
+        caption:    body,
+        notifTitle: title,
+        sendNotify: true,
+      });
+
+      if (res._id) {
+        showToast('\uD83D\uDCF8 Photo posted & notification sent!', 'success');
+        clearBizPostImage();
+        // Collapse photo panel
+        const panel   = document.getElementById('unifiedPhotoPanel');
+        const chevron = document.getElementById('unifiedPhotoChevron');
+        const note    = document.getElementById('unifiedCostNote');
+        if (panel && !panel.classList.contains('hidden')) {
+          panel.classList.add('hidden');
+          if (chevron) chevron.textContent = '\u25BC expand';
+          if (note)    note.textContent    = 'text-only broadcast';
+        }
+        loadBizPostHistory();
+      } else {
+        showToast(res.message || 'Failed to post', 'error');
+        return;
+      }
+    } else {
+      // Text-only path — POST /owner/custom-notification
+      res = await apiPost('/owner/custom-notification', { title, body });
+
+      if (res.success) {
+        showToast('\u2705 Notification sent to all users!', 'success');
+      } else {
+        showToast(res.message || 'Failed to send notification', 'error');
+        return;
+      }
+    }
+
+    // Clear text fields
+    const titleEl = document.getElementById('customTitle');
+    const bodyEl  = document.getElementById('customBody');
+    if (titleEl) { titleEl.value = ''; titleEl.dispatchEvent(new Event('input')); }
+    if (bodyEl)  { bodyEl.value  = ''; bodyEl.dispatchEvent(new Event('input')); }
+
+    // Refresh credit counter
+    const newCredits = res.credits ?? res.notificationCredits;
+    if (newCredits !== undefined) {
+      const creditEl = document.getElementById('notifCreditDisplay');
+      if (creditEl) creditEl.textContent = newCredits;
+    }
+
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to send \u2014 please try again', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCE2 Send to All Users'; }
+  }
+};
 
 window.saveOwnerBusinessChanges = async function () {
   const name        = document.getElementById('ownerBizName')?.value.trim()        || '';
@@ -4284,6 +4612,8 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
+
   const title = document.getElementById('dealTitle').value.trim();
   const desc = document.getElementById('dealDesc').value.trim();
   const expires = document.getElementById('dealExpires').value;
@@ -4316,6 +4646,8 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
+  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
+
   const title = document.getElementById('eventTitle').value.trim();
   const date = document.getElementById('eventDate').value;
   const location = document.getElementById('eventLocation').value.trim();
@@ -6905,17 +7237,6 @@ async function renderAdminDashboard() {
       </div>
     </div>
 
-    <!-- NOTIFICATION SCHEDULER BUTTON -->
-    <div class="mb-8">
-      <button onclick="window.open('/admin/notification-scheduler.html', '_blank')"
-              class="w-full flex items-center justify-center gap-3 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 transition px-6 py-4 rounded-3xl font-bold text-lg shadow-xl">
-        <span class="text-2xl">🔔</span>
-        <span>Notification Scheduler</span>
-        <span class="text-xs bg-white/20 px-3 py-1 rounded-full font-medium">NEW</span>
-      </button>
-      <p class="text-center text-white/40 text-xs mt-2">Schedule custom push notifications for businesses</p>
-    </div>
-
     <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
       <h3 class="font-bold mb-4">Recent Activity</h3>
       <div id="recentActivity" class="space-y-3 text-sm">
@@ -7075,6 +7396,8 @@ async function loadOwnerAnalytics() {
     const totalDeals = deals.length;
     const totalEvents = events.length;
     const totalListings = homes.length;
+    const credits = sub.credits || 0;
+    const tier = sub.tier || 'free';
 
     container.innerHTML = `
       <div class="space-y-4">
@@ -7093,7 +7416,11 @@ async function loadOwnerAnalytics() {
             <div class="text-xs text-white/50">Marketplace Listings</div>
             <div class="text-4xl font-black mt-1">${totalListings}</div>
           </div>
-
+          <div class="bg-white/10 rounded-3xl p-5">
+            <div class="text-xs text-white/50">Notification Credits</div>
+            <div class="text-4xl font-black mt-1">${credits}</div>
+            <div class="text-xs text-white/40 mt-1">${tier === 'pro' ? 'Pro Tier' : 'Free Tier'}</div>
+          </div>
         </div>
 
         <div class="bg-white/5 rounded-3xl p-5 text-sm text-white/60">
@@ -7905,6 +8232,58 @@ window.showOnboardingTour = function() {
 let isPostingShoutout = false; // guard used by the correct postShoutoutWithPhoto above
 
 // ─── CUSTOM NOTIFICATION + CREDIT SYSTEM (FINAL) ─────────────────────────────
+// ⚠️  NOTE: This old sendCustomNotification button path MUST send imageUrl.
+//     The API route /owner/custom-notification accepts { title, body, imageUrl }.
+//     Omitting imageUrl here means images never show in notifications from this path.
+//     DO NOT remove the imageUrl field from the apiPost call below.
+window.sendCustomNotification = async function() {
+  const title = document.getElementById('customTitle')?.value.trim();
+  const body  = document.getElementById('customBody')?.value.trim();
+
+  if (!title || !body) {
+    showToast('Title and message are required', 'error');
+    return;
+  }
+
+  // Client-side credit pre-check (2 credits for custom)
+  const canSend = await window.canSendNotification(true);
+  if (!canSend) {
+    showToast('Not enough credits. Upgrade to Pro!', 'error');
+    return;
+  }
+
+  const btn = document.querySelector('#notificationsContent button[onclick="sendCustomNotification()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  try {
+    // ⚠️  Always pass imageUrl — the API will handle base64 → thumb URL conversion.
+    //     Omitting it here means notification images never show in this code path.
+    const payload = { title, body };
+    if (_bizPostPendingImage) payload.imageUrl = _bizPostPendingImage;
+
+    const res = await apiPost('/owner/custom-notification', payload);
+
+    if (res.success) {
+      showToast('✅ Custom notification sent to all users!', 'success');
+      document.getElementById('customTitle').value = '';
+      document.getElementById('customBody').value  = '';
+      document.getElementById('customTitle').dispatchEvent(new Event('input'));
+      document.getElementById('customBody').dispatchEvent(new Event('input'));
+      // Refresh the credit counter in the tab
+      if (res.credits !== undefined) {
+        const creditEl = document.getElementById('notifCreditDisplay');
+        if (creditEl) creditEl.textContent = res.credits;
+      }
+    } else {
+      showToast(res.message || 'Failed to send notification', 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to send notification', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>'; }
+  }
+};
 
 window.nextOnboardingSlide = function() {
   const slide1  = document.getElementById('slide1');
@@ -8011,6 +8390,170 @@ window.viewReportedContent = async function (type, id) {
   }
 };
 
+// Credit check helper for other posting functions
+async function checkNotificationCredits(required = 2) {
+  // Only verified business owners have a credit system at all
+  if (!currentUser || !currentUser.verifiedBusiness) return true;
+  if (currentUser.subscriptionTier === 'pro') return true;
+
+  const sub = await apiGet('/owner/subscription').catch(() => ({}));
+  if ((sub.credits || 0) < required) {
+    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
+    return false;
+  }
+  return true;
+}
+
+// ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
+let pendingOwnerLogo = null;
+
+window.handleOwnerLogoUpload = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 4 * 1024 * 1024) {
+    showToast('Logo must be under 4MB', 'error');
+    return;
+  }
+
+  try {
+    const compressed = await compressImage(file, 400, 0.85);
+    const reader = new FileReader();
+    reader.onload = e => {
+      pendingOwnerLogo = e.target.result;
+      const preview = document.getElementById('ownerLogoPreview');
+      if (preview) preview.innerHTML = `<img src="${pendingOwnerLogo}" class="w-full h-full object-cover">`;
+    };
+    reader.readAsDataURL(compressed);
+  } catch (e) {
+    showToast('Failed to process logo', 'error');
+  }
+};
+
+// Client-side credit helpers
+window.canSendNotification = async function(isCustom = false) {
+  if (!currentUser) return false;
+  try {
+    const sub = await apiGet('/owner/subscription');
+    const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
+    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
+    return credits >= cost;
+  } catch (e) {
+    console.error('Credit check failed', e);
+    return false;
+  }
+};
+
+// ─── GOOGLE PLAY BILLING - BUY PRO TIER ─────────────────────────────────────
+window.buyProTier = async function() {
+  if (!window.Capacitor) {
+    showToast('Google Play Billing only works in the Android app', 'error');
+    return;
+  }
+
+  try {
+    showToast('Opening Google Play...', 'success');
+
+    const { InAppPurchase2 } = window.Capacitor.Plugins;
+
+    // Replace with your actual Google Play product ID
+    const productId = 'pro_monthly';   // ← Change this if your product ID is different
+
+    await InAppPurchase2.buy({
+      productId: productId,
+      type: 'subs'   // recurring subscription in Play Console
+    });
+
+    // This will be called by the purchase listener below when successful
+  } catch (err) {
+    console.error(err);
+    showToast('Purchase failed or cancelled', 'error');
+  }
+};
+
+// ─── BUY CREDIT PACK (10 credits for $4.99) ─────────────────────────────────
+window.buyCreditPack = async function() {
+  if (!window.Capacitor) {
+    showToast('Credit purchases are only available in the Android app', 'error');
+    return;
+  }
+
+  try {
+    showToast('Opening Google Play...', 'success');
+
+    const { InAppPurchase2 } = window.Capacitor.Plugins;
+
+    // ←←← CHANGE THIS if your product ID in Google Play Console is different
+    const productId = 'credits_10_pack';
+
+    await InAppPurchase2.buy({
+      productId: productId,
+      type: 'consumable'   // Important: this is a one-time consumable, not a subscription
+    });
+
+    // The actual credit grant happens in purchaseSucceeded listener below
+  } catch (err) {
+    console.error(err);
+    showToast('Purchase failed or cancelled', 'error');
+  }
+};
+
+// Listen for successful purchase and activate Pro on backend
+function setupBillingListener() {
+  if (!window.Capacitor) return;
+
+  const { InAppPurchase2 } = window.Capacitor.Plugins;
+
+InAppPurchase2.addListener('purchaseSucceeded', async (purchase) => {
+  try {
+    const productId = purchase.productId || '';
+
+    if (productId.includes('pro_monthly')) {
+      // Existing Pro subscription flow
+      const res = await apiPost('/owner/upgrade', {
+        orderId: purchase.orderId || purchase.transactionId,
+        productId: productId
+      });
+
+      if (res.success) {
+        showToast('🎉 Thank you! You are now Business Pro!', 'success');
+        loadOwnerDashboard(document.getElementById('content'));
+      }
+    } 
+    else if (productId.includes('credits_10_pack') || productId.includes('credit')) {
+      // New credit pack flow
+      const res = await apiPost('/owner/buy-credits', {
+        orderId: purchase.orderId || purchase.transactionId,
+        productId: productId,
+        credits: 10
+      });
+
+      if (res.success) {
+        showToast('✅ 10 credits added to your account!', 'success');
+        // Refresh the notifications tab so credit count updates
+        if (typeof loadNotificationsTab === 'function') {
+          loadNotificationsTab();
+        }
+      }
+    }
+  } catch (e) {
+    showToast('Failed to activate purchase', 'error');
+  }
+});
+
+  InAppPurchase2.addListener('purchaseFailed', () => {
+    showToast('Purchase failed or cancelled', 'error');
+  });
+}
+
+// Call this once when app loads (add near the bottom of your file)
+document.addEventListener('DOMContentLoaded', () => {
+  setupBillingListener();
+});
+
+window.showCreditInfo = function() {
+  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
+};
 
 window.saveOwnerBusinessLogo = async function() {
   if (!pendingOwnerLogo) {
@@ -8397,11 +8940,14 @@ window.postHomeListing = async function() {
   const price     = document.getElementById('homePrice')?.value.trim();
   const condition = document.getElementById('homeCondition')?.value || 'used';
   const desc      = document.getElementById('homeDesc')?.value.trim();
+  const notify    = document.getElementById('homeNotify')?.checked ?? false;
 
   if (!title || !category) {
     showToast('Title and Category are required', 'error');
     return;
   }
+
+  if (notify && !(await checkNotificationCredits(2))) return;
 
   const btn = document.querySelector('#dtabContent-homes button[onclick="postHomeListing()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
@@ -8413,7 +8959,8 @@ window.postHomeListing = async function() {
       price: price || '0',
       condition,
       images: _pendingHomeImages,
-      category
+      category,
+      sendNotify: notify
     };
 
     // === HOMES CATEGORY → use rich fields + /owner/homes endpoint ===
@@ -8577,6 +9124,7 @@ window.validateProSubscription = async function() {
 
     if (res.success) {
       currentUser.subscriptionTier = res.tier;
+      if (res.credits !== undefined) currentUser.notificationCredits = res.credits;
     }
   } catch (e) {
     console.error('Subscription validation failed', e);
@@ -8803,7 +9351,16 @@ window.toggleHomeExtraFields = function() {
   }
 };
 
+// ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
+// Duplicate definitions removed to prevent the second copy from silently
+// overwriting the first and breaking the credit-check flow.
+
 // Extra protection against any accidental double broadcast
 window.addEventListener('beforeunload', () => {
   isPostingShoutout = false;
 });
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+// initPushAfterLogin is defined in profile.js (_initNativePush).
+// That version correctly checks existing permissions before re-requesting,
+// preventing the black-screen bug on startup. No duplicate needed here.

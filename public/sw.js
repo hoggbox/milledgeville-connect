@@ -3,28 +3,21 @@ self.addEventListener('push', event => {
   const payload = event.data?.json() || {};
 
   const options = {
-    body: payload.body || '',
-    icon: payload.icon || '/icon-192.png',
+    body:  payload.body  || '',
+    icon:  payload.icon  || '/icon-192.png',
     badge: payload.badge || '/icon-192.png',
-    data: payload.data || {},
-    tag: payload.tag || 'default',
+    // ── Keep the full data object so notificationclick can read page + id ──
+    data:  payload.data  || {},
+    tag:   payload.tag   || 'default',
+    // Stay visible until the user taps (improves visibility on mobile)
     requireInteraction: true
   };
 
-  // FIXED IMAGE HANDLING - accepts image OR imageUrl, handles relative URLs
-  let imageUrl = payload.image || payload.imageUrl || null;
-
-  if (imageUrl) {
-    try {
-      // Convert relative URL (/api/...) to full https:// URL
-      if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-        imageUrl = new URL(imageUrl, self.location.origin).href;
-      }
-      options.image = imageUrl;
-      console.log('[SW] Notification image set:', imageUrl);
-    } catch (e) {
-      console.error('[SW] Failed to parse image URL:', e);
-    }
+  // ✅ FIX: only set image when it's a real https:// URL.
+  // Passing a data: base64 string or undefined here causes Chrome Android to
+  // silently drop the notification entirely on some devices.
+  if (payload.image && payload.image.startsWith('https://')) {
+    options.image = payload.image;
   }
 
   event.waitUntil(
@@ -41,6 +34,8 @@ self.addEventListener('notificationclick', event => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+
+      // Case 1: App is already open and visible
       const visibleClient = windowClients.find(c => c.visibilityState === 'visible');
       if (visibleClient) {
         visibleClient.focus();
@@ -48,12 +43,17 @@ self.addEventListener('notificationclick', event => {
         return;
       }
 
+      // Case 2: App is open but backgrounded
+      // ── FIX 2: no setTimeout in service workers — post the message immediately,
+      //    then focus. The app's 'message' listener handles sequencing via its own
+      //    setTimeout internally (already in data.js). ─────────────────────────
       const backgroundClient = windowClients.find(c => c.url.includes(self.location.origin));
       if (backgroundClient) {
         backgroundClient.postMessage({ type: 'PUSH_NOTIFICATION_CLICK', data: { page, id } });
         return backgroundClient.focus();
       }
 
+      // Case 3: App was completely closed → open with query params
       const url = `/?notif_page=${encodeURIComponent(page)}&notif_id=${encodeURIComponent(id)}`;
       return self.clients.openWindow(url);
     })
