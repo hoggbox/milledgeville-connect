@@ -1,716 +1,613 @@
 
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font-sans)}
-.ns{padding:1rem 0;color:var(--color-text-primary)}
-.tab-bar{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);margin-bottom:1.5rem}
-.tab{padding:8px 16px;font-size:13px;font-weight:500;border:none;background:none;color:var(--color-text-secondary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-0.5px;transition:color .15s}
-.tab.active{color:var(--color-text-primary);border-bottom:2px solid var(--color-text-primary)}
-.tab:hover{color:var(--color-text-primary)}
-.section{display:none}.section.visible{display:block}
-.field-label{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:6px;letter-spacing:.03em}
-.field{margin-bottom:1rem}
-input,textarea,select{width:100%;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:14px;font-family:var(--font-sans)}
-textarea{min-height:80px;resize:vertical;line-height:1.5}
-input:focus,textarea:focus,select:focus{outline:none;border-color:var(--color-border-primary);box-shadow:0 0 0 2px rgba(0,0,0,.06)}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:12px}
-.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.card-title{font-size:14px;font-weight:500}
-.btn{padding:8px 16px;border-radius:var(--border-radius-md);font-size:13px;font-weight:500;cursor:pointer;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);transition:background .12s}
-.btn:hover{background:var(--color-background-secondary)}
-.btn-primary{background:var(--color-text-primary);color:var(--color-background-primary);border-color:var(--color-text-primary)}
-.btn-primary:hover{opacity:.85}
-.btn-danger{background:#fceaea;color:#9b2020;border-color:#f5c1c1}
-.btn-danger:hover{background:#f5c1c1}
-.btn-sm{padding:5px 10px;font-size:12px}
-.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:500}
-.badge-sent{background:#eaf3de;color:#3b6d11}
-.badge-scheduled{background:#faeeda;color:#854f0b}
-.badge-draft{background:#f1efe8;color:#5f5e5a}
-.badge-failed{background:#fceaea;color:#9b2020}
-.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
-.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem 1rem}
-.metric-val{font-size:22px;font-weight:500;line-height:1.2;margin-top:4px}
-.metric-label{font-size:12px;color:var(--color-text-secondary)}
-.metric-delta{font-size:11px;color:var(--color-text-success);margin-top:2px}
-.notif-list{display:flex;flex-direction:column;gap:8px}
-.notif-item{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:.875rem 1rem;cursor:pointer;transition:border-color .12s}
-.notif-item:hover{border-color:var(--color-border-primary)}
-.notif-item-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
-.notif-title-row{display:flex;align-items:center;gap:8px}
-.notif-thumb{width:40px;height:40px;border-radius:var(--border-radius-md);object-fit:cover;flex-shrink:0;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:center;font-size:18px}
-.notif-body{font-size:13px;color:var(--color-text-secondary);margin-top:2px;line-height:1.4}
-.notif-meta{display:flex;align-items:center;gap:12px;margin-top:8px;font-size:11px;color:var(--color-text-tertiary)}
-.notif-meta span{display:flex;align-items:center;gap:3px}
-.progress-bar{height:4px;background:var(--color-background-secondary);border-radius:99px;margin-top:6px;overflow:hidden}
-.progress-fill{height:100%;border-radius:99px;background:var(--color-text-primary)}
-.actions-row{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.form-section-title{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:.75rem;padding-bottom:6px;border-bottom:0.5px solid var(--color-border-tertiary)}
-.link-type-tabs{display:flex;gap:4px;margin-bottom:.75rem}
-.lt{padding:5px 10px;font-size:12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);cursor:pointer;color:var(--color-text-secondary)}
-.lt.active{background:var(--color-text-primary);color:var(--color-background-primary);border-color:var(--color-text-primary)}
-.image-drop{border:1px dashed var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:24px;text-align:center;cursor:pointer;position:relative;transition:border-color .12s}
-.image-drop:hover{border-color:var(--color-border-primary)}
-.image-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
-.image-preview{width:100%;height:120px;object-fit:cover;border-radius:var(--border-radius-md);margin-top:8px;display:none}
-.page-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;font-size:12px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);cursor:pointer;margin:3px}
-.page-chip.selected{background:var(--color-text-primary);color:var(--color-background-primary);border-color:var(--color-text-primary)}
-.detail-panel{display:none;border-top:0.5px solid var(--color-border-tertiary);margin-top:10px;padding-top:10px}
-.detail-panel.open{display:block}
-.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-.stat-box{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px}
-.stat-box .v{font-size:18px;font-weight:500}
-.stat-box .l{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
-.timeline{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.tl-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text-secondary)}
-.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.tl-dot.green{background:#63991a}
-.tl-dot.amber{background:#ef9f27}
-.tl-dot.gray{background:#888780}
-select option{background:var(--color-background-primary)}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-.empty{text-align:center;padding:2rem;color:var(--color-text-tertiary);font-size:13px}
-.biz-option{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--border-radius-md);cursor:pointer;transition:background .1s}
-.biz-option:hover{background:var(--color-background-secondary)}
-.biz-option input[type=radio]{accent-color:var(--color-text-primary)}
-.search-box{position:relative;margin-bottom:8px}
-.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:15px;color:var(--color-text-tertiary);pointer-events:none}
-.search-box input{padding-left:32px}
-.bar-chart{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.bar-row{display:flex;align-items:center;gap:8px;font-size:12px}
-.bar-label{width:90px;color:var(--color-text-secondary);text-align:right;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar-track{flex:1;height:10px;background:var(--color-background-secondary);border-radius:99px;overflow:hidden}
-.bar-fill{height:100%;border-radius:99px}
-.bar-val{width:36px;font-weight:500;text-align:right;color:var(--color-text-primary)}
+  h2.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body,div,span,p,input,select,textarea,button{font-family:var(--font-sans)}
+  :root{--emerald:#0F6E56;--emerald-light:#E1F5EE;--emerald-mid:#1D9E75;--amber:#BA7517;--amber-light:#FAEEDA;--red:#A32D2D;--red-light:#FCEBEB}
+  .page{padding:0 0 2rem}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem 1rem;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .topbar-left{display:flex;align-items:center;gap:10px}
+  .topbar-title{font-size:17px;font-weight:500;color:var(--color-text-primary)}
+  .topbar-sub{font-size:12px;color:var(--color-text-secondary)}
+  .btn-primary{background:var(--emerald);color:#fff;border:none;border-radius:var(--border-radius-md);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s}
+  .btn-primary:hover{opacity:.85}
+  .btn-ghost{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 14px;font-size:13px;color:var(--color-text-secondary);cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s}
+  .btn-ghost:hover{background:var(--color-background-secondary)}
+  .btn-danger{background:var(--red-light);color:var(--red);border:0.5px solid #F09595;border-radius:var(--border-radius-md);padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:opacity .15s}
+  .btn-danger:hover{opacity:.8}
+  .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:1.25rem 1.5rem}
+  .metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px 16px}
+  .metric-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+  .metric-value{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+  .metric-sub{font-size:11px;color:var(--color-text-secondary);margin-top:3px}
+  .metric-up{color:var(--emerald-mid)}
+  .metric-down{color:var(--red)}
+  .section-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.5rem;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .section-title{font-size:14px;font-weight:500;color:var(--color-text-primary);display:flex;align-items:center;gap:8px}
+  .filters{display:flex;align-items:center;gap:8px}
+  .filter-select{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:5px 10px;font-size:12px;color:var(--color-text-secondary);cursor:pointer}
+  .notif-list{padding:.75rem 1.5rem;display:flex;flex-direction:column;gap:10px}
+  .notif-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;transition:border-color .15s}
+  .notif-card:hover{border-color:var(--color-border-secondary)}
+  .notif-card.active{border-left:3px solid var(--emerald-mid)}
+  .notif-card.scheduled{border-left:3px solid var(--amber)}
+  .notif-card.draft{border-left:3px solid var(--color-border-secondary)}
+  .notif-card.sent{border-left:3px solid #9FE1CB}
+  .biz-avatar{width:40px;height:40px;border-radius:var(--border-radius-md);object-fit:cover;background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .notif-body{}
+  .notif-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .biz-name{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+  .status-pill{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px}
+  .pill-active{background:#E1F5EE;color:#0F6E56}
+  .pill-scheduled{background:#FAEEDA;color:#BA7517}
+  .pill-draft{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+  .pill-sent{background:#E1F5EE;color:#085041}
+  .notif-title{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:3px}
+  .notif-msg{font-size:12px;color:var(--color-text-secondary);line-height:1.5;margin-bottom:8px}
+  .notif-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .meta-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--color-text-tertiary)}
+  .notif-stats{display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--color-border-tertiary)}
+  .stat-box{text-align:center}
+  .stat-num{font-size:14px;font-weight:500;color:var(--color-text-primary)}
+  .stat-lbl{font-size:10px;color:var(--color-text-secondary)}
+  .notif-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .action-btn{background:none;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:5px 9px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:background .15s}
+  .action-btn:hover{background:var(--color-background-secondary)}
+  .action-btn.del:hover{background:var(--red-light);color:var(--red);border-color:#F09595}
+  .notif-link-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--color-background-info);color:var(--color-text-info);padding:2px 8px;border-radius:20px}
+  .has-img-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px}
+
+  /* MODAL */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999;padding:1rem}
+  .modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+  .modal-header{padding:1.25rem 1.5rem 1rem;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--color-background-primary);z-index:2}
+  .modal-title{font-size:16px;font-weight:500;color:var(--color-text-primary)}
+  .modal-close{background:none;border:none;font-size:20px;color:var(--color-text-secondary);cursor:pointer;padding:0 4px;line-height:1}
+  .modal-body{padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:16px}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form-group{display:flex;flex-direction:column;gap:5px}
+  .form-group.full{grid-column:1/-1}
+  .form-label{font-size:12px;color:var(--color-text-secondary);font-weight:500}
+  .form-input{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 12px;font-size:13px;color:var(--color-text-primary);width:100%;outline:none;transition:border-color .15s}
+  .form-input:focus{border-color:var(--emerald-mid)}
+  .form-input::placeholder{color:var(--color-text-tertiary)}
+  .form-select{appearance:none;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 12px;font-size:13px;color:var(--color-text-primary);width:100%;outline:none;cursor:pointer}
+  .form-textarea{resize:vertical;min-height:80px;line-height:1.5}
+  .img-upload-area{border:0.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-md);padding:20px;text-align:center;cursor:pointer;transition:background .15s;position:relative}
+  .img-upload-area:hover{background:var(--color-background-secondary)}
+  .img-upload-area input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .img-preview{max-height:120px;max-width:100%;border-radius:var(--border-radius-md);object-fit:contain;margin-top:8px}
+  .link-type-tabs{display:flex;gap:6px;margin-bottom:4px}
+  .link-tab{padding:5px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);font-size:12px;cursor:pointer;color:var(--color-text-secondary);background:transparent;transition:all .15s}
+  .link-tab.active{background:var(--emerald-light);color:var(--emerald);border-color:#9FE1CB}
+  .schedule-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .modal-footer{padding:1rem 1.5rem;border-top:0.5px solid var(--color-border-tertiary);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--color-background-primary)}
+  .chart-wrap{padding:.25rem 1.5rem 1.5rem}
+  .section-divider{height:0.5px;background:var(--color-border-tertiary);margin:0 1.5rem}
+  .empty-state{text-align:center;padding:3rem 1.5rem;color:var(--color-text-secondary)}
+  .repeat-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .repeat-day{padding:4px 10px;border-radius:20px;border:0.5px solid var(--color-border-tertiary);font-size:11px;cursor:pointer;color:var(--color-text-secondary);transition:all .15s}
+  .repeat-day.sel{background:var(--emerald-light);color:var(--emerald);border-color:#9FE1CB}
+  .tab-row{display:flex;gap:0;border-bottom:0.5px solid var(--color-border-tertiary);padding:0 1.5rem}
+  .tab{padding:10px 14px;font-size:13px;color:var(--color-text-secondary);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+  .tab.active{color:var(--emerald);border-bottom-color:var(--emerald);font-weight:500}
 </style>
-<h2 class="sr-only">Notification scheduler admin panel</h2>
 
-<div class="ns">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
-    <div>
-      <p style="font-size:20px;font-weight:500">Notification scheduler</p>
-      <p style="font-size:13px;color:var(--color-text-secondary);margin-top:3px">Create, schedule, and track push notifications</p>
+<h2 class="sr-only">Notification scheduler — manage and schedule push notifications for businesses</h2>
+<div class="page" id="nsApp">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <i class="ti ti-bell-ringing" style="font-size:20px;color:var(--emerald-mid)" aria-hidden="true"></i>
+      <div>
+        <div class="topbar-title">Notification Scheduler</div>
+        <div class="topbar-sub">Milledgeville Connect · Admin</div>
+      </div>
     </div>
-    <button class="btn btn-primary" onclick="showCompose()"><i class="ti ti-plus" aria-hidden="true"></i> New notification</button>
+    <button class="btn-primary" onclick="openCompose()"><i class="ti ti-plus" aria-hidden="true"></i> New Notification</button>
   </div>
 
-  <div class="tab-bar">
-    <button class="tab active" onclick="switchTab('compose-tab','compose-btn',this)" id="compose-btn">Compose</button>
-    <button class="tab" onclick="switchTab('sent-tab','sent-btn',this)" id="sent-btn">Sent & scheduled</button>
-    <button class="tab" onclick="switchTab('analytics-tab','analytics-btn',this)" id="analytics-btn">Analytics</button>
-  </div>
-
-  <div id="compose-tab" class="section visible">
-    <div class="row2" style="gap:1.5rem;align-items:flex-start">
-      <div>
-        <p class="form-section-title"><i class="ti ti-message" aria-hidden="true"></i> Message</p>
-
-        <div class="field">
-          <p class="field-label">Notification title</p>
-          <input type="text" id="notif-title" placeholder="e.g. Grand Opening at Rose Garden Café" maxlength="65">
-          <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px" id="title-counter">0 / 65</p>
-        </div>
-
-        <div class="field">
-          <p class="field-label">Body text</p>
-          <textarea id="notif-body" placeholder="Share details, a special offer, or an announcement…" maxlength="200"></textarea>
-          <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px" id="body-counter">0 / 200</p>
-        </div>
-
-        <div class="field">
-          <p class="field-label">Photo (optional)</p>
-          <div class="image-drop" id="img-drop">
-            <i class="ti ti-photo" style="font-size:24px;color:var(--color-text-tertiary)" aria-hidden="true"></i>
-            <p style="font-size:13px;color:var(--color-text-secondary);margin-top:6px">Click or drag to upload image</p>
-            <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px">JPEG, PNG, WebP · max 4 MB</p>
-            <input type="file" accept="image/jpeg,image/png,image/webp" id="notif-image" onchange="handleImageUpload(this)">
-          </div>
-          <img id="image-preview-el" class="image-preview" alt="Preview">
-          <button class="btn btn-sm" id="clear-img-btn" style="display:none;margin-top:6px" onclick="clearImage()">
-            <i class="ti ti-trash" aria-hidden="true"></i> Remove photo
-          </button>
-        </div>
-
-        <p class="form-section-title" style="margin-top:1.25rem"><i class="ti ti-link" aria-hidden="true"></i> Deep link destination</p>
-
-        <div class="link-type-tabs" id="link-tabs">
-          <button class="lt active" onclick="setLinkType('business',this)">Business card</button>
-          <button class="lt" onclick="setLinkType('page',this)">App page</button>
-          <button class="lt" onclick="setLinkType('url',this)">External URL</button>
-          <button class="lt" onclick="setLinkType('none',this)">No link</button>
-        </div>
-
-        <div id="link-business" class="link-panel">
-          <div class="search-box">
-            <i class="ti ti-search" aria-hidden="true"></i>
-            <input type="text" placeholder="Search businesses…" oninput="filterBizList(this.value)" id="biz-search">
-          </div>
-          <div id="biz-list" style="max-height:200px;overflow-y:auto;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:4px"></div>
-        </div>
-
-        <div id="link-page" class="link-panel" style="display:none">
-          <p class="field-label">Select destination page</p>
-          <div id="page-chips" style="margin-bottom:6px">
-            <span class="page-chip" data-page="home" onclick="selectPage(this)">Home</span>
-            <span class="page-chip" data-page="events" onclick="selectPage(this)">Events</span>
-            <span class="page-chip" data-page="deals" onclick="selectPage(this)">Deals</span>
-            <span class="page-chip" data-page="marketplace" onclick="selectPage(this)">Marketplace</span>
-            <span class="page-chip" data-page="news" onclick="selectPage(this)">News</span>
-            <span class="page-chip" data-page="shoutouts" onclick="selectPage(this)">Shoutouts</span>
-            <span class="page-chip" data-page="lostfound" onclick="selectPage(this)">Lost & Found</span>
-            <span class="page-chip" data-page="directory" onclick="selectPage(this)">Directory</span>
-          </div>
-        </div>
-
-        <div id="link-url" class="link-panel" style="display:none">
-          <div class="field">
-            <p class="field-label">URL</p>
-            <input type="url" id="custom-url" placeholder="https://...">
-          </div>
-          <div class="field">
-            <p class="field-label">Link label (shown in notification)</p>
-            <input type="text" id="url-label" placeholder="e.g. View details">
-          </div>
-        </div>
-
-        <div id="link-none" class="link-panel" style="display:none">
-          <p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0">Notification will open the app home screen when tapped.</p>
-        </div>
-
-        <p class="form-section-title" style="margin-top:1.25rem"><i class="ti ti-clock" aria-hidden="true"></i> Schedule</p>
-        <div class="row2">
-          <div class="field">
-            <p class="field-label">Send time</p>
-            <select id="send-time-type" onchange="toggleScheduleFields()">
-              <option value="now">Send immediately</option>
-              <option value="scheduled">Schedule for later</option>
-            </select>
-          </div>
-          <div class="field" id="schedule-datetime-field" style="display:none">
-            <p class="field-label">Date & time</p>
-            <input type="datetime-local" id="schedule-dt">
-          </div>
-        </div>
-
-        <div class="field">
-          <p class="field-label">Target audience</p>
-          <select id="audience">
-            <option value="all">All users</option>
-            <option value="business-owners">Business owners only</option>
-            <option value="verified">Verified accounts</option>
-          </select>
-        </div>
-
-        <div style="display:flex;gap:8px;margin-top:.5rem">
-          <button class="btn" onclick="saveDraft()"><i class="ti ti-device-floppy" aria-hidden="true"></i> Save draft</button>
-          <button class="btn" onclick="previewNotif()" style="flex:1"><i class="ti ti-eye" aria-hidden="true"></i> Preview</button>
-          <button class="btn btn-primary" onclick="sendNotification()" id="send-btn" style="flex:1"><i class="ti ti-send" aria-hidden="true"></i> Send notification</button>
-        </div>
-      </div>
-
-      <div>
-        <p class="form-section-title"><i class="ti ti-device-mobile" aria-hidden="true"></i> Live preview</p>
-        <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:16px">
-          <div id="notif-preview-card" style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px;min-height:80px">
-            <div style="display:flex;align-items:flex-start;gap:10px">
-              <div style="width:36px;height:36px;border-radius:8px;background:#0f172a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                <i class="ti ti-building-store" style="color:#34d399;font-size:18px" aria-hidden="true"></i>
-              </div>
-              <div style="flex:1;min-width:0">
-                <p style="font-size:13px;font-weight:500;color:var(--color-text-primary)" id="preview-title">Your notification title</p>
-                <p style="font-size:12px;color:var(--color-text-secondary);margin-top:2px;line-height:1.4" id="preview-body">Body text will appear here…</p>
-                <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px" id="preview-link"></p>
-              </div>
-              <div id="preview-img-wrap" style="display:none;flex-shrink:0">
-                <img id="preview-thumb" style="width:48px;height:48px;border-radius:6px;object-fit:cover" alt="">
-              </div>
-            </div>
-          </div>
-          <p style="font-size:11px;color:var(--color-text-tertiary);text-align:center;margin-top:8px">iOS / Android lock screen preview</p>
-
-          <div style="margin-top:1rem;border-top:0.5px solid var(--color-border-tertiary);padding-top:1rem">
-            <p class="field-label">Estimated reach</p>
-            <div class="row2" style="gap:8px">
-              <div class="stat-box">
-                <div class="v" id="est-subscribers">—</div>
-                <div class="l">Active subscribers</div>
-              </div>
-              <div class="stat-box">
-                <div class="v" id="est-delivery">—</div>
-                <div class="l">Expected delivery</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top:1rem">
-          <p class="form-section-title"><i class="ti ti-history" aria-hidden="true"></i> Recent sends</p>
-          <div id="recent-sends-mini" class="notif-list"></div>
-        </div>
-      </div>
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-send" style="font-size:13px" aria-hidden="true"></i> Sent this month</div>
+      <div class="metric-value" id="mSent">24</div>
+      <div class="metric-sub metric-up">↑ 6 vs last month</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-eye" style="font-size:13px" aria-hidden="true"></i> Avg open rate</div>
+      <div class="metric-value" id="mOpen">38%</div>
+      <div class="metric-sub metric-up">↑ 4% vs last month</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-cursor-text" style="font-size:13px" aria-hidden="true"></i> Avg click rate</div>
+      <div class="metric-value" id="mClick">19%</div>
+      <div class="metric-sub metric-down">↓ 2% vs last month</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-clock" style="font-size:13px" aria-hidden="true"></i> Scheduled</div>
+      <div class="metric-value" id="mSched">3</div>
+      <div class="metric-sub">upcoming in queue</div>
     </div>
   </div>
 
-  <div id="sent-tab" class="section">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem">
-      <div class="search-box" style="flex:1">
-        <i class="ti ti-search" aria-hidden="true"></i>
-        <input type="text" placeholder="Search notifications…" oninput="filterSentList(this.value)">
-      </div>
-      <select id="status-filter" onchange="filterSentList(document.querySelector('#sent-tab .search-box input').value)" style="width:140px;padding:8px 12px">
-        <option value="all">All statuses</option>
-        <option value="sent">Sent</option>
-        <option value="scheduled">Scheduled</option>
-        <option value="draft">Draft</option>
-        <option value="failed">Failed</option>
+  <div class="chart-wrap">
+    <div style="position:relative;width:100%;height:120px;"><canvas id="reachChart" role="img" aria-label="Bar chart of daily notification reach over the past 14 days">Daily reach over past 14 days.</canvas></div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <div class="tab-row">
+    <div class="tab active" onclick="switchTab('all',this)">All</div>
+    <div class="tab" onclick="switchTab('active',this)">Live</div>
+    <div class="tab" onclick="switchTab('scheduled',this)">Scheduled</div>
+    <div class="tab" onclick="switchTab('sent',this)">Sent</div>
+    <div class="tab" onclick="switchTab('draft',this)">Drafts</div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title"><i class="ti ti-list" aria-hidden="true"></i> Notifications <span id="countBadge" style="font-size:11px;background:var(--color-background-secondary);padding:1px 8px;border-radius:20px;font-weight:400">6</span></div>
+    <div class="filters">
+      <select class="filter-select" onchange="filterBusiness(this.value)" id="bizFilter">
+        <option value="">All businesses</option>
+      </select>
+      <select class="filter-select" onchange="sortNotifs(this.value)">
+        <option value="date">Sort: date</option>
+        <option value="reach">Sort: reach</option>
+        <option value="ctr">Sort: CTR</option>
       </select>
     </div>
-    <div id="sent-list" class="notif-list"></div>
   </div>
 
-  <div id="analytics-tab" class="section">
-    <div class="metric-grid">
-      <div class="metric">
-        <div class="metric-label">Total sent (30d)</div>
-        <div class="metric-val" id="a-total">—</div>
-        <div class="metric-delta" id="a-total-d"></div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Avg open rate</div>
-        <div class="metric-val" id="a-open">—</div>
-        <div class="metric-delta" id="a-open-d"></div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Avg tap-through</div>
-        <div class="metric-val" id="a-tap">—</div>
-        <div class="metric-delta" id="a-tap-d"></div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Active subscribers</div>
-        <div class="metric-val" id="a-subs">—</div>
-        <div class="metric-delta" id="a-subs-d"></div>
-      </div>
-    </div>
+  <div class="notif-list" id="notifList"></div>
+</div>
 
-    <div class="row2" style="gap:1rem;align-items:flex-start">
-      <div class="card">
-        <div class="card-header"><p class="card-title">Top performing notifications</p></div>
-        <div id="top-notifs" class="bar-chart"></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><p class="card-title">Delivery breakdown</p></div>
-        <div id="delivery-breakdown" class="bar-chart"></div>
-        <div style="margin-top:1rem;border-top:0.5px solid var(--color-border-tertiary);padding-top:.875rem">
-          <p class="card-title" style="margin-bottom:.75rem">Link destination clicks</p>
-          <div id="link-clicks" class="bar-chart"></div>
+<!-- COMPOSE MODAL -->
+<div class="modal-backdrop" id="composeModal" style="display:none">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitleLabel">New notification</div>
+      <button class="modal-close" onclick="closeCompose()" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Business</label>
+          <select class="form-select" id="fBusiness" onchange="onBizChange()">
+            <option value="">— select business —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="fStatus">
+            <option value="scheduled">Scheduled</option>
+            <option value="draft">Draft</option>
+          </select>
         </div>
       </div>
-    </div>
 
-    <div class="card" style="margin-top:1rem">
-      <div class="card-header"><p class="card-title">Notification history timeline</p></div>
-      <div id="history-timeline" class="timeline"></div>
+      <div class="form-group full">
+        <label class="form-label">Title (notification headline)</label>
+        <input type="text" class="form-input" id="fTitle" placeholder="e.g. Flash sale this weekend only!">
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label">Message body</label>
+        <textarea class="form-input form-textarea" id="fBody" placeholder="Short, punchy copy. 100 chars max on lock screen."></textarea>
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label">Photo (optional)</label>
+        <div class="img-upload-area" id="imgDropArea" onclick="document.getElementById('fImage').click()">
+          <input type="file" id="fImage" accept="image/*" style="display:none" onchange="handleImgUpload(event)">
+          <i class="ti ti-photo" style="font-size:28px;color:var(--color-text-tertiary)" aria-hidden="true"></i>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">Click to upload or drag an image</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary)">JPEG / PNG / WebP · max 4 MB</div>
+          <img id="imgPreview" class="img-preview" style="display:none" alt="Preview">
+          <button id="imgClear" style="display:none;margin-top:6px;font-size:11px;color:var(--red);background:none;border:none;cursor:pointer" onclick="clearImg(event)">Remove image</button>
+        </div>
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label">Link destination</label>
+        <div class="link-type-tabs" id="linkTabs">
+          <button class="link-tab active" onclick="setLinkType('directory',this)">Business card</button>
+          <button class="link-tab" onclick="setLinkType('business-post',this)">Photo post</button>
+          <button class="link-tab" onclick="setLinkType('url',this)">Custom URL</button>
+          <button class="link-tab" onclick="setLinkType('deals',this)">Deals page</button>
+          <button class="link-tab" onclick="setLinkType('events',this)">Events page</button>
+        </div>
+        <div id="linkFieldWrap">
+          <input type="text" class="form-input" id="fLinkValue" placeholder="Auto — opens business directory card" disabled style="color:var(--color-text-tertiary)">
+        </div>
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label">Schedule — date &amp; time</label>
+        <div class="schedule-grid">
+          <input type="date" class="form-input" id="fDate">
+          <input type="time" class="form-input" id="fTime" value="09:00">
+          <select class="form-select" id="fRepeat" onchange="toggleRepeat()">
+            <option value="once">Send once</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="custom">Custom days</option>
+          </select>
+        </div>
+        <div id="customDaysWrap" style="display:none;margin-top:8px">
+          <div class="repeat-row" id="dayPills">
+            <span class="repeat-day sel" onclick="toggleDay(this)" data-d="Mon">Mon</span>
+            <span class="repeat-day" onclick="toggleDay(this)" data-d="Tue">Tue</span>
+            <span class="repeat-day" onclick="toggleDay(this)" data-d="Wed">Wed</span>
+            <span class="repeat-day" onclick="toggleDay(this)" data-d="Thu">Thu</span>
+            <span class="repeat-day" onclick="toggleDay(this)" data-d="Fri">Fri</span>
+            <span class="repeat-day" onclick="toggleDay(this)" data-d="Sat">Sat</span>
+            <span class="repeat-day" onclick="toggleDay(this)" data-d="Sun">Sun</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="endDateWrap" style="display:none" class="form-group full">
+        <label class="form-label">End date (for repeating)</label>
+        <input type="date" class="form-input" id="fEndDate">
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeCompose()">Cancel</button>
+      <button class="btn-primary" onclick="saveNotif()"><i class="ti ti-check" aria-hidden="true"></i> <span id="saveBtnLabel">Save &amp; schedule</span></button>
     </div>
   </div>
 </div>
 
+<!-- ANALYTICS MODAL -->
+<div class="modal-backdrop" id="analyticsModal" style="display:none">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="analyticsBizName">Notification analytics</div>
+      <button class="modal-close" onclick="document.getElementById('analyticsModal').style.display='none'" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="analyticsBody"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+let editingId = null;
+let currentLinkType = 'directory';
+let currentTab = 'all';
+let imgBase64 = null;
+
 const BUSINESSES = [
-  {id:'b1',name:'Rose Garden Café',category:'Food & Drink'},
-  {id:'b2',name:'Milledgeville Hardware',category:'Home & Garden'},
-  {id:'b3',name:'Main Street Boutique',category:'Shopping'},
-  {id:'b4',name:'Capital City Barbershop',category:'Services'},
-  {id:'b5',name:'Lake Sinclair Marina',category:'Recreation'},
-  {id:'b6',name:'Barefoot Books',category:'Shopping'},
-  {id:'b7',name:'The Brick House Grille',category:'Food & Drink'},
-  {id:'b8',name:'Milledgeville Urgent Care',category:'Health'},
+  {id:'b1', name:'The Brick', category:'Restaurant', emoji:'🍕'},
+  {id:'b2', name:'Barefoot Boutique', category:'Retail', emoji:'👗'},
+  {id:'b3', name:'Lake House Spa', category:'Wellness', emoji:'🧖'},
+  {id:'b4', name:'Milledgeville Hardware', category:'Home', emoji:'🔧'},
+  {id:'b5', name:"Copper's Coffee", category:'Cafe', emoji:'☕'},
+  {id:'b6', name:'Oconee Outdoors', category:'Sports', emoji:'🏕️'},
 ];
 
-const NOTIFICATIONS = [
-  {id:'n1',title:'Grand Opening — Rose Garden Café',body:'Join us Saturday for free samples and live music! First 50 guests get a free coffee.',status:'sent',sentAt:'2026-06-01T10:00',business:'Rose Garden Café',businessId:'b1',audience:'all',delivered:3241,opened:1487,tapped:624,linkType:'business',hasImage:true},
-  {id:'n2',title:'Weekend Deal at The Brick House',body:'Buy one entrée, get one 50% off this Saturday & Sunday only.',status:'sent',sentAt:'2026-05-30T09:00',business:'The Brick House Grille',businessId:'b7',audience:'all',delivered:3198,opened:1102,tapped:481,linkType:'business',hasImage:false},
-  {id:'n3',title:'New summer inventory at Main Street Boutique',body:'Fresh arrivals every week — stop in and see what\'s new!',status:'scheduled',scheduledFor:'2026-06-05T08:30',business:'Main Street Boutique',businessId:'b3',audience:'all',delivered:0,opened:0,tapped:0,linkType:'business',hasImage:true},
-  {id:'n4',title:'Milledgeville Community Events — June',body:'Farmers market, art walk, and lake fest all this month.',status:'sent',sentAt:'2026-06-01T07:00',business:null,audience:'all',delivered:3301,opened:2011,tapped:877,linkType:'page',page:'events',hasImage:false},
-  {id:'n5',title:'Marketplace spotlight — featured listings',body:'Check out this week\'s best marketplace finds from your neighbors.',status:'draft',business:null,audience:'all',delivered:0,opened:0,tapped:0,linkType:'page',page:'marketplace',hasImage:false},
-  {id:'n6',title:'Capital City Barbershop — walk-ins welcome',body:'No appointment needed this Friday. Come in before 6pm.',status:'failed',sentAt:'2026-05-28T14:00',business:'Capital City Barbershop',businessId:'b4',audience:'all',delivered:0,opened:0,tapped:0,linkType:'business',hasImage:false},
+let notifications = [
+  {id:'n1', bizId:'b1', bizName:'The Brick', bizEmoji:'🍕', status:'active', title:'Happy Hour starts NOW 🍺', body:'2-for-1 drinks until 7pm every Friday. Come join us downtown!', link:{type:'directory'}, hasImg:true, scheduledAt:'Fri 6:00 PM', repeat:'weekly', days:['Fri'], stats:{sent:1240,opens:471,clicks:218,ctr:18}},
+  {id:'n2', bizId:'b2', bizName:'Barefoot Boutique', bizEmoji:'👗', status:'scheduled', title:'Summer collection drops tomorrow', body:'New arrivals from 15+ local designers. Early access for app members!', link:{type:'url',value:'https://milledgevilleconnect.com'}, hasImg:true, scheduledAt:'Tomorrow 9:00 AM', repeat:'once', days:[], stats:{sent:0,opens:0,clicks:0,ctr:0}},
+  {id:'n3', bizId:'b3', bizName:'Lake House Spa', bizEmoji:'🧖', status:'scheduled', title:'Book your Mother\'s Day massage', body:'Limited slots available. 20% off all services this Sunday only.', link:{type:'events'}, hasImg:false, scheduledAt:'Sat 10:00 AM', repeat:'once', days:[], stats:{sent:0,opens:0,clicks:0,ctr:0}},
+  {id:'n4', bizId:'b5', bizName:"Copper's Coffee", bizEmoji:'☕', status:'sent', title:'New seasonal latte is here!', body:'Honey lavender oat latte — only while supplies last. Stop in today!', link:{type:'business-post'}, hasImg:true, scheduledAt:'Mon 7:30 AM', repeat:'once', days:[], stats:{sent:1890,opens:832,clicks:401,ctr:21}},
+  {id:'n5', bizId:'b4', bizName:'Milledgeville Hardware', bizEmoji:'🔧', status:'sent', title:'Storm prep checklist 🌪️', body:'Generators, flashlights & bottled water fully stocked. Be ready!', link:{type:'directory'}, hasImg:false, scheduledAt:'Wed 8:00 AM', repeat:'once', days:[], stats:{sent:2100,opens:756,clicks:189,ctr:9}},
+  {id:'n6', bizId:'b6', bizName:'Oconee Outdoors', bizEmoji:'🏕️', status:'draft', title:'Kayak rentals open this weekend', body:'Lake Sinclair access, gear included. Book now before it fills up.', link:{type:'deals'}, hasImg:false, scheduledAt:'—', repeat:'once', days:[], stats:{sent:0,opens:0,clicks:0,ctr:0}},
 ];
 
-let currentLinkType = 'business';
-let selectedBizId = null;
-let selectedPage = null;
-let imageData = null;
-let openDetailId = null;
-let allNotifs = [...NOTIFICATIONS];
-
-function switchTab(tabId, btnId, el){
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('visible'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById(tabId).classList.add('visible');
-  el.classList.add('active');
-  if(tabId==='sent-tab') renderSentList(allNotifs);
-  if(tabId==='analytics-tab') renderAnalytics();
+function init() {
+  populateBizDropdowns();
+  setTodayDate();
+  renderList();
+  buildReachChart();
 }
 
-function setLinkType(type, el){
-  currentLinkType = type;
-  document.querySelectorAll('.lt').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
-  document.querySelectorAll('.link-panel').forEach(p=>p.style.display='none');
-  document.getElementById('link-'+type).style.display='block';
-  updatePreviewLink();
+function setTodayDate(){
+  const d=new Date();
+  const s=d.toISOString().split('T')[0];
+  document.getElementById('fDate').value=s;
+  document.getElementById('fDate').min=s;
 }
 
-function selectPage(el){
-  document.querySelectorAll('.page-chip').forEach(c=>c.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedPage = el.dataset.page;
-  updatePreviewLink();
-}
-
-function filterBizList(q){
-  renderBizList(q);
-}
-
-function renderBizList(q=''){
-  const container = document.getElementById('biz-list');
-  const filtered = BUSINESSES.filter(b=>b.name.toLowerCase().includes(q.toLowerCase()));
-  if(!filtered.length){container.innerHTML='<p style="padding:8px;font-size:13px;color:var(--color-text-tertiary)">No businesses found</p>';return;}
-  container.innerHTML = filtered.map(b=>`
-    <label class="biz-option">
-      <input type="radio" name="biz-select" value="${b.id}" onchange="selectBiz('${b.id}','${b.name}')">
-      <div>
-        <p style="font-size:13px;font-weight:500">${b.name}</p>
-        <p style="font-size:11px;color:var(--color-text-secondary)">${b.category}</p>
-      </div>
-    </label>`).join('');
-}
-
-function selectBiz(id,name){
-  selectedBizId = id;
-  updatePreviewLink();
-}
-
-function updatePreviewLink(){
-  const el = document.getElementById('preview-link');
-  if(currentLinkType==='business'&&selectedBizId){
-    const biz = BUSINESSES.find(b=>b.id===selectedBizId);
-    el.innerHTML = biz ? `<i class="ti ti-arrow-right" style="font-size:12px" aria-hidden="true"></i> Opens ${biz.name} directory card` : '';
-  } else if(currentLinkType==='page'&&selectedPage){
-    el.innerHTML = `<i class="ti ti-arrow-right" style="font-size:12px" aria-hidden="true"></i> Opens ${selectedPage} page`;
-  } else if(currentLinkType==='url'){
-    const url = document.getElementById('custom-url').value;
-    el.innerHTML = url ? `<i class="ti ti-external-link" style="font-size:12px" aria-hidden="true"></i> ${url}` : '';
-  } else {
-    el.textContent = '';
-  }
-}
-
-function handleImageUpload(input){
-  const file = input.files[0];
-  if(!file) return;
-  if(file.size > 4*1024*1024){alert('Image must be under 4 MB');return;}
-  const reader = new FileReader();
-  reader.onload = e => {
-    imageData = e.target.result;
-    const prev = document.getElementById('image-preview-el');
-    prev.src = imageData;
-    prev.style.display = 'block';
-    document.getElementById('clear-img-btn').style.display = 'inline-flex';
-    const previewWrap = document.getElementById('preview-img-wrap');
-    document.getElementById('preview-thumb').src = imageData;
-    previewWrap.style.display = 'block';
-    const drop = document.getElementById('img-drop');
-    drop.style.borderStyle = 'solid';
-    drop.style.borderColor = 'var(--color-border-primary)';
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearImage(){
-  imageData = null;
-  document.getElementById('notif-image').value = '';
-  document.getElementById('image-preview-el').style.display = 'none';
-  document.getElementById('clear-img-btn').style.display = 'none';
-  document.getElementById('preview-img-wrap').style.display = 'none';
-  const drop = document.getElementById('img-drop');
-  drop.style.borderStyle = 'dashed';
-  drop.style.borderColor = 'var(--color-border-secondary)';
-}
-
-function toggleScheduleFields(){
-  const type = document.getElementById('send-time-type').value;
-  document.getElementById('schedule-datetime-field').style.display = type==='scheduled'?'block':'none';
-  document.getElementById('send-btn').innerHTML = type==='scheduled'
-    ? '<i class="ti ti-calendar" aria-hidden="true"></i> Schedule notification'
-    : '<i class="ti ti-send" aria-hidden="true"></i> Send notification';
-}
-
-document.getElementById('notif-title').addEventListener('input',function(){
-  document.getElementById('title-counter').textContent = this.value.length+' / 65';
-  document.getElementById('preview-title').textContent = this.value || 'Your notification title';
-});
-document.getElementById('notif-body').addEventListener('input',function(){
-  document.getElementById('body-counter').textContent = this.value.length+' / 200';
-  document.getElementById('preview-body').textContent = this.value || 'Body text will appear here…';
-});
-document.getElementById('custom-url').addEventListener('input', updatePreviewLink);
-document.getElementById('audience').addEventListener('change', updateEstimates);
-
-function updateEstimates(){
-  const audience = document.getElementById('audience').value;
-  const total = audience==='all'?3301:audience==='business-owners'?87:842;
-  const delivery = Math.round(total * 0.89);
-  document.getElementById('est-subscribers').textContent = total.toLocaleString();
-  document.getElementById('est-delivery').textContent = delivery.toLocaleString();
-}
-
-function saveDraft(){
-  const title = document.getElementById('notif-title').value;
-  if(!title.trim()){
-    showToastLocal('Add a title before saving draft','warn');return;
-  }
-  const n = buildNotifObject('draft');
-  allNotifs.unshift(n);
-  showToastLocal('Draft saved','ok');
-}
-
-function sendNotification(){
-  const title = document.getElementById('notif-title').value;
-  const body = document.getElementById('notif-body').value;
-  if(!title.trim()||!body.trim()){showToastLocal('Title and body are required','warn');return;}
-  const timeType = document.getElementById('send-time-type').value;
-  const status = timeType==='scheduled'?'scheduled':'sent';
-  const n = buildNotifObject(status);
-  allNotifs.unshift(n);
-  renderRecentMini();
-  if(status==='sent'){
-    showToastLocal('Notification sent to '+n.delivered.toLocaleString()+' subscribers','ok');
-  } else {
-    showToastLocal('Notification scheduled','ok');
-  }
-  clearForm();
-}
-
-function buildNotifObject(status){
-  const biz = selectedBizId ? BUSINESSES.find(b=>b.id===selectedBizId) : null;
-  const delivered = status==='sent' ? Math.round(3241 * 0.87 + Math.random()*200) : 0;
-  const opened = status==='sent' ? Math.round(delivered * (0.38+Math.random()*0.12)) : 0;
-  const tapped = status==='sent' ? Math.round(opened * (0.38+Math.random()*0.12)) : 0;
-  const now = new Date().toISOString().slice(0,16);
-  const dt = document.getElementById('schedule-dt').value;
-  return {
-    id:'n'+Date.now(),
-    title:document.getElementById('notif-title').value,
-    body:document.getElementById('notif-body').value,
-    status,
-    sentAt:status==='sent'?now:undefined,
-    scheduledFor:status==='scheduled'?dt:undefined,
-    business:biz?biz.name:null,
-    businessId:biz?biz.id:null,
-    audience:document.getElementById('audience').value,
-    delivered,opened,tapped,
-    linkType:currentLinkType,
-    page:currentLinkType==='page'?selectedPage:undefined,
-    hasImage:!!imageData,
-  };
-}
-
-function clearForm(){
-  document.getElementById('notif-title').value='';
-  document.getElementById('notif-body').value='';
-  document.getElementById('title-counter').textContent='0 / 65';
-  document.getElementById('body-counter').textContent='0 / 200';
-  document.getElementById('preview-title').textContent='Your notification title';
-  document.getElementById('preview-body').textContent='Body text will appear here…';
-  clearImage();
-}
-
-function previewNotif(){
-  const title = document.getElementById('notif-title').value||'Your notification title';
-  const body = document.getElementById('notif-body').value||'Body text here…';
-  showToastLocal('Preview: "'+title.substring(0,40)+'"','info');
-}
-
-function showCompose(){
-  switchTab('compose-tab','compose-btn',document.getElementById('compose-btn'));
-  document.getElementById('notif-title').focus();
-}
-
-function filterSentList(q){
-  const statusF = document.getElementById('status-filter').value;
-  let filtered = allNotifs.filter(n=>{
-    const matchQ = !q||n.title.toLowerCase().includes(q.toLowerCase())||(n.business||'').toLowerCase().includes(q.toLowerCase());
-    const matchS = statusF==='all'||n.status===statusF;
-    return matchQ&&matchS;
+function populateBizDropdowns(){
+  const sel=document.getElementById('fBusiness');
+  const fsel=document.getElementById('bizFilter');
+  BUSINESSES.forEach(b=>{
+    sel.innerHTML+=`<option value="${b.id}">${b.emoji} ${b.name}</option>`;
+    fsel.innerHTML+=`<option value="${b.id}">${b.emoji} ${b.name}</option>`;
   });
-  renderSentList(filtered);
 }
 
-function renderSentList(list){
-  const container = document.getElementById('sent-list');
-  if(!list.length){container.innerHTML='<div class="empty"><i class="ti ti-inbox" style="font-size:32px;margin-bottom:8px;display:block" aria-hidden="true"></i>No notifications found</div>';return;}
-  container.innerHTML = list.map(n=>{
-    const openRate = n.delivered>0 ? Math.round(n.opened/n.delivered*100)+'%' : '—';
-    const tapRate = n.opened>0 ? Math.round(n.tapped/n.opened*100)+'%' : '—';
-    const dateStr = n.sentAt||n.scheduledFor||'';
-    const dateLabel = dateStr ? new Date(dateStr).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-    const badge = `<span class="badge badge-${n.status}">${n.status.charAt(0).toUpperCase()+n.status.slice(1)}</span>`;
-    const progress = n.delivered>0 ? `<div class="progress-bar"><div class="progress-fill" style="width:${Math.round(n.opened/n.delivered*100)}%"></div></div>` : '';
-    return `
-    <div class="notif-item" onclick="toggleDetail('${n.id}')">
-      <div class="notif-item-header">
-        <div class="notif-title-row">
-          <div class="notif-thumb">${n.hasImage?'<i class="ti ti-photo" style="font-size:16px;color:var(--color-text-tertiary)" aria-hidden="true"></i>':'<i class="ti ti-bell" style="font-size:16px;color:var(--color-text-tertiary)" aria-hidden="true"></i>'}</div>
-          <div>
-            <p style="font-size:13px;font-weight:500">${n.title}</p>
-            ${n.business?`<p style="font-size:11px;color:var(--color-text-secondary);margin-top:1px">${n.business}</p>`:''}
-          </div>
-        </div>
-        <div class="actions-row">
-          ${badge}
-          ${n.status==='scheduled'?`<button class="btn btn-sm" onclick="event.stopPropagation();cancelScheduled('${n.id}')"><i class="ti ti-x" aria-hidden="true"></i></button>`:''}
-          ${n.status==='draft'?`<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();sendDraft('${n.id}')"><i class="ti ti-send" aria-hidden="true"></i> Send</button>`:''}
-        </div>
+let _filterBiz='', _sortKey='date';
+function filterBusiness(v){_filterBiz=v;renderList();}
+function sortNotifs(v){_sortKey=v;renderList();}
+
+function switchTab(t,el){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+
+function renderList(){
+  let list=[...notifications];
+  if(currentTab!=='all') list=list.filter(n=>n.status===currentTab);
+  if(_filterBiz) list=list.filter(n=>n.bizId===_filterBiz);
+  if(_sortKey==='reach') list.sort((a,b)=>b.stats.sent-a.stats.sent);
+  else if(_sortKey==='ctr') list.sort((a,b)=>b.stats.ctr-a.stats.ctr);
+  document.getElementById('countBadge').textContent=list.length;
+  const el=document.getElementById('notifList');
+  if(!list.length){el.innerHTML=`<div class="empty-state"><i class="ti ti-bell-off" style="font-size:32px;opacity:.3" aria-hidden="true"></i><div style="margin-top:8px;font-size:14px">No notifications here yet</div></div>`;return;}
+  el.innerHTML=list.map(n=>notifCard(n)).join('');
+}
+
+function notifCard(n){
+  const pillClass={active:'pill-active',scheduled:'pill-scheduled',draft:'pill-draft',sent:'pill-sent'};
+  const pillLabel={active:'Live',scheduled:'Scheduled',draft:'Draft',sent:'Sent'};
+  const linkBadge=n.link.type==='url'
+    ?`<span class="notif-link-badge"><i class="ti ti-external-link" style="font-size:10px" aria-hidden="true"></i> URL</span>`
+    :n.link.type==='directory'
+    ?`<span class="notif-link-badge"><i class="ti ti-building-store" style="font-size:10px" aria-hidden="true"></i> Directory card</span>`
+    :n.link.type==='business-post'
+    ?`<span class="notif-link-badge"><i class="ti ti-photo" style="font-size:10px" aria-hidden="true"></i> Photo post</span>`
+    :`<span class="notif-link-badge"><i class="ti ti-link" style="font-size:10px" aria-hidden="true"></i> ${n.link.type}</span>`;
+  const imgBadge=n.hasImg?`<span class="has-img-badge"><i class="ti ti-photo" style="font-size:10px" aria-hidden="true"></i> Image</span>`:'';
+  const statsHtml=(n.stats.sent>0)?`<div class="notif-stats">
+    <div class="stat-box"><div class="stat-num">${n.stats.sent.toLocaleString()}</div><div class="stat-lbl">Delivered</div></div>
+    <div class="stat-box"><div class="stat-num">${Math.round(n.stats.opens/n.stats.sent*100)}%</div><div class="stat-lbl">Open rate</div></div>
+    <div class="stat-box"><div class="stat-num">${n.stats.ctr}%</div><div class="stat-lbl">Click rate</div></div>
+    <div class="stat-box"><div class="stat-num">${n.stats.clicks.toLocaleString()}</div><div class="stat-lbl">Clicks</div></div>
+    <button class="action-btn" style="margin-left:auto;font-size:11px" onclick="openAnalytics('${n.id}')"><i class="ti ti-chart-bar" style="font-size:12px" aria-hidden="true"></i> Full report</button>
+  </div>`:'';
+  const repeatBadge=n.repeat!=='once'?`<span style="font-size:10px;background:var(--color-background-secondary);padding:2px 7px;border-radius:20px;color:var(--color-text-secondary)"><i class="ti ti-refresh" style="font-size:9px" aria-hidden="true"></i> ${n.repeat}</span>`:'';
+  return `<div class="notif-card ${n.status}" id="nc-${n.id}">
+    <div class="biz-avatar" aria-hidden="true" style="font-size:20px">${n.bizEmoji}</div>
+    <div class="notif-body">
+      <div class="notif-top">
+        <span class="biz-name">${esc(n.bizName)}</span>
+        <span class="status-pill ${pillClass[n.status]}">${pillLabel[n.status]}</span>
+        ${repeatBadge}
       </div>
-      <p class="notif-body">${n.body}</p>
+      <div class="notif-title">${esc(n.title)}</div>
+      <div class="notif-msg">${esc(n.body)}</div>
       <div class="notif-meta">
-        ${dateLabel?`<span><i class="ti ti-calendar" style="font-size:12px" aria-hidden="true"></i>${dateLabel}</span>`:''}
-        ${n.delivered>0?`<span><i class="ti ti-users" style="font-size:12px" aria-hidden="true"></i>${n.delivered.toLocaleString()} delivered</span>`:''}
-        ${n.delivered>0?`<span><i class="ti ti-eye" style="font-size:12px" aria-hidden="true"></i>${openRate} open rate</span>`:''}
-        ${n.tapped>0?`<span><i class="ti ti-hand-click" style="font-size:12px" aria-hidden="true"></i>${tapRate} tap rate</span>`:''}
+        <span class="meta-item"><i class="ti ti-clock" style="font-size:11px" aria-hidden="true"></i> ${esc(n.scheduledAt)}</span>
+        ${linkBadge}
+        ${imgBadge}
       </div>
-      ${progress}
-      <div class="detail-panel${openDetailId===n.id?' open':''}" id="detail-${n.id}">
-        <div class="stat-row">
-          <div class="stat-box"><div class="v">${n.delivered.toLocaleString()}</div><div class="l">Delivered</div></div>
-          <div class="stat-box"><div class="v">${n.opened.toLocaleString()}</div><div class="l">Opened</div></div>
-          <div class="stat-box"><div class="v">${n.tapped.toLocaleString()}</div><div class="l">Tapped</div></div>
-        </div>
-        <div class="bar-chart">
-          <div class="bar-row">
-            <span class="bar-label">Delivery rate</span>
-            <div class="bar-track"><div class="bar-fill" style="width:89%;background:#63991a"></div></div>
-            <span class="bar-val">89%</span>
-          </div>
-          <div class="bar-row">
-            <span class="bar-label">Open rate</span>
-            <div class="bar-track"><div class="bar-fill" style="width:${n.delivered>0?Math.round(n.opened/n.delivered*100):0}%;background:#185fa5"></div></div>
-            <span class="bar-val">${openRate}</span>
-          </div>
-          <div class="bar-row">
-            <span class="bar-label">Tap rate</span>
-            <div class="bar-track"><div class="bar-fill" style="width:${n.opened>0?Math.round(n.tapped/n.opened*100):0}%;background:#854f0b"></div></div>
-            <span class="bar-val">${tapRate}</span>
-          </div>
-        </div>
-        <p style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px">
-          Link: ${n.linkType==='business'&&n.business?'→ '+n.business+' directory card':n.linkType==='page'&&n.page?'→ '+n.page+' page':n.linkType==='url'?'→ external URL':'No link'} · Audience: ${n.audience}
-        </p>
-      </div>
-    </div>`;
-  }).join('');
+      ${statsHtml}
+    </div>
+    <div class="notif-actions">
+      <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px" aria-hidden="true"></i> Edit</button>
+      ${n.status==='scheduled'||n.status==='draft'?`<button class="action-btn" onclick="sendNow('${n.id}')"><i class="ti ti-send" style="font-size:12px" aria-hidden="true"></i> Send now</button>`:''}
+      <button class="action-btn del" onclick="deleteNotif('${n.id}')"><i class="ti ti-trash" style="font-size:12px" aria-hidden="true"></i> Delete</button>
+    </div>
+  </div>`;
 }
 
-function toggleDetail(id){
-  openDetailId = openDetailId===id?null:id;
-  renderSentList(allNotifs);
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function openCompose(){
+  editingId=null;
+  resetForm();
+  document.getElementById('modalTitleLabel').textContent='New notification';
+  document.getElementById('saveBtnLabel').textContent='Save & schedule';
+  document.getElementById('composeModal').style.display='flex';
 }
 
-function cancelScheduled(id){
-  allNotifs = allNotifs.map(n=>n.id===id?{...n,status:'draft'}:n);
-  renderSentList(allNotifs);
-  showToastLocal('Notification moved to drafts','ok');
-}
-
-function sendDraft(id){
-  const n = allNotifs.find(x=>x.id===id);
+function openEdit(id){
+  const n=notifications.find(x=>x.id===id);
   if(!n) return;
+  editingId=id;
+  resetForm();
+  document.getElementById('modalTitleLabel').textContent='Edit notification';
+  document.getElementById('saveBtnLabel').textContent='Update';
+  document.getElementById('fBusiness').value=n.bizId;
+  document.getElementById('fStatus').value=n.status==='sent'?'scheduled':n.status;
+  document.getElementById('fTitle').value=n.title;
+  document.getElementById('fBody').value=n.body;
+  document.getElementById('fRepeat').value=n.repeat;
+  toggleRepeat();
+  if(n.days.length){
+    document.querySelectorAll('.repeat-day').forEach(d=>{
+      d.classList.toggle('sel',n.days.includes(d.dataset.d));
+    });
+  }
+  setLinkTypeActive(n.link.type);
+  if(n.link.value) document.getElementById('fLinkValue').value=n.link.value;
+  document.getElementById('composeModal').style.display='flex';
+}
+
+function closeCompose(){document.getElementById('composeModal').style.display='none';}
+
+function resetForm(){
+  document.getElementById('fBusiness').value='';
+  document.getElementById('fStatus').value='scheduled';
+  document.getElementById('fTitle').value='';
+  document.getElementById('fBody').value='';
+  document.getElementById('fRepeat').value='once';
+  document.getElementById('fLinkValue').value='';
+  document.getElementById('fLinkValue').disabled=true;
+  document.getElementById('fLinkValue').placeholder='Auto — opens business directory card';
+  imgBase64=null;
+  document.getElementById('imgPreview').style.display='none';
+  document.getElementById('imgClear').style.display='none';
+  document.getElementById('customDaysWrap').style.display='none';
+  document.getElementById('endDateWrap').style.display='none';
+  document.querySelectorAll('.repeat-day').forEach(d=>d.classList.remove('sel'));
+  document.querySelector('[data-d="Mon"]').classList.add('sel');
+  setLinkTypeActive('directory');
+  currentLinkType='directory';
+  setTodayDate();
+}
+
+function setLinkType(t,btn){
+  currentLinkType=t;
+  setLinkTypeActive(t);
+}
+function setLinkTypeActive(t){
+  currentLinkType=t;
+  document.querySelectorAll('.link-tab').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('onclick').includes(`'${t}'`));
+  });
+  const inp=document.getElementById('fLinkValue');
+  inp.value='';
+  if(t==='url'){
+    inp.disabled=false;
+    inp.placeholder='https://...';
+  } else if(t==='directory'){
+    inp.disabled=true;
+    inp.placeholder='Auto — opens business directory card';
+  } else if(t==='business-post'){
+    inp.disabled=true;
+    inp.placeholder='Auto — opens most recent photo post';
+  } else {
+    inp.disabled=true;
+    inp.placeholder=`Auto — navigates to ${t} page`;
+  }
+}
+
+function toggleRepeat(){
+  const v=document.getElementById('fRepeat').value;
+  document.getElementById('customDaysWrap').style.display=v==='custom'?'block':'none';
+  document.getElementById('endDateWrap').style.display=(v==='daily'||v==='weekly'||v==='custom')?'block':'none';
+}
+
+function toggleDay(el){el.classList.toggle('sel');}
+
+function handleImgUpload(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  if(file.size>4*1024*1024){alert('Image must be under 4 MB');return;}
+  const r=new FileReader();
+  r.onload=ev=>{
+    imgBase64=ev.target.result;
+    const prev=document.getElementById('imgPreview');
+    prev.src=imgBase64;
+    prev.style.display='block';
+    document.getElementById('imgClear').style.display='inline-block';
+  };
+  r.readAsDataURL(file);
+}
+
+function clearImg(e){
+  e.stopPropagation();
+  imgBase64=null;
+  document.getElementById('imgPreview').style.display='none';
+  document.getElementById('imgClear').style.display='none';
+  document.getElementById('fImage').value='';
+}
+
+function onBizChange(){}
+
+function saveNotif(){
+  const bizId=document.getElementById('fBusiness').value;
+  const biz=BUSINESSES.find(b=>b.id===bizId);
+  const title=document.getElementById('fTitle').value.trim();
+  const body=document.getElementById('fBody').value.trim();
+  const status=document.getElementById('fStatus').value;
+  const repeat=document.getElementById('fRepeat').value;
+  const dateVal=document.getElementById('fDate').value;
+  const timeVal=document.getElementById('fTime').value;
+  if(!bizId||!title||!body){
+    alert('Please fill in business, title, and message.');
+    return;
+  }
+  const days=repeat==='custom'?[...document.querySelectorAll('.repeat-day.sel')].map(d=>d.dataset.d):
+             repeat==='weekly'?['Mon']:[];
+  const linkVal=document.getElementById('fLinkValue').value.trim();
+  const link={type:currentLinkType};
+  if(linkVal) link.value=linkVal;
+  let scheduledAt='—';
+  if(dateVal&&timeVal){
+    const d=new Date(dateVal+'T'+timeVal);
+    scheduledAt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  }
+  if(editingId){
+    const idx=notifications.findIndex(n=>n.id===editingId);
+    if(idx>-1){
+      notifications[idx]={...notifications[idx],bizId,bizName:biz.name,bizEmoji:biz.emoji,title,body,status,repeat,days,link,hasImg:!!imgBase64,scheduledAt};
+    }
+  } else {
+    const id='n'+(Date.now());
+    notifications.unshift({id,bizId,bizName:biz.name,bizEmoji:biz.emoji,status,title,body,link,hasImg:!!imgBase64,scheduledAt,repeat,days,stats:{sent:0,opens:0,clicks:0,ctr:0}});
+  }
+  closeCompose();
+  renderList();
+  updateTopMetrics();
+}
+
+function deleteNotif(id){
+  if(!confirm('Delete this notification?')) return;
+  notifications=notifications.filter(n=>n.id!==id);
+  renderList();
+  updateTopMetrics();
+}
+
+function sendNow(id){
+  const n=notifications.find(x=>x.id===id);
+  if(!n) return;
+  if(!confirm(`Send "${n.title}" to all subscribers now?`)) return;
   n.status='sent';
-  n.sentAt=new Date().toISOString().slice(0,16);
-  n.delivered=Math.round(3200*0.87+Math.random()*200);
-  n.opened=Math.round(n.delivered*0.42);
-  n.tapped=Math.round(n.opened*0.40);
-  renderSentList(allNotifs);
-  showToastLocal('Draft sent to '+n.delivered.toLocaleString()+' subscribers','ok');
+  n.scheduledAt='Just now';
+  n.stats={sent:Math.floor(1200+Math.random()*1000),opens:0,clicks:0,ctr:0};
+  n.stats.opens=Math.floor(n.stats.sent*.3+Math.random()*n.stats.sent*.2);
+  n.stats.clicks=Math.floor(n.stats.opens*.4+Math.random()*n.stats.opens*.2);
+  n.stats.ctr=Math.round(n.stats.clicks/n.stats.sent*100);
+  renderList();
+  updateTopMetrics();
 }
 
-function renderAnalytics(){
-  const sent = allNotifs.filter(n=>n.status==='sent');
-  const totalDelivered = sent.reduce((s,n)=>s+n.delivered,0);
-  const totalOpened = sent.reduce((s,n)=>s+n.opened,0);
-  const totalTapped = sent.reduce((s,n)=>s+n.tapped,0);
-  const avgOpen = totalDelivered>0 ? Math.round(totalOpened/totalDelivered*100) : 0;
-  const avgTap = totalOpened>0 ? Math.round(totalTapped/totalOpened*100) : 0;
-  document.getElementById('a-total').textContent = sent.length;
-  document.getElementById('a-total-d').textContent = '+2 vs last month';
-  document.getElementById('a-open').textContent = avgOpen+'%';
-  document.getElementById('a-open-d').textContent = '+3% vs last month';
-  document.getElementById('a-tap').textContent = avgTap+'%';
-  document.getElementById('a-tap-d').textContent = '+1% vs last month';
-  document.getElementById('a-subs').textContent = '3,301';
-  document.getElementById('a-subs-d').textContent = '+47 this week';
+function updateTopMetrics(){
+  const sched=notifications.filter(n=>n.status==='scheduled'||n.status==='draft').length;
+  document.getElementById('mSched').textContent=sched;
+}
 
-  const topSorted = [...sent].sort((a,b)=>(b.opened/Math.max(b.delivered,1))-(a.opened/Math.max(a.delivered,1))).slice(0,5);
-  document.getElementById('top-notifs').innerHTML = topSorted.map(n=>{
-    const rate = Math.round(n.opened/Math.max(n.delivered,1)*100);
-    return `<div class="bar-row">
-      <span class="bar-label" title="${n.title}">${n.title.substring(0,18)}…</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${rate}%;background:#185fa5"></div></div>
-      <span class="bar-val">${rate}%</span>
+function openAnalytics(id){
+  const n=notifications.find(x=>x.id===id);
+  if(!n||!n.stats.sent) return;
+  document.getElementById('analyticsBizName').textContent=`${n.bizEmoji} ${n.bizName} — analytics`;
+  const openRate=Math.round(n.stats.opens/n.stats.sent*100);
+  const body=document.getElementById('analyticsBody');
+  body.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
+      <div class="metric-card"><div class="metric-label">Delivered</div><div class="metric-value">${n.stats.sent.toLocaleString()}</div></div>
+      <div class="metric-card"><div class="metric-label">Open rate</div><div class="metric-value">${openRate}%</div></div>
+      <div class="metric-card"><div class="metric-label">Click rate</div><div class="metric-value">${n.stats.ctr}%</div></div>
+    </div>
+    <div style="position:relative;width:100%;height:180px;margin-bottom:1rem">
+      <canvas id="analyticsChart" role="img" aria-label="Funnel: delivered, opened, clicked">${n.stats.sent.toLocaleString()} delivered, ${n.stats.opens.toLocaleString()} opened, ${n.stats.clicks.toLocaleString()} clicked.</canvas>
+    </div>
+    <div style="font-size:12px;color:var(--color-text-secondary)">
+      <strong style="font-weight:500">Title:</strong> ${esc(n.title)}<br>
+      <strong style="font-weight:500">Sent:</strong> ${esc(n.scheduledAt)} &nbsp;·&nbsp; <strong style="font-weight:500">Repeat:</strong> ${n.repeat}
     </div>`;
-  }).join('');
-
-  document.getElementById('delivery-breakdown').innerHTML = `
-    <div class="bar-row"><span class="bar-label">Delivered</span><div class="bar-track"><div class="bar-fill" style="width:89%;background:#63991a"></div></div><span class="bar-val">89%</span></div>
-    <div class="bar-row"><span class="bar-label">Opened</span><div class="bar-track"><div class="bar-fill" style="width:${avgOpen}%;background:#185fa5"></div></div><span class="bar-val">${avgOpen}%</span></div>
-    <div class="bar-row"><span class="bar-label">Tapped link</span><div class="bar-track"><div class="bar-fill" style="width:${avgTap}%;background:#854f0b"></div></div><span class="bar-val">${avgTap}%</span></div>
-    <div class="bar-row"><span class="bar-label">Dismissed</span><div class="bar-track"><div class="bar-fill" style="width:${100-avgOpen}%;background:#888780"></div></div><span class="bar-val">${100-avgOpen}%</span></div>`;
-
-  const bizClicks = sent.filter(n=>n.linkType==='business').reduce((s,n)=>s+n.tapped,0);
-  const pageClicks = sent.filter(n=>n.linkType==='page').reduce((s,n)=>s+n.tapped,0);
-  const total = Math.max(bizClicks+pageClicks,1);
-  document.getElementById('link-clicks').innerHTML = `
-    <div class="bar-row"><span class="bar-label">Business cards</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(bizClicks/total*100)}%;background:#534ab7"></div></div><span class="bar-val">${bizClicks.toLocaleString()}</span></div>
-    <div class="bar-row"><span class="bar-label">App pages</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(pageClicks/total*100)}%;background:#0f6e56"></div></div><span class="bar-val">${pageClicks.toLocaleString()}</span></div>`;
-
-  const history = [...allNotifs].slice(0,8);
-  document.getElementById('history-timeline').innerHTML = history.map(n=>{
-    const dotClass = n.status==='sent'?'green':n.status==='scheduled'?'amber':'gray';
-    const dateStr = n.sentAt||n.scheduledFor||'draft';
-    const dateLabel = dateStr!=='draft'?new Date(dateStr).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Draft';
-    return `<div class="tl-item"><div class="tl-dot ${dotClass}"></div><span style="width:72px;flex-shrink:0">${dateLabel}</span><span style="flex:1;font-size:13px;color:var(--color-text-primary)">${n.title}</span><span style="color:var(--color-text-tertiary)">${n.delivered>0?n.delivered.toLocaleString()+' delivered':n.status}</span></div>`;
-  }).join('');
+  document.getElementById('analyticsModal').style.display='flex';
+  setTimeout(()=>{
+    new Chart(document.getElementById('analyticsChart'),{
+      type:'bar',
+      data:{labels:['Delivered','Opened','Clicked'],datasets:[{label:'Users',data:[n.stats.sent,n.stats.opens,n.stats.clicks],backgroundColor:['#1D9E75','#5DCAA5','#9FE1CB'],borderRadius:6,borderSkipped:false}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y.toLocaleString()} users`}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()},grid:{color:'rgba(0,0,0,.06)'}},x:{grid:{display:false}}}}
+    });
+  },50);
 }
 
-function renderRecentMini(){
-  const container = document.getElementById('recent-sends-mini');
-  const recent = allNotifs.filter(n=>n.status==='sent').slice(0,3);
-  container.innerHTML = recent.map(n=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);font-size:12px">
-      <span class="badge badge-sent">Sent</span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.title}</span>
-      <span style="color:var(--color-text-tertiary)">${n.delivered.toLocaleString()}</span>
-    </div>`).join('');
+function buildReachChart(){
+  const days=14;
+  const labels=[];
+  const data=[];
+  for(let i=days-1;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    labels.push(d.toLocaleDateString('en-US',{weekday:'short'}));
+    data.push(Math.floor(400+Math.random()*1800));
+  }
+  new Chart(document.getElementById('reachChart'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'Reach',data,backgroundColor:'#9FE1CB',borderRadius:3,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y.toLocaleString()} users reached`}}},scales:{y:{display:false,beginAtZero:true},x:{ticks:{font:{size:10},color:'#888'},grid:{display:false}},}}}
+  );
 }
 
-let toastT;
-function showToastLocal(msg, type){
-  const old = document.getElementById('local-toast');
-  if(old) old.remove();
-  clearTimeout(toastT);
-  const colors = {ok:'#eaf3de',warn:'#faeeda',info:'#e6f1fb'};
-  const textColors = {ok:'#3b6d11',warn:'#854f0b',info:'#185fa5'};
-  const div = document.createElement('div');
-  div.id='local-toast';
-  div.style.cssText=`position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:${colors[type]||'#eaf3de'};color:${textColors[type]||'#3b6d11'};padding:10px 18px;border-radius:99px;font-size:13px;font-weight:500;z-index:9999;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.12)`;
-  div.textContent=msg;
-  document.body.appendChild(div);
-  toastT=setTimeout(()=>div.remove(),3000);
-}
-
-renderBizList();
-renderRecentMini();
-updateEstimates();
+init();
 </script>
