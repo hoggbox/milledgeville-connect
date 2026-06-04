@@ -30,10 +30,9 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
-const ScheduledNotification = require('../models/ScheduledNotification');
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MODERATION ROUTES  — paste this block into api.js//
+// MODERATION ROUTES  — paste this block into api.js
 //
 // Prerequisites:
 //   1. Add `const Report = require('../models/Report');` near the other model imports
@@ -4065,65 +4064,6 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
     if (!post) return res.status(404).json({ message: 'Post not found or not yours' });
     await post.deleteOne();
     res.json({ message: 'Post deleted' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ─── SCHEDULED NOTIFICATION BACKGROUND JOB ─────────────────────────────────
-async function processScheduledNotifications() {
-  try {
-    const now = new Date();
-    const due = await ScheduledNotification.find({
-      status: { $in: ['pending', 'scheduled'] },
-      scheduledFor: { $lte: now }
-    });
-
-    for (const notif of due) {
-      try {
-        const imageUrl = notif.image 
-          ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
-          : null;
-
-        await broadcastPush(
-          notif.title,
-          notif.body,
-          { 
-            page: notif.targetType || 'home', 
-            id: notif.targetId || '' 
-          },
-          { 
-            type: notif.targetType || 'custom', 
-            imageUrl 
-          }
-        );
-
-        notif.status = 'sent';
-        notif.sentAt = new Date();
-        await notif.save();
-        console.log(`✅ Scheduled notification sent: ${notif.title}`);
-      } catch (err) {
-        console.error(`Failed scheduled notif ${notif._id}:`, err);
-        notif.status = 'failed';
-        await notif.save();
-      }
-    }
-  } catch (err) {
-    console.error('Scheduled processor error:', err);
-  }
-}
-
-// Run every 30 seconds
-setInterval(processScheduledNotifications, 30 * 1000);
-processScheduledNotifications(); // run once on start
-
-// GET /api/admin/scheduled-notifications
-router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const items = await ScheduledNotification.find()
-      .populate('business', 'name category')
-      .sort({ createdAt: -1 });
-    res.json(items);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
