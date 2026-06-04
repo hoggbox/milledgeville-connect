@@ -623,6 +623,7 @@ async function apiDelete(endpoint) {
   return res.json();
 }
 
+
 async function loadBusinesses() {
   try {
     const data = await apiGet('/directory');
@@ -1108,16 +1109,16 @@ async function saveNotif(){
   const bizId = document.getElementById('fBusiness').value;
   const title = document.getElementById('fTitle').value.trim();
   const body = document.getElementById('fBody').value.trim();
-  const status = document.getElementById('fStatus').value; // 'scheduled' | 'draft'
+  const status = document.getElementById('fStatus').value;
 
   if (!bizId || !title || !body) {
     alert('Please fill in business, title, and message.');
     return;
   }
 
-  // === Schedule / Recurring Logic ===
+  // === Recurring / Schedule Logic ===
   const recurType = document.getElementById('fRecurType').value;
-  const recurTime = document.getElementById('fRecurTime').value; // "HH:MM"
+  const recurTime = document.getElementById('fRecurTime').value;
   const selectedDays = getSelectedRecurDays();
 
   let scheduledFor = null;
@@ -1125,7 +1126,6 @@ async function saveNotif(){
   let days = [];
 
   if (recurType === 'recurring' && selectedDays.length > 0 && recurTime) {
-    // Recurring: next matching day at recurTime
     repeat = 'custom';
     days = selectedDays;
     const [hour, minute] = recurTime.split(':').map(Number);
@@ -1134,7 +1134,6 @@ async function saveNotif(){
     if (nextDate <= new Date()) nextDate.setDate(nextDate.getDate() + 1);
     scheduledFor = nextDate.toISOString();
   } else if (recurType === 'once' && recurTime && status !== 'draft') {
-    // One-time send at a specific time
     const [hour, minute] = recurTime.split(':').map(Number);
     const onceDate = new Date();
     onceDate.setHours(hour, minute, 0, 0);
@@ -1142,10 +1141,9 @@ async function saveNotif(){
     scheduledFor = onceDate.toISOString();
   }
 
-  // Draft = hold as pending with no scheduledFor (server won't auto-send without a time)
   if (status === 'draft') scheduledFor = null;
 
-  // Link type
+  // Link logic
   let targetType = 'home';
   let targetId = null;
   let targetUrl = null;
@@ -1165,38 +1163,18 @@ async function saveNotif(){
   } else if (currentLinkType === 'events') {
     targetType = 'app';
     targetId = 'events';
-  } else {
-    targetType = currentLinkType;
   }
 
-  const btn = document.querySelector('#composeModal .btn-primary');
-  if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
-
-  // Upload image via JSON base64 — the route at /admin/upload-notification-image
-  // reads req.body.image and expects a data: URL, not a multipart file.
-  // sanitizeBody (global middleware) may touch the body, but the route's own
-  // regex guard (line 4208) will catch any corruption before it hits Mongoose.
-  // If the pre-upload stub fails (e.g. backend schema rejects 'draft' status),
-  // we fall back to embedding base64 directly — the main save route accepts it too.
-  let imageUrl = null;
-  let imageFallbackBase64 = null;
+  // === IMAGE HANDLING — Same as Traffic Alerts ===
+  let imageToSend = null;
   if (imgBase64) {
-    try {
-      const uploadData = await apiPost('/admin/upload-notification-image', { image: imgBase64 });
-      imageUrl = uploadData.url || null;
-    } catch (uploadErr) {
-      // Backend stub failed (likely schema bug with status:'draft') — fall back to
-      // sending base64 directly in the main payload. The save route accepts it.
-      console.warn('Pre-upload stub failed, falling back to inline base64:', uploadErr.message);
-      imageFallbackBase64 = imgBase64;
-    }
+    imageToSend = imgBase64;   // Send full base64 like shoutouts
   }
 
   const payload = {
     title,
     body,
-    image: imageUrl || imageFallbackBase64 || null,  // https:// URL preferred; base64 as fallback
-    status: 'pending', // backend enum: pending|sent|failed — "draft" is display-only; scheduledFor=null is what makes it a draft
+    image: imageToSend,
     targetType,
     targetId,
     targetUrl,
@@ -1204,8 +1182,14 @@ async function saveNotif(){
     business: bizId,
     repeat,
     days,
-    endDate: null
+    status: 'pending'
   };
+
+  const btn = document.querySelector('#composeModal .btn-primary');
+  if (btn) { 
+    btn.disabled = true; 
+    btn.innerHTML = 'Saving...'; 
+  }
 
   try {
     if (editingId) {
@@ -1213,17 +1197,12 @@ async function saveNotif(){
       showToast('Notification updated', 'success');
     } else {
       await apiPost('/admin/scheduled-notifications', payload);
-      if (status === 'draft') {
-        showToast('Saved as draft', 'success');
-      } else if (scheduledFor) {
-        showToast('Notification scheduled!', 'success');
-      } else {
-        showToast('Notification sent to all users!', 'success');
-      }
+      showToast(status === 'draft' ? 'Saved as draft' : 'Notification saved!', 'success');
     }
 
     closeCompose();
 
+    // Refresh list
     const fresh = await apiGet('/admin/scheduled-notifications');
     notifications = (fresh || []).map(normalizeNotification);
     renderList();
@@ -1233,10 +1212,7 @@ async function saveNotif(){
     console.error(e);
     showToast(e.message || 'Failed to save', 'error');
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>';
-    }
+    if (btn) btn.disabled = false;
   }
 }
 
