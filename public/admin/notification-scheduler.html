@@ -883,11 +883,27 @@ function notifCard(n){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function openCompose(){
-  editingId=null;
+  // Force full reset of all possible dirty state
+  editingId = null;
+  selectedBusinessId = null;
+  imgBase64 = null;
+  imgCompressedFile = null;
+
+  // Clear any lingering business search UI
+  const searchInput = document.getElementById('businessSearch');
+  const results = document.getElementById('businessSearchResults');
+  const display = document.getElementById('selectedBusinessDisplay');
+
+  if (searchInput) searchInput.value = '';
+  if (results) results.style.display = 'none';
+  if (display) display.style.display = 'none';
+
+  // Now do the normal reset
   resetForm();
-  document.getElementById('modalTitleLabel').textContent='New notification';
-  document.getElementById('saveBtnLabel').textContent='Save & schedule';
-  document.getElementById('composeModal').style.display='flex';
+
+  document.getElementById('modalTitleLabel').textContent = 'New notification';
+  document.getElementById('saveBtnLabel').textContent = 'Save & schedule';
+  document.getElementById('composeModal').style.display = 'flex';
 }
 
 function openEdit(id){
