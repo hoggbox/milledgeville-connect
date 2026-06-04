@@ -4129,41 +4129,5 @@ router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (
   }
 });
 
-// POST /api/admin/scheduled-notifications
-router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const doc = await ScheduledNotification.create(req.body);
-    res.status(201).json(doc);
-  } catch (err) {
-    console.error('Create scheduled notification error:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// GET /api/scheduled-notification-thumb/:id
-router.get('/scheduled-notification-thumb/:id', async (req, res) => {
-  try {
-    const notif = await ScheduledNotification.findById(req.params.id).select('image');
-    if (!notif?.image) return res.status(404).send('Not found');
-
-    const match = notif.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
-
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.send(buffer);
-  } catch (err) {
-    console.error('Scheduled thumb error:', err);
-    res.status(500).send('Error');
-  }
-});
-
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
