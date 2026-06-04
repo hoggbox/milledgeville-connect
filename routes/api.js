@@ -30,6 +30,7 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
+const ScheduledNotification = require('../models/ScheduledNotification');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
@@ -4115,6 +4116,18 @@ async function processScheduledNotifications() {
 // Run every 30 seconds
 setInterval(processScheduledNotifications, 30 * 1000);
 processScheduledNotifications(); // run once on start
+
+// GET /api/admin/scheduled-notifications
+router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const items = await ScheduledNotification.find()
+      .populate('business', 'name category')
+      .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
