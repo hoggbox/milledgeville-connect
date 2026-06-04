@@ -377,8 +377,10 @@ async function compressImage(file, maxWidth = 1200, quality = 0.75) {
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name.replace(/\.png$/i, '.jpg'), { type: 'image/jpeg' }));
-        }, 'image/jpeg', quality);
+          const isPng = file.type === 'image/png';
+          const outputType = isPng ? 'image/png' : 'image/jpeg';
+          resolve(new File([blob], file.name, { type: outputType }));
+        }, file.type === 'image/png' ? 'image/png' : 'image/jpeg', file.type === 'image/png' ? undefined : quality);
       };
       img.src = e.target.result;
     };
@@ -2408,7 +2410,7 @@ window.handleShoutoutImages = async function (input) {
 
     try {
       showToast('Compressing image...', 'success');
-      const compressed = await compressImage(file, 800, 0.60);
+      const compressed = await compressImage(file, 1100, 0.72);
       const reader = new FileReader();
       reader.onload = e => {
         _pendingShoutoutImages.push(e.target.result);
@@ -5298,7 +5300,7 @@ window.postLostItem = async function() {
         continue;
       }
       try {
-        const compressed = await compressImage(file, 800, 0.60);
+        const compressed = await compressImage(file, 1100, 0.72);
         const base64 = await new Promise(resolve => {
           const r = new FileReader();
           r.onload = e => resolve(e.target.result);
