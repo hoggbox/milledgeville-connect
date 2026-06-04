@@ -1545,25 +1545,30 @@ async function filterByCategory(catId) {
   renderDirectory(filtered);
 }
 
-// Opens the business directories from the notification scheduler
 async function loadDirectoryAndOpen(businessId) {
-  // Make sure we're on the directory page
+  showToast('Debug: loadDirectoryAndOpen started', 'info');
+
   const content = document.getElementById('content');
   if (content) {
+    showToast('Debug: loading directory page...', 'info');
     await loadDirectoryPage(content);
   } else {
+    showToast('Debug: navigating to directory', 'info');
     navigate('directory');
   }
 
-  // Give the directory a moment to render, then open the specific business
+  showToast('Debug: waiting then opening business...', 'info');
+
   setTimeout(() => {
     if (typeof showBusinessDetail === 'function') {
+      showToast('Debug: calling showBusinessDetail now', 'success');
       showBusinessDetail(businessId);
+    } else {
+      showToast('Debug ERROR: showBusinessDetail not found!', 'error');
     }
-  }, 650);
+  }, 800);
 }
 
-// Make sure it's globally available for the push handler
 window.loadDirectoryAndOpen = loadDirectoryAndOpen;
 
 // ─── BUSINESS DETAIL MODAL (DARK THEME) ───────────────────────────────────────
