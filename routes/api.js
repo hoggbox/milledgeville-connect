@@ -4218,7 +4218,7 @@ router.post('/admin/upload-notification-image', authenticate, requireAdmin, asyn
       title:       '_image_upload_stub_',
       body:        '_',
       image,
-      status:      'draft',
+      status:      'pending',
       targetType:  'home',
     });
 
