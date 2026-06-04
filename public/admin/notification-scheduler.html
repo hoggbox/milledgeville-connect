@@ -349,63 +349,6 @@
   .empty-state { text-align: center; padding: 3rem 1.5rem; color: var(--text-secondary); }
 
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Image upload preview — constrained thumbnail row */
-  .img-upload-area {
-    overflow: hidden; /* prevent any child from blowing out the box */
-  }
-
-  .img-preview-row {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-top: 8px;
-  }
-  .img-preview-row.visible { display: flex; }
-
-  .img-preview {
-    width: 64px;
-    height: 48px;
-    object-fit: cover;
-    border-radius: 7px;
-    flex-shrink: 0;
-    border: 1px solid var(--border);
-    display: block;
-  }
-
-  .img-preview-info {
-    flex: 1;
-    min-width: 0;
-  }
-  .img-preview-name {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .img-preview-size {
-    font-size: 11px;
-    color: var(--emerald);
-    margin-top: 2px;
-  }
-
-  .img-clear-btn {
-    flex-shrink: 0;
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 4px 9px;
-    font-size: 11px;
-    color: var(--red);
-    cursor: pointer;
-  }
-  .img-clear-btn:hover { background: var(--red-light); border-color: #7f1d1d; }
 </style>
 
 <h2 class="sr-only">Notification scheduler — manage and schedule push notifications for businesses</h2>
@@ -528,18 +471,11 @@
         <label class="form-label">Photo (optional)</label>
         <div class="img-upload-area" id="imgDropArea" onclick="document.getElementById('fImage').click()">
           <input type="file" id="fImage" accept="image/*" style="display:none" onchange="handleImgUpload(event)">
-          <i class="ti ti-photo" style="font-size:28px;color:var(--text-tertiary)" aria-hidden="true"></i>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Click to upload or drag an image</div>
-          <div style="font-size:11px;color:var(--text-tertiary)">JPEG / PNG / WebP · auto-compressed like Traffic Alerts</div>
-        </div>
-        <!-- Preview lives OUTSIDE the drop zone so restoring originalHTML never affects it -->
-        <div class="img-preview-row" id="imgPreviewRow">
-          <img id="imgPreview" class="img-preview" src="" alt="Image preview">
-          <div class="img-preview-info">
-            <div class="img-preview-name" id="imgPreviewName">image.jpg</div>
-            <div class="img-preview-size" id="imgPreviewSize">Ready to upload</div>
-          </div>
-          <button class="img-clear-btn" onclick="clearImg(event)">✕ Remove</button>
+          <i class="ti ti-photo" style="font-size:28px;color:var(--color-text-tertiary)" aria-hidden="true"></i>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">Click to upload or drag an image</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary)">JPEG / PNG / WebP · auto-compressed like Traffic Alerts</div>
+          <img id="imgPreview" class="img-preview" style="display:none" alt="Preview">
+          <button id="imgClear" style="display:none;margin-top:6px;font-size:11px;color:var(--red);background:none;border:none;cursor:pointer" onclick="clearImg(event)">Remove image</button>
         </div>
       </div>
 
@@ -1000,8 +936,8 @@ function resetForm(){
 
   // Clear image
   imgBase64 = null;
-  document.getElementById('imgPreview').src = '';
-  document.getElementById('imgPreviewRow').classList.remove('visible');
+  document.getElementById('imgPreview').style.display = 'none';
+  document.getElementById('imgClear').style.display = 'none';
   document.getElementById('fImage').value = '';
 
   // Reset recurring schedule UI
@@ -1095,28 +1031,29 @@ async function handleImgUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  // Raw size guard — catch absurd files before compression
+  // Raw size guard — after compression it will be smaller but catch absurd files early
   if (file.size > 12 * 1024 * 1024) {
     showToast('Image must be under 12 MB before compression', 'error');
     e.target.value = '';
     return;
   }
 
-  // Show spinner inside the drop area (we DON'T touch the preview row)
+  // Show compressing state in the upload area
   const dropArea = document.getElementById('imgDropArea');
-  const spinnerEl = document.createElement('div');
-  spinnerEl.id = 'imgSpinner';
-  spinnerEl.style.cssText = 'padding:10px 0; color:var(--text-secondary); font-size:12px; text-align:center;';
-  spinnerEl.innerHTML = `<div style="width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--emerald);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 6px"></div>Compressing…`;
-  dropArea.appendChild(spinnerEl);
+  const originalHTML = dropArea.innerHTML;
+  dropArea.innerHTML = `
+    <div style="padding:16px 0; color:var(--text-secondary); font-size:13px;">
+      <div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--emerald);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px"></div>
+      Compressing image…
+    </div>`;
 
   try {
     const compressed = await compressImage(file, 1100, 0.72);
-    spinnerEl.remove();
 
-    // Enforce 4 MB limit on the *compressed* output
+    // Enforce 4 MB limit on the *compressed* output — same ceiling as upload endpoint
     if (compressed.size > 4 * 1024 * 1024) {
       showToast('Image is still too large after compression (max 4 MB). Try a smaller file.', 'error');
+      dropArea.innerHTML = originalHTML;
       e.target.value = '';
       return;
     }
@@ -1125,26 +1062,25 @@ async function handleImgUpload(e) {
     reader.onload = ev => {
       imgBase64 = ev.target.result;
 
-      // Show the preview row (outside the drop zone — no HTML restore needed)
+      // Restore the drop area UI and swap in the preview
+      dropArea.innerHTML = originalHTML;
+
       const prev = document.getElementById('imgPreview');
       prev.src = imgBase64;
-
-      const kb = Math.round(compressed.size / 1024);
-      const origKb = Math.round(file.size / 1024);
-      document.getElementById('imgPreviewName').textContent = file.name;
-      document.getElementById('imgPreviewSize').textContent =
-        `${kb} KB (compressed from ${origKb} KB)`;
-
-      document.getElementById('imgPreviewRow').classList.add('visible');
+      prev.style.display = 'block';
+      document.getElementById('imgClear').style.display = 'inline-block';
       showToast('Image compressed and ready', 'success');
     };
-    reader.onerror = () => showToast('Failed to read compressed image', 'error');
+    reader.onerror = () => {
+      showToast('Failed to read compressed image', 'error');
+      dropArea.innerHTML = originalHTML;
+    };
     reader.readAsDataURL(compressed);
 
   } catch (err) {
-    spinnerEl.remove();
     console.error('Image compression error:', err);
     showToast('Image processing failed: ' + (err.message || 'unknown error'), 'error');
+    dropArea.innerHTML = originalHTML;
     e.target.value = '';
   }
 }
@@ -1152,8 +1088,8 @@ async function handleImgUpload(e) {
 function clearImg(e) {
   e.stopPropagation();
   imgBase64 = null;
-  document.getElementById('imgPreview').src = '';
-  document.getElementById('imgPreviewRow').classList.remove('visible');
+  document.getElementById('imgPreview').style.display = 'none';
+  document.getElementById('imgClear').style.display = 'none';
   document.getElementById('fImage').value = '';
 }
 
@@ -1247,6 +1183,7 @@ async function saveNotif(){
     title,
     body,
     image: imageUrl,  // always an https:// URL or null — never raw base64
+    status: 'pending', // backend enum: pending|sent|failed — "draft" is display-only; scheduledFor=null is what makes it a draft
     targetType,
     targetId,
     targetUrl,
