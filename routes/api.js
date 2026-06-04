@@ -30,6 +30,7 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
+const ScheduledNotification = require('../models/ScheduledNotification');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
