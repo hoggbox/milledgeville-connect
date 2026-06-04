@@ -1545,6 +1545,27 @@ async function filterByCategory(catId) {
   renderDirectory(filtered);
 }
 
+// Opens the business directories from the notification scheduler
+async function loadDirectoryAndOpen(businessId) {
+  // Make sure we're on the directory page
+  const content = document.getElementById('content');
+  if (content) {
+    await loadDirectoryPage(content);
+  } else {
+    navigate('directory');
+  }
+
+  // Give the directory a moment to render, then open the specific business
+  setTimeout(() => {
+    if (typeof showBusinessDetail === 'function') {
+      showBusinessDetail(businessId);
+    }
+  }, 650);
+}
+
+// Make sure it's globally available for the push handler
+window.loadDirectoryAndOpen = loadDirectoryAndOpen;
+
 // ─── BUSINESS DETAIL MODAL (DARK THEME) ───────────────────────────────────────
 async function showBusinessDetail(id) {
   const business = allBusinesses.find(b => b._id === id);
