@@ -578,6 +578,7 @@ let editingId = null;
 let currentLinkType = 'directory';
 let currentTab = 'all';
 let imgBase64 = null;
+let imgCompressedFile = null; // the actual File blob — used for multipart upload
 let BUSINESSES = [];
 let notifications = [];
 
@@ -946,6 +947,7 @@ function resetForm(){
 
   // Clear image
   imgBase64 = null;
+  imgCompressedFile = null;
   document.getElementById('imgPreviewWrap').style.display = 'none';
   document.getElementById('imgPreview').src = '';
   document.getElementById('fImage').value = '';
@@ -1066,7 +1068,7 @@ async function handleImgUpload(e) {
       return;
     }
 
-    // Read the compressed file into base64
+    imgCompressedFile = compressed; // keep the File for multipart upload at save time
     imgBase64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = ev => resolve(ev.target.result);
@@ -1084,6 +1086,7 @@ async function handleImgUpload(e) {
     showToast('Image processing failed: ' + (err.message || 'unknown error'), 'error');
     fileInput.value = '';
     imgBase64 = null;
+    imgCompressedFile = null;
   } finally {
     // Always hide spinner when done, success or failure
     spinner.style.display = 'none';
@@ -1093,6 +1096,7 @@ async function handleImgUpload(e) {
 function clearImg(e) {
   e.stopPropagation();
   imgBase64 = null;
+  imgCompressedFile = null;
   document.getElementById('imgPreviewWrap').style.display = 'none';
   document.getElementById('imgPreview').src = '';
   document.getElementById('fImage').value = '';
@@ -1168,15 +1172,26 @@ async function saveNotif(){
   const btn = document.querySelector('#composeModal .btn-primary');
   if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
 
-  // Pre-upload image so the DB stores a real https:// URL, not raw base64.
-  // Raw base64 in req.body gets corrupted by the sanitizeBody middleware before
-  // it ever reaches the route handler — the pre-upload endpoint bypasses that
-  // because it's a dedicated route that stores the image and returns a URL.
+  // Upload image as multipart/form-data — same pattern as traffic alerts.
+  // This bypasses the sanitizeBody middleware that corrupts raw base64 in JSON bodies,
+  // and works with standard multer on the backend.
   let imageUrl = null;
-  if (imgBase64) {
+  if (imgCompressedFile) {
     try {
-      const uploadRes = await apiPost('/admin/upload-notification-image', { image: imgBase64 });
-      imageUrl = uploadRes.url || null;
+      const form = new FormData();
+      form.append('image', imgCompressedFile, imgCompressedFile.name);
+      const uploadRes = await fetch(API_BASE + '/admin/upload-notification-image', {
+        method: 'POST',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        // NOTE: do NOT set Content-Type — the browser sets it with the correct boundary
+        body: form
+      });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${uploadRes.status}`);
+      }
+      const uploadData = await uploadRes.json();
+      imageUrl = uploadData.url || null;
     } catch (uploadErr) {
       showToast('Image upload failed: ' + (uploadErr.message || 'unknown error'), 'error');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>'; }
