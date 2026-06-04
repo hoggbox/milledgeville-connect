@@ -1300,8 +1300,38 @@ window.submitNewsArticle = async function () {
 };
 
 window.loadDirectoryAndOpen = async function (businessId) {
-  await loadDirectoryPage(document.getElementById('content'));
-  showBusinessDetail(businessId);
+  const content = document.getElementById('content');
+
+  if (content) {
+    await loadDirectoryPage(content);
+  } else {
+    navigate('directory');
+  }
+
+  // Wait until businesses are actually loaded (handles the async race)
+  if (!allBusinesses || allBusinesses.length === 0) {
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (allBusinesses && allBusinesses.length > 0) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 120);
+
+      // Safety timeout after 6 seconds
+      setTimeout(() => {
+        clearInterval(check);
+        resolve();
+      }, 6000);
+    });
+  }
+
+  // Now open the specific business card
+  if (typeof showBusinessDetail === 'function') {
+    showBusinessDetail(businessId);
+  } else {
+    console.warn('showBusinessDetail not found');
+  }
 };
 
 async function loadDirectoryPage(content) {
