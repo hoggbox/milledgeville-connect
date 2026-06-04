@@ -4129,5 +4129,16 @@ router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (
   }
 });
 
+// POST /api/admin/scheduled-notifications
+router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ScheduledNotification.create(req.body);
+    res.status(201).json(doc);
+  } catch (err) {
+    console.error('Create scheduled notification error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
