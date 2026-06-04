@@ -4145,5 +4145,17 @@ async function processScheduledNotifications() {
 setInterval(processScheduledNotifications, 30 * 1000);
 processScheduledNotifications(); // run once on start
 
+// GET /api/admin/scheduled-notifications
+router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const items = await ScheduledNotification.find()
+      .populate('business', 'name category')
+      .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
