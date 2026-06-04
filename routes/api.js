@@ -4110,10 +4110,10 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
 async function processScheduledNotifications() {
   try {
     const now = new Date();
-    const due = await ScheduledNotification.find({
-      status: 'scheduled',
-      scheduledFor: { $lte: now }
-    });
+const due = await ScheduledNotification.find({
+  status: { $in: ['pending', 'scheduled'] },
+  scheduledFor: { $lte: now }
+});
 
     for (const notif of due) {
       try {
