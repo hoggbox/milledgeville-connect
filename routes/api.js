@@ -4072,6 +4072,26 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
 // ─── SCHEDULED NOTIFICATION RUNNER ─────────────────────────────────────────
 const ScheduledNotification = require('../models/ScheduledNotification');
 
+// ── Helper: convert stored targetType → deep-link page name ─────────────────
+// The scheduler stores targetType as 'business', 'business-post', 'app', 'external', 'home'.
+// handlePushNotificationClick (data.js) expects 'directory', 'business-post',
+// 'deals', 'events', or a plain page name. Map them here so deep links work.
+function resolveDeepLinkPage(targetType, targetId) {
+  switch (targetType) {
+    case 'business':
+      return 'directory';
+    case 'business-post':
+      return 'business-post';
+    case 'external':
+      return 'home'; // external URLs aren't handled by the in-app router
+    case 'app':
+      // targetId holds the sub-page name ('deals', 'events', etc.)
+      return targetId || 'home';
+    default:
+      return targetType || 'home';
+  }
+}
+
 async function processScheduledNotifications() {
   try {
     const now = new Date();
@@ -4083,18 +4103,26 @@ async function processScheduledNotifications() {
 
     for (const notif of due) {
       try {
+        const deepLinkPage = resolveDeepLinkPage(notif.targetType, notif.targetId);
+        // For 'app' type (deals/events), the page IS the targetId — no separate id needed
+        const deepLinkId = (notif.targetType === 'app') ? '' : (notif.targetId || '');
+
+        const imageUrl = notif.image
+          ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
+          : null;
+
+        console.log(`[SchedNotif] Firing "${notif.title}" → page: ${deepLinkPage}, id: ${deepLinkId}, image: ${imageUrl ? 'yes' : 'none'}`);
+
         await broadcastPush(
           notif.title,
           notif.body,
           { 
-            page: notif.targetType || 'home', 
-            id: notif.targetId || '' 
+            page: deepLinkPage, 
+            id: deepLinkId
           },
           { 
-            type: notif.targetType || 'custom', 
-            imageUrl: notif.image 
-              ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}` 
-              : null 
+            type: 'custom',
+            imageUrl
           }
         );
 
@@ -4168,10 +4196,61 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
+// POST /api/admin/upload-notification-image
+// Accepts a base64 image, creates a minimal ScheduledNotification stub to hold it,
+// and returns the public thumb URL. The scheduler uses this URL in the notification
+// payload instead of embedding raw base64 (which sanitizeBody can corrupt).
+router.post('/admin/upload-notification-image', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image) return res.status(400).json({ message: 'No image provided' });
+
+    if (!/^data:image\/(jpeg|png|webp);base64,/i.test(image)) {
+      return res.status(400).json({ message: 'Image must be a JPEG, PNG, or WebP data URL' });
+    }
+    if (image.length > 5_600_000) {
+      return res.status(400).json({ message: 'Image too large (max ~4 MB)' });
+    }
+
+    // Store image in a temporary stub document; it will be replaced when the
+    // real notification is saved, or cleaned up if the user cancels.
+    const stub = await ScheduledNotification.create({
+      title:       '_image_upload_stub_',
+      body:        '_',
+      image,
+      status:      'draft',
+      targetType:  'home',
+    });
+
+    const url = `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${stub._id}`;
+    res.json({ url, stubId: stub._id });
+  } catch (err) {
+    console.error('Admin image upload error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // POST /api/admin/scheduled-notifications
 router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
   try {
-    const doc = await ScheduledNotification.create({ ...req.body });
+    // Image should arrive as an https:// URL (pre-uploaded via /admin/upload-notification-image).
+    // As a fallback, also accept raw base64 in case the caller skipped the pre-upload step.
+    const rawImage = req.body.image;
+    let resolvedImage = null;
+
+    if (rawImage) {
+      if (rawImage.startsWith('https://')) {
+        resolvedImage = rawImage; // already a real URL — store as-is
+      } else if (/^data:image\/(jpeg|png|webp);base64,/i.test(rawImage)) {
+        // Fallback: base64 passed directly — store it so the thumb endpoint can serve it
+        if (rawImage.length > 5_600_000) {
+          return res.status(400).json({ message: 'Image too large (max ~4 MB)' });
+        }
+        resolvedImage = rawImage;
+      }
+    }
+
+    const doc = await ScheduledNotification.create({ ...req.body, image: resolvedImage });
     // If status is 'scheduled' with no scheduledFor, treat as draft
     if (!doc.scheduledFor) doc.status = 'pending';
     await doc.save();
@@ -4190,12 +4269,18 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
 
     if (action === 'send-now') {
       // Fire immediately via your existing broadcastPush
-await broadcastPush(doc.title, doc.body,
-  { page: doc.targetType || 'home', id: doc.targetId || '' },
-  { type: doc.targetType, imageUrl: doc.image
-      ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${doc._id}`
-      : undefined }
-);
+      const deepLinkPage = resolveDeepLinkPage(doc.targetType, doc.targetId);
+      const deepLinkId   = (doc.targetType === 'app') ? '' : (doc.targetId || '');
+      const imageUrl     = doc.image
+        ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${doc._id}`
+        : null;
+
+      console.log(`[SendNow] Firing "${doc.title}" → page: ${deepLinkPage}, id: ${deepLinkId}, image: ${imageUrl ? 'yes' : 'none'}`);
+
+      await broadcastPush(doc.title, doc.body,
+        { page: deepLinkPage, id: deepLinkId },
+        { type: 'custom', imageUrl }
+      );
       doc.status = 'sent';
       doc.sentAt  = new Date();
     } else {

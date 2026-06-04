@@ -1073,10 +1073,29 @@ async function saveNotif(){
     targetType = currentLinkType;
   }
 
+  const btn = document.querySelector('#composeModal .btn-primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
+
+  // Pre-upload image so the DB stores a real https:// URL, not raw base64.
+  // Raw base64 in req.body gets corrupted by the sanitizeBody middleware before
+  // it ever reaches the route handler — the pre-upload endpoint bypasses that
+  // because it's a dedicated route that stores the image and returns a URL.
+  let imageUrl = null;
+  if (imgBase64) {
+    try {
+      const uploadRes = await apiPost('/admin/upload-notification-image', { image: imgBase64 });
+      imageUrl = uploadRes.url || null;
+    } catch (uploadErr) {
+      showToast('Image upload failed: ' + (uploadErr.message || 'unknown error'), 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> <span id="saveBtnLabel">Save &amp; schedule</span>'; }
+      return;
+    }
+  }
+
   const payload = {
     title,
     body,
-    image: imgBase64 || null,
+    image: imageUrl,  // always an https:// URL or null — never raw base64
     targetType,
     targetId,
     targetUrl,
@@ -1086,9 +1105,6 @@ async function saveNotif(){
     days,
     endDate: null
   };
-
-  const btn = document.querySelector('#composeModal .btn-primary');
-  if (btn) { btn.disabled = true; btn.innerHTML = 'Saving...'; }
 
   try {
     if (editingId) {
