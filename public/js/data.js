@@ -1300,8 +1300,38 @@ window.submitNewsArticle = async function () {
 };
 
 window.loadDirectoryAndOpen = async function (businessId) {
-  await loadDirectoryPage(document.getElementById('content'));
-  showBusinessDetail(businessId);
+  const content = document.getElementById('content');
+
+  if (content) {
+    await loadDirectoryPage(content);
+  } else {
+    navigate('directory');
+  }
+
+  // Wait until businesses are actually loaded (handles the async race)
+  if (!allBusinesses || allBusinesses.length === 0) {
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (allBusinesses && allBusinesses.length > 0) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 120);
+
+      // Safety timeout after 6 seconds
+      setTimeout(() => {
+        clearInterval(check);
+        resolve();
+      }, 6000);
+    });
+  }
+
+  // Now open the specific business card
+  if (typeof showBusinessDetail === 'function') {
+    showBusinessDetail(businessId);
+  } else {
+    console.warn('showBusinessDetail not found');
+  }
 };
 
 async function loadDirectoryPage(content) {
@@ -1380,6 +1410,27 @@ function _renderCategoryBar(categories) {
         <span>${cat.icon}</span><span>${cat.name}</span>
       </button>`).join('')}`;
 }
+
+async function loadDirectoryAndOpen(businessId) {
+  console.log('🔗 loadDirectoryAndOpen called with:', businessId);   // ← ADD THIS LINE
+  // Make sure we're on the directory page
+  const content = document.getElementById('content');
+  if (content) {
+    await loadDirectoryPage(content);
+  } else {
+    navigate('directory');
+  }
+
+  // Give the directory a moment to render, then open the specific business
+  setTimeout(() => {
+    if (typeof showBusinessDetail === 'function') {
+      showBusinessDetail(businessId);
+    }
+  }, 650);
+}
+
+// Make sure it's globally available for the push handler
+window.loadDirectoryAndOpen = loadDirectoryAndOpen;
 
 // ─── "Open now" badge helper ──────────────────────────────────────────────────
 function getOpenStatus(hoursStr) {
