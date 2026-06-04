@@ -4069,5 +4069,52 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
+// ─── SCHEDULED NOTIFICATION BACKGROUND JOB ─────────────────────────────────
+async function processScheduledNotifications() {
+  try {
+    const now = new Date();
+    const due = await ScheduledNotification.find({
+      status: { $in: ['pending', 'scheduled'] },
+      scheduledFor: { $lte: now }
+    });
+
+    for (const notif of due) {
+      try {
+        const imageUrl = notif.image 
+          ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
+          : null;
+
+        await broadcastPush(
+          notif.title,
+          notif.body,
+          { 
+            page: notif.targetType || 'home', 
+            id: notif.targetId || '' 
+          },
+          { 
+            type: notif.targetType || 'custom', 
+            imageUrl 
+          }
+        );
+
+        notif.status = 'sent';
+        notif.sentAt = new Date();
+        await notif.save();
+        console.log(`✅ Scheduled notification sent: ${notif.title}`);
+      } catch (err) {
+        console.error(`Failed scheduled notif ${notif._id}:`, err);
+        notif.status = 'failed';
+        await notif.save();
+      }
+    }
+  } catch (err) {
+    console.error('Scheduled processor error:', err);
+  }
+}
+
+// Run every 30 seconds
+setInterval(processScheduledNotifications, 30 * 1000);
+processScheduledNotifications(); // run once on start
+
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
