@@ -195,6 +195,16 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
 
     // Navigate to the right page, then scroll to/highlight the specific post
     if (typeof loadPage === 'function') {
+      // Directory deep-link: use loadDirectoryAndOpen so the business card actually opens
+      if ((page === 'directory' || page === 'business') && id) {
+        if (typeof window.loadDirectoryAndOpen === 'function') {
+          window.loadDirectoryAndOpen(id);
+        } else {
+          loadPage('directory');
+        }
+        return;
+      }
+
       loadPage(page).then(() => {
         if (id && page === 'shoutouts') {
           // Increased delay for better reliability after page load
