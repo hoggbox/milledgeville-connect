@@ -149,7 +149,7 @@ window.handlePushNotificationClick = function(data) {
       navigate('home');
     }
   }
-  else if (page === 'directory') {
+  else if (page === 'directory' || page === 'business') {
     if (id) {
       loadDirectoryAndOpen(id);
     } else {

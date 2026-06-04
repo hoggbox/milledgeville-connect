@@ -1150,9 +1150,9 @@ async function saveNotif(){
   let targetId = null;
   let targetUrl = null;
 
-  if (currentLinkType === 'directory' || currentLinkType === 'business') {
-    targetType = 'business';
-    targetId = bizId;
+if (currentLinkType === 'directory' || currentLinkType === 'business') {
+  targetType = 'directory';
+  targetId = bizId;
   } else if (currentLinkType === 'business-post') {
     targetType = 'business-post';
     targetId = bizId;
