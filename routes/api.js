@@ -4007,6 +4007,42 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   }
 });
 
+// GET /api/scheduled-notification-thumb/:id   ← ADD THIS
+router.get('/scheduled-notification-thumb/:id', async (req, res) => {
+  try {
+    console.log(`[SchedThumb] 🔥 REQUEST for ${req.params.id}`);
+
+    const notif = await ScheduledNotification.findById(req.params.id).select('image');
+    if (!notif?.image) {
+      console.log(`[SchedThumb] No image`);
+      return res.status(404).send('No image');
+    }
+
+    const raw = notif.image;
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) {
+      console.error('[SchedThumb] Bad format');
+      return res.status(400).send('Bad format');
+    }
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    console.log(`[SchedThumb] ✅ Serving ${buffer.length} bytes`);
+
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': 'inline; filename="notification.jpg"',
+      'Cache-Control': 'public, max-age=86400',
+      'Access-Control-Allow-Origin': '*',
+    });
+    return res.send(buffer);
+  } catch (err) {
+    console.error('[SchedThumb] Error:', err);
+    res.status(500).send('Error');
+  }
+});
+
 // GET /api/business-posts/post/:postId — fetch single post by ID (public, for deep-link)
 // MUST come BEFORE the generic /:businessId route
 router.get('/business-posts/post/:postId', async (req, res) => {
@@ -4068,6 +4104,46 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// ─── SCHEDULED NOTIFICATION BACKGROUND JOB ─────────────────────────────────
+async function processScheduledNotifications() {
+  try {
+    const now = new Date();
+    const due = await ScheduledNotification.find({
+      status: 'scheduled',
+      scheduledFor: { $lte: now }
+    });
+
+    for (const notif of due) {
+      try {
+        await broadcastPush(
+          notif.title,
+          notif.body,
+          { page: notif.targetType || 'home', id: notif.targetId || '' },
+          { 
+            type: notif.targetType || 'custom', 
+            imageUrl: notif.image ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}` : null 
+          }
+        );
+
+        notif.status = 'sent';
+        notif.sentAt = new Date();
+        await notif.save();
+        console.log(`✅ Scheduled notification sent: ${notif.title}`);
+      } catch (err) {
+        console.error(`Failed scheduled notif ${notif._id}:`, err);
+        notif.status = 'failed';
+        await notif.save();
+      }
+    }
+  } catch (err) {
+    console.error('Scheduled processor error:', err);
+  }
+}
+
+// Run every 30 seconds
+setInterval(processScheduledNotifications, 30 * 1000);
+processScheduledNotifications(); // run once on start
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
