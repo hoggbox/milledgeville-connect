@@ -469,13 +469,23 @@
 
       <div class="form-group full">
         <label class="form-label">Photo (optional)</label>
-        <div class="img-upload-area" id="imgDropArea" onclick="document.getElementById('fImage').click()">
+        <div class="img-upload-area" id="imgDropArea" onclick="document.getElementById('fImage').click()" style="position:relative">
           <input type="file" id="fImage" accept="image/*" style="display:none" onchange="handleImgUpload(event)">
+          <!-- spinner overlay — shown during compression, hidden otherwise -->
+          <div id="imgSpinner" style="display:none;position:absolute;inset:0;border-radius:12px;background:var(--bg-secondary);flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:2">
+            <div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--emerald);border-radius:50%;animation:spin 0.8s linear infinite"></div>
+            <span style="font-size:13px;color:var(--text-secondary)">Compressing…</span>
+          </div>
           <i class="ti ti-photo" style="font-size:28px;color:var(--color-text-tertiary)" aria-hidden="true"></i>
           <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">Click to upload or drag an image</div>
           <div style="font-size:11px;color:var(--color-text-tertiary)">JPEG / PNG / WebP · auto-compressed like Traffic Alerts</div>
-          <img id="imgPreview" class="img-preview" style="display:none" alt="Preview">
-          <button id="imgClear" style="display:none;margin-top:6px;font-size:11px;color:var(--red);background:none;border:none;cursor:pointer" onclick="clearImg(event)">Remove image</button>
+        </div>
+        <!-- preview lives OUTSIDE the drop area so it survives any innerHTML ops -->
+        <div id="imgPreviewWrap" style="display:none;margin-top:8px;text-align:center">
+          <img id="imgPreview" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border)" alt="Preview">
+          <div style="margin-top:4px">
+            <button id="imgClear" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer" onclick="clearImg(event)">✕ Remove image</button>
+          </div>
         </div>
       </div>
 
@@ -936,8 +946,8 @@ function resetForm(){
 
   // Clear image
   imgBase64 = null;
-  document.getElementById('imgPreview').style.display = 'none';
-  document.getElementById('imgClear').style.display = 'none';
+  document.getElementById('imgPreviewWrap').style.display = 'none';
+  document.getElementById('imgPreview').src = '';
   document.getElementById('fImage').value = '';
 
   // Reset recurring schedule UI
@@ -1031,21 +1041,19 @@ async function handleImgUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  // Raw size guard — after compression it will be smaller but catch absurd files early
+  // Raw size guard — catch absurd files before even trying to compress
   if (file.size > 12 * 1024 * 1024) {
     showToast('Image must be under 12 MB before compression', 'error');
     e.target.value = '';
     return;
   }
 
-  // Show compressing state in the upload area
-  const dropArea = document.getElementById('imgDropArea');
-  const originalHTML = dropArea.innerHTML;
-  dropArea.innerHTML = `
-    <div style="padding:16px 0; color:var(--text-secondary); font-size:13px;">
-      <div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--emerald);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px"></div>
-      Compressing image…
-    </div>`;
+  // Show spinner overlay — never touch innerHTML so the input stays in the DOM
+  const spinner = document.getElementById('imgSpinner');
+  spinner.style.display = 'flex';
+
+  // Capture the input reference NOW before any async work
+  const fileInput = document.getElementById('fImage');
 
   try {
     const compressed = await compressImage(file, 1100, 0.72);
@@ -1053,43 +1061,40 @@ async function handleImgUpload(e) {
     // Enforce 4 MB limit on the *compressed* output — same ceiling as upload endpoint
     if (compressed.size > 4 * 1024 * 1024) {
       showToast('Image is still too large after compression (max 4 MB). Try a smaller file.', 'error');
-      dropArea.innerHTML = originalHTML;
-      e.target.value = '';
+      spinner.style.display = 'none';
+      fileInput.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = ev => {
-      imgBase64 = ev.target.result;
+    // Read the compressed file into base64
+    imgBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target.result);
+      reader.onerror = () => reject(new Error('Failed to read compressed image'));
+      reader.readAsDataURL(compressed);
+    });
 
-      // Restore the drop area UI and swap in the preview
-      dropArea.innerHTML = originalHTML;
-
-      const prev = document.getElementById('imgPreview');
-      prev.src = imgBase64;
-      prev.style.display = 'block';
-      document.getElementById('imgClear').style.display = 'inline-block';
-      showToast('Image compressed and ready', 'success');
-    };
-    reader.onerror = () => {
-      showToast('Failed to read compressed image', 'error');
-      dropArea.innerHTML = originalHTML;
-    };
-    reader.readAsDataURL(compressed);
+    // Show preview (lives outside the drop area — always safe to update)
+    document.getElementById('imgPreview').src = imgBase64;
+    document.getElementById('imgPreviewWrap').style.display = 'block';
+    showToast('Image compressed and ready', 'success');
 
   } catch (err) {
     console.error('Image compression error:', err);
     showToast('Image processing failed: ' + (err.message || 'unknown error'), 'error');
-    dropArea.innerHTML = originalHTML;
-    e.target.value = '';
+    fileInput.value = '';
+    imgBase64 = null;
+  } finally {
+    // Always hide spinner when done, success or failure
+    spinner.style.display = 'none';
   }
 }
 
 function clearImg(e) {
   e.stopPropagation();
   imgBase64 = null;
-  document.getElementById('imgPreview').style.display = 'none';
-  document.getElementById('imgClear').style.display = 'none';
+  document.getElementById('imgPreviewWrap').style.display = 'none';
+  document.getElementById('imgPreview').src = '';
   document.getElementById('fImage').value = '';
 }
 
