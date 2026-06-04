@@ -1144,7 +1144,7 @@ async function saveNotif(){
   let days = [];
 
   if (recurType === 'recurring' && selectedDays.length > 0 && recurTime) {
-    repeat = 'custom';
+    repeat = 'weekly';
     days = selectedDays;
     const [hour, minute] = recurTime.split(':').map(Number);
     const nextDate = new Date();
