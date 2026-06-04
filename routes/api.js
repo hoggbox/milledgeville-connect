@@ -30,7 +30,7 @@ const MarketplaceItem = require('../models/MarketplaceItem');
 const Message         = require('../models/Message');   // ← NEW MESSAGING MODEL
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
-
+const ScheduledNotification = require('../models/ScheduledNotification');
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
 //
@@ -4066,6 +4066,101 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
     res.json({ message: 'Post deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── SCHEDULED NOTIFICATION BACKGROUND JOB ─────────────────────────────────
+async function processScheduledNotifications() {
+  try {
+    const now = new Date();
+    const due = await ScheduledNotification.find({
+      status: { $in: ['pending', 'scheduled'] },
+      scheduledFor: { $lte: now }
+    });
+
+    for (const notif of due) {
+      try {
+        const imageUrl = notif.image 
+          ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
+          : null;
+
+        await broadcastPush(
+          notif.title,
+          notif.body,
+          { 
+            page: notif.targetType || 'home', 
+            id: notif.targetId || '' 
+          },
+          { 
+            type: notif.targetType || 'custom', 
+            imageUrl 
+          }
+        );
+
+        notif.status = 'sent';
+        notif.sentAt = new Date();
+        await notif.save();
+        console.log(`✅ Scheduled notification sent: ${notif.title}`);
+      } catch (err) {
+        console.error(`Failed scheduled notif ${notif._id}:`, err);
+        notif.status = 'failed';
+        await notif.save();
+      }
+    }
+  } catch (err) {
+    console.error('Scheduled processor error:', err);
+  }
+}
+
+// Run every 30 seconds
+setInterval(processScheduledNotifications, 30 * 1000);
+processScheduledNotifications(); // run once on start
+
+// GET /api/admin/scheduled-notifications
+router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const items = await ScheduledNotification.find()
+      .populate('business', 'name category')
+      .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/admin/scheduled-notifications
+router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ScheduledNotification.create(req.body);
+    res.status(201).json(doc);
+  } catch (err) {
+    console.error('Create scheduled notification error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/scheduled-notification-thumb/:id
+router.get('/scheduled-notification-thumb/:id', async (req, res) => {
+  try {
+    const notif = await ScheduledNotification.findById(req.params.id).select('image');
+    if (!notif?.image) return res.status(404).send('Not found');
+
+    const match = notif.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Scheduled thumb error:', err);
+    res.status(500).send('Error');
   }
 });
 

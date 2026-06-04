@@ -1300,38 +1300,8 @@ window.submitNewsArticle = async function () {
 };
 
 window.loadDirectoryAndOpen = async function (businessId) {
-  const content = document.getElementById('content');
-
-  if (content) {
-    await loadDirectoryPage(content);
-  } else {
-    navigate('directory');
-  }
-
-  // Wait until businesses are actually loaded (handles the async race)
-  if (!allBusinesses || allBusinesses.length === 0) {
-    await new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (allBusinesses && allBusinesses.length > 0) {
-          clearInterval(check);
-          resolve();
-        }
-      }, 120);
-
-      // Safety timeout after 6 seconds
-      setTimeout(() => {
-        clearInterval(check);
-        resolve();
-      }, 6000);
-    });
-  }
-
-  // Now open the specific business card
-  if (typeof showBusinessDetail === 'function') {
-    showBusinessDetail(businessId);
-  } else {
-    console.warn('showBusinessDetail not found');
-  }
+  await loadDirectoryPage(document.getElementById('content'));
+  showBusinessDetail(businessId);
 };
 
 async function loadDirectoryPage(content) {
@@ -1574,32 +1544,6 @@ async function filterByCategory(catId) {
   directoryCurrentPage = 1;           // ← Reset to first page
   renderDirectory(filtered);
 }
-
-async function loadDirectoryAndOpen(businessId) {
-  showToast('Debug: loadDirectoryAndOpen started', 'info');
-
-  const content = document.getElementById('content');
-  if (content) {
-    showToast('Debug: loading directory page...', 'info');
-    await loadDirectoryPage(content);
-  } else {
-    showToast('Debug: navigating to directory', 'info');
-    navigate('directory');
-  }
-
-  showToast('Debug: waiting then opening business...', 'info');
-
-  setTimeout(() => {
-    if (typeof showBusinessDetail === 'function') {
-      showToast('Debug: calling showBusinessDetail now', 'success');
-      showBusinessDetail(businessId);
-    } else {
-      showToast('Debug ERROR: showBusinessDetail not found!', 'error');
-    }
-  }, 800);
-}
-
-window.loadDirectoryAndOpen = loadDirectoryAndOpen;
 
 // ─── BUSINESS DETAIL MODAL (DARK THEME) ───────────────────────────────────────
 async function showBusinessDetail(id) {
