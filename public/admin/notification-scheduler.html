@@ -872,11 +872,16 @@ function setTodayDate(){
   // Keeping it here so it doesn't break anything
 }
 
-function populateBizDropdowns(){
-  // fBusiness is a hidden input — business selection uses the search UI.
-  // Only populate the filter dropdown here.
+function populateBizDropdowns() {
   const fsel = document.getElementById('bizFilter');
+  
+  if (!fsel) {
+    console.warn('bizFilter element not found yet');
+    return;
+  }
+
   fsel.innerHTML = '<option value="">All businesses</option>';
+
   BUSINESSES.forEach(b => {
     const opt = document.createElement('option');
     opt.value = b.id;
