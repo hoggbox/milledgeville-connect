@@ -8,7 +8,7 @@ const scheduledNotificationSchema = new mongoose.Schema({
   targetType:   { type: String, default: 'home' },
   targetId:     { type: String },
   targetUrl:    { type: String },
-  status:       { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+  status:       { type: String, enum: ['pending', 'sent', 'failed', 'paused'], default: 'pending' },
   scheduledFor: { type: Date },
   sentAt:       { type: Date },
   repeat:       { type: String, default: 'once' },
