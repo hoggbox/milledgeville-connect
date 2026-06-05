@@ -2517,7 +2517,6 @@ function renderShoutoutCard(s) {
   const comments = s.comments || [];
   const commentCount = comments.length;
 
-  const userIsAdmin = isAdmin();
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
 
   // Still There state
@@ -2527,119 +2526,84 @@ function renderShoutoutCard(s) {
 
   // Cleared state
   const clearedBy = s.clearedBy || [];
-  const clearCount = clearedBy.length;
-  const CLEAR_THRESHOLD = 8;
   const hasVotedCleared = clearedBy.some(v => (v?._id || v)?.toString() === myId?.toString());
+
+  // Like state
+  const hasLiked = s.likes ? s.likes.some(v => (v?._id || v)?.toString() === myId?.toString()) : false;
 
   // Location tag
   const locationTag = s.location?.label
-    ? `<span class="inline-flex items-center gap-1 text-[11px] text-sky-300/80 bg-sky-500/10 border border-sky-500/20 rounded-full px-2.5 py-0.5 mt-1">
-         📍 ${s.location.label}
-       </span>`
+    ? `<div class="sc-location"><i class="ti ti-map-pin" style="font-size:11px"></i> ${esc(s.location.label)}</div>`
     : '';
 
   return `
-<div id="shoutout-${s._id}"
-     class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 transition-all duration-200">
-
-  <!-- Header -->
-  <div class="flex items-center justify-between mb-3">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-1 ring-white/10">
-        ${authorLetter}
-      </div>
-      <div class="flex items-center gap-2">
-        ${renderClickableUser(s.authorId || s.author)}
-        <span class="text-white/40 text-xs">· ${timeAgo(s.createdAt)}</span>
+<div id="shoutout-${s._id}" class="sc">
+  <div class="sc-header">
+    <div class="sc-author">
+      <div class="sc-avatar">${authorLetter}</div>
+      <div>
+        <div class="sc-name">${renderClickableUser(s.authorId || s.author)}</div>
+        <div class="sc-time">${timeAgo(s.createdAt)}</div>
       </div>
     </div>
-
     ${isAuthor
-      ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-medium">Yours</span>`
-      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,80)}...')"
-                 class="text-white/40 hover:text-red-400 transition text-lg leading-none px-1">🚩</button>`}
+      ? `<span class="yours-badge">Yours</span>`
+      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout','${s._id}','${esc(s.text||'').substring(0,80)}...')" class="sc-flag-btn" title="Report"><i class="ti ti-flag-3" style="font-size:15px"></i></button>`}
   </div>
 
-  <!-- Location (if exists) -->
   ${locationTag}
+  <p class="sc-text">${esc(s.text)}</p>
 
-  <!-- Main Text -->
-  <p class="text-[15px] text-white leading-relaxed whitespace-pre-wrap">${esc(s.text)}</p>
-
-  <!-- Images -->
   ${s.images && s.images.length ? `
-    <div class="flex gap-2 mt-4 overflow-x-auto pb-1 hide-scrollbar">
-      ${s.images.map((src, i) => `
-        <img src="${src}" onclick="openShoutoutImageViewer('${s._id}', ${i})"
-             class="h-28 rounded-2xl object-cover cursor-pointer flex-shrink-0 border border-white/10">
-      `).join('')}
+    <div class="sc-images">
+      ${s.images.map((src, i) => `<img src="${src}" onclick="openShoutoutImageViewer('${s._id}',${i})" alt="">`).join('')}
     </div>` : ''}
 
-  <!-- Status + Actions Bar -->
-  <div class="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+  <div class="sc-divider"></div>
 
-    <!-- Still There -->
-    <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}', this)"
-            class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition active:scale-[0.985]
-                   ${hasVotedStillThere
-                     ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30'
-                     : 'bg-white/5 hover:bg-white/10 text-white/80'}">
-      <span>👀</span>
-      <span>Still There</span>
-      <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-white/10">
-        ${stillThereVoters.length}
-      </span>
+  <div class="sc-actions">
+    <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}',this)"
+            class="sc-btn ${hasVotedStillThere ? 'active' : ''}">
+      <i class="ti ti-eye" style="font-size:14px"></i>
+      Still There
+      <span class="count">${stillThereVoters.length}</span>
     </button>
 
-    <!-- Cleared State or Clear Button -->
     ${s.cleared
-      ? `<div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold ring-1 ring-emerald-500/20">
-           <span>✅</span>
-           <span>Cleared</span>
-         </div>`
-      : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}', this)"
-                 class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition active:scale-[0.985] bg-white/5 hover:bg-white/10 text-white/80">
-           <span>✅</span>
-           <span>Mark Cleared</span>
-         </button>`
-    }
+      ? `<div class="sc-cleared"><i class="ti ti-check" style="font-size:14px"></i> Cleared</div>`
+      : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}',this)" class="sc-btn">
+           <i class="ti ti-circle-check" style="font-size:14px"></i> Mark Cleared
+         </button>`}
 
-    <!-- Right side actions -->
-    <div class="flex items-center gap-4 ml-auto text-white/70">
-      <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1.5 hover:text-white transition">
-        ❤️ <span id="like-count-${s._id}">${likeCount}</span>
+    <div class="sc-right">
+      <button onclick="likeShoutout('${s._id}')" class="sc-icon-btn ${hasLiked ? 'liked' : ''}">
+        <i class="ti ti-heart" style="font-size:16px"></i>
+        <span class="badge" id="like-count-${s._id}">${likeCount}</span>
       </button>
-      <button onclick="toggleCommentSection('${s._id}')" class="flex items-center gap-1.5 hover:text-white transition">
-        💬 <span>${commentCount}</span>
+      <button onclick="toggleCommentSection('${s._id}')" class="sc-icon-btn">
+        <i class="ti ti-message-circle" style="font-size:16px"></i>
+        <span class="badge">${commentCount}</span>
       </button>
-      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout', ${JSON.stringify(esc(s.text || '').substring(0,120))})"
-              class="hover:text-white transition">🔗</button>
+      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout',${JSON.stringify(esc(s.text||'').substring(0,120))})" class="sc-icon-btn">
+        <i class="ti ti-link" style="font-size:16px"></i>
+      </button>
     </div>
-
   </div>
 
-  <!-- Comment Section -->
-  <div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4">
-    ${comments.map(c => renderCommentRow(c, s._id)).join('')}
-    ${currentUser ? `
-      <div class="flex items-center gap-2 mt-3">
-        <div class="w-7 h-7 bg-emerald-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">
-          ${currentUser.name[0].toUpperCase()}
-        </div>
-        <div class="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2">
-          <input id="commentinput-${s._id}" type="text"
-                 class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
-                 placeholder="Write a comment…"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
-          <button onclick="submitComment('${s._id}')"
-                  class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition">Post</button>
-        </div>
-      </div>` : `
-      <p class="text-xs text-white/40 text-center mt-3">
-        <button onclick="showAuthModal()" class="text-emerald-400 hover:underline">Sign in</button> to comment
-      </p>`}
+  <div id="comment-section-${s._id}" class="hidden">
+    <div class="sc-comments">
+      ${comments.map(c => renderCommentRow(c, s._id)).join('')}
+      ${currentUser
+        ? `<div class="sc-comment-input">
+             <input id="commentinput-${s._id}" type="text" placeholder="Add a comment…"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
+             <button onclick="submitComment('${s._id}')">Post</button>
+           </div>`
+        : `<p style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;margin-top:10px">
+             <button onclick="showAuthModal()" style="color:#10b981;background:none;border:none;cursor:pointer;font-size:12px">Sign in</button> to comment
+           </p>`}
+    </div>
   </div>
-
 </div>`;
 }
 
