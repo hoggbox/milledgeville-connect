@@ -2522,7 +2522,6 @@ function renderShoutoutCard(s) {
 
   // Still There state
   const stillThereVoters = s.stillThereVoters || [];
-  const stillThereCount = stillThereVoters.length;
   const myId = currentUser?._id || currentUser?.id || '';
   const hasVotedStillThere = stillThereVoters.some(v => (v?._id || v)?.toString() === myId?.toString());
 
@@ -2530,9 +2529,7 @@ function renderShoutoutCard(s) {
   const clearedBy = s.clearedBy || [];
   const clearCount = clearedBy.length;
   const CLEAR_THRESHOLD = 8;
-  const isCleared = s.cleared === true;
   const hasVotedCleared = clearedBy.some(v => (v?._id || v)?.toString() === myId?.toString());
-  const clearProgress = Math.min(clearCount, CLEAR_THRESHOLD);
 
   // Location tag
   const locationTag = s.location?.label
@@ -2542,7 +2539,7 @@ function renderShoutoutCard(s) {
     : '';
 
   return `
-<div id="shoutout-${s._id}" 
+<div id="shoutout-${s._id}"
      class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 transition-all duration-200">
 
   <!-- Header -->
@@ -2557,9 +2554,9 @@ function renderShoutoutCard(s) {
       </div>
     </div>
 
-    ${isAuthor 
-      ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-medium">Yours</span>` 
-      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,80)}...')" 
+    ${isAuthor
+      ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-medium">Yours</span>`
+      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,80)}...')"
                  class="text-white/40 hover:text-red-400 transition text-lg leading-none px-1">🚩</button>`}
   </div>
 
@@ -2584,20 +2581,20 @@ function renderShoutoutCard(s) {
     <!-- Still There -->
     <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}', this)"
             class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition active:scale-[0.985]
-                   ${s.stillThereVoters?.includes(currentUser?._id) 
-                     ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' 
+                   ${hasVotedStillThere
+                     ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30'
                      : 'bg-white/5 hover:bg-white/10 text-white/80'}">
       <span>👀</span>
       <span>Still There</span>
       <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-white/10">
-        ${s.stillThereVoters?.length || 0}
+        ${stillThereVoters.length}
       </span>
     </button>
 
     <!-- Cleared State or Clear Button -->
-    ${s.cleared 
+    ${s.cleared
       ? `<div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold ring-1 ring-emerald-500/20">
-           <span>✅</span> 
+           <span>✅</span>
            <span>Cleared</span>
          </div>`
       : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}', this)"
@@ -2643,8 +2640,7 @@ function renderShoutoutCard(s) {
       </p>`}
   </div>
 
-</div>
-    </div>`;
+</div>`;
 }
 
 function renderCommentRow(c, shoutoutId) {
