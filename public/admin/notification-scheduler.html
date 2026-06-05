@@ -1028,10 +1028,10 @@ function notifCard(n){
 <div class="notif-actions">
   <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px"></i> Edit</button>
 
-  ${n.repeat !== 'once' && n.status !== 'paused' ? 
+  ${n.repeat !== 'once' && n.status !== 'draft' ? 
     `<button class="action-btn" onclick="pauseResumeNotif('${n.id}', 'pause')"><i class="ti ti-player-pause" style="font-size:12px"></i> Pause</button>` : ''}
 
-  ${n.status === 'paused' ? 
+  ${n.status === 'draft' ? 
     `<button class="action-btn" onclick="pauseResumeNotif('${n.id}', 'resume')"><i class="ti ti-player-play" style="font-size:12px"></i> Resume</button>` : ''}
 
   ${n.status === 'scheduled' || n.status === 'draft' ? 
