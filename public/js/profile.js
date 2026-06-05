@@ -344,11 +344,12 @@ content.innerHTML = `
     </div>
   </div>
 
-  <div class="flex flex-col items-center">
-  <h2 class="text-3xl font-bold text-white mt-2">${currentUser.name}</h2>
+  <!-- Name + Developer Badge -->
+<div class="flex flex-col items-center mb-1">
+  <h2 class="text-3xl font-bold text-white">${currentUser.name}</h2>
   
   ${currentUser.email === 'imhoggbox@gmail.com' ? `
-    <div class="mt-2 inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow-lg">
+    <div class="mt-2 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow-lg">
       <span>👨‍💻</span>
       <span>Developer</span>
     </div>
