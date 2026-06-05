@@ -1013,11 +1013,20 @@ function notifCard(n){
         </div>` : ''}
     </div>
 
-    <div class="notif-actions">
-      <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px"></i> Edit</button>
-      ${n.status === 'scheduled' || n.status === 'draft' ? `<button class="action-btn" onclick="sendNow('${n.id}')"><i class="ti ti-send" style="font-size:12px"></i> Send now</button>` : ''}
-      <button class="action-btn del" onclick="deleteNotif('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i> Delete</button>
-    </div>
+<div class="notif-actions">
+  <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px"></i> Edit</button>
+
+  ${n.repeat !== 'once' && n.status !== 'paused' ? 
+    `<button class="action-btn" onclick="pauseResumeNotif('${n.id}', 'pause')"><i class="ti ti-player-pause" style="font-size:12px"></i> Pause</button>` : ''}
+
+  ${n.status === 'paused' ? 
+    `<button class="action-btn" onclick="pauseResumeNotif('${n.id}', 'resume')"><i class="ti ti-player-play" style="font-size:12px"></i> Resume</button>` : ''}
+
+  ${n.status === 'scheduled' || n.status === 'draft' ? 
+    `<button class="action-btn" onclick="sendNow('${n.id}')"><i class="ti ti-send" style="font-size:12px"></i> Send now</button>` : ''}
+
+  <button class="action-btn del" onclick="deleteNotif('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i> Delete</button>
+</div>
   </div>`;
 }
 
@@ -1404,6 +1413,27 @@ async function deleteNotif(id) {
     updateTopMetrics();
   } catch (e) {
     showToast(e.message || 'Delete failed', 'error');
+  }
+}
+
+async function pauseResumeNotif(id, action) {
+  const actionText = action === 'pause' ? 'pause' : 'resume';
+  
+  if (!confirm(`${actionText.charAt(0).toUpperCase() + actionText.slice(1)} this recurring notification?`)) {
+    return;
+  }
+
+  try {
+    await apiPatch(`/admin/scheduled-notifications/${id}`, { action: action });
+    showToast(`Notification ${actionText}d`, 'success');
+
+    // Refresh the list
+    const fresh = await apiGet('/admin/scheduled-notifications');
+    notifications = (fresh || []).map(normalizeNotification);
+    renderList();
+    updateTopMetrics();
+  } catch (e) {
+    showToast(e.message || `Failed to ${actionText}`, 'error');
   }
 }
 
