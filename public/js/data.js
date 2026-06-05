@@ -2542,75 +2542,107 @@ function renderShoutoutCard(s) {
     : '';
 
   return `
-    <div id="shoutout-${s._id}" class="bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-5 transition">
-      <div class="flex items-start gap-3">
-        <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0">
-          ${authorLetter}
+<div id="shoutout-${s._id}" class="bg-white/10 border border-white/10 hover:border-white/20 rounded-3xl p-5 transition">
+  
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+        ${authorLetter}
+      </div>
+      <div>
+        ${renderClickableUser(s.authorId || s.author)}
+        <span class="text-xs text-white/50 ml-2">· ${timeAgo(s.createdAt)}</span>
+      </div>
+    </div>
+
+    ${isAuthor 
+      ? `<span class="text-[10px] bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">Yours</span>` 
+      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,80)}...')" 
+                 class="text-red-400 hover:text-red-500 text-lg leading-none px-1">🚩</button>`}
+  </div>
+
+  ${locationTag}
+
+  <!-- Text -->
+  <p class="text-white leading-relaxed whitespace-pre-wrap">${esc(s.text)}</p>
+
+  <!-- Images -->
+  ${s.images && s.images.length ? `
+    <div class="flex gap-2 mt-4 overflow-x-auto hide-scrollbar">
+      ${s.images.map((src, i) => `
+        <img src="${src}" onclick="openShoutoutImageViewer('${s._id}', ${i})"
+             class="h-24 rounded-2xl object-cover cursor-pointer flex-shrink-0 border border-white/10">
+      `).join('')}
+    </div>` : ''}
+
+  <!-- Status + Actions -->
+  <div class="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 text-sm">
+
+    <!-- Still There Button -->
+    <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}', this)"
+            class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition
+                   ${s.stillThereVoters?.includes(currentUser?._id) 
+                     ? 'bg-emerald-500/20 text-emerald-400' 
+                     : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+      <span>👀</span>
+      <span>Still There</span>
+      <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-white/10">
+        ${s.stillThereVoters?.length || 0}
+      </span>
+    </button>
+
+    <!-- Clear Button / Cleared State -->
+    ${s.cleared 
+      ? `<div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold">
+           <span>✅</span> 
+           <span>Cleared</span>
+         </div>`
+      : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}', this)"
+                 class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition bg-white/10 hover:bg-white/20 text-white/80">
+           <span>✅</span>
+           <span>Mark Cleared</span>
+         </button>`
+    }
+
+    <!-- Other Actions -->
+    <div class="flex items-center gap-5 text-white/70 ml-auto">
+      <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+        ❤️ <span id="like-count-${s._id}">${likeCount}</span>
+      </button>
+      <button onclick="toggleCommentSection('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+        💬 ${commentCount}
+      </button>
+      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout', ${JSON.stringify(esc(s.text || '').substring(0,120))})"
+              class="flex items-center gap-1 hover:text-white transition">
+        🔗
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Comment Section -->
+  <div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4 space-y-3">
+    ${comments.map(c => renderCommentRow(c, s._id)).join('')}
+    ${currentUser ? `
+      <div class="flex items-center gap-2 mt-3">
+        <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">
+          ${currentUser.name[0].toUpperCase()}
         </div>
-        <div class="flex-1 min-w-0">
-          <div class="flex justify-between items-start">
-            <div>
-              ${renderClickableUser(s.authorId || s.author)}
-              <span class="text-xs text-white/50 ml-2">${timeAgo(s.createdAt)}</span>
-            </div>
-            ${isAuthor ? `<span class="text-[10px] bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">Yours</span>` : ''}
-          </div>
-
-          ${locationTag}
-
-          <p class="mt-2 text-white leading-relaxed">${esc(s.text)}</p>
-
-          ${s.images && s.images.length ? `
-            <div class="flex gap-2 mt-4 overflow-x-auto hide-scrollbar">
-              ${s.images.map((src, i) => `
-                <img src="${src}" onclick="openShoutoutImageViewer('${s._id}', ${i})"
-                     class="h-24 rounded-2xl object-cover cursor-pointer flex-shrink-0 border border-white/10">
-              `).join('')}
-            </div>` : ''}
-
-          <!-- Actions Bar -->
-          <div class="flex items-center justify-between mt-4 pt-3 border-t border-white/10 text-xs">
-            <div class="flex gap-5 text-white/70">
-              <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
-                ❤️ <span id="like-count-${s._id}">${likeCount}</span>
-              </button>
-              <button onclick="toggleCommentSection('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
-  💬 ${commentCount}
-</button>
-              <button onclick="event.stopImmediatePropagation(); shareContent('shoutout', ${JSON.stringify(esc(s.text || '').substring(0,120))})"
-                      class="flex items-center gap-1 hover:text-white transition">
-                🔗 Share
-              </button>
-            </div>
-
-            <!-- Report Button -->
-            <button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,100)}...')" 
-                    class="text-red-400 hover:text-red-500 flex items-center gap-1 transition font-medium">
-              🚩 Report
-            </button>
-          </div>
+        <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
+          <input id="commentinput-${s._id}" type="text"
+                 class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
+                 placeholder="Write a comment…"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
+          <button onclick="submitComment('${s._id}')"
+                  class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition">Post</button>
         </div>
-      </div>
-      <!-- Comment Section -->
-<div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4 space-y-3">
-  ${comments.map(c => renderCommentRow(c, s._id)).join('')}
-  ${currentUser ? `
-    <div class="flex items-center gap-2 mt-3">
-      <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">
-        ${currentUser.name[0].toUpperCase()}
-      </div>
-      <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
-        <input id="commentinput-${s._id}" type="text"
-               class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
-               placeholder="Write a comment…"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
-        <button onclick="submitComment('${s._id}')"
-                class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition">Post</button>
-      </div>
-    </div>` : `
-    <p class="text-xs text-white/40 text-center mt-2">
-      <button onclick="showAuthModal()" class="text-emerald-400 hover:underline">Sign in</button> to comment
-    </p>`}
+      </div>` : `
+      <p class="text-xs text-white/40 text-center mt-2">
+        <button onclick="showAuthModal()" class="text-emerald-400 hover:underline">Sign in</button> to comment
+      </p>`}
+  </div>
+
 </div>
     </div>`;
 }
