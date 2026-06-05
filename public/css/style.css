@@ -91,7 +91,7 @@
 }
 /* ====================== SHOUTOUT CARDS ====================== */
 .sc {
-  background: #0b1120;
+  background: linear-gradient(145deg, #111e2e, #0e1a28);
   border: 1px solid rgba(255,255,255,0.07);
   border-radius: 20px;
   padding: 20px;
