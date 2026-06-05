@@ -1315,9 +1315,20 @@ async function deleteNotif(id) {
 async function sendNow(id) {
   const n = notifications.find(x => x.id === id);
   if (!n) return;
+
   if (!confirm(`Send "${n.title}" to all users RIGHT NOW?`)) return;
 
-  // Optimistically flip to sent instantly — no waiting for the server
+  // Find the button and disable it with loading state
+  const card = document.getElementById(`nc-${id}`);
+  const sendBtn = card ? card.querySelector('.action-btn[onclick*="sendNow"]') : null;
+
+  const originalText = sendBtn ? sendBtn.innerHTML : '';
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = `<i class="ti ti-loader" style="font-size:12px"></i> Sending...`;
+  }
+
+  // Optimistic UI update
   const prevStatus = n.status;
   const prevScheduledAt = n.scheduledAt;
   n.status = 'sent';
@@ -1327,19 +1338,29 @@ async function sendNow(id) {
 
   try {
     await apiPatch(`/admin/scheduled-notifications/${id}`, { action: 'send-now' });
-    showToast('Notification sent to all users!', 'success');
 
+    showToast('✅ Notification sent to all users!', 'success');
+
+    // Refresh from server to get accurate data
     const fresh = await apiGet('/admin/scheduled-notifications');
     notifications = (fresh || []).map(normalizeNotification);
     renderList();
     updateTopMetrics();
+
   } catch (e) {
-    // Revert on failure
+    // Revert optimistic update on failure
     n.status = prevStatus;
     n.scheduledAt = prevScheduledAt;
     renderList();
     updateTopMetrics();
-    showToast(e.message || 'Send now failed', 'error');
+
+    showToast(e.message || 'Failed to send notification', 'error');
+
+    // Re-enable button
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = originalText;
+    }
   }
 }
 
