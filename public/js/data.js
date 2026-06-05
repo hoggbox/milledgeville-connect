@@ -2542,49 +2542,51 @@ function renderShoutoutCard(s) {
     : '';
 
   return `
-<div id="shoutout-${s._id}" class="bg-white/10 border border-white/10 hover:border-white/20 rounded-3xl p-5 transition">
-  
+<div id="shoutout-${s._id}" 
+     class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 transition-all duration-200">
+
   <!-- Header -->
   <div class="flex items-center justify-between mb-3">
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+      <div class="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-1 ring-white/10">
         ${authorLetter}
       </div>
-      <div>
+      <div class="flex items-center gap-2">
         ${renderClickableUser(s.authorId || s.author)}
-        <span class="text-xs text-white/50 ml-2">· ${timeAgo(s.createdAt)}</span>
+        <span class="text-white/40 text-xs">· ${timeAgo(s.createdAt)}</span>
       </div>
     </div>
 
     ${isAuthor 
-      ? `<span class="text-[10px] bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">Yours</span>` 
+      ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-medium">Yours</span>` 
       : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout', '${s._id}', '${esc(s.text || '').substring(0,80)}...')" 
-                 class="text-red-400 hover:text-red-500 text-lg leading-none px-1">🚩</button>`}
+                 class="text-white/40 hover:text-red-400 transition text-lg leading-none px-1">🚩</button>`}
   </div>
 
+  <!-- Location (if exists) -->
   ${locationTag}
 
-  <!-- Text -->
-  <p class="text-white leading-relaxed whitespace-pre-wrap">${esc(s.text)}</p>
+  <!-- Main Text -->
+  <p class="text-[15px] text-white leading-relaxed whitespace-pre-wrap">${esc(s.text)}</p>
 
   <!-- Images -->
   ${s.images && s.images.length ? `
-    <div class="flex gap-2 mt-4 overflow-x-auto hide-scrollbar">
+    <div class="flex gap-2 mt-4 overflow-x-auto pb-1 hide-scrollbar">
       ${s.images.map((src, i) => `
         <img src="${src}" onclick="openShoutoutImageViewer('${s._id}', ${i})"
-             class="h-24 rounded-2xl object-cover cursor-pointer flex-shrink-0 border border-white/10">
+             class="h-28 rounded-2xl object-cover cursor-pointer flex-shrink-0 border border-white/10">
       `).join('')}
     </div>` : ''}
 
-  <!-- Status + Actions -->
-  <div class="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 text-sm">
+  <!-- Status + Actions Bar -->
+  <div class="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
 
-    <!-- Still There Button -->
+    <!-- Still There -->
     <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}', this)"
-            class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition
+            class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition active:scale-[0.985]
                    ${s.stillThereVoters?.includes(currentUser?._id) 
-                     ? 'bg-emerald-500/20 text-emerald-400' 
-                     : 'bg-white/10 hover:bg-white/20 text-white/80'}">
+                     ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' 
+                     : 'bg-white/5 hover:bg-white/10 text-white/80'}">
       <span>👀</span>
       <span>Still There</span>
       <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-white/10">
@@ -2592,44 +2594,42 @@ function renderShoutoutCard(s) {
       </span>
     </button>
 
-    <!-- Clear Button / Cleared State -->
+    <!-- Cleared State or Clear Button -->
     ${s.cleared 
-      ? `<div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold">
+      ? `<div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold ring-1 ring-emerald-500/20">
            <span>✅</span> 
            <span>Cleared</span>
          </div>`
       : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}', this)"
-                 class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition bg-white/10 hover:bg-white/20 text-white/80">
+                 class="flex items-center gap-2 px-4 py-2 rounded-2xl font-semibold transition active:scale-[0.985] bg-white/5 hover:bg-white/10 text-white/80">
            <span>✅</span>
            <span>Mark Cleared</span>
          </button>`
     }
 
-    <!-- Other Actions -->
-    <div class="flex items-center gap-5 text-white/70 ml-auto">
-      <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
+    <!-- Right side actions -->
+    <div class="flex items-center gap-4 ml-auto text-white/70">
+      <button onclick="likeShoutout('${s._id}')" class="flex items-center gap-1.5 hover:text-white transition">
         ❤️ <span id="like-count-${s._id}">${likeCount}</span>
       </button>
-      <button onclick="toggleCommentSection('${s._id}')" class="flex items-center gap-1 hover:text-white transition">
-        💬 ${commentCount}
+      <button onclick="toggleCommentSection('${s._id}')" class="flex items-center gap-1.5 hover:text-white transition">
+        💬 <span>${commentCount}</span>
       </button>
       <button onclick="event.stopImmediatePropagation(); shareContent('shoutout', ${JSON.stringify(esc(s.text || '').substring(0,120))})"
-              class="flex items-center gap-1 hover:text-white transition">
-        🔗
-      </button>
+              class="hover:text-white transition">🔗</button>
     </div>
 
   </div>
 
   <!-- Comment Section -->
-  <div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4 space-y-3">
+  <div id="comment-section-${s._id}" class="hidden mt-4 border-t border-white/10 pt-4">
     ${comments.map(c => renderCommentRow(c, s._id)).join('')}
     ${currentUser ? `
       <div class="flex items-center gap-2 mt-3">
-        <div class="w-7 h-7 bg-emerald-500 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">
+        <div class="w-7 h-7 bg-emerald-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">
           ${currentUser.name[0].toUpperCase()}
         </div>
-        <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-2">
+        <div class="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2">
           <input id="commentinput-${s._id}" type="text"
                  class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
                  placeholder="Write a comment…"
@@ -2638,7 +2638,7 @@ function renderShoutoutCard(s) {
                   class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition">Post</button>
         </div>
       </div>` : `
-      <p class="text-xs text-white/40 text-center mt-2">
+      <p class="text-xs text-white/40 text-center mt-3">
         <button onclick="showAuthModal()" class="text-emerald-400 hover:underline">Sign in</button> to comment
       </p>`}
   </div>
