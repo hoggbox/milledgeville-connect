@@ -730,6 +730,7 @@ function normalizeNotification(n) {
   let displayStatus = n.status;
   if (n.status === 'pending') displayStatus = n.scheduledFor ? 'scheduled' : 'draft';
   if (n.status === 'failed')  displayStatus = 'draft';
+  // 'paused' passes through as-is
 
   return {
     id: n._id,
@@ -971,8 +972,8 @@ function changePage(delta) {
 }
 
 function notifCard(n){
-  const pillClass = {active:'pill-active', scheduled:'pill-scheduled', draft:'pill-draft', sent:'pill-sent'};
-  const pillLabel = {active:'Live', scheduled:'Scheduled', draft:'Draft', sent:'Sent'};
+  const pillClass = {active:'pill-active', scheduled:'pill-scheduled', draft:'pill-draft', sent:'pill-sent', paused:'pill-draft'};
+  const pillLabel = {active:'Live', scheduled:'Scheduled', draft:'Draft', sent:'Sent', paused:'Paused'};
 
   const linkBadge = n.link.type === 'url'
     ? `<span class="notif-link-badge"><i class="ti ti-external-link" style="font-size:10px"></i> URL</span>`
@@ -1028,13 +1029,13 @@ function notifCard(n){
 <div class="notif-actions">
   <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px"></i> Edit</button>
 
-  ${n.repeat !== 'once' && n.status !== 'draft' ? 
+  ${n.repeat !== 'once' && n.status !== 'paused' && n.status !== 'sent' ? 
     `<button class="action-btn" onclick="pauseResumeNotif('${n.id}', 'pause')"><i class="ti ti-player-pause" style="font-size:12px"></i> Pause</button>` : ''}
 
-  ${n.status === 'draft' ? 
+  ${n.status === 'paused' ? 
     `<button class="action-btn" onclick="pauseResumeNotif('${n.id}', 'resume')"><i class="ti ti-player-play" style="font-size:12px"></i> Resume</button>` : ''}
 
-  ${n.status === 'scheduled' || n.status === 'draft' ? 
+  ${n.status === 'scheduled' || n.status === 'draft' || n.status === 'paused' ? 
     `<button class="action-btn" onclick="sendNow('${n.id}')"><i class="ti ti-send" style="font-size:12px"></i> Send now</button>` : ''}
 
   <button class="action-btn del" onclick="deleteNotif('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i> Delete</button>
