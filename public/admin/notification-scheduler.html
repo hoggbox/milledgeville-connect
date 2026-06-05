@@ -1370,6 +1370,10 @@ if (currentLinkType === 'directory' || currentLinkType === 'business') {
     imageToSend = imgBase64;   // Send full base64 like shoutouts
   }
 
+  // Backend schema only accepts 'pending' / 'sent' / 'cancelled' — never send 'draft'.
+  // A draft is just a pending notification with no scheduledFor date.
+  const backendStatus = 'pending';
+
   const payload = {
     title,
     body,
@@ -1381,7 +1385,7 @@ if (currentLinkType === 'directory' || currentLinkType === 'business') {
     business: bizId,
     repeat,
     days,
-    status: 'pending'
+    status: backendStatus
   };
 
   const btn = document.querySelector('#composeModal .btn-primary');
@@ -1557,20 +1561,6 @@ function startLiveRefresh() {
       console.log('Live refresh error (non-critical)');
     }
   }, 8000);
-}
-
-async function manualRefresh() {
-  try {
-    const fresh = await apiGet('/admin/scheduled-notifications');
-    notifications = (fresh || []).map(normalizeNotification);
-    renderList();
-    updateTopMetrics();
-    lastRefreshTime = Date.now();
-    updateLastRefreshTime();
-    showToast('Refreshed', 'success');
-  } catch (e) {
-    showToast('Failed to refresh', 'error');
-  }
 }
 
 async function manualRefresh() {
