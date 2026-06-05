@@ -4256,27 +4256,29 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
       return res.json({ message: 'Notification sent successfully' });
     }
 
-// Handle Pause and Resume (using 'draft' as paused state to avoid enum issues)
-if (req.body.action === 'pause' || req.body.action === 'resume') {
-  const notif = await ScheduledNotification.findById(id);
-  if (!notif) {
-    return res.status(404).json({ message: 'Notification not found' });
-  }
+    // Handle Pause and Resume
+    if (req.body.action === 'pause' || req.body.action === 'resume') {
+      const notif = await ScheduledNotification.findById(id);
+      if (!notif) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
 
-  if (req.body.action === 'pause') {
-    notif.status = 'draft';        // Temporarily use 'draft' as paused
-  } else {
-    notif.status = 'pending';
-  }
+      notif.status = req.body.action === 'pause' ? 'paused' : 'pending';
 
-  await notif.save();
-  return res.json({ message: `Notification ${req.body.action}d` });
-}
+      await notif.save();
+      return res.json({ message: `Notification ${req.body.action}d` });
+    }
 
-    // Normal update (for editing)
+    // Normal update (for editing) — strip any invalid status values before saving
+    const VALID_STATUSES = ['pending', 'sent', 'failed', 'paused'];
+    const updateBody = { ...req.body };
+    if (updateBody.status && !VALID_STATUSES.includes(updateBody.status)) {
+      updateBody.status = 'pending';
+    }
+
     const updated = await ScheduledNotification.findByIdAndUpdate(
       id,
-      req.body,
+      updateBody,
       { new: true }
     );
 
