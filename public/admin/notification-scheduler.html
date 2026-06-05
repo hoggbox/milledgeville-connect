@@ -398,19 +398,22 @@
     <div class="tab" onclick="switchTab('draft',this)">Drafts</div>
   </div>
 
-  <div class="section-header">
-    <div class="section-title"><i class="ti ti-list" aria-hidden="true"></i> Notifications <span id="countBadge" style="font-size:11px;background:var(--color-background-secondary);padding:1px 8px;border-radius:20px;font-weight:400">6</span></div>
-    <div class="filters">
-      <select class="filter-select" onchange="filterBusiness(this.value)" id="bizFilter">
-        <option value="">All businesses</option>
-      </select>
-      <select class="filter-select" onchange="sortNotifs(this.value)">
-        <option value="date">Sort: date</option>
-        <option value="reach">Sort: reach</option>
-        <option value="ctr">Sort: CTR</option>
-      </select>
-    </div>
+<div class="section-header">
+  <div class="section-title">
+    <i class="ti ti-list"></i> Notifications 
+    <span id="countBadge" style="font-size:11px;background:#334155;padding:1px 8px;border-radius:20px;font-weight:400">0</span>
   </div>
+
+  <div style="display:flex; align-items:center; gap:12px;">
+    <div id="lastUpdated" style="font-size:11px; color:#64748b;"></div>
+    
+    <button onclick="manualRefresh()" class="btn-ghost" style="padding:6px 12px; font-size:12px;">
+      <i class="ti ti-refresh"></i> Refresh
+    </button>
+
+    <div class="filters">...</div>
+  </div>
+</div>
 
   <div class="notif-list" id="notifList"></div>
 </div>
@@ -1358,17 +1361,72 @@ function updateTopMetrics() {
   document.getElementById('mThisMonth').textContent = thisMonth;
 }
 
+let lastRefreshTime = Date.now();
+
+function updateLastRefreshTime() {
+  const el = document.getElementById('lastUpdated');
+  if (!el) return;
+
+  const secondsAgo = Math.floor((Date.now() - lastRefreshTime) / 1000);
+
+  if (secondsAgo < 10) {
+    el.textContent = 'Updated just now';
+  } else if (secondsAgo < 60) {
+    el.textContent = `Updated ${secondsAgo}s ago`;
+  } else {
+    el.textContent = `Updated ${Math.floor(secondsAgo / 60)}m ago`;
+  }
+}
+
 function startLiveRefresh() {
+  // Update the "last updated" text every 10 seconds
+  setInterval(updateLastRefreshTime, 10000);
+
+  // Main auto-refresh every 8 seconds (only re-renders if data changed)
   setInterval(async () => {
     try {
       const fresh = await apiGet('/admin/scheduled-notifications');
-      notifications = (fresh || []).map(normalizeNotification);
-      renderList();
-      updateTopMetrics();
+      const newNotifications = (fresh || []).map(normalizeNotification);
+
+      if (JSON.stringify(newNotifications) !== JSON.stringify(notifications)) {
+        notifications = newNotifications;
+        renderList();
+        updateTopMetrics();
+        lastRefreshTime = Date.now();
+        updateLastRefreshTime();
+      }
     } catch (e) {
-      console.log('Live refresh error');
+      console.log('Live refresh error (non-critical)');
     }
-  }, 5000); // refreshes every 5 seconds
+  }, 8000);
+}
+
+async function manualRefresh() {
+  try {
+    const fresh = await apiGet('/admin/scheduled-notifications');
+    notifications = (fresh || []).map(normalizeNotification);
+    renderList();
+    updateTopMetrics();
+    lastRefreshTime = Date.now();
+    updateLastRefreshTime();
+    showToast('Refreshed', 'success');
+  } catch (e) {
+    showToast('Failed to refresh', 'error');
+  }
+}
+
+async function manualRefresh() {
+  try {
+    const fresh = await apiGet('/admin/scheduled-notifications');
+    notifications = (fresh || []).map(normalizeNotification);
+    renderList();
+    updateTopMetrics();
+    lastRefreshTime = Date.now();
+    updateLastRefreshTime();
+    showToast('Refreshed', 'success');
+  } catch (e) {
+    showToast('Failed to refresh', 'error');
+  }
 }
 
 function openAnalytics(id){
