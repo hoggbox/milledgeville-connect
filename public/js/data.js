@@ -2516,24 +2516,13 @@ function renderShoutoutCard(s) {
   const likeCount = s.likes ? s.likes.length : 0;
   const comments = s.comments || [];
   const commentCount = comments.length;
-
   const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
-
-  // Still There state
   const stillThereVoters = s.stillThereVoters || [];
   const myId = currentUser?._id || currentUser?.id || '';
   const hasVotedStillThere = stillThereVoters.some(v => (v?._id || v)?.toString() === myId?.toString());
-
-  // Cleared state
-  const clearedBy = s.clearedBy || [];
-  const hasVotedCleared = clearedBy.some(v => (v?._id || v)?.toString() === myId?.toString());
-
-  // Like state
-  const hasLiked = s.likes ? s.likes.some(v => (v?._id || v)?.toString() === myId?.toString()) : false;
-
-  // Location tag
+  const hasLiked = (s.likes || []).some(v => (v?._id || v)?.toString() === myId?.toString());
   const locationTag = s.location?.label
-    ? `<div class="sc-location"><i class="ti ti-map-pin" style="font-size:11px"></i> ${esc(s.location.label)}</div>`
+    ? `<div class="sc-location">\u{1F4CD} ${esc(s.location.label)}</div>`
     : '';
 
   return `
@@ -2547,61 +2536,46 @@ function renderShoutoutCard(s) {
       </div>
     </div>
     ${isAuthor
-      ? `<span class="yours-badge">Yours</span>`
-      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout','${s._id}','${esc(s.text||'').substring(0,80)}...')" class="sc-flag-btn" title="Report"><i class="ti ti-flag-3" style="font-size:15px"></i></button>`}
+      ? `<span class="sc-yours">Yours</span>`
+      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout','${s._id}','${esc(s.text||'').substring(0,80)}...')" class="sc-flag-btn" title="Report">\u{1F6A9}</button>`}
   </div>
-
   ${locationTag}
   <p class="sc-text">${esc(s.text)}</p>
-
   ${s.images && s.images.length ? `
     <div class="sc-images">
       ${s.images.map((src, i) => `<img src="${src}" onclick="openShoutoutImageViewer('${s._id}',${i})" alt="">`).join('')}
     </div>` : ''}
-
   <div class="sc-divider"></div>
-
   <div class="sc-actions">
-    <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}',this)"
-            class="sc-btn ${hasVotedStillThere ? 'active' : ''}">
-      <i class="ti ti-eye" style="font-size:14px"></i>
-      Still There
-      <span class="count">${stillThereVoters.length}</span>
+    <button onclick="event.stopImmediatePropagation(); stillThere('${s._id}',this)" class="sc-pill${hasVotedStillThere ? ' active' : ''}">
+      \u{1F440} Still There <span class="sc-pill-count">${stillThereVoters.length}</span>
     </button>
-
     ${s.cleared
-      ? `<div class="sc-cleared"><i class="ti ti-check" style="font-size:14px"></i> Cleared</div>`
-      : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}',this)" class="sc-btn">
-           <i class="ti ti-circle-check" style="font-size:14px"></i> Mark Cleared
-         </button>`}
-
-    <div class="sc-right">
-      <button onclick="likeShoutout('${s._id}')" class="sc-react-btn ${hasLiked ? 'liked' : ''}">
-        <i class="ti ti-heart"></i>
-        <span id="like-count-${s._id}">${likeCount}</span>
+      ? `<div class="sc-pill sc-cleared-badge">\u2705 Cleared</div>`
+      : `<button onclick="event.stopImmediatePropagation(); clearShoutout('${s._id}',this)" class="sc-pill">\u2705 Mark Cleared</button>`}
+    <div class="sc-reactions">
+      <button onclick="likeShoutout('${s._id}')" class="sc-react${hasLiked ? ' liked' : ''}">
+        <span class="sc-react-icon">\u2665</span><span id="like-count-${s._id}">${likeCount}</span>
       </button>
-      <button onclick="toggleCommentSection('${s._id}')" class="sc-react-btn">
-        <i class="ti ti-message-circle"></i>
-        <span>${commentCount}</span>
+      <button onclick="toggleCommentSection('${s._id}')" class="sc-react">
+        <span class="sc-react-icon">\u{1F4AC}</span><span>${commentCount}</span>
       </button>
-      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout',${JSON.stringify(esc(s.text||'').substring(0,120))})" class="sc-react-btn share">
-        <i class="ti ti-share"></i>
+      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout',${JSON.stringify(esc(s.text||'').substring(0,120))})" class="sc-react sc-share">
+        <span class="sc-react-icon">\u{1F517}</span>
       </button>
     </div>
   </div>
-
   <div id="comment-section-${s._id}" class="hidden">
     <div class="sc-comments">
       ${comments.map(c => renderCommentRow(c, s._id)).join('')}
-      ${currentUser
-        ? `<div class="sc-comment-input">
-             <input id="commentinput-${s._id}" type="text" placeholder="Add a comment…"
-                    onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
-             <button onclick="submitComment('${s._id}')">Post</button>
-           </div>`
-        : `<p style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;margin-top:10px">
-             <button onclick="showAuthModal()" style="color:#10b981;background:none;border:none;cursor:pointer;font-size:12px">Sign in</button> to comment
-           </p>`}
+      ${currentUser ? `
+        <div class="sc-comment-input">
+          <div class="sc-comment-avatar">${currentUser.name[0].toUpperCase()}</div>
+          <input id="commentinput-${s._id}" type="text" placeholder="Write a comment\u2026"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
+          <button onclick="submitComment('${s._id}')">Post</button>
+        </div>` : `
+        <p class="sc-sign-in-prompt"><button onclick="showAuthModal()">Sign in</button> to comment</p>`}
     </div>
   </div>
 </div>`;
@@ -9452,12 +9426,7 @@ window.clearShoutout = async function(shoutoutId, btnElement) {
     if (res.cleared) {
       // Replace button with "Cleared" state
       const container = btnElement.parentElement;
-      btnElement.outerHTML = `
-        <div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold">
-          <span>✅</span> 
-          <span>Cleared</span>
-        </div>
-      `;
+      btnElement.outerHTML = `<div class="sc-pill sc-cleared-badge">✅ Cleared</div>`;
       showToast('Alert marked as cleared. Thanks!', 'success');
     } else {
       showToast(`Marked (${res.clearCount}/${res.threshold} needed)`, 'success');
@@ -9471,6 +9440,25 @@ window.clearShoutout = async function(shoutoutId, btnElement) {
       showToast('Failed to mark as cleared', 'error');
     }
     btnElement.disabled = false;
+  }
+};
+
+window.likeShoutout = async function(shoutoutId) {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to like traffic alerts.' });
+    return;
+  }
+  try {
+    const res = await apiPost(`/shoutouts/${shoutoutId}/like`, {});
+    const countEl = document.getElementById(`like-count-${shoutoutId}`);
+    if (countEl) countEl.textContent = res.likes;
+    const btn = countEl?.closest('button');
+    if (btn) {
+      if (res.liked) btn.classList.add('liked');
+      else btn.classList.remove('liked');
+    }
+  } catch (err) {
+    showToast('Could not like this alert', 'error');
   }
 };
 
