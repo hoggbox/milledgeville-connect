@@ -882,27 +882,35 @@ function notifCard(n){
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-function openCompose(){
-  // Force full reset of all possible dirty state
+function openCompose() {
+  // === FULL STATE RESET ===
   editingId = null;
   selectedBusinessId = null;
   imgBase64 = null;
   imgCompressedFile = null;
 
-  // Clear any lingering business search UI
+  // Clear business search UI completely
   const searchInput = document.getElementById('businessSearch');
-  const results = document.getElementById('businessSearchResults');
-  const display = document.getElementById('selectedBusinessDisplay');
+  const resultsDiv = document.getElementById('businessSearchResults');
+  const selectedDisplay = document.getElementById('selectedBusinessDisplay');
+  const hiddenInput = document.getElementById('fBusiness');
 
   if (searchInput) searchInput.value = '';
-  if (results) results.style.display = 'none';
-  if (display) display.style.display = 'none';
+  if (resultsDiv) {
+    resultsDiv.innerHTML = '';
+    resultsDiv.style.display = 'none';
+  }
+  if (selectedDisplay) selectedDisplay.style.display = 'none';
+  if (hiddenInput) hiddenInput.value = '';
 
-  // Now do the normal reset
+  // Reset the rest of the form
   resetForm();
 
+  // Update modal UI
   document.getElementById('modalTitleLabel').textContent = 'New notification';
   document.getElementById('saveBtnLabel').textContent = 'Save & schedule';
+
+  // Show the modal
   document.getElementById('composeModal').style.display = 'flex';
 }
 
