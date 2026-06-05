@@ -4069,10 +4069,15 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── SCHEDULED NOTIFICATION BACKGROUND JOB ─────────────────────────────────
+// ─── SCHEDULED NOTIFICATION BACKGROUND JOB (Minimal Recurring Version) ──────
+let RECURRING_ENABLED = true; // ← Easy kill switch. Set to false to disable recurring
+
 async function processScheduledNotifications() {
+  if (!RECURRING_ENABLED) return;
+
   try {
     const now = new Date();
+
     const due = await ScheduledNotification.find({
       status: { $in: ['pending', 'scheduled'] },
       scheduledFor: { $lte: now }
@@ -4080,10 +4085,12 @@ async function processScheduledNotifications() {
 
     for (const notif of due) {
       try {
+        // Build image URL if exists (unchanged from before)
         const imageUrl = notif.image 
           ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
           : null;
 
+        // Send the notification
         await broadcastPush(
           notif.title,
           notif.body,
@@ -4097,12 +4104,30 @@ async function processScheduledNotifications() {
           }
         );
 
-        notif.status = 'sent';
-        notif.sentAt = new Date();
-        await notif.save();
         console.log(`✅ Scheduled notification sent: ${notif.title}`);
+
+        // ─── RECURRING LOGIC (Minimal & Safe) ───────────────────────────────
+        if (notif.repeat === 'weekly' && notif.days && notif.days.length > 0) {
+          const nextRun = getNextRecurringDate(notif.days, notif.scheduledFor);
+
+          if (nextRun) {
+            notif.scheduledFor = nextRun;
+            notif.status = 'pending';           // ← Using 'pending' instead of 'scheduled'
+            await notif.save();
+            console.log(`🔁 Recurring rescheduled for: ${nextRun}`);
+          } else {
+            notif.status = 'sent';
+            await notif.save();
+          }
+        } else {
+          // One-time notification
+          notif.status = 'sent';
+          notif.sentAt = new Date();
+          await notif.save();
+        }
+
       } catch (err) {
-        console.error(`Failed scheduled notif ${notif._id}:`, err);
+        console.error(`Failed to process scheduled notif ${notif._id}:`, err);
         notif.status = 'failed';
         await notif.save();
       }
@@ -4112,9 +4137,32 @@ async function processScheduledNotifications() {
   }
 }
 
+// Helper: Calculate next recurring date (same as before)
+function getNextRecurringDate(daysArray, currentScheduledFor) {
+  const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const selectedDays = daysArray.map(d => dayMap[d]).filter(d => d !== undefined);
+
+  if (selectedDays.length === 0) return null;
+
+  let nextDate = new Date(currentScheduledFor || new Date());
+
+  if (nextDate <= new Date()) {
+    nextDate.setDate(nextDate.getDate() + 1);
+  }
+
+  for (let i = 0; i < 14; i++) {
+    if (selectedDays.includes(nextDate.getDay())) {
+      return nextDate;
+    }
+    nextDate.setDate(nextDate.getDate() + 1);
+  }
+
+  return null;
+}
+
 // Run every 30 seconds
 setInterval(processScheduledNotifications, 30 * 1000);
-processScheduledNotifications(); // run once on start
+processScheduledNotifications(); // run once on startup
 
 // GET /api/admin/scheduled-notifications
 router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
