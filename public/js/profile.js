@@ -354,9 +354,9 @@ content.innerHTML = `
       <span>Developer</span>
     </div>
   ` : ''}
-</div>
   <p class="text-emerald-400 text-base mb-1">${currentUser.email}</p>
   ${currentUser.neighborhood ? `<p class="text-white/60 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
+</div>
 
   <div class="flex justify-center mt-3 mb-6">
     <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-xl px-6 py-2.5 rounded-3xl shadow">
