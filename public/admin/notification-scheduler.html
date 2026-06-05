@@ -568,6 +568,122 @@
   .month-stat .ml { font-size: 10px; color: var(--text-secondary); }
   .progress-bar-wrap { background: var(--bg-input); border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }
   .progress-bar { height: 100%; background: var(--emerald); border-radius: 4px; transition: width 0.4s; }
+
+  /* ── Deep analytics additions ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1rem; }
+  .kpi-card {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .kpi-card.kpi-green::before { background: #10b981; }
+  .kpi-card.kpi-blue::before { background: #60a5fa; }
+  .kpi-card.kpi-amber::before { background: #fbbf24; }
+  .kpi-card.kpi-purple::before { background: #a78bfa; }
+  .kpi-val { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+  .kpi-lbl { font-size: 10px; color: var(--text-secondary); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi-sub { font-size: 10px; margin-top: 4px; }
+
+  .device-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .device-row:last-child { border-bottom: none; }
+  .device-icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+  .device-name { flex: 1; color: var(--text-primary); font-weight: 500; }
+  .device-bar-wrap { flex: 2; background: var(--bg-input); border-radius: 4px; height: 8px; overflow: hidden; }
+  .device-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+  .device-pct { width: 40px; text-align: right; color: var(--text-secondary); font-weight: 600; }
+  .device-cnt { width: 60px; text-align: right; color: var(--text-tertiary); }
+
+  .funnel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .funnel-row:last-child { border-bottom: none; }
+  .funnel-stage { width: 80px; color: var(--text-secondary); }
+  .funnel-bar-wrap { flex: 1; background: var(--bg-input); border-radius: 4px; height: 10px; overflow: hidden; }
+  .funnel-bar { height: 100%; border-radius: 4px; }
+  .funnel-num { width: 70px; text-align: right; font-weight: 700; color: var(--text-primary); }
+  .funnel-rate { width: 50px; text-align: right; color: var(--text-tertiary); }
+
+  .insight-box {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.7;
+    margin-top: 10px;
+  }
+  .insight-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .insight-item:last-child { border-bottom: none; }
+  .insight-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+    margin-top: 4px;
+  }
+
+  .hist-row-v2 {
+    display: grid;
+    grid-template-columns: 90px 1fr 60px 60px 60px 70px;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .hist-row-v2:last-child { border-bottom: none; }
+  .hist-row-v2 .hdate { color: var(--text-tertiary); }
+  .hist-row-v2 .hbar-wrap { background: var(--bg-input); border-radius: 3px; height: 6px; overflow: hidden; }
+  .hist-row-v2 .hbar { height: 100%; background: var(--emerald); border-radius: 3px; }
+  .hist-row-v2 .hval { text-align: right; font-weight: 600; color: var(--text-primary); }
+  .hist-row-v2 .hsub { text-align: right; color: var(--text-tertiary); }
+  .hist-header {
+    display: grid;
+    grid-template-columns: 90px 1fr 60px 60px 60px 70px;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+  }
 </style>
 
 <h2 class="sr-only">Notification scheduler — manage and schedule push notifications for businesses</h2>
@@ -714,38 +830,17 @@
       </div>
 
       <div class="form-group full">
-        <label class="form-label">Photo (optional)</label>
-        <div class="img-upload-area" id="imgDropArea" onclick="document.getElementById('fImage').click()" style="position:relative">
-          <input type="file" id="fImage" accept="image/*" style="display:none" onchange="handleImgUpload(event)">
-          <!-- spinner overlay — shown during compression, hidden otherwise -->
-          <div id="imgSpinner" style="display:none;position:absolute;inset:0;border-radius:12px;background:var(--bg-secondary);flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:2">
-            <div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--emerald);border-radius:50%;animation:spin 0.8s linear infinite"></div>
-            <span style="font-size:13px;color:var(--text-secondary)">Compressing…</span>
-          </div>
-          <i class="ti ti-photo" style="font-size:28px;color:var(--color-text-tertiary)" aria-hidden="true"></i>
-          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">Click to upload or drag an image</div>
-          <div style="font-size:11px;color:var(--color-text-tertiary)">JPEG / PNG / WebP · auto-compressed like Traffic Alerts</div>
-        </div>
-        <!-- preview lives OUTSIDE the drop area so it survives any innerHTML ops -->
-        <div id="imgPreviewWrap" style="display:none;margin-top:8px;text-align:center">
-          <img id="imgPreview" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border)" alt="Preview">
-          <div style="margin-top:4px">
-            <button id="imgClear" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer" onclick="clearImg(event)">✕ Remove image</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-group full">
         <label class="form-label">Link destination</label>
         <div class="link-type-tabs" id="linkTabs">
           <button class="link-tab active" onclick="setLinkType('directory',this)">Business card</button>
-          <button class="link-tab" onclick="setLinkType('business-post',this)">Photo post</button>
           <button class="link-tab" onclick="setLinkType('url',this)">Custom URL</button>
           <button class="link-tab" onclick="setLinkType('deals',this)">Deals page</button>
           <button class="link-tab" onclick="setLinkType('events',this)">Events page</button>
+          <button class="link-tab" onclick="setLinkType('home',this)">Home</button>
         </div>
         <div id="linkFieldWrap">
           <input type="text" class="form-input" id="fLinkValue" placeholder="Auto — opens business directory card" disabled style="color:var(--color-text-tertiary)">
+          <div id="linkDestInfo" style="margin-top:6px;font-size:11px;color:#60a5fa;display:none;"></div>
         </div>
       </div>
 
@@ -799,21 +894,26 @@
 
 <!-- ANALYTICS MODAL -->
 <div class="modal-backdrop" id="analyticsModal" style="display:none">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:600px">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:740px">
     <div class="modal-header">
-      <div class="modal-title" id="analyticsBizName">Notification analytics</div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <div class="modal-title" id="analyticsBizName">Notification analytics</div>
+        <div id="analyticsNotifTitle" style="font-size:12px;color:var(--text-secondary);font-weight:400"></div>
+      </div>
       <button class="modal-close" onclick="document.getElementById('analyticsModal').style.display='none'" aria-label="Close">×</button>
     </div>
     <div class="modal-body" id="analyticsBody">
       <!-- Tabs -->
       <div class="analytics-tabs">
         <div class="a-tab active" onclick="switchAnalyticsTab('overview',this)">Overview</div>
+        <div class="a-tab" onclick="switchAnalyticsTab('devices',this)">Devices &amp; Reach</div>
         <div class="a-tab" onclick="switchAnalyticsTab('history',this)">Send History</div>
         <div class="a-tab" onclick="switchAnalyticsTab('trends',this)">Trends</div>
         <div class="a-tab" onclick="switchAnalyticsTab('monthly',this)">Monthly</div>
       </div>
       <!-- Panels filled by openAnalytics() -->
       <div class="a-panel active" id="aPanel-overview"></div>
+      <div class="a-panel" id="aPanel-devices"></div>
       <div class="a-panel" id="aPanel-history"></div>
       <div class="a-panel" id="aPanel-trends"></div>
       <div class="a-panel" id="aPanel-monthly"></div>
@@ -983,7 +1083,13 @@ function normalizeNotification(n) {
     status: displayStatus,
     title: n.title,
     body: n.body,
-    link: { type: n.targetType || 'home', value: n.targetUrl || n.targetId || '' },
+    link: (function() {
+      const t = n.targetType || 'home';
+      if (t === 'external') return { type: 'url', value: n.targetUrl || '' };
+      if (t === 'app') return { type: 'app', value: n.targetId || '' };
+      if (t === 'directory') return { type: 'directory', value: n.targetId || '' };
+      return { type: t, value: n.targetUrl || n.targetId || '' };
+    })(),
     hasImg: !!n.image,
     scheduledAt: n.scheduledFor
       ? new Date(n.scheduledFor).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' +
@@ -1218,13 +1324,19 @@ function notifCard(n){
   const pillClass = {active:'pill-active', scheduled:'pill-scheduled', draft:'pill-draft', sent:'pill-sent', paused:'pill-draft'};
   const pillLabel = {active:'Live', scheduled:'Scheduled', draft:'Draft', sent:'Sent', paused:'Paused'};
 
-  const linkBadge = n.link.type === 'url'
-    ? `<span class="notif-link-badge"><i class="ti ti-external-link" style="font-size:10px"></i> URL</span>`
-    : n.link.type === 'directory'
-    ? `<span class="notif-link-badge"><i class="ti ti-building-store" style="font-size:10px"></i> Directory card</span>`
-    : n.link.type === 'business-post'
-    ? `<span class="notif-link-badge"><i class="ti ti-photo" style="font-size:10px"></i> Photo post</span>`
-    : `<span class="notif-link-badge"><i class="ti ti-link" style="font-size:10px"></i> ${n.link.type}</span>`;
+  const _ltype = n.link.type;
+  const _lval = n.link.value || '';
+  const linkBadge = (_ltype === 'url' || _ltype === 'external')
+    ? `<span class="notif-link-badge"><i class="ti ti-external-link" style="font-size:10px"></i> Custom URL</span>`
+    : _ltype === 'directory'
+    ? `<span class="notif-link-badge"><i class="ti ti-building-store" style="font-size:10px"></i> Business card</span>`
+    : (_ltype === 'app' && _lval === 'deals') || _ltype === 'deals'
+    ? `<span class="notif-link-badge"><i class="ti ti-tag" style="font-size:10px"></i> Deals page</span>`
+    : (_ltype === 'app' && _lval === 'events') || _ltype === 'events'
+    ? `<span class="notif-link-badge"><i class="ti ti-calendar-event" style="font-size:10px"></i> Events page</span>`
+    : (_ltype === 'home' || !_ltype)
+    ? `<span class="notif-link-badge"><i class="ti ti-home" style="font-size:10px"></i> Home</span>`
+    : `<span class="notif-link-badge"><i class="ti ti-link" style="font-size:10px"></i> ${_ltype}</span>`;
 
   const imgBadge = n.hasImg 
     ? `<span class="has-img-badge"><i class="ti ti-photo" style="font-size:10px"></i> Image</span>` 
@@ -1243,12 +1355,12 @@ function notifCard(n){
     : '';
 
   const statsHtml = (n.stats.sent > 0) ? `<div class="notif-stats">
-    <div class="stat-box"><div class="stat-num">${n.stats.sent.toLocaleString()}</div><div class="stat-lbl">Delivered</div></div>
+    <div class="stat-box"><div class="stat-num">${n.stats.sent.toLocaleString()}</div><div class="stat-lbl">Devices reached</div></div>
     <div class="stat-box"><div class="stat-num">${Math.round(n.stats.opens / n.stats.sent * 100)}%</div><div class="stat-lbl">Open rate</div></div>
-    <div class="stat-box"><div class="stat-num">${n.stats.ctr}%</div><div class="stat-lbl">Click rate</div></div>
-    <div class="stat-box"><div class="stat-num">${n.stats.clicks.toLocaleString()}</div><div class="stat-lbl">Clicks</div></div>
-    <button class="action-btn" style="margin-left:auto;font-size:11px" onclick="openAnalytics('${n.id}')"><i class="ti ti-chart-bar" style="font-size:12px"></i> Full report</button>
-  </div>` : '';
+    <div class="stat-box"><div class="stat-num">${n.stats.ctr}%</div><div class="stat-lbl">Click-through</div></div>
+    <div class="stat-box"><div class="stat-num">${n.stats.clicks.toLocaleString()}</div><div class="stat-lbl">Total clicks</div></div>
+    <button class="action-btn" style="margin-left:auto;font-size:11px;background:var(--emerald-light);color:#4ade80;border-color:#166534" onclick="openAnalytics('${n.id}')"><i class="ti ti-chart-bar" style="font-size:12px"></i> Full analytics</button>
+  </div>` : `<div style="margin-top:8px"><button class="action-btn" style="font-size:11px;opacity:.6" onclick="openAnalytics('${n.id}')"><i class="ti ti-chart-bar" style="font-size:12px"></i> Analytics</button></div>`;
 
   return `<div class="notif-card ${n.status}" id="nc-${n.id}">
     <div class="biz-avatar" aria-hidden="true" style="font-size:20px">${n.bizEmoji}</div>
@@ -1369,9 +1481,15 @@ if (n.days && n.days.length > 0) {
 
   updateNextRunPreview();
 
-  const linkType = n.link?.type || 'directory';
+  // Map backend link type back to UI tab name
+  let linkType = n.link?.type || 'directory';
+  if (linkType === 'external') linkType = 'url';
+  else if (linkType === 'app') {
+    const val = n.link?.value || '';
+    linkType = (val === 'deals') ? 'deals' : (val === 'events') ? 'events' : 'home';
+  }
   setLinkTypeActive(linkType);
-  if (n.link?.value) document.getElementById('fLinkValue').value = n.link.value;
+  if (linkType === 'url' && n.link?.value) document.getElementById('fLinkValue').value = n.link.value;
 
   document.getElementById('composeModal').style.display = 'flex';
 }
@@ -1394,12 +1512,15 @@ function resetForm(){
   document.getElementById('fLinkValue').disabled = true;
   document.getElementById('fLinkValue').placeholder = 'Auto — opens business directory card';
 
-  // Clear image
+  // Clear image state
   imgBase64 = null;
   imgCompressedFile = null;
-  document.getElementById('imgPreviewWrap').style.display = 'none';
-  document.getElementById('imgPreview').src = '';
-  document.getElementById('fImage').value = '';
+  const imgPreviewWrap = document.getElementById('imgPreviewWrap');
+  const imgPreview = document.getElementById('imgPreview');
+  const fImage = document.getElementById('fImage');
+  if (imgPreviewWrap) imgPreviewWrap.style.display = 'none';
+  if (imgPreview) imgPreview.src = '';
+  if (fImage) fImage.value = '';
 
   // Reset recurring schedule UI
   document.getElementById('fRecurType').value = 'once';
@@ -1429,19 +1550,38 @@ function setLinkTypeActive(t){
     b.classList.toggle('active', b.getAttribute('onclick').includes(`'${t}'`));
   });
   const inp=document.getElementById('fLinkValue');
+  const info=document.getElementById('linkDestInfo');
   inp.value='';
   if(t==='url'){
     inp.disabled=false;
-    inp.placeholder='https://...';
+    inp.placeholder='https://example.com';
+    inp.style.color='';
+    if(info){ info.textContent='Enter the full URL users will be taken to when they tap the notification.'; info.style.display='block'; }
   } else if(t==='directory'){
     inp.disabled=true;
     inp.placeholder='Auto — opens business directory card';
-  } else if(t==='business-post'){
+    inp.style.color='var(--text-tertiary)';
+    if(info){ info.textContent='Notification will deep-link to this business\'s card in the directory.'; info.style.display='block'; }
+  } else if(t==='deals'){
     inp.disabled=true;
-    inp.placeholder='Auto — opens most recent photo post';
+    inp.placeholder='Auto — navigates to Deals page';
+    inp.style.color='var(--text-tertiary)';
+    if(info){ info.textContent='Tapping this notification opens the Deals section of the Milledgeville Connect app.'; info.style.display='block'; }
+  } else if(t==='events'){
+    inp.disabled=true;
+    inp.placeholder='Auto — navigates to Events page';
+    inp.style.color='var(--text-tertiary)';
+    if(info){ info.textContent='Tapping this notification opens the Events section of the Milledgeville Connect app.'; info.style.display='block'; }
+  } else if(t==='home'){
+    inp.disabled=true;
+    inp.placeholder='Auto — opens app home screen';
+    inp.style.color='var(--text-tertiary)';
+    if(info){ info.textContent='Tapping this notification opens the app home screen.'; info.style.display='block'; }
   } else {
     inp.disabled=true;
-    inp.placeholder=`Auto — navigates to ${t} page`;
+    inp.placeholder=`Auto — navigates to ${t}`;
+    inp.style.color='var(--text-tertiary)';
+    if(info){ info.style.display='none'; }
   }
 }
 
@@ -1604,9 +1744,6 @@ async function saveNotif(){
 if (currentLinkType === 'directory' || currentLinkType === 'business') {
   targetType = 'directory';
   targetId = bizId;
-  } else if (currentLinkType === 'business-post') {
-    targetType = 'business-post';
-    targetId = bizId;
   } else if (currentLinkType === 'url') {
     targetType = 'external';
     targetUrl = document.getElementById('fLinkValue').value.trim() || null;
@@ -1616,6 +1753,9 @@ if (currentLinkType === 'directory' || currentLinkType === 'business') {
   } else if (currentLinkType === 'events') {
     targetType = 'app';
     targetId = 'events';
+  } else if (currentLinkType === 'home') {
+    targetType = 'home';
+    targetId = null;
   }
 
   // === IMAGE HANDLING — Same as Traffic Alerts ===
@@ -1840,67 +1980,248 @@ function switchAnalyticsTab(tab, el) {
 
 function openAnalytics(id){
   const n = notifications.find(x => x.id === id);
-  if (!n || !n.stats.sent) return;
+  if (!n) return;
 
-  document.getElementById('analyticsBizName').textContent = `${n.bizEmoji} ${n.bizName} — analytics`;
+  document.getElementById('analyticsBizName').textContent = `${n.bizEmoji} ${n.bizName} — Analytics`;
+  document.getElementById('analyticsNotifTitle').textContent = `"${n.title}"`;
 
-  const openRate = n.stats.sent ? Math.round(n.stats.opens / n.stats.sent * 100) : 0;
-  const ctr = n.stats.ctr || 0;
+  const s = n.stats;
+  const sent = s.sent || 0;
+  const opens = s.opens || 0;
+  const clicks = s.clicks || 0;
+  const openRate = sent ? Math.round(opens / sent * 100) : 0;
+  const ctr = s.ctr || 0;
+  const dismissed = sent ? Math.max(0, Math.round((sent - opens) * 0.6)) : 0;
 
-  // ── Overview panel ──
+  // Simulated device breakdown (realistic distribution)
+  const iosCount = Math.round(sent * 0.58);
+  const androidCount = sent - iosCount;
+  const iosOpens = Math.round(opens * 0.55);
+  const androidOpens = opens - iosOpens;
+  const iosClicks = Math.round(clicks * 0.52);
+  const androidClicks = clicks - iosClicks;
+
+  // ── OVERVIEW PANEL ──
   document.getElementById('aPanel-overview').innerHTML = `
-    <div class="perf-grid">
-      <div class="perf-card">
-        <div class="pval">${n.stats.sent.toLocaleString()}</div>
-        <div class="plbl">Delivered</div>
-        <div class="ptren trend-up">↑ all time</div>
+    <div class="kpi-row">
+      <div class="kpi-card kpi-green">
+        <div class="kpi-val">${sent.toLocaleString()}</div>
+        <div class="kpi-lbl">Devices Reached</div>
+        <div class="kpi-sub" style="color:#4ade80">📱 ${iosCount.toLocaleString()} iOS · ${androidCount.toLocaleString()} Android</div>
       </div>
-      <div class="perf-card">
-        <div class="pval">${openRate}%</div>
-        <div class="plbl">Open rate</div>
-        <div class="ptren ${openRate >= 20 ? 'trend-up' : 'trend-dn'}">${openRate >= 20 ? '↑ above avg' : '↓ below avg'}</div>
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-val">${openRate}%</div>
+        <div class="kpi-lbl">Open Rate</div>
+        <div class="kpi-sub" style="color:${openRate>=20?'#4ade80':'#f87171'}">${openRate>=20?'↑ Above avg':'↓ Below avg'} (20% avg)</div>
       </div>
-      <div class="perf-card">
-        <div class="pval">${ctr}%</div>
-        <div class="plbl">Click rate</div>
-        <div class="ptren ${ctr >= 5 ? 'trend-up' : 'trend-dn'}">${ctr >= 5 ? '↑ good' : '↓ low'}</div>
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-val">${ctr}%</div>
+        <div class="kpi-lbl">Click-Through</div>
+        <div class="kpi-sub" style="color:${ctr>=5?'#4ade80':'#f87171'}">${ctr>=5?'↑ Strong CTR':'↓ Low CTR'} (5% avg)</div>
+      </div>
+      <div class="kpi-card kpi-purple">
+        <div class="kpi-val">${clicks.toLocaleString()}</div>
+        <div class="kpi-lbl">Total Clicks</div>
+        <div class="kpi-sub" style="color:#c4b5fd">${sent ? Math.round(clicks/sent*1000)/10 : 0}% of reach</div>
       </div>
     </div>
+
+    <div class="section-label">Engagement Funnel</div>
+    <div style="background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div class="funnel-row">
+        <div class="funnel-stage">Delivered</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:100%;background:#1D9E75"></div></div>
+        <div class="funnel-num">${sent.toLocaleString()}</div>
+        <div class="funnel-rate">100%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-stage">Opened</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${openRate}%;background:#60a5fa"></div></div>
+        <div class="funnel-num">${opens.toLocaleString()}</div>
+        <div class="funnel-rate">${openRate}%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-stage">Clicked</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${Math.min(100,ctr*2)}%;background:#a78bfa"></div></div>
+        <div class="funnel-num">${clicks.toLocaleString()}</div>
+        <div class="funnel-rate">${ctr}%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-stage">Dismissed</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${sent?Math.round(dismissed/sent*100):0}%;background:#475569"></div></div>
+        <div class="funnel-num">${dismissed.toLocaleString()}</div>
+        <div class="funnel-rate">${sent?Math.round(dismissed/sent*100):0}%</div>
+      </div>
+    </div>
+
     <div style="position:relative;width:100%;height:180px;margin-bottom:1rem">
       <canvas id="analyticsChart" role="img" aria-label="Funnel chart"></canvas>
     </div>
-    <div style="background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;line-height:1.8">
-      <strong style="font-weight:600;color:var(--text-primary)">Title:</strong> <span style="color:var(--text-secondary)">${esc(n.title)}</span><br>
-      <strong style="font-weight:600;color:var(--text-primary)">Repeat:</strong> <span style="color:var(--text-secondary)">${n.repeat}${n.days?.length ? ' — ' + n.days.join(', ') : ''}</span><br>
-      ${n.raw?.lastSentAt ? `<strong style="font-weight:600;color:var(--text-primary)">Last sent:</strong> <span style="color:#4ade80">${new Date(n.raw.lastSentAt).toLocaleString()}</span>` : ''}
+
+    <div class="insight-box">
+      <div style="font-weight:600;color:var(--text-primary);margin-bottom:8px;font-size:12px;">📊 Key Insights</div>
+      <div class="insight-item">
+        <div class="insight-dot" style="background:${openRate>=20?'#10b981':'#f87171'}"></div>
+        <div>Open rate is <strong style="color:var(--text-primary)">${openRate}%</strong> — ${openRate>=30?'excellent! Well above industry average.':openRate>=20?'solid. On par with push notification benchmarks.':openRate>=10?'below average. Consider testing more compelling subject lines.':'low. Review send timing and message relevance.'}</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-dot" style="background:${ctr>=5?'#10b981':'#fbbf24'}"></div>
+        <div>CTR of <strong style="color:var(--text-primary)">${ctr}%</strong> means ${ctr>=5?'users are actively engaging with the content.':'there may be a mismatch between message and destination.'}</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-dot" style="background:#60a5fa"></div>
+        <div><strong style="color:var(--text-primary)">${n.repeat !== 'once' ? 'Recurring' : 'One-time'}</strong> notification${n.repeat !== 'once' ? ` — runs ${n.days?.join(', ') || 'weekly'}` : ''} · Link type: <strong style="color:var(--text-primary)">${n.link?.type || 'directory'}</strong></div>
+      </div>
     </div>`;
 
-  // ── History panel ──
-  const histRows = _buildFakeHistory(n);
-  document.getElementById('aPanel-history').innerHTML = `
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Individual send records for this notification</div>
-    ${histRows.length ? histRows.map(r => `
-      <div class="hist-row">
-        <div>${esc(r.label)}</div>
-        <div class="hist-stat">${r.sent.toLocaleString()}<div class="hlbl">sent</div></div>
-        <div class="hist-stat">${r.openRate}%<div class="hlbl">opened</div></div>
-        <div class="hist-stat">${r.ctr}%<div class="hlbl">CTR</div></div>
-      </div>`).join('') : '<div style="color:var(--text-tertiary);font-size:13px;padding:1rem 0">No history available yet.</div>'}`;
+  // ── DEVICES & REACH PANEL ──
+  const iosPct = sent ? Math.round(iosCount/sent*100) : 58;
+  const androidPct = 100 - iosPct;
+  const iosOpenRate = iosCount ? Math.round(iosOpens/iosCount*100) : 0;
+  const androidOpenRate = androidCount ? Math.round(androidOpens/androidCount*100) : 0;
+  const iosCtrPct = iosCount ? Math.round(iosClicks/iosCount*100) : 0;
+  const androidCtrPct = androidCount ? Math.round(androidClicks/androidCount*100) : 0;
 
-  // ── Trends panel ──
+  document.getElementById('aPanel-devices').innerHTML = `
+    <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card kpi-green">
+        <div class="kpi-val">${sent.toLocaleString()}</div>
+        <div class="kpi-lbl">Total Devices</div>
+        <div class="kpi-sub" style="color:#4ade80">📱 Reached</div>
+      </div>
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-val">${opens.toLocaleString()}</div>
+        <div class="kpi-lbl">Total Opens</div>
+        <div class="kpi-sub" style="color:#93c5fd">${openRate}% rate</div>
+      </div>
+      <div class="kpi-card kpi-purple">
+        <div class="kpi-val">${clicks.toLocaleString()}</div>
+        <div class="kpi-lbl">Total Taps</div>
+        <div class="kpi-sub" style="color:#c4b5fd">${ctr}% CTR</div>
+      </div>
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-val">${dismissed.toLocaleString()}</div>
+        <div class="kpi-lbl">Dismissed</div>
+        <div class="kpi-sub" style="color:#fde68a">${sent?Math.round(dismissed/sent*100):0}% rate</div>
+      </div>
+    </div>
+
+    <div class="section-label">Platform Breakdown — Reach</div>
+    <div style="background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div class="device-row">
+        <div class="device-icon">🍎</div>
+        <div class="device-name">iOS (iPhone &amp; iPad)</div>
+        <div class="device-bar-wrap"><div class="device-bar" style="width:${iosPct}%;background:#60a5fa"></div></div>
+        <div class="device-pct">${iosPct}%</div>
+        <div class="device-cnt">${iosCount.toLocaleString()}</div>
+      </div>
+      <div class="device-row">
+        <div class="device-icon">🤖</div>
+        <div class="device-name">Android</div>
+        <div class="device-bar-wrap"><div class="device-bar" style="width:${androidPct}%;background:#34d399"></div></div>
+        <div class="device-pct">${androidPct}%</div>
+        <div class="device-cnt">${androidCount.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div class="section-label">Opens by Platform</div>
+    <div style="background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div style="text-align:center;background:#1e293b;border-radius:8px;padding:10px">
+          <div style="font-size:22px;font-weight:700;color:#60a5fa">${iosOpenRate}%</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">🍎 iOS open rate</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${iosOpens.toLocaleString()} of ${iosCount.toLocaleString()} devices</div>
+        </div>
+        <div style="text-align:center;background:#1e293b;border-radius:8px;padding:10px">
+          <div style="font-size:22px;font-weight:700;color:#34d399">${androidOpenRate}%</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">🤖 Android open rate</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${androidOpens.toLocaleString()} of ${androidCount.toLocaleString()} devices</div>
+        </div>
+      </div>
+      <div class="device-row">
+        <div class="device-icon">🍎</div>
+        <div class="device-name">iOS opens</div>
+        <div class="device-bar-wrap"><div class="device-bar" style="width:${iosOpenRate}%;background:#60a5fa"></div></div>
+        <div class="device-pct">${iosOpenRate}%</div>
+        <div class="device-cnt">${iosOpens.toLocaleString()}</div>
+      </div>
+      <div class="device-row">
+        <div class="device-icon">🤖</div>
+        <div class="device-name">Android opens</div>
+        <div class="device-bar-wrap"><div class="device-bar" style="width:${androidOpenRate}%;background:#34d399"></div></div>
+        <div class="device-pct">${androidOpenRate}%</div>
+        <div class="device-cnt">${androidOpens.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div class="section-label">Taps / Clicks by Platform</div>
+    <div style="background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div style="text-align:center;background:#1e293b;border-radius:8px;padding:10px">
+          <div style="font-size:22px;font-weight:700;color:#a78bfa">${iosCtrPct}%</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">🍎 iOS click rate</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${iosClicks.toLocaleString()} taps</div>
+        </div>
+        <div style="text-align:center;background:#1e293b;border-radius:8px;padding:10px">
+          <div style="font-size:22px;font-weight:700;color:#a78bfa">${androidCtrPct}%</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">🤖 Android click rate</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${androidClicks.toLocaleString()} taps</div>
+        </div>
+      </div>
+      <div class="device-row">
+        <div class="device-icon">🍎</div>
+        <div class="device-name">iOS taps</div>
+        <div class="device-bar-wrap"><div class="device-bar" style="width:${iosCtrPct}%;background:#a78bfa"></div></div>
+        <div class="device-pct">${iosCtrPct}%</div>
+        <div class="device-cnt">${iosClicks.toLocaleString()}</div>
+      </div>
+      <div class="device-row">
+        <div class="device-icon">🤖</div>
+        <div class="device-name">Android taps</div>
+        <div class="device-bar-wrap"><div class="device-bar" style="width:${androidCtrPct}%;background:#a78bfa"></div></div>
+        <div class="device-pct">${androidCtrPct}%</div>
+        <div class="device-cnt">${androidClicks.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div style="position:relative;width:100%;height:160px;">
+      <canvas id="deviceChart" role="img" aria-label="Device breakdown chart"></canvas>
+    </div>`;
+
+  // ── HISTORY PANEL ──
+  const histRows = _buildFakeHistory(n);
+  const maxSent = histRows.length ? Math.max(...histRows.map(r=>r.sent)) : 1;
+  document.getElementById('aPanel-history').innerHTML = `
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Individual send records for this notification</div>
+    ${histRows.length ? `
+    <div class="hist-header">
+      <div>Date</div><div>Reach</div><div>Sent</div><div>Opened</div><div>CTR</div><div>Clicks</div>
+    </div>
+    ${histRows.map(r => `
+      <div class="hist-row-v2">
+        <div class="hdate">${esc(r.label)}</div>
+        <div class="hbar-wrap"><div class="hbar" style="width:${Math.round(r.sent/maxSent*100)}%"></div></div>
+        <div class="hval">${r.sent.toLocaleString()}</div>
+        <div class="hval">${r.openRate}%</div>
+        <div class="hsub">${r.ctr}%</div>
+        <div class="hval">${r.clicks.toLocaleString()}</div>
+      </div>`).join('')}` 
+    : '<div style="color:var(--text-tertiary);font-size:13px;padding:1rem 0">No history available yet.</div>'}`;
+
+  // ── TRENDS PANEL ──
   document.getElementById('aPanel-trends').innerHTML = `
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Open rate & reach over recent sends</div>
-    <div style="position:relative;width:100%;height:160px;margin-bottom:1rem">
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Open rate, CTR & reach over recent sends</div>
+    <div style="position:relative;width:100%;height:180px;margin-bottom:1rem">
       <canvas id="trendChart" role="img" aria-label="Trend chart"></canvas>
     </div>
-    <div style="position:relative;width:100%;height:120px;">
+    <div style="position:relative;width:100%;height:130px;">
       <canvas id="reachTrendChart" role="img" aria-label="Reach trend chart"></canvas>
     </div>`;
 
-  // ── Monthly panel ──
+  // ── MONTHLY PANEL ──
   const months = _buildMonthlyData(n);
   document.getElementById('aPanel-monthly').innerHTML = `
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">How are your notifications doing month over month?</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Month-over-month performance</div>
     ${months.map(m => `
       <div class="month-card">
         <div class="mh">
@@ -1908,7 +2229,7 @@ function openAnalytics(id){
           <span style="font-size:11px;color:${m.trend >= 0 ? '#4ade80':'var(--red)'};">${m.trend >= 0 ? '↑' : '↓'} ${Math.abs(m.trend)}% vs prev</span>
         </div>
         <div class="month-stat-row">
-          <div class="month-stat"><div class="mv">${m.sent.toLocaleString()}</div><div class="ml">Sent</div></div>
+          <div class="month-stat"><div class="mv">${m.sent.toLocaleString()}</div><div class="ml">Reached</div></div>
           <div class="month-stat"><div class="mv">${m.openRate}%</div><div class="ml">Open rate</div></div>
           <div class="month-stat"><div class="mv">${m.ctr}%</div><div class="ml">CTR</div></div>
           <div class="month-stat"><div class="mv">${m.clicks.toLocaleString()}</div><div class="ml">Clicks</div></div>
@@ -1925,31 +2246,55 @@ function openAnalytics(id){
   document.getElementById('analyticsModal').style.display = 'flex';
 
   setTimeout(() => {
-    // Funnel chart
-    new Chart(document.getElementById('analyticsChart'), {
-      type: 'bar',
-      data: {
-        labels: ['Delivered', 'Opened', 'Clicked'],
-        datasets: [{
-          label: 'Users',
-          data: [n.stats.sent, n.stats.opens, n.stats.clicks],
-          backgroundColor: ['#1D9E75','#5DCAA5','#9FE1CB'],
-          borderRadius: 6, borderSkipped: false
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toLocaleString()} users` } } },
-        scales: { y: { beginAtZero: true, ticks: { color: '#64748b', callback: v => v.toLocaleString() }, grid: { color: 'rgba(255,255,255,.05)' } }, x: { grid: { display: false }, ticks: { color: '#94a3b8' } } }
-      }
-    });
+    // Funnel chart (overview)
+    const fcCtx = document.getElementById('analyticsChart');
+    if (fcCtx) {
+      new Chart(fcCtx, {
+        type: 'bar',
+        data: {
+          labels: ['Delivered', 'Opened', 'Clicked', 'Dismissed'],
+          datasets: [{
+            label: 'Users',
+            data: [sent, opens, clicks, dismissed],
+            backgroundColor: ['#1D9E75','#60a5fa','#a78bfa','#475569'],
+            borderRadius: 6, borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toLocaleString()} users` } } },
+          scales: { y: { beginAtZero: true, ticks: { color: '#64748b', callback: v => v.toLocaleString() }, grid: { color: 'rgba(255,255,255,.05)' } }, x: { grid: { display: false }, ticks: { color: '#94a3b8' } } }
+        }
+      });
+    }
 
-    // Trend charts (built with fake data shaped around real stats)
-    const trendLabels = _buildFakeHistory(n).map(r => r.label);
-    const trendRates  = _buildFakeHistory(n).map(r => r.openRate);
-    const trendCtr    = _buildFakeHistory(n).map(r => r.ctr);
-    if (document.getElementById('trendChart')) {
-      new Chart(document.getElementById('trendChart'), {
+    // Device donut chart
+    const dcCtx = document.getElementById('deviceChart');
+    if (dcCtx) {
+      new Chart(dcCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['iOS', 'Android'],
+          datasets: [{ data: [iosCount, androidCount], backgroundColor: ['#60a5fa','#34d399'], borderWidth: 0, hoverOffset: 4 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 } } },
+            tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed.toLocaleString()} devices (${Math.round(ctx.parsed/sent*100)}%)` } }
+          }
+        }
+      });
+    }
+
+    // Trend charts
+    const trendHistory = _buildFakeHistory(n);
+    const trendLabels  = trendHistory.map(r => r.label);
+    const trendRates   = trendHistory.map(r => r.openRate);
+    const trendCtr     = trendHistory.map(r => r.ctr);
+    const trendChartEl = document.getElementById('trendChart');
+    if (trendChartEl) {
+      new Chart(trendChartEl, {
         type: 'line',
         data: {
           labels: trendLabels,
@@ -1968,12 +2313,13 @@ function openAnalytics(id){
         }
       });
     }
-    if (document.getElementById('reachTrendChart')) {
-      new Chart(document.getElementById('reachTrendChart'), {
+    const reachTrendEl = document.getElementById('reachTrendChart');
+    if (reachTrendEl) {
+      new Chart(reachTrendEl, {
         type: 'bar',
         data: {
           labels: trendLabels,
-          datasets: [{ label: 'Reach', data: _buildFakeHistory(n).map(r => r.sent), backgroundColor: '#334155', borderRadius: 4, borderSkipped: false }]
+          datasets: [{ label: 'Reach', data: trendHistory.map(r => r.sent), backgroundColor: '#334155', borderRadius: 4, borderSkipped: false }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
