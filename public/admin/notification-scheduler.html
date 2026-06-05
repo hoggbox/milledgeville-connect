@@ -581,6 +581,9 @@ let imgBase64 = null;
 let imgCompressedFile = null; // the compressed File blob — kept for size checks; base64 used for upload
 let BUSINESSES = [];
 let notifications = [];
+// === PAGINATION STATE ===
+let currentPage = 1;
+const PAGE_SIZE = 12; // 12 notifications per page
 
 const API_BASE = '/api';
 let authToken = localStorage.getItem('token') || '';
@@ -814,26 +817,76 @@ function populateBizDropdowns(){
 }
 
 let _filterBiz='', _sortKey='date';
-function filterBusiness(v){_filterBiz=v;renderList();}
+function filterBusiness(v) {
+  _filterBiz = v;
+  currentPage = 1;
+  renderList();
+}
 function sortNotifs(v){_sortKey=v;renderList();}
 
-function switchTab(t,el){
-  currentTab=t;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+function switchTab(t, el) {
+  currentTab = t;
+  currentPage = 1;
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   el.classList.add('active');
   renderList();
 }
 
-function renderList(){
-  let list=[...notifications];
-  if(currentTab!=='all') list=list.filter(n=>n.status===currentTab);
-  if(_filterBiz) list=list.filter(n=>n.bizId===_filterBiz);
-  if(_sortKey==='reach') list.sort((a,b)=>b.stats.sent-a.stats.sent);
-  else if(_sortKey==='ctr') list.sort((a,b)=>b.stats.ctr-a.stats.ctr);
-  document.getElementById('countBadge').textContent=list.length;
-  const el=document.getElementById('notifList');
-  if(!list.length){el.innerHTML=`<div class="empty-state"><i class="ti ti-bell-off" style="font-size:32px;opacity:.3" aria-hidden="true"></i><div style="margin-top:8px;font-size:14px">No notifications here yet</div></div>`;return;}
-  el.innerHTML=list.map(n=>notifCard(n)).join('');
+function renderList() {
+  let list = [...notifications];
+
+  // Apply filters
+  if (currentTab !== 'all') list = list.filter(n => n.status === currentTab);
+  if (_filterBiz) list = list.filter(n => n.bizId === _filterBiz);
+
+  // Apply sorting
+  if (_sortKey === 'reach') list.sort((a, b) => b.stats.sent - a.stats.sent);
+  else if (_sortKey === 'ctr') list.sort((a, b) => b.stats.ctr - a.stats.ctr);
+
+  // === PAGINATION ===
+  const totalPages = Math.ceil(list.length / PAGE_SIZE);
+  currentPage = Math.max(1, Math.min(currentPage, totalPages));
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = list.slice(start, start + PAGE_SIZE);
+
+  document.getElementById('countBadge').textContent = list.length;
+
+  const el = document.getElementById('notifList');
+
+  if (!pageItems.length) {
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-bell-off" style="font-size:32px;opacity:.3"></i><div style="margin-top:8px;font-size:14px">No notifications here yet</div></div>`;
+    return;
+  }
+
+  el.innerHTML = pageItems.map(n => notifCard(n)).join('');
+
+  // Add pagination controls at the bottom
+  if (totalPages > 1) {
+    const paginationHTML = `
+      <div style="display:flex; justify-content:center; align-items:center; gap:12px; margin-top:20px; padding:10px 0;">
+        <button onclick="changePage(-1)" ${currentPage === 1 ? 'disabled' : ''} 
+                style="padding:8px 16px; border-radius:8px; border:1px solid #475569; background:transparent; color:#cbd5e1; cursor:pointer;">
+          ← Previous
+        </button>
+        
+        <span style="color:#64748b; font-size:13px;">
+          Page ${currentPage} of ${totalPages}
+        </span>
+        
+        <button onclick="changePage(1)" ${currentPage === totalPages ? 'disabled' : ''} 
+                style="padding:8px 16px; border-radius:8px; border:1px solid #475569; background:transparent; color:#cbd5e1; cursor:pointer;">
+          Next →
+        </button>
+      </div>
+    `;
+    el.insertAdjacentHTML('beforeend', paginationHTML);
+  }
+}
+
+function changePage(delta) {
+  currentPage += delta;
+  renderList();
 }
 
 function notifCard(n){

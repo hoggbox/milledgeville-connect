@@ -4212,5 +4212,19 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/scheduled-notifications/:id
+router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const deleted = await ScheduledNotification.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Scheduled notification not found' });
+    }
+    res.json({ message: 'Scheduled notification deleted' });
+  } catch (err) {
+    console.error('Delete scheduled notification error:', err);
+    res.status(500).json({ message: 'Failed to delete' });
+  }
+});
+
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 module.exports = router;
