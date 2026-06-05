@@ -889,7 +889,7 @@ function openCompose() {
   imgBase64 = null;
   imgCompressedFile = null;
 
-  // Clear business search UI completely
+  // Clear business search UI
   const searchInput = document.getElementById('businessSearch');
   const resultsDiv = document.getElementById('businessSearchResults');
   const selectedDisplay = document.getElementById('selectedBusinessDisplay');
@@ -903,15 +903,16 @@ function openCompose() {
   if (selectedDisplay) selectedDisplay.style.display = 'none';
   if (hiddenInput) hiddenInput.value = '';
 
-  // Reset the rest of the form
   resetForm();
 
-  // Update modal UI
-  document.getElementById('modalTitleLabel').textContent = 'New notification';
-  document.getElementById('saveBtnLabel').textContent = 'Save & schedule';
+  // === SAFE modal UI updates ===
+  const titleLabel = document.getElementById('modalTitleLabel');
+  const saveLabel = document.getElementById('saveBtnLabel');
+  const modal = document.getElementById('composeModal');
 
-  // Show the modal
-  document.getElementById('composeModal').style.display = 'flex';
+  if (titleLabel) titleLabel.textContent = 'New notification';
+  if (saveLabel) saveLabel.textContent = 'Save & schedule';
+  if (modal) modal.style.display = 'flex';
 }
 
 function openEdit(id){
