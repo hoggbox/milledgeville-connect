@@ -704,14 +704,16 @@ function updateNextRunPreview() {
 function populateBizDropdowns() {
   const fsel = document.getElementById('bizFilter');
   
-  // Safety check — exit early if element doesn't exist yet
   if (!fsel) {
-    console.warn('bizFilter element not found yet');
+    console.warn('bizFilter not found — skipping dropdown population');
     return;
   }
 
-  // Clear and repopulate
   fsel.innerHTML = '<option value="">All businesses</option>';
+
+  if (!BUSINESSES || BUSINESSES.length === 0) {
+    return;
+  }
 
   BUSINESSES.forEach(b => {
     const opt = document.createElement('option');
@@ -837,6 +839,11 @@ async function init() {
   }
 
   await loadBusinesses();
+
+// Safer call with small delay
+setTimeout(() => {
+  populateBizDropdowns();
+}, 100);
   
   // Wait a tick to make sure DOM is ready
   setTimeout(() => {
