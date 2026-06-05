@@ -549,6 +549,10 @@
               <input type="checkbox" value="Sun" class="day-check"> Sun
             </label>
           </div>
+          <div id="nextRunPreview" style="margin-top:12px; padding:10px 12px; background:#0f172a; border:1px solid #475569; border-radius:10px; font-size:13px; display:none;">
+  <div style="color:#64748b; font-size:11px; margin-bottom:4px;">Next run</div>
+  <div id="nextRunText" style="color:#10b981; font-weight:600;"></div>
+</div>
           <div style="font-size:11px; color:#64748b; margin-top:6px;">
             Example: Check Tue + Thu → runs every Tuesday &amp; Thursday at the selected time
           </div>
@@ -643,6 +647,58 @@ async function loadBusinesses() {
     console.error('Failed to load businesses', e);
     BUSINESSES = [];
   }
+}
+
+function updateNextRunPreview() {
+  const preview = document.getElementById('nextRunPreview');
+  const textEl = document.getElementById('nextRunText');
+  const recurType = document.getElementById('fRecurType').value;
+  const timeVal = document.getElementById('fRecurTime').value;
+
+  if (recurType !== 'recurring' || !timeVal) {
+    preview.style.display = 'none';
+    return;
+  }
+
+  const selectedDays = getSelectedRecurDays();
+  if (selectedDays.length === 0) {
+    preview.style.display = 'none';
+    return;
+  }
+
+  // Calculate next run date
+  const [hour, minute] = timeVal.split(':').map(Number);
+  const nextDate = new Date();
+  nextDate.setHours(hour, minute, 0, 0);
+
+  // Find the next matching day
+  const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const selectedDayNumbers = selectedDays.map(d => dayMap[d]);
+
+  let daysToAdd = 0;
+  while (daysToAdd < 14) {
+    const checkDate = new Date(nextDate);
+    checkDate.setDate(checkDate.getDate() + daysToAdd);
+
+    if (selectedDayNumbers.includes(checkDate.getDay())) {
+      if (daysToAdd === 0 && checkDate <= new Date()) {
+        daysToAdd = 1; // move to next week if time already passed today
+        continue;
+      }
+      nextDate.setDate(nextDate.getDate() + daysToAdd);
+      break;
+    }
+    daysToAdd++;
+  }
+
+  const formatted = nextDate.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
+  }) + ' at ' + timeVal;
+
+  textEl.textContent = formatted;
+  preview.style.display = 'block';
 }
 
 function populateBizDropdowns() {
@@ -799,6 +855,14 @@ async function init() {
   updateTopMetrics();
   buildReachChart();
   startLiveRefresh();
+
+  // Live "Next Run" preview for recurring
+  document.getElementById('fRecurType').addEventListener('change', updateNextRunPreview);
+  document.getElementById('fRecurTime').addEventListener('change', updateNextRunPreview);
+
+  document.querySelectorAll('.day-check').forEach(cb => {
+    cb.addEventListener('change', updateNextRunPreview);
+  });
 }
 
 function setTodayDate(){
@@ -998,6 +1062,7 @@ function openEdit(id){
 
   document.getElementById('fRecurType').value = (n.repeat && n.repeat !== 'once') ? 'recurring' : 'once';
   toggleRecurType();
+  updateNextRunPreview();
 
   if (n.days && n.days.length) {
     document.querySelectorAll('.repeat-day').forEach(d => {
