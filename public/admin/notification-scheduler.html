@@ -1083,13 +1083,22 @@ function openEdit(id){
 
   document.getElementById('fRecurType').value = (n.repeat && n.repeat !== 'once') ? 'recurring' : 'once';
   toggleRecurType();
+
+// Pre-select days
+if (n.days && n.days.length > 0) {
+  document.querySelectorAll('.day-check').forEach(checkbox => {
+    checkbox.checked = n.days.includes(checkbox.value);
+  });
+}
+
   updateNextRunPreview();
 
-  if (n.days && n.days.length) {
-    document.querySelectorAll('.repeat-day').forEach(d => {
-      d.classList.toggle('sel', n.days.includes(d.dataset.d));
-    });
-  }
+// Pre-select the correct days when editing a recurring notification
+if (n.days && n.days.length > 0) {
+  document.querySelectorAll('.day-check').forEach(checkbox => {
+    checkbox.checked = n.days.includes(checkbox.value);
+  });
+}
 
   const linkType = n.link?.type || 'directory';
   setLinkTypeActive(linkType);
