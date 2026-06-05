@@ -11,6 +11,7 @@ const scheduledNotificationSchema = new mongoose.Schema({
   status:       { type: String, enum: ['pending', 'sent', 'failed', 'paused'], default: 'pending' },
   scheduledFor: { type: Date },
   sentAt:       { type: Date },
+  lastSentAt:   { type: Date },          // most recent send time for recurring notifications
   repeat:       { type: String, default: 'once' },
   days:         [{ type: String }],
   endDate:      { type: Date },
