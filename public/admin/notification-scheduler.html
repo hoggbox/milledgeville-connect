@@ -724,10 +724,11 @@ function populateBizDropdowns() {
 function normalizeNotification(n) {
   const bizId = n.business?._id || n.business || null;
   const biz = BUSINESSES.find(b => b.id === bizId) || { name: 'System', emoji: '🔔' };
-  // Map DB status → display status
+
   let displayStatus = n.status;
   if (n.status === 'pending') displayStatus = n.scheduledFor ? 'scheduled' : 'draft';
   if (n.status === 'failed')  displayStatus = 'draft';
+
   return {
     id: n._id,
     bizId,
@@ -745,7 +746,8 @@ function normalizeNotification(n) {
     repeat: n.repeat || 'once',
     days: n.days || [],
     stats: n.deliveryStats || { sent: n.status === 'sent' ? 1 : 0, opens: 0, clicks: 0, ctr: 0 },
-    raw: n
+    raw: n,
+    nextRun: getNextRunDisplay(n)     // ← Fixed line
   };
 }
 
@@ -957,24 +959,33 @@ function changePage(delta) {
 }
 
 function notifCard(n){
-  const pillClass={active:'pill-active',scheduled:'pill-scheduled',draft:'pill-draft',sent:'pill-sent'};
-  const pillLabel={active:'Live',scheduled:'Scheduled',draft:'Draft',sent:'Sent'};
-  const linkBadge=n.link.type==='url'
-    ?`<span class="notif-link-badge"><i class="ti ti-external-link" style="font-size:10px" aria-hidden="true"></i> URL</span>`
-    :n.link.type==='directory'
-    ?`<span class="notif-link-badge"><i class="ti ti-building-store" style="font-size:10px" aria-hidden="true"></i> Directory card</span>`
-    :n.link.type==='business-post'
-    ?`<span class="notif-link-badge"><i class="ti ti-photo" style="font-size:10px" aria-hidden="true"></i> Photo post</span>`
-    :`<span class="notif-link-badge"><i class="ti ti-link" style="font-size:10px" aria-hidden="true"></i> ${n.link.type}</span>`;
-  const imgBadge=n.hasImg?`<span class="has-img-badge"><i class="ti ti-photo" style="font-size:10px" aria-hidden="true"></i> Image</span>`:'';
-  const statsHtml=(n.stats.sent>0)?`<div class="notif-stats">
+  const pillClass = {active:'pill-active', scheduled:'pill-scheduled', draft:'pill-draft', sent:'pill-sent'};
+  const pillLabel = {active:'Live', scheduled:'Scheduled', draft:'Draft', sent:'Sent'};
+
+  const linkBadge = n.link.type === 'url'
+    ? `<span class="notif-link-badge"><i class="ti ti-external-link" style="font-size:10px"></i> URL</span>`
+    : n.link.type === 'directory'
+    ? `<span class="notif-link-badge"><i class="ti ti-building-store" style="font-size:10px"></i> Directory card</span>`
+    : n.link.type === 'business-post'
+    ? `<span class="notif-link-badge"><i class="ti ti-photo" style="font-size:10px"></i> Photo post</span>`
+    : `<span class="notif-link-badge"><i class="ti ti-link" style="font-size:10px"></i> ${n.link.type}</span>`;
+
+  const imgBadge = n.hasImg 
+    ? `<span class="has-img-badge"><i class="ti ti-photo" style="font-size:10px"></i> Image</span>` 
+    : '';
+
+  const repeatBadge = n.repeat !== 'once' 
+    ? `<span style="font-size:10px;background:#334155;padding:2px 7px;border-radius:20px;color:#cbd5e1"><i class="ti ti-refresh" style="font-size:9px"></i> ${n.repeat}</span>` 
+    : '';
+
+  const statsHtml = (n.stats.sent > 0) ? `<div class="notif-stats">
     <div class="stat-box"><div class="stat-num">${n.stats.sent.toLocaleString()}</div><div class="stat-lbl">Delivered</div></div>
-    <div class="stat-box"><div class="stat-num">${Math.round(n.stats.opens/n.stats.sent*100)}%</div><div class="stat-lbl">Open rate</div></div>
+    <div class="stat-box"><div class="stat-num">${Math.round(n.stats.opens / n.stats.sent * 100)}%</div><div class="stat-lbl">Open rate</div></div>
     <div class="stat-box"><div class="stat-num">${n.stats.ctr}%</div><div class="stat-lbl">Click rate</div></div>
     <div class="stat-box"><div class="stat-num">${n.stats.clicks.toLocaleString()}</div><div class="stat-lbl">Clicks</div></div>
-    <button class="action-btn" style="margin-left:auto;font-size:11px" onclick="openAnalytics('${n.id}')"><i class="ti ti-chart-bar" style="font-size:12px" aria-hidden="true"></i> Full report</button>
-  </div>`:'';
-  const repeatBadge=n.repeat!=='once'?`<span style="font-size:10px;background:var(--color-background-secondary);padding:2px 7px;border-radius:20px;color:var(--color-text-secondary)"><i class="ti ti-refresh" style="font-size:9px" aria-hidden="true"></i> ${n.repeat}</span>`:'';
+    <button class="action-btn" style="margin-left:auto;font-size:11px" onclick="openAnalytics('${n.id}')"><i class="ti ti-chart-bar" style="font-size:12px"></i> Full report</button>
+  </div>` : '';
+
   return `<div class="notif-card ${n.status}" id="nc-${n.id}">
     <div class="biz-avatar" aria-hidden="true" style="font-size:20px">${n.bizEmoji}</div>
     <div class="notif-body">
@@ -985,17 +996,27 @@ function notifCard(n){
       </div>
       <div class="notif-title">${esc(n.title)}</div>
       <div class="notif-msg">${esc(n.body)}</div>
+      
       <div class="notif-meta">
-        <span class="meta-item"><i class="ti ti-clock" style="font-size:11px" aria-hidden="true"></i> ${esc(n.scheduledAt)}</span>
+        <span class="meta-item"><i class="ti ti-clock" style="font-size:11px"></i> ${esc(n.scheduledAt)}</span>
         ${linkBadge}
         ${imgBadge}
       </div>
+
       ${statsHtml}
+
+      <!-- NEXT RUN DATE (only for recurring) -->
+      ${n.repeat !== 'once' && n.nextRun ? `
+        <div style="margin-top:8px; font-size:12px; color:#10b981; display:flex; align-items:center; gap:5px;">
+          <i class="ti ti-refresh" style="font-size:12px"></i> 
+          <span>Next: ${n.nextRun}</span>
+        </div>` : ''}
     </div>
+
     <div class="notif-actions">
-      <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px" aria-hidden="true"></i> Edit</button>
-      ${n.status==='scheduled'||n.status==='draft'?`<button class="action-btn" onclick="sendNow('${n.id}')"><i class="ti ti-send" style="font-size:12px" aria-hidden="true"></i> Send now</button>`:''}
-      <button class="action-btn del" onclick="deleteNotif('${n.id}')"><i class="ti ti-trash" style="font-size:12px" aria-hidden="true"></i> Delete</button>
+      <button class="action-btn" onclick="openEdit('${n.id}')"><i class="ti ti-edit" style="font-size:12px"></i> Edit</button>
+      ${n.status === 'scheduled' || n.status === 'draft' ? `<button class="action-btn" onclick="sendNow('${n.id}')"><i class="ti ti-send" style="font-size:12px"></i> Send now</button>` : ''}
+      <button class="action-btn del" onclick="deleteNotif('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i> Delete</button>
     </div>
   </div>`;
 }
@@ -1558,6 +1579,22 @@ function buildReachChart(){
     data:{labels,datasets:[{label:'Reach',data,backgroundColor:'#9FE1CB',borderRadius:3,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y.toLocaleString()} users reached`}}},scales:{y:{display:false,beginAtZero:true},x:{ticks:{font:{size:10},color:'#888'},grid:{display:false}},}}}
   );
+}
+
+function getNextRunDisplay(n) {
+  if (!n || n.repeat !== 'weekly' || !n.days || n.days.length === 0 || !n.scheduledFor) {
+    return null;
+  }
+
+  const nextDate = new Date(n.scheduledFor);
+  return nextDate.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  }) + ' at ' + nextDate.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 }
 
 init().catch(e => console.error('Init error:', e));
