@@ -4212,6 +4212,64 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/admin/scheduled-notifications/:id
+router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Handle "Send Now" action
+    if (req.body.action === 'send-now') {
+      const notif = await ScheduledNotification.findById(id);
+      if (!notif) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+
+      // Build image URL if exists
+      const imageUrl = notif.image 
+        ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
+        : null;
+
+      // Send the push notification immediately
+      await broadcastPush(
+        notif.title,
+        notif.body,
+        { 
+          page: notif.targetType || 'home', 
+          id: notif.targetId || '' 
+        },
+        { 
+          type: notif.targetType || 'custom', 
+          imageUrl 
+        }
+      );
+
+      // Mark as sent
+      notif.status = 'sent';
+      notif.sentAt = new Date();
+      await notif.save();
+
+      return res.json({ message: 'Notification sent successfully' });
+    }
+
+    // Normal update (if you want to support editing later)
+    const updated = await ScheduledNotification.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    res.json(updated);
+
+  } catch (err) {
+    console.error('PATCH scheduled notification error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // DELETE /api/admin/scheduled-notifications/:id
 router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, async (req, res) => {
   try {
