@@ -4083,8 +4083,13 @@ async function processScheduledNotifications() {
       scheduledFor: { $lte: now }
     });
 
-    for (const notif of due) {
-      try {
+for (const notif of due) {
+  // Skip paused recurring notifications
+  if (notif.status === 'paused') {
+    continue;
+  }
+
+  try {
         // Build image URL if exists (unchanged from before)
         const imageUrl = notif.image 
           ? `https://www.milledgevilleconnect.com/api/scheduled-notification-thumb/${notif._id}`
@@ -4251,7 +4256,24 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
       return res.json({ message: 'Notification sent successfully' });
     }
 
-    // Normal update (if you want to support editing later)
+    // Handle Pause and Resume
+    if (req.body.action === 'pause' || req.body.action === 'resume') {
+      const notif = await ScheduledNotification.findById(id);
+      if (!notif) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+
+      if (req.body.action === 'pause') {
+        notif.status = 'paused';
+      } else {
+        notif.status = 'pending';
+      }
+
+      await notif.save();
+      return res.json({ message: `Notification ${req.body.action}d` });
+    }
+
+    // Normal update (for editing)
     const updated = await ScheduledNotification.findByIdAndUpdate(
       id,
       req.body,
