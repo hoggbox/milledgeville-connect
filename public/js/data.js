@@ -9434,6 +9434,86 @@ window.toggleHomeExtraFields = function() {
   }
 };
 
+// ─── STILL THERE (Frontend) ─────────────────────────────────────────────────
+window.stillThere = async function(shoutoutId, btnElement) {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to confirm this alert.' });
+    return;
+  }
+
+  if (btnElement.disabled) return;
+  btnElement.disabled = true;
+
+  try {
+    const res = await apiPost(`/shoutouts/${shoutoutId}/still-there`, {});
+
+    // Update the count shown on the button
+    const countSpan = btnElement.querySelector('span.font-mono');
+    if (countSpan) {
+      countSpan.textContent = res.stillThereCount || 0;
+    }
+
+    // Make the button look active
+    btnElement.classList.remove('bg-white/10', 'hover:bg-white/20', 'text-white/80');
+    btnElement.classList.add('bg-emerald-500/20', 'text-emerald-400');
+
+    showToast('Thanks for confirming!', 'success');
+
+  } catch (err) {
+    if (err.message && err.message.includes('already confirmed')) {
+      showToast('You already confirmed this one', 'info');
+      btnElement.classList.remove('bg-white/10', 'hover:bg-white/20', 'text-white/80');
+      btnElement.classList.add('bg-emerald-500/20', 'text-emerald-400');
+    } else {
+      showToast('Something went wrong', 'error');
+    }
+  } finally {
+    btnElement.disabled = false;
+  }
+};
+
+// ─── CLEAR SHOUTOUT (Frontend) ──────────────────────────────────────────────
+window.clearShoutout = async function(shoutoutId, btnElement) {
+  if (!currentUser) {
+    showAuthModal({ message: 'Sign in to mark alerts as cleared.' });
+    return;
+  }
+
+  if (!confirm('Mark this traffic alert as resolved?')) {
+    return;
+  }
+
+  if (btnElement.disabled) return;
+  btnElement.disabled = true;
+
+  try {
+    const res = await apiPost(`/shoutouts/${shoutoutId}/clear`, {});
+
+    if (res.cleared) {
+      // Replace button with "Cleared" state
+      const container = btnElement.parentElement;
+      btnElement.outerHTML = `
+        <div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 text-emerald-400 font-semibold">
+          <span>✅</span> 
+          <span>Cleared</span>
+        </div>
+      `;
+      showToast('Alert marked as cleared. Thanks!', 'success');
+    } else {
+      showToast(`Marked (${res.clearCount}/${res.threshold} needed)`, 'success');
+      btnElement.disabled = false;
+    }
+
+  } catch (err) {
+    if (err.message && err.message.includes('already marked')) {
+      showToast('You already marked this as cleared', 'info');
+    } else {
+      showToast('Failed to mark as cleared', 'error');
+    }
+    btnElement.disabled = false;
+  }
+};
+
 // ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
 // Duplicate definitions removed to prevent the second copy from silently
 // overwriting the first and breaking the credit-check flow.
