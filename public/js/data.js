@@ -93,6 +93,7 @@ window.submitRating = async function (businessId, score) {
   }
 };
 
+
 // ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
 window.handlePushNotificationClick = function(data) {
   if (!data?.page) {
@@ -196,6 +197,13 @@ if ('serviceWorker' in navigator) {
   }
 })();
 
+// developer badge check
+function isDeveloper(user) {
+  if (!user) return false;
+  const email = user.email || '';
+  return email.toLowerCase() === 'imhoggbox@gmail.com';
+}
+
 // ─── Guest auth nudge banner ──────────────────────────────────────────────────
 function guestBanner(action) {
   return `
@@ -286,11 +294,13 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
   let userId = null;
   let displayName = fallbackName;
   let reputation = 0;
+  let email = '';
 
   if (typeof userData === 'object' && userData !== null) {
     userId = userData._id || userData.id;
     displayName = userData.name || userData.authorName || userData.author || fallbackName;
     reputation = userData.reputation || 0;
+    email = userData.email || '';
   } else if (typeof userData === 'string' && userData.length > 10) {
     userId = userData;
   }
@@ -301,9 +311,14 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
     ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-400 to-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">⭐${reputation}</span>`
     : '';
 
+  // === DEVELOPER BADGE (only for you) ===
+  const devBadge = (email.toLowerCase() === 'imhoggbox@gmail.com')
+    ? `<span class="ml-1.5 inline-flex items-center gap-1 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">👨‍💻 Dev</span>`
+    : '';
+
   return `<span onclick="event.stopImmediatePropagation(); showUserProfileModal('${userId}')" 
                 class="cursor-pointer hover:underline text-emerald-400 inline-flex items-center">
-            ${displayName}${repHTML}
+            ${displayName}${repHTML}${devBadge}
           </span>`;
 }
 

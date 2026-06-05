@@ -344,7 +344,16 @@ content.innerHTML = `
     </div>
   </div>
 
+  <div class="flex flex-col items-center">
   <h2 class="text-3xl font-bold text-white mt-2">${currentUser.name}</h2>
+  
+  ${currentUser.email === 'imhoggbox@gmail.com' ? `
+    <div class="mt-2 inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow-lg">
+      <span>👨‍💻</span>
+      <span>Developer</span>
+    </div>
+  ` : ''}
+</div>
   <p class="text-emerald-400 text-base mb-1">${currentUser.email}</p>
   ${currentUser.neighborhood ? `<p class="text-white/60 text-sm flex items-center justify-center gap-1">📍 ${currentUser.neighborhood}</p>` : ''}
 
@@ -370,11 +379,11 @@ content.innerHTML = `
       <span class="text-xs text-white/50 mt-1">Status</span>
       <span class="text-xs font-semibold text-white">${isVerified ? 'Owner' : 'Member'}</span>
     </div>
-    <div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
-      <span class="text-lg font-bold text-white">${isAdmin ? '🔧' : '⭐'}</span>
-      <span class="text-xs text-white/50 mt-1">Role</span>
-      <span class="text-xs font-semibold text-white">${isAdmin ? 'Admin' : 'User'}</span>
-    </div>
+<div class="bg-white/5 border border-white/10 rounded-2xl py-3 flex flex-col items-center">
+  <span class="text-lg font-bold text-white">👨‍💻</span>
+  <span class="text-xs text-white/50 mt-1">Role</span>
+  <span class="text-xs font-semibold text-white">Developer</span>
+</div>
   </div>
 
   <!-- Contact / Socials -->
@@ -954,7 +963,16 @@ window.showUserProfileModal = async function (userId) {
               </div>
             </div>
 
-            <h2 class="text-3xl font-bold text-center mb-1">${esc(user.name)}</h2>
+            <div class="flex flex-col items-center mb-1">
+  <h2 class="text-3xl font-bold text-center">${esc(user.name)}</h2>
+  
+  ${user.email === 'imhoggbox@gmail.com' ? `
+    <div class="mt-2 inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow-lg">
+      <span>👨‍💻</span>
+      <span>Developer</span>
+    </div>
+  ` : ''}
+</div>
 
             <!-- Beta Tester Badge -->
             ${user.isBetaTester ? `
