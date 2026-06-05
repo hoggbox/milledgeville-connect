@@ -4117,11 +4117,13 @@ for (const notif of due) {
 
           if (nextRun) {
             notif.scheduledFor = nextRun;
-            notif.status = 'pending';           // ← Using 'pending' instead of 'scheduled'
+            notif.status = 'pending';
+            notif.lastSentAt = new Date();      // ← track last send time for the UI badge
             await notif.save();
             console.log(`🔁 Recurring rescheduled for: ${nextRun}`);
           } else {
             notif.status = 'sent';
+            notif.lastSentAt = new Date();
             await notif.save();
           }
         } else {
@@ -4248,9 +4250,21 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
         }
       );
 
-      // Mark as sent
-      notif.status = 'sent';
-      notif.sentAt = new Date();
+      // Mark as sent (or reschedule if recurring)
+      if (notif.repeat === 'weekly' && notif.days && notif.days.length > 0) {
+        const nextRun = getNextRecurringDate(notif.days, new Date());
+        notif.lastSentAt = new Date();
+        if (nextRun) {
+          notif.scheduledFor = nextRun;
+          notif.status = 'pending';
+        } else {
+          notif.status = 'sent';
+          notif.sentAt = new Date();
+        }
+      } else {
+        notif.status = 'sent';
+        notif.sentAt = new Date();
+      }
       await notif.save();
 
       return res.json({ message: 'Notification sent successfully' });

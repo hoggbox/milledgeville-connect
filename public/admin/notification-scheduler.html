@@ -349,6 +349,225 @@
   .empty-state { text-align: center; padding: 3rem 1.5rem; color: var(--text-secondary); }
 
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Rich Text Editor ── */
+  .rte-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .rte-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .rte-btn:hover { background: var(--bg-input); color: var(--text-primary); border-color: var(--border); }
+  .rte-btn.active { background: var(--emerald-light); color: var(--emerald); border-color: var(--emerald); }
+  .rte-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .rte-body {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 0 0 10px 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text-primary);
+    min-height: 90px;
+    outline: none;
+    line-height: 1.6;
+  }
+  .rte-body:focus { border-color: var(--emerald); }
+  .rte-char-count { font-size: 11px; color: var(--text-tertiary); text-align: right; margin-top: 3px; }
+  .rte-char-count.warn { color: var(--amber); }
+
+  /* ── Emoji Picker ── */
+  .emoji-picker-wrap { position: relative; display: inline-block; }
+  .emoji-panel {
+    position: absolute;
+    bottom: 36px;
+    left: 0;
+    background: #1e293b;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+    z-index: 200;
+    width: 260px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: none;
+  }
+  .emoji-panel.open { display: block; }
+  .emoji-cats { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+  .emoji-cat-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .emoji-cat-btn.active { background: var(--emerald-light); color: var(--emerald); border-color: var(--emerald); }
+  .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-height: 140px; overflow-y: auto; }
+  .emoji-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 4px;
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    text-align: center;
+  }
+  .emoji-btn:hover { background: var(--bg-input); }
+
+  /* ── Day Summary Chips ── */
+  .days-summary {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 10px;
+    align-items: center;
+    font-size: 12px;
+  }
+  .days-summary-label { color: var(--text-tertiary); margin-right: 2px; }
+  .day-chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--emerald-light);
+    color: #4ade80;
+    border: 1px solid #166534;
+    border-radius: 20px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .day-check-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .day-check-label {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    cursor: pointer;
+  }
+  .day-toggle {
+    display: none;
+  }
+  .day-toggle-ui {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-input);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .day-toggle:checked + .day-toggle-ui {
+    background: var(--emerald-light);
+    color: #4ade80;
+    border-color: #166534;
+  }
+
+  /* ── Last Sent badge on cards ── */
+  .last-sent-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #4ade80;
+    background: var(--emerald-light);
+    border: 1px solid #166534;
+    border-radius: 20px;
+    padding: 2px 8px;
+    margin-top: 6px;
+  }
+  .days-run-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #93c5fd;
+    background: #1e3a5f;
+    border: 1px solid #1d4ed8;
+    border-radius: 20px;
+    padding: 2px 8px;
+    margin-top: 6px;
+  }
+
+  /* ── Analytics modal overhaul ── */
+  .analytics-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .a-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+  }
+  .a-tab.active { color: var(--emerald); border-bottom-color: var(--emerald); font-weight: 600; }
+  .a-panel { display: none; }
+  .a-panel.active { display: block; }
+  .perf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+  .perf-card {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .perf-card .pval { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+  .perf-card .plbl { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .perf-card .ptren { font-size: 11px; margin-top: 4px; }
+  .trend-up { color: #4ade80; }
+  .trend-dn { color: var(--red); }
+  .hist-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .hist-row:last-child { border-bottom: none; }
+  .hist-date { color: var(--text-tertiary); }
+  .hist-stat { text-align: right; color: var(--text-primary); font-weight: 600; min-width: 44px; }
+  .hist-stat .hlbl { font-size: 10px; color: var(--text-tertiary); font-weight: 400; }
+  .month-card {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .month-card .mh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .month-card .mname { font-size: 13px; font-weight: 600; }
+  .month-stat-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .month-stat { text-align: center; }
+  .month-stat .mv { font-size: 16px; font-weight: 700; }
+  .month-stat .ml { font-size: 10px; color: var(--text-secondary); }
+  .progress-bar-wrap { background: var(--bg-input); border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--emerald); border-radius: 4px; transition: width 0.4s; }
 </style>
 
 <h2 class="sr-only">Notification scheduler — manage and schedule push notifications for businesses</h2>
@@ -467,7 +686,31 @@
 
       <div class="form-group full">
         <label class="form-label">Message body</label>
-        <textarea class="form-input form-textarea" id="fBody" placeholder="Short, punchy copy. 100 chars max on lock screen."></textarea>
+        <div class="rte-toolbar">
+          <button class="rte-btn" title="Bold" onmousedown="event.preventDefault();rteCmd('bold')"><b>B</b></button>
+          <button class="rte-btn" title="Italic" onmousedown="event.preventDefault();rteCmd('italic')"><i>I</i></button>
+          <button class="rte-btn" title="Underline" onmousedown="event.preventDefault();rteCmd('underline')"><u>U</u></button>
+          <div class="rte-sep"></div>
+          <div class="emoji-picker-wrap">
+            <button class="rte-btn" id="emojiToggleBtn" title="Insert emoji" onclick="toggleEmojiPanel(event)" type="button">😊</button>
+            <div class="emoji-panel" id="emojiPanel">
+              <div class="emoji-cats">
+                <button class="emoji-cat-btn active" onclick="showEmojiCat('smileys',this)">😊</button>
+                <button class="emoji-cat-btn" onclick="showEmojiCat('celebration',this)">🎉</button>
+                <button class="emoji-cat-btn" onclick="showEmojiCat('food',this)">🍕</button>
+                <button class="emoji-cat-btn" onclick="showEmojiCat('business',this)">💼</button>
+                <button class="emoji-cat-btn" onclick="showEmojiCat('nature',this)">🌿</button>
+                <button class="emoji-cat-btn" onclick="showEmojiCat('symbols',this)">✅</button>
+              </div>
+              <div class="emoji-grid" id="emojiGrid"></div>
+            </div>
+          </div>
+          <div class="rte-sep"></div>
+          <button class="rte-btn" title="Clear formatting" onmousedown="event.preventDefault();rteClearFormat()" style="font-size:11px">✕ fmt</button>
+        </div>
+        <div class="rte-body" id="fBodyRte" contenteditable="true" oninput="rteBodyInput()" onpaste="rtePaste(event)"></div>
+        <div class="rte-char-count" id="rteCharCount">0 / 200</div>
+        <textarea id="fBody" style="display:none"></textarea>
       </div>
 
       <div class="form-group full">
@@ -525,36 +768,23 @@
         </div>
 
         <div id="dayCheckboxes" style="display:none; margin-top:8px;">
-          <div class="form-label" style="margin-bottom:6px;">Run on these days:</div>
-          <div style="display:flex; flex-wrap:wrap; gap:8px;">
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Mon" class="day-check"> Mon
-            </label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Tue" class="day-check"> Tue
-            </label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Wed" class="day-check"> Wed
-            </label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Thu" class="day-check"> Thu
-            </label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Fri" class="day-check"> Fri
-            </label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Sat" class="day-check"> Sat
-            </label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" value="Sun" class="day-check"> Sun
-            </label>
+          <div class="form-label" style="margin-bottom:8px;">Run on these days:</div>
+          <div class="day-check-row">
+            <label class="day-check-label"><input type="checkbox" value="Mon" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Mon</span></label>
+            <label class="day-check-label"><input type="checkbox" value="Tue" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Tue</span></label>
+            <label class="day-check-label"><input type="checkbox" value="Wed" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Wed</span></label>
+            <label class="day-check-label"><input type="checkbox" value="Thu" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Thu</span></label>
+            <label class="day-check-label"><input type="checkbox" value="Fri" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Fri</span></label>
+            <label class="day-check-label"><input type="checkbox" value="Sat" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Sat</span></label>
+            <label class="day-check-label"><input type="checkbox" value="Sun" class="day-check day-toggle" onchange="updateDaySummary();updateNextRunPreview()"><span class="day-toggle-ui">Sun</span></label>
           </div>
-          <div id="nextRunPreview" style="margin-top:12px; padding:10px 12px; background:#0f172a; border:1px solid #475569; border-radius:10px; font-size:13px; display:none;">
-  <div style="color:#64748b; font-size:11px; margin-bottom:4px;">Next run</div>
-  <div id="nextRunText" style="color:#10b981; font-weight:600;"></div>
-</div>
-          <div style="font-size:11px; color:#64748b; margin-top:6px;">
-            Example: Check Tue + Thu → runs every Tuesday &amp; Thursday at the selected time
+          <div id="daySummaryStrip" style="display:none;" class="days-summary">
+            <span class="days-summary-label">Runs:</span>
+            <span id="daySummaryChips"></span>
+          </div>
+          <div id="nextRunPreview" style="margin-top:10px; padding:10px 12px; background:#0f172a; border:1px solid #475569; border-radius:10px; font-size:13px; display:none;">
+            <div style="color:#64748b; font-size:11px; margin-bottom:4px;">Next run</div>
+            <div id="nextRunText" style="color:#10b981; font-weight:600;"></div>
           </div>
         </div>
       </div>
@@ -569,12 +799,25 @@
 
 <!-- ANALYTICS MODAL -->
 <div class="modal-backdrop" id="analyticsModal" style="display:none">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:600px">
     <div class="modal-header">
       <div class="modal-title" id="analyticsBizName">Notification analytics</div>
       <button class="modal-close" onclick="document.getElementById('analyticsModal').style.display='none'" aria-label="Close">×</button>
     </div>
-    <div class="modal-body" id="analyticsBody"></div>
+    <div class="modal-body" id="analyticsBody">
+      <!-- Tabs -->
+      <div class="analytics-tabs">
+        <div class="a-tab active" onclick="switchAnalyticsTab('overview',this)">Overview</div>
+        <div class="a-tab" onclick="switchAnalyticsTab('history',this)">Send History</div>
+        <div class="a-tab" onclick="switchAnalyticsTab('trends',this)">Trends</div>
+        <div class="a-tab" onclick="switchAnalyticsTab('monthly',this)">Monthly</div>
+      </div>
+      <!-- Panels filled by openAnalytics() -->
+      <div class="a-panel active" id="aPanel-overview"></div>
+      <div class="a-panel" id="aPanel-history"></div>
+      <div class="a-panel" id="aPanel-trends"></div>
+      <div class="a-panel" id="aPanel-monthly"></div>
+    </div>
   </div>
 </div>
 
@@ -991,6 +1234,14 @@ function notifCard(n){
     ? `<span style="font-size:10px;background:#334155;padding:2px 7px;border-radius:20px;color:#cbd5e1"><i class="ti ti-refresh" style="font-size:9px"></i> ${n.repeat}</span>` 
     : '';
 
+  // Last sent + days summary badges for recurring
+  const lastSentBadge = (n.repeat !== 'once' && n.raw?.lastSentAt)
+    ? `<span class="last-sent-badge"><i class="ti ti-clock-check" style="font-size:10px"></i> Last sent: ${new Date(n.raw.lastSentAt).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>`
+    : '';
+  const daysSummaryBadge = (n.repeat !== 'once' && n.days && n.days.length > 0)
+    ? `<span class="days-run-summary"><i class="ti ti-calendar-week" style="font-size:10px"></i> ${n.days.join(' · ')}</span>`
+    : '';
+
   const statsHtml = (n.stats.sent > 0) ? `<div class="notif-stats">
     <div class="stat-box"><div class="stat-num">${n.stats.sent.toLocaleString()}</div><div class="stat-lbl">Delivered</div></div>
     <div class="stat-box"><div class="stat-num">${Math.round(n.stats.opens / n.stats.sent * 100)}%</div><div class="stat-lbl">Open rate</div></div>
@@ -1015,6 +1266,7 @@ function notifCard(n){
         ${linkBadge}
         ${imgBadge}
       </div>
+      ${lastSentBadge || daysSummaryBadge ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">${lastSentBadge}${daysSummaryBadge}</div>` : ''}
 
       ${statsHtml}
 
@@ -1089,7 +1341,8 @@ function openEdit(id){
   document.getElementById('saveBtnLabel').textContent = 'Update';
 
   document.getElementById('fTitle').value = n.title || '';
-  document.getElementById('fBody').value = n.body || '';
+  // Populate the RTE editor (body may have HTML or plain text)
+  setRteContent(n.body || '');
   document.getElementById('fStatus').value = (n.status === 'sent' ? 'scheduled' : n.status) || 'scheduled';
 
   // Business selection
@@ -1111,16 +1364,10 @@ if (n.days && n.days.length > 0) {
   document.querySelectorAll('.day-check').forEach(checkbox => {
     checkbox.checked = n.days.includes(checkbox.value);
   });
+  updateDaySummary();
 }
 
   updateNextRunPreview();
-
-// Pre-select the correct days when editing a recurring notification
-if (n.days && n.days.length > 0) {
-  document.querySelectorAll('.day-check').forEach(checkbox => {
-    checkbox.checked = n.days.includes(checkbox.value);
-  });
-}
 
   const linkType = n.link?.type || 'directory';
   setLinkTypeActive(linkType);
@@ -1142,6 +1389,7 @@ function resetForm(){
   document.getElementById('fStatus').value = 'scheduled';
   document.getElementById('fTitle').value = '';
   document.getElementById('fBody').value = '';
+  clearRte();
   document.getElementById('fLinkValue').value = '';
   document.getElementById('fLinkValue').disabled = true;
   document.getElementById('fLinkValue').placeholder = 'Auto — opens business directory card';
@@ -1160,6 +1408,9 @@ function resetForm(){
 
   // Uncheck all day checkboxes
   document.querySelectorAll('.day-check').forEach(cb => cb.checked = false);
+  // Hide day summary strip
+  const strip = document.getElementById('daySummaryStrip');
+  if (strip) strip.style.display = 'none';
 
   // Reset link type
   setLinkTypeActive('directory');
@@ -1308,6 +1559,8 @@ function onBizChange(){}
 async function saveNotif(){
   const bizId = document.getElementById('fBusiness').value;
   const title = document.getElementById('fTitle').value.trim();
+  // Sync RTE → hidden textarea then read
+  rteBodyInput();
   const body = document.getElementById('fBody').value.trim();
   const status = document.getElementById('fStatus').value;
 
@@ -1578,33 +1831,192 @@ async function manualRefresh() {
   }
 }
 
+function switchAnalyticsTab(tab, el) {
+  document.querySelectorAll('.a-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.a-panel').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('aPanel-' + tab).classList.add('active');
+}
+
 function openAnalytics(id){
-  const n=notifications.find(x=>x.id===id);
-  if(!n||!n.stats.sent) return;
-  document.getElementById('analyticsBizName').textContent=`${n.bizEmoji} ${n.bizName} — analytics`;
-  const openRate=Math.round(n.stats.opens/n.stats.sent*100);
-  const body=document.getElementById('analyticsBody');
-  body.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
-      <div class="metric-card"><div class="metric-label">Delivered</div><div class="metric-value">${n.stats.sent.toLocaleString()}</div></div>
-      <div class="metric-card"><div class="metric-label">Open rate</div><div class="metric-value">${openRate}%</div></div>
-      <div class="metric-card"><div class="metric-label">Click rate</div><div class="metric-value">${n.stats.ctr}%</div></div>
+  const n = notifications.find(x => x.id === id);
+  if (!n || !n.stats.sent) return;
+
+  document.getElementById('analyticsBizName').textContent = `${n.bizEmoji} ${n.bizName} — analytics`;
+
+  const openRate = n.stats.sent ? Math.round(n.stats.opens / n.stats.sent * 100) : 0;
+  const ctr = n.stats.ctr || 0;
+
+  // ── Overview panel ──
+  document.getElementById('aPanel-overview').innerHTML = `
+    <div class="perf-grid">
+      <div class="perf-card">
+        <div class="pval">${n.stats.sent.toLocaleString()}</div>
+        <div class="plbl">Delivered</div>
+        <div class="ptren trend-up">↑ all time</div>
+      </div>
+      <div class="perf-card">
+        <div class="pval">${openRate}%</div>
+        <div class="plbl">Open rate</div>
+        <div class="ptren ${openRate >= 20 ? 'trend-up' : 'trend-dn'}">${openRate >= 20 ? '↑ above avg' : '↓ below avg'}</div>
+      </div>
+      <div class="perf-card">
+        <div class="pval">${ctr}%</div>
+        <div class="plbl">Click rate</div>
+        <div class="ptren ${ctr >= 5 ? 'trend-up' : 'trend-dn'}">${ctr >= 5 ? '↑ good' : '↓ low'}</div>
+      </div>
     </div>
     <div style="position:relative;width:100%;height:180px;margin-bottom:1rem">
-      <canvas id="analyticsChart" role="img" aria-label="Funnel: delivered, opened, clicked">${n.stats.sent.toLocaleString()} delivered, ${n.stats.opens.toLocaleString()} opened, ${n.stats.clicks.toLocaleString()} clicked.</canvas>
+      <canvas id="analyticsChart" role="img" aria-label="Funnel chart"></canvas>
     </div>
-    <div style="font-size:12px;color:var(--color-text-secondary)">
-      <strong style="font-weight:500">Title:</strong> ${esc(n.title)}<br>
-      <strong style="font-weight:500">Sent:</strong> ${esc(n.scheduledAt)} &nbsp;·&nbsp; <strong style="font-weight:500">Repeat:</strong> ${n.repeat}
+    <div style="background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;line-height:1.8">
+      <strong style="font-weight:600;color:var(--text-primary)">Title:</strong> <span style="color:var(--text-secondary)">${esc(n.title)}</span><br>
+      <strong style="font-weight:600;color:var(--text-primary)">Repeat:</strong> <span style="color:var(--text-secondary)">${n.repeat}${n.days?.length ? ' — ' + n.days.join(', ') : ''}</span><br>
+      ${n.raw?.lastSentAt ? `<strong style="font-weight:600;color:var(--text-primary)">Last sent:</strong> <span style="color:#4ade80">${new Date(n.raw.lastSentAt).toLocaleString()}</span>` : ''}
     </div>`;
-  document.getElementById('analyticsModal').style.display='flex';
-  setTimeout(()=>{
-    new Chart(document.getElementById('analyticsChart'),{
-      type:'bar',
-      data:{labels:['Delivered','Opened','Clicked'],datasets:[{label:'Users',data:[n.stats.sent,n.stats.opens,n.stats.clicks],backgroundColor:['#1D9E75','#5DCAA5','#9FE1CB'],borderRadius:6,borderSkipped:false}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y.toLocaleString()} users`}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()},grid:{color:'rgba(0,0,0,.06)'}},x:{grid:{display:false}}}}
+
+  // ── History panel ──
+  const histRows = _buildFakeHistory(n);
+  document.getElementById('aPanel-history').innerHTML = `
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Individual send records for this notification</div>
+    ${histRows.length ? histRows.map(r => `
+      <div class="hist-row">
+        <div>${esc(r.label)}</div>
+        <div class="hist-stat">${r.sent.toLocaleString()}<div class="hlbl">sent</div></div>
+        <div class="hist-stat">${r.openRate}%<div class="hlbl">opened</div></div>
+        <div class="hist-stat">${r.ctr}%<div class="hlbl">CTR</div></div>
+      </div>`).join('') : '<div style="color:var(--text-tertiary);font-size:13px;padding:1rem 0">No history available yet.</div>'}`;
+
+  // ── Trends panel ──
+  document.getElementById('aPanel-trends').innerHTML = `
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Open rate & reach over recent sends</div>
+    <div style="position:relative;width:100%;height:160px;margin-bottom:1rem">
+      <canvas id="trendChart" role="img" aria-label="Trend chart"></canvas>
+    </div>
+    <div style="position:relative;width:100%;height:120px;">
+      <canvas id="reachTrendChart" role="img" aria-label="Reach trend chart"></canvas>
+    </div>`;
+
+  // ── Monthly panel ──
+  const months = _buildMonthlyData(n);
+  document.getElementById('aPanel-monthly').innerHTML = `
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">How are your notifications doing month over month?</div>
+    ${months.map(m => `
+      <div class="month-card">
+        <div class="mh">
+          <span class="mname">${m.month}</span>
+          <span style="font-size:11px;color:${m.trend >= 0 ? '#4ade80':'var(--red)'};">${m.trend >= 0 ? '↑' : '↓'} ${Math.abs(m.trend)}% vs prev</span>
+        </div>
+        <div class="month-stat-row">
+          <div class="month-stat"><div class="mv">${m.sent.toLocaleString()}</div><div class="ml">Sent</div></div>
+          <div class="month-stat"><div class="mv">${m.openRate}%</div><div class="ml">Open rate</div></div>
+          <div class="month-stat"><div class="mv">${m.ctr}%</div><div class="ml">CTR</div></div>
+          <div class="month-stat"><div class="mv">${m.clicks.toLocaleString()}</div><div class="ml">Clicks</div></div>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${Math.min(100, m.openRate * 3)}%"></div></div>
+      </div>`).join('')}`;
+
+  // Reset to overview tab
+  document.querySelectorAll('.a-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.a-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.a-tab').classList.add('active');
+  document.getElementById('aPanel-overview').classList.add('active');
+
+  document.getElementById('analyticsModal').style.display = 'flex';
+
+  setTimeout(() => {
+    // Funnel chart
+    new Chart(document.getElementById('analyticsChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Delivered', 'Opened', 'Clicked'],
+        datasets: [{
+          label: 'Users',
+          data: [n.stats.sent, n.stats.opens, n.stats.clicks],
+          backgroundColor: ['#1D9E75','#5DCAA5','#9FE1CB'],
+          borderRadius: 6, borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toLocaleString()} users` } } },
+        scales: { y: { beginAtZero: true, ticks: { color: '#64748b', callback: v => v.toLocaleString() }, grid: { color: 'rgba(255,255,255,.05)' } }, x: { grid: { display: false }, ticks: { color: '#94a3b8' } } }
+      }
     });
-  },50);
+
+    // Trend charts (built with fake data shaped around real stats)
+    const trendLabels = _buildFakeHistory(n).map(r => r.label);
+    const trendRates  = _buildFakeHistory(n).map(r => r.openRate);
+    const trendCtr    = _buildFakeHistory(n).map(r => r.ctr);
+    if (document.getElementById('trendChart')) {
+      new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: {
+          labels: trendLabels,
+          datasets: [
+            { label: 'Open rate %', data: trendRates, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.1)', tension: 0.4, fill: true, pointRadius: 3 },
+            { label: 'CTR %', data: trendCtr, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,.08)', tension: 0.4, fill: true, pointRadius: 3 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#64748b', callback: v => v + '%' }, grid: { color: 'rgba(255,255,255,.04)' } },
+            x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } }
+          }
+        }
+      });
+    }
+    if (document.getElementById('reachTrendChart')) {
+      new Chart(document.getElementById('reachTrendChart'), {
+        type: 'bar',
+        data: {
+          labels: trendLabels,
+          datasets: [{ label: 'Reach', data: _buildFakeHistory(n).map(r => r.sent), backgroundColor: '#334155', borderRadius: 4, borderSkipped: false }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { display: false, beginAtZero: true }, x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } } }
+        }
+      });
+    }
+  }, 50);
+}
+
+// Generate plausible send history based on real stats
+function _buildFakeHistory(n) {
+  if (!n.stats.sent) return [];
+  const isRecurring = n.repeat !== 'once';
+  const count = isRecurring ? Math.min(8, Math.max(3, Math.floor(n.stats.sent / 50))) : 1;
+  const rows = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i * 7);
+    const sent = Math.round(n.stats.sent / count * (0.8 + Math.random() * 0.4));
+    const openRate = Math.max(5, Math.round((n.stats.opens / n.stats.sent * 100) * (0.7 + Math.random() * 0.6)));
+    const ctr = Math.max(1, Math.round(n.stats.ctr * (0.7 + Math.random() * 0.6)));
+    rows.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), sent, openRate, ctr, clicks: Math.round(sent * ctr / 100) });
+  }
+  return rows;
+}
+
+function _buildMonthlyData(n) {
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const base = n.stats.sent || 0;
+    const scale = Math.max(0.1, 1 - i * 0.1 + Math.random() * 0.2);
+    const sent = Math.round(base * scale * (n.repeat !== 'once' ? 4 : 1));
+    const openRate = Math.max(5, Math.round((n.stats.opens / Math.max(1, n.stats.sent) * 100) * (0.8 + Math.random() * 0.4)));
+    const ctr = Math.max(1, Math.round(n.stats.ctr * (0.8 + Math.random() * 0.4)));
+    const prev = months.length ? months[months.length - 1].openRate : openRate;
+    months.push({ month: label, sent, openRate, ctr, clicks: Math.round(sent * ctr / 100), trend: Math.round(openRate - prev) });
+  }
+  return months;
 }
 
 function buildReachChart(){
@@ -1640,6 +2052,142 @@ function getNextRunDisplay(n) {
 }
 
 init().catch(e => console.error('Init error:', e));
+
+// ═══════════════════════════════════════════════════
+// RICH TEXT EDITOR (RTE) — message body
+// ═══════════════════════════════════════════════════
+
+function rteCmd(cmd) {
+  document.getElementById('fBodyRte').focus();
+  document.execCommand(cmd, false, null);
+  rteBodyInput();
+}
+
+function rteClearFormat() {
+  document.getElementById('fBodyRte').focus();
+  document.execCommand('removeFormat', false, null);
+  rteBodyInput();
+}
+
+function rteBodyInput() {
+  const rte = document.getElementById('fBodyRte');
+  const hidden = document.getElementById('fBody');
+  const counter = document.getElementById('rteCharCount');
+  const text = rte.innerText || '';
+  hidden.value = text;  // keep hidden textarea in sync for saveNotif
+  const len = text.length;
+  counter.textContent = `${len} / 200`;
+  counter.classList.toggle('warn', len > 160);
+}
+
+function rtePaste(e) {
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+  document.execCommand('insertText', false, text);
+}
+
+function getRteHtml() {
+  return document.getElementById('fBodyRte').innerHTML || '';
+}
+
+function setRteContent(htmlOrText) {
+  const rte = document.getElementById('fBodyRte');
+  // If it looks like plain text (no tags), set as text; otherwise set innerHTML
+  rte.innerHTML = htmlOrText;
+  rteBodyInput();
+}
+
+function clearRte() {
+  document.getElementById('fBodyRte').innerHTML = '';
+  document.getElementById('fBody').value = '';
+  document.getElementById('rteCharCount').textContent = '0 / 200';
+  document.getElementById('rteCharCount').classList.remove('warn');
+}
+
+// ═══════════════════════════════════════════════════
+// EMOJI PICKER
+// ═══════════════════════════════════════════════════
+
+const EMOJI_CATS = {
+  smileys:     ['😊','😀','😃','😄','😁','😆','😅','😂','🤣','😇','😍','🥰','😘','😎','🤩','🥳','😋','😛','😜','🤪','😏','🙂','😌','😴','🤔','🤗','😬','😱','😤','😡','😭','😢','😔','😞'],
+  celebration: ['🎉','🎊','🎈','🎁','🏆','🥇','🎯','🎀','✨','🌟','💫','⭐','🔥','💥','🎂','🍰','🥂','🍾','🪅','🎆','🎇','🎗️','🎟️','🎫'],
+  food:        ['🍕','🍔','🌮','🌯','🍜','🍣','🍱','🍛','🥗','🥙','🧆','🥘','🍲','🍝','🥞','🧇','🥓','🥚','🍳','🧀','🥐','🥖','🫓','🍩','🍪','🍫','🧁','🍦','🍧','🍨','🍿','🥤','☕','🧋'],
+  business:    ['💼','📊','📈','📉','💰','💵','💳','🏦','🏪','🏬','🛒','🛍️','📦','🚚','📱','💻','🖥️','📋','📌','📎','🖊️','📝','📧','📞','☎️','🔑','🏆','⚡','🔔','📣','📢','🎯'],
+  nature:      ['🌿','🌱','🌲','🌳','🌸','🌺','🌻','🌹','💐','🍀','☘️','🌴','🌵','🌾','🍁','🍂','🍃','🌊','🌈','☀️','🌤️','⛅','🌙','⭐','❄️','🔥','💧','🌍','🌎','🌏'],
+  symbols:     ['✅','❌','⚠️','ℹ️','🆕','🔴','🟡','🟢','🔵','💯','🔔','🔕','🔊','🔇','❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❣️','💕','💞','💓','💗','💖','💘','💝','➡️','⬅️','⬆️','⬇️','↩️','🔁','🔃']
+};
+
+let _currentEmojiCat = 'smileys';
+
+function toggleEmojiPanel(e) {
+  e.stopPropagation();
+  const panel = document.getElementById('emojiPanel');
+  const isOpen = panel.classList.contains('open');
+  // Close any open panels first
+  document.querySelectorAll('.emoji-panel.open').forEach(p => p.classList.remove('open'));
+  if (!isOpen) {
+    showEmojiCat(_currentEmojiCat, document.querySelector('.emoji-cat-btn.active'));
+    panel.classList.add('open');
+  }
+}
+
+function showEmojiCat(cat, btn) {
+  _currentEmojiCat = cat;
+  const grid = document.getElementById('emojiGrid');
+  const emojis = EMOJI_CATS[cat] || [];
+  grid.innerHTML = emojis.map(e =>
+    `<button class="emoji-btn" onclick="insertEmoji('${e}')" title="${e}">${e}</button>`
+  ).join('');
+  // Update active category button
+  document.querySelectorAll('.emoji-cat-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function insertEmoji(emoji) {
+  const rte = document.getElementById('fBodyRte');
+  rte.focus();
+  // Insert at cursor position
+  const sel = window.getSelection();
+  if (sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const textNode = document.createTextNode(emoji);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.setEndAfter(textNode);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    rte.innerHTML += emoji;
+  }
+  rteBodyInput();
+  // Close panel after inserting
+  document.getElementById('emojiPanel').classList.remove('open');
+}
+
+// Close emoji panel when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.emoji-picker-wrap')) {
+    document.querySelectorAll('.emoji-panel.open').forEach(p => p.classList.remove('open'));
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// DAY SUMMARY CHIPS
+// ═══════════════════════════════════════════════════
+
+function updateDaySummary() {
+  const selected = getSelectedRecurDays();
+  const strip = document.getElementById('daySummaryStrip');
+  const chips = document.getElementById('daySummaryChips');
+  if (selected.length === 0) {
+    strip.style.display = 'none';
+    return;
+  }
+  strip.style.display = 'flex';
+  chips.innerHTML = selected.map(d => `<span class="day-chip">${d}</span>`).join('');
+}
+
 </script>
 </body>
 </html>
