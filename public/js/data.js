@@ -2576,16 +2576,16 @@ function renderShoutoutCard(s) {
          </button>`}
 
     <div class="sc-right">
-      <button onclick="likeShoutout('${s._id}')" class="sc-icon-btn ${hasLiked ? 'liked' : ''}">
-        <i class="ti ti-heart" style="font-size:16px"></i>
-        <span class="badge" id="like-count-${s._id}">${likeCount}</span>
+      <button onclick="likeShoutout('${s._id}')" class="sc-react-btn ${hasLiked ? 'liked' : ''}">
+        <i class="ti ti-heart"></i>
+        <span id="like-count-${s._id}">${likeCount}</span>
       </button>
-      <button onclick="toggleCommentSection('${s._id}')" class="sc-icon-btn">
-        <i class="ti ti-message-circle" style="font-size:16px"></i>
-        <span class="badge">${commentCount}</span>
+      <button onclick="toggleCommentSection('${s._id}')" class="sc-react-btn">
+        <i class="ti ti-message-circle"></i>
+        <span>${commentCount}</span>
       </button>
-      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout',${JSON.stringify(esc(s.text||'').substring(0,120))})" class="sc-icon-btn">
-        <i class="ti ti-link" style="font-size:16px"></i>
+      <button onclick="event.stopImmediatePropagation(); shareContent('shoutout',${JSON.stringify(esc(s.text||'').substring(0,120))})" class="sc-react-btn share">
+        <i class="ti ti-share"></i>
       </button>
     </div>
   </div>
