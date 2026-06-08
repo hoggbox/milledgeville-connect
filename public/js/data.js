@@ -2542,20 +2542,22 @@ function renderShoutoutCard(s) {
 
   return `
 <div id="shoutout-${s._id}" class="sc">
-  <div class="sc-header">
-    <div class="sc-author">
-      <div class="sc-avatar">${authorLetter}</div>
-      <div>
-        <div class="sc-name">${renderClickableUser(s.authorId || s.author)}</div>
-        <div class="sc-time">${timeAgo(s.createdAt)}</div>
+  <div class="sc-body">
+    <div class="sc-header">
+      <div class="sc-author">
+        <div class="sc-avatar">${authorLetter}</div>
+        <div>
+          <div class="sc-name">${renderClickableUser(s.authorId || s.author)}</div>
+          <div class="sc-time">${timeAgo(s.createdAt)}</div>
+        </div>
       </div>
+      ${isAuthor
+        ? `<span class="sc-yours">Yours</span>`
+        : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout','${s._id}','${esc(s.text||'').substring(0,80)}...')" class="sc-flag-btn" title="Report">\u{1F6A9}</button>`}
     </div>
-    ${isAuthor
-      ? `<span class="sc-yours">Yours</span>`
-      : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout','${s._id}','${esc(s.text||'').substring(0,80)}...')" class="sc-flag-btn" title="Report">\u{1F6A9}</button>`}
+    ${locationTag}
+    <p class="sc-text">${esc(s.text)}</p>
   </div>
-  ${locationTag}
-  <p class="sc-text">${esc(s.text)}</p>
   ${s.images && s.images.length ? `
     <div class="sc-images">
       ${s.images.map((src, i) => `<img src="${src}" onclick="openShoutoutImageViewer('${s._id}',${i})" alt="">`).join('')}
