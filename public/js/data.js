@@ -3652,39 +3652,6 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
-      <!-- 🔥 BUSINESS PRO TIER CARD (Added Here) -->
-<div class="mt-8 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl p-8 text-white">
-  <div class="flex justify-between items-start">
-    <div>
-      <div class="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-sm mb-4">
-        ⭐ PRO TIER
-      </div>
-      <h2 class="text-3xl font-bold">Business Pro — $29.99/mo</h2>
-      <p class="text-white/80 mt-2">Boosted visibility • 12 notification credits/month • Analytics</p>
-    </div>
-          
-          ${isPro ? `
-            <div class="text-right">
-              <div class="text-emerald-300 font-bold">ACTIVE</div>
-              <div class="text-xs opacity-75">${sub.expires ? 'until ' + new Date(sub.expires).toLocaleDateString() : ''}</div>
-            </div>
-          ` : `
-            <button onclick="buyProTier()" 
-                    class="bg-white text-purple-700 px-7 py-3 rounded-3xl font-bold hover:bg-white/90 transition shadow-xl">
-              Upgrade Now
-            </button>
-          `}
-        </div>
-
-        <div class="mt-6 bg-white/10 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <div class="text-xs opacity-75">Notification Credits</div>
-            <div class="text-4xl font-black">${credits}</div>
-          </div>
-          <button onclick="showCreditInfo()" class="text-xs underline">How credits work →</button>
-        </div>
-      </div>
-
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
         <div class="flex gap-1 overflow-x-auto hide-scrollbar">
@@ -3940,15 +3907,6 @@ const tabs = [
                 <input type="file" accept="image/*" multiple onchange="handleHomeImages(this)" class="hidden">
               </label>
             </div>
-
-            <!-- Notify -->
-            <div class="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
-              <input type="checkbox" id="homeNotify" checked class="w-5 h-5 rounded accent-emerald-500 flex-shrink-0">
-              <label for="homeNotify" class="text-sm text-white/80 cursor-pointer leading-snug">
-                📢 Notify all users when posted <span class="text-amber-400 font-semibold">(2 credits)</span>
-              </label>
-            </div>
-
             <button onclick="postHomeListing()" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 py-4 rounded-3xl font-semibold transition-all">
               🛒 Post to Marketplace
             </button>
