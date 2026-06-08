@@ -3652,6 +3652,34 @@ router.post('/owner/validate-subscription', authenticate, async (req, res) => {
   }
 });
 
+// ─── UPDATE BUSINESS LOGO ───────────────────────────────────────────────────
+router.post('/owner/business/logo', authenticate, async (req, res) => {
+  try {
+    const { logo } = req.body;
+
+    if (!logo) {
+      return res.status(400).json({ message: 'Logo is required' });
+    }
+
+    // Find the business owned by the logged-in user
+    const business = await Business.findOne({ owner: req.userId });
+
+    if (!business) {
+      return res.status(404).json({ message: 'You do not own a verified business' });
+    }
+
+    // Update the logo
+    business.logo = logo;
+    await business.save();
+
+    res.json({ business });
+
+  } catch (err) {
+    console.error('Logo upload error:', err);
+    res.status(500).json({ message: 'Failed to update logo' });
+  }
+});
+
 // Test both native + web
 router.post('/test-push', authenticate, async (req, res) => {
   await broadcastPush(
