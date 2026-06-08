@@ -816,10 +816,32 @@ const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
 
-  // Digest
-  // Digest — now clickable
+  // Digest — now clickable (3 cols: Upcoming | Hot Deal | Ad Spotlight)
+  // Load the sponsored ad in the background
+  let spotlightAdData = null;
+  try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
+
+  const adSlotHTML = spotlightAdData && spotlightAdData.image
+    ? `<div class="relative overflow-hidden rounded-2xl cursor-pointer"
+            style="background:#000;"
+            onclick="${spotlightAdData.link ? `window.open('${spotlightAdData.link}','_blank')` : ''}">
+         <div class="absolute top-1.5 left-1.5 z-10">
+           <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
+         </div>
+         <img src="${spotlightAdData.image}" alt="${spotlightAdData.businessName || 'Sponsored'}"
+              class="w-full h-full object-cover rounded-2xl" style="max-height:80px;">
+         ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-3 rounded-b-2xl">
+           <p class="text-white text-[10px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
+         </div>` : ''}
+       </div>`
+    : `<div class="bg-white/5 border border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center p-2 text-center" style="min-height:60px;">
+         <span class="text-lg mb-0.5">📣</span>
+         <p class="text-[9px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
+         <p class="text-[8px] text-white/25 mt-0.5">Available</p>
+       </div>`;
+
   const digestHTML = `
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-3 gap-2">
       <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
            class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
         <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
@@ -831,6 +853,8 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
         <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
         <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
       </div>
+
+      ${adSlotHTML}
     </div>`;
 
   document.getElementById('todayDigest').innerHTML = digestHTML;
@@ -4702,7 +4726,8 @@ async function loadAdminPage(content) {
           {id:4, label:'Claims',    icon:'📬'},
           {id:5, label:'Broadcast', icon:'📢'},
           {id:6, label:'Analytics', icon:'📈'},
-          {id:7, label:'Reports',   icon:'🚩'}
+          {id:7, label:'Reports',   icon:'🚩'},
+          {id:8, label:'Ad Spotlight', icon:'📣'}
         ].map(tab => `
           <button onclick="switchAdminTab(${tab.id})" id="mobileTab${tab.id}"
                   class="admin-tab whitespace-nowrap flex items-center gap-2 px-5 py-3 rounded-3xl text-sm font-semibold flex-shrink-0 transition-all
@@ -4731,6 +4756,7 @@ async function loadAdminPage(content) {
             <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📢 Broadcast</button>
             <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📈 Analytics</button>
             <button onclick="switchAdminTab(7)" id="adminTab7" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🚩 Reports</button>
+            <button onclick="switchAdminTab(8)" id="adminTab8" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📣 Ad Spotlight</button>
           </nav>
         </div>
 
@@ -4937,6 +4963,7 @@ try {
     } else if (tab === 5) await renderAdminBroadcast();
     else if (tab === 6) await renderAdminAnalytics();
     else if (tab === 7) await renderAdminReports();   // ← NEW REPORTS TAB
+    else if (tab === 8) await renderAdminAdSpotlight(); // ← AD SPOTLIGHT
   } catch (err) {
     console.error(err);
     container.innerHTML = `
@@ -8090,6 +8117,165 @@ async function renderAdminAnalytics() {
       </div>` : ''}
     </div>`;
 }
+
+// ─── AD SPOTLIGHT ADMIN PANEL ────────────────────────────────────────────────
+async function renderAdminAdSpotlight() {
+  const container = document.getElementById('adminMainContent');
+  container.innerHTML = `<div class="flex items-center justify-center py-16"><div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div></div>`;
+
+  let current = null;
+  try { current = await apiGet('/admin/spotlight-ad'); } catch(e) {}
+
+  const hasAd = current && current.image;
+
+  container.innerHTML = `
+    <div class="space-y-6 max-w-2xl mx-auto">
+      <div class="flex items-center gap-3">
+        <div class="text-3xl">📣</div>
+        <div>
+          <h2 class="text-2xl font-bold">Ad Spotlight</h2>
+          <p class="text-white/50 text-sm">Paid business banner shown on the home screen beside the Hot Deal box.</p>
+        </div>
+      </div>
+
+      <!-- CURRENT AD PREVIEW -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Current Spotlight</h3>
+        ${hasAd ? `
+          <div class="relative rounded-2xl overflow-hidden mb-4" style="aspect-ratio:4/3;max-height:240px;">
+            <img src="${current.image}" alt="Current ad" class="w-full h-full object-cover"/>
+            ${current.businessName ? `
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
+              <p class="text-white text-sm font-bold truncate">${current.businessName}</p>
+              ${current.link ? `<p class="text-white/60 text-xs truncate">${current.link}</p>` : ''}
+            </div>` : ''}
+            <div class="absolute top-2 right-2 bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">LIVE</div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="bg-white/5 rounded-xl p-3">
+              <div class="text-white/40 text-xs mb-1">Business Name</div>
+              <div class="font-semibold truncate">${current.businessName || '—'}</div>
+            </div>
+            <div class="bg-white/5 rounded-xl p-3">
+              <div class="text-white/40 text-xs mb-1">Click Link</div>
+              <div class="font-semibold truncate text-emerald-400">${current.link || 'None'}</div>
+            </div>
+          </div>
+          <button onclick="clearSpotlightAd()" class="mt-4 w-full py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/30 transition-all">
+            🗑️ Remove Current Ad
+          </button>
+        ` : `
+          <div class="flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/20 rounded-2xl text-center gap-2">
+            <div class="text-4xl">📭</div>
+            <p class="text-white/50 font-semibold">No Ad Running</p>
+            <p class="text-white/30 text-xs">Upload a banner below to activate the spotlight</p>
+          </div>
+        `}
+      </div>
+
+      <!-- UPLOAD NEW AD -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Upload New Ad</h3>
+
+        <div class="space-y-4">
+          <!-- Image upload -->
+          <div>
+            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Banner Image <span class="text-amber-400">*</span></label>
+            <div id="adDropZone" onclick="document.getElementById('adImageInput').click()"
+              class="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-400/50 hover:bg-emerald-400/5 transition-all group">
+              <input type="file" id="adImageInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewAdImage(event)"/>
+              <div id="adPreviewWrap" class="hidden mb-3">
+                <img id="adPreviewImg" class="w-full max-h-48 object-cover rounded-xl"/>
+              </div>
+              <div id="adDropLabel" class="space-y-1">
+                <div class="text-3xl">🖼️</div>
+                <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
+                <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">800 × 600 px</strong> (4:3 ratio) · Max 2 MB</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Business name -->
+          <div>
+            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Business Name</label>
+            <input id="adBusinessName" type="text" placeholder="e.g. Miller's BBQ" maxlength="50"
+              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
+          </div>
+
+          <!-- Click link -->
+          <div>
+            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Click-Through Link <span class="text-white/30">(optional)</span></label>
+            <input id="adLink" type="url" placeholder="https://yourbusiness.com"
+              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
+          </div>
+
+          <button onclick="uploadSpotlightAd()" id="adUploadBtn"
+            class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white transition-all flex items-center justify-center gap-2">
+            <span>📣</span> Save & Activate Spotlight Ad
+          </button>
+        </div>
+      </div>
+
+      <!-- SIZE GUIDE -->
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
+        <p class="font-bold mb-1">📐 Image Size Guide</p>
+        <p class="text-amber-200/70">Upload at <strong>800 × 600 px</strong> (4:3 ratio) for a perfect fit inside the banner spotlight slot. The slot matches the height of the Hot Deal box and will crop/fit automatically.</p>
+      </div>
+    </div>`;
+}
+
+window.previewAdImage = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2 MB', 'error'); event.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('adPreviewImg');
+    const wrap = document.getElementById('adPreviewWrap');
+    const label = document.getElementById('adDropLabel');
+    img.src = e.target.result;
+    wrap.classList.remove('hidden');
+    label.querySelector('p:first-of-type').textContent = file.name;
+    label.querySelector('p:last-of-type').textContent = `${(file.size/1024).toFixed(0)} KB`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.uploadSpotlightAd = async function() {
+  const fileInput = document.getElementById('adImageInput');
+  const businessName = document.getElementById('adBusinessName').value.trim();
+  const link = document.getElementById('adLink').value.trim();
+  const btn = document.getElementById('adUploadBtn');
+
+  if (!fileInput.files[0]) { showToast('Please choose a banner image first', 'error'); return; }
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    btn.disabled = true;
+    btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Uploading…';
+    try {
+      await apiPost('/admin/spotlight-ad', { image: e.target.result, businessName, link });
+      showToast('Ad Spotlight updated! 📣', 'success');
+      await renderAdminAdSpotlight();
+    } catch(err) {
+      showToast(err.message || 'Upload failed', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<span>📣</span> Save & Activate Spotlight Ad';
+    }
+  };
+  reader.readAsDataURL(fileInput.files[0]);
+};
+
+window.clearSpotlightAd = async function() {
+  if (!confirm('Remove the current spotlight ad?')) return;
+  try {
+    await apiDelete('/admin/spotlight-ad');
+    showToast('Ad removed', 'success');
+    await renderAdminAdSpotlight();
+  } catch(err) {
+    showToast(err.message || 'Failed to remove ad', 'error');
+  }
+};
 
 // Track how many comments are visible per container
 const _commentVisibleCount = {};

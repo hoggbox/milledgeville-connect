@@ -31,6 +31,15 @@ const Message         = require('../models/Message');   // ← NEW MESSAGING MOD
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 const ScheduledNotification = require('../models/ScheduledNotification');
+
+// \u2500\u2500\u2500 Inline model: SpotlightAd (singleton \u2014 only one doc ever exists) \u2500\u2500\u2500\u2500\u2500\u2500
+const spotlightAdSchema = new mongoose.Schema({
+  image:        { type: String, required: true },
+  businessName: { type: String, default: '' },
+  link:         { type: String, default: '' },
+  updatedAt:    { type: Date, default: Date.now }
+});
+const SpotlightAd = mongoose.models.SpotlightAd || mongoose.model('SpotlightAd', spotlightAdSchema);
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
 //
@@ -4351,4 +4360,45 @@ router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, 
 });
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
+
+// \u2500\u2500\u2500 SPOTLIGHT AD ROUTES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+// GET /api/admin/spotlight-ad  \u2014 public (home screen reads it)
+router.get('/admin/spotlight-ad', async (req, res) => {
+  try {
+    const ad = await SpotlightAd.findOne().sort({ updatedAt: -1 });
+    if (!ad) return res.json(null);
+    res.json({ image: ad.image, businessName: ad.businessName, link: ad.link });
+  } catch (err) {
+    console.error('GET spotlight-ad error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/admin/spotlight-ad  \u2014 admin only, saves/replaces current ad
+router.post('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { image, businessName = '', link = '' } = req.body;
+    if (!image) return res.status(400).json({ message: 'image is required' });
+    // Keep only one doc \u2014 replace any existing
+    await SpotlightAd.deleteMany({});
+    const ad = await SpotlightAd.create({ image, businessName, link, updatedAt: new Date() });
+    res.json({ message: 'Spotlight ad saved', id: ad._id });
+  } catch (err) {
+    console.error('POST spotlight-ad error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/admin/spotlight-ad  \u2014 admin only
+router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await SpotlightAd.deleteMany({});
+    res.json({ message: 'Spotlight ad removed' });
+  } catch (err) {
+    console.error('DELETE spotlight-ad error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
