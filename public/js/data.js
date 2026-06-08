@@ -822,21 +822,21 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
   try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
 
   const adSlotHTML = spotlightAdData && spotlightAdData.image
-    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer mt-3"
-            style="background:#000; height:90px;"
+    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer h-full"
+            style="background:#000; min-height:80px;"
             onclick="${spotlightAdData.link ? `window.open('${spotlightAdData.link}','_blank')` : ''}">
          <div class="absolute top-1.5 left-1.5 z-10">
            <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
          </div>
          <img src="${spotlightAdData.image}" alt="${spotlightAdData.businessName || 'Sponsored'}"
-              class="w-full h-full object-cover rounded-2xl">
+              class="w-full h-full object-contain rounded-2xl" style="display:block;">
          ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-4 rounded-b-2xl">
            <p class="text-white text-[11px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
          </div>` : ''}
        </div>`
-    : `<div class="w-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex items-center justify-center gap-3 mt-3" style="height:90px;">
+    : `<div class="w-full h-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2" style="min-height:80px;">
          <span class="text-2xl">📣</span>
-         <div class="text-left">
+         <div class="text-center">
            <p class="text-[10px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
            <p class="text-[9px] text-white/25 mt-0.5">Your business here — contact admin</p>
          </div>
@@ -844,19 +844,28 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   const digestHTML = `
     <div class="grid grid-cols-2 gap-2">
-      <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
-           class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
-        <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
-        <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
+
+      <!-- Left col: Upcoming + Hot Deal stacked -->
+      <div class="flex flex-col gap-2">
+        <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
+             class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition flex-1">
+          <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
+          <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
+        </div>
+
+        <div onclick="${dealsData[0] ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')` : `navigate('deals')`}" 
+             class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition flex-1">
+          <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
+          <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
+        </div>
       </div>
 
-      <div onclick="${dealsData[0] ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')` : `navigate('deals')`}" 
-           class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
-        <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
-        <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
+      <!-- Right col: Ad Spotlight — same width/position as weather widget above -->
+      <div class="flex flex-col">
+        ${adSlotHTML}
       </div>
-    </div>
-    ${adSlotHTML}`;
+
+    </div>`;
 
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
@@ -8143,8 +8152,8 @@ async function renderAdminAdSpotlight() {
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
         <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Current Spotlight</h3>
         ${hasAd ? `
-          <div class="relative rounded-2xl overflow-hidden mb-4" style="aspect-ratio:4/3;max-height:240px;">
-            <img src="${current.image}" alt="Current ad" class="w-full h-full object-cover"/>
+          <div class="relative rounded-2xl overflow-hidden mb-4 bg-black" style="aspect-ratio:4/1;">
+            <img src="${current.image}" alt="Current ad" class="w-full h-full object-contain"/>
             ${current.businessName ? `
             <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
               <p class="text-white text-sm font-bold truncate">${current.businessName}</p>
@@ -8186,7 +8195,7 @@ async function renderAdminAdSpotlight() {
               class="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-400/50 hover:bg-emerald-400/5 transition-all group">
               <input type="file" id="adImageInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewAdImage(event)"/>
               <div id="adPreviewWrap" class="hidden mb-3">
-                <img id="adPreviewImg" class="w-full max-h-48 object-cover rounded-xl"/>
+                <img id="adPreviewImg" class="w-full rounded-xl bg-black" style="object-fit:contain;max-height:120px;"/>
               </div>
               <div id="adDropLabel" class="space-y-1">
                 <div class="text-3xl">🖼️</div>
