@@ -38,6 +38,159 @@ function sanitizeBroadcast(raw) {
   return safe;
 }
 
+// ─── Rich-text HTML sanitizer (for news article viewer) ──────────────────────
+// Allows a safe subset of formatting tags from the RTE; strips everything else.
+function sanitizeNewsHtml(html) {
+  if (!html) return '';
+  const ALLOWED_TAGS = new Set(['b','strong','i','em','u','br','p','h2','h3','ul','ol','li','blockquote','a','span']);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  function clean(node) {
+    [...node.childNodes].forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE) return;
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase();
+        if (!ALLOWED_TAGS.has(tag)) {
+          // replace with its text content
+          const text = document.createTextNode(child.textContent);
+          child.replaceWith(text);
+          return;
+        }
+        // Strip all attributes except href on <a>
+        [...child.attributes].forEach(attr => {
+          if (tag === 'a' && attr.name === 'href') {
+            const href = attr.value;
+            if (!/^https?:\/\//i.test(href)) child.removeAttribute('href');
+            else {
+              child.setAttribute('target', '_blank');
+              child.setAttribute('rel', 'noopener noreferrer');
+            }
+          } else {
+            child.removeAttribute(attr.name);
+          }
+        });
+        clean(child);
+      } else {
+        child.remove();
+      }
+    });
+  }
+  clean(tmp);
+  return tmp.innerHTML;
+}
+
+// ─── RTE helpers ─────────────────────────────────────────────────────────────
+window.rteFormat = function(cmd, val) {
+  document.getElementById('newsRTE')?.focus();
+  document.execCommand(cmd, false, val || null);
+  updateRteToolbarState();
+};
+
+window.rteInsertLink = function() {
+  const url = prompt('Enter URL (must start with https://):');
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { showToast('URL must start with https://', 'error'); return; }
+  const text = window.getSelection()?.toString() || url;
+  document.getElementById('newsRTE')?.focus();
+  document.execCommand('insertHTML', false, `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`);
+};
+
+function updateRteToolbarState() {
+  const cmds = ['bold','italic','underline'];
+  cmds.forEach(cmd => {
+    const btn = document.querySelector(`.rte-btn[title="${cmd.charAt(0).toUpperCase()+cmd.slice(1)}"]`);
+    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
+  });
+}
+
+// ─── Emoji picker ─────────────────────────────────────────────────────────────
+const EMOJI_DATA = {
+  '😊 Smileys': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱'],
+  '👍 People': ['👋','🤚','🖐','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🦾','🖐','🤷','🙋','🤦','🧍','💁','🧑','👩','👨'],
+  '❤️ Hearts': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☯️','🕎','🔯','♾️','⚜️','🔰','♻️','✅','❎','💯','❗','‼️','⁉️','❓'],
+  '🌟 Symbols': ['⭐','🌟','✨','💫','🎉','🎊','🎈','🎁','🏆','🥇','🥈','🥉','🎖️','🏅','🎗️','🎀','🎫','🎟️','🎪','🎭','🎨','🎬','🎤','🎧','📰','📢','📣','🔔','🔕','🔇','🔈','🔉','🔊','📡'],
+  '🌍 Nature': ['☀️','🌤','⛅','🌥','☁️','🌦','🌧','⛈','🌩','🌨','❄️','☃️','⛄','🌬','💨','💧','💦','🌊','🌀','🌈','⚡','🔥','🌱','🌿','🍀','🌲','🌳','🌴','🌵','🌾','🍁','🍂','🍃','🌻','🌹','🌷','🌸','🏔','🌋','🏕','🌅','🌄','🌃','🌆','🌇','🌉'],
+  '🍕 Food': ['🍕','🍔','🍟','🌭','🍿','🧂','🥓','🥚','🍳','🧇','🥞','🧈','🍞','🥐','🥖','🫓','🥨','🧀','🥗','🥙','🌮','🌯','🫔','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','☕','🧋','🥤','🍺','🎉'],
+  '✈️ Travel': ['✈️','🚀','🛸','🚁','🛺','🚗','🚕','🚙','🚌','🚎','🚐','🚑','🚒','🚓','🚔','🚖','🚘','🚍','🚛','🚚','🚜','🏎','🏍','🛵','🛺','🚲','🛴','🛹','🛼','🚏','🛣','🛤','⛽','🛞','🚨','🚥','🚦','🛑','🚧'],
+};
+
+let _emojiSavedRange = null;
+
+window.toggleEmojiPicker = function(e) {
+  e.stopPropagation();
+  const panel = document.getElementById('emojiPickerPanel');
+  if (!panel) return;
+  const rte = document.getElementById('newsRTE');
+  // Save caret position before panel opens
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) _emojiSavedRange = sel.getRangeAt(0).cloneRange();
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    initEmojiPicker();
+    document.getElementById('emojiPickerPanel')?.querySelector('.emoji-search')?.focus();
+  }
+};
+
+function initEmojiPicker() {
+  const catsEl = document.getElementById('emojiCats');
+  const gridEl = document.getElementById('emojiGrid');
+  if (!catsEl || !gridEl || catsEl.children.length) return; // already init'd
+  const cats = Object.keys(EMOJI_DATA);
+  catsEl.innerHTML = cats.map((cat, i) =>
+    `<button class="emoji-cat-btn${i===0?' active':''}" onclick="showEmojiCat(this,'${CSS.escape(cat)}')">${cat.split(' ')[0]}</button>`
+  ).join('');
+  renderEmojiGrid(EMOJI_DATA[cats[0]]);
+}
+
+window.showEmojiCat = function(btn, catKey) {
+  document.querySelectorAll('.emoji-cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const key = Object.keys(EMOJI_DATA).find(k => CSS.escape(k) === catKey);
+  if (key) renderEmojiGrid(EMOJI_DATA[key]);
+};
+
+function renderEmojiGrid(emojis) {
+  const gridEl = document.getElementById('emojiGrid');
+  if (!gridEl) return;
+  gridEl.innerHTML = emojis.map(e =>
+    `<button class="emoji-item" onclick="insertEmoji('${e}')">${e}</button>`
+  ).join('');
+}
+
+window.filterEmojis = function(query) {
+  if (!query) {
+    // show active category
+    const activeBtn = document.querySelector('.emoji-cat-btn.active');
+    if (activeBtn) activeBtn.click();
+    return;
+  }
+  const all = Object.values(EMOJI_DATA).flat();
+  renderEmojiGrid(all); // show all and let browser filter visually isn't ideal; just show all
+};
+
+window.insertEmoji = function(emoji) {
+  const rte = document.getElementById('newsRTE');
+  if (!rte) return;
+  rte.focus();
+  const sel = window.getSelection();
+  if (_emojiSavedRange) {
+    sel.removeAllRanges();
+    sel.addRange(_emojiSavedRange);
+  }
+  document.execCommand('insertText', false, emoji);
+  _emojiSavedRange = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  // keep picker open for multiple emoji
+};
+
+// Close emoji picker when clicking outside
+document.addEventListener('click', function(e) {
+  const panel = document.getElementById('emojiPickerPanel');
+  if (panel && !panel.contains(e.target) && e.target.id !== 'emojiToggleBtn') {
+    panel.classList.remove('open');
+  }
+});
+
 /** Returns true if the currently logged-in user is a site admin. */
 function isAdmin() {
   return !!(currentUser && currentUser.isAdmin === true);
@@ -1043,6 +1196,15 @@ window.openNewsArticle = async function (articleId) {
        </div>` : '';
 
   const modalHTML = `
+    <style>
+      .news-article-body h2 { font-size:1.35em; font-weight:700; margin:0.8em 0 0.3em; }
+      .news-article-body h3 { font-size:1.1em; font-weight:600; margin:0.7em 0 0.3em; }
+      .news-article-body ul,.news-article-body ol { padding-left:1.4em; margin:0.4em 0; }
+      .news-article-body li { margin-bottom:0.25em; }
+      .news-article-body blockquote { border-left:3px solid #34d399; padding-left:14px; color:rgba(255,255,255,0.65); margin:0.6em 0; font-style:italic; }
+      .news-article-body a { color:#34d399; text-decoration:underline; }
+      .news-article-body p { margin-bottom:0.6em; }
+    </style>
     <div onclick="if(event.target.id==='newsArticleModal') closeNewsArticle()" id="newsArticleModal"
          class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[12000] flex items-end md:items-center md:justify-center overflow-y-auto">
       
@@ -1070,8 +1232,8 @@ window.openNewsArticle = async function (articleId) {
             </div>
           </div>
 
-          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px]" style="white-space:pre-wrap;">
-            ${esc(article.content)}
+          <div class="prose prose-invert max-w-none text-white/90 leading-relaxed text-[15px] news-article-body">
+            ${sanitizeNewsHtml(article.content)}
           </div>
 
           ${imagesHTML}
@@ -1207,6 +1369,38 @@ async function loadPostNewsPage(content) {
   const existingNews = await apiGet('/news');
 
   content.innerHTML = `
+    <style>
+      /* ── RTE toolbar ── */
+      .rte-toolbar { display:flex; flex-wrap:wrap; gap:4px; padding:10px 12px; background:rgba(255,255,255,0.06); border-bottom:1px solid rgba(255,255,255,0.1); border-radius:20px 20px 0 0; }
+      .rte-btn { background:rgba(255,255,255,0.08); border:none; color:rgba(255,255,255,0.8); border-radius:8px; width:34px; height:34px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; transition:background 0.15s, color 0.15s; }
+      .rte-btn:hover { background:rgba(52,211,153,0.25); color:#fff; }
+      .rte-btn.active { background:rgba(52,211,153,0.35); color:#34d399; }
+      .rte-sep { width:1px; background:rgba(255,255,255,0.15); margin:4px 2px; align-self:stretch; }
+      .rte-select { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.8); border-radius:8px; padding:4px 8px; font-size:12px; cursor:pointer; height:34px; outline:none; }
+      .rte-select option { background:#1e293b; color:#fff; }
+      #newsRTE { min-height:200px; padding:18px 20px; outline:none; color:#fff; font-size:15px; line-height:1.7; background:rgba(255,255,255,0.03); border-radius:0 0 20px 20px; }
+      #newsRTE:empty:before { content:attr(data-placeholder); color:rgba(255,255,255,0.3); pointer-events:none; display:block; }
+      #newsRTE h2 { font-size:1.4em; font-weight:700; margin:0.5em 0 0.3em; }
+      #newsRTE h3 { font-size:1.15em; font-weight:600; margin:0.5em 0 0.3em; }
+      #newsRTE ul,#newsRTE ol { padding-left:1.5em; margin:0.4em 0; }
+      #newsRTE blockquote { border-left:3px solid #34d399; padding-left:14px; color:rgba(255,255,255,0.65); margin:0.6em 0; font-style:italic; }
+      #newsRTE a { color:#34d399; text-decoration:underline; }
+      #newsRTE b,#newsRTE strong { font-weight:700; }
+      #newsRTE i,#newsRTE em { font-style:italic; }
+      #newsRTE u { text-decoration:underline; }
+      /* ── Emoji picker ── */
+      #emojiPickerPanel { position:absolute; z-index:9999; background:#1e293b; border:1px solid rgba(255,255,255,0.15); border-radius:16px; padding:12px; width:280px; box-shadow:0 12px 40px rgba(0,0,0,0.5); display:none; }
+      #emojiPickerPanel.open { display:block; }
+      .emoji-search { width:100%; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; border-radius:10px; padding:7px 12px; font-size:13px; outline:none; margin-bottom:8px; box-sizing:border-box; }
+      .emoji-categories { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; }
+      .emoji-cat-btn { background:rgba(255,255,255,0.08); border:none; border-radius:8px; padding:4px 8px; font-size:12px; color:rgba(255,255,255,0.7); cursor:pointer; transition:background 0.15s; }
+      .emoji-cat-btn.active,.emoji-cat-btn:hover { background:rgba(52,211,153,0.25); color:#34d399; }
+      .emoji-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; max-height:180px; overflow-y:auto; }
+      .emoji-grid::-webkit-scrollbar { width:4px; } .emoji-grid::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:2px; }
+      .emoji-item { background:none; border:none; border-radius:8px; font-size:20px; cursor:pointer; width:36px; height:36px; display:flex; align-items:center; justify-content:center; transition:background 0.1s; }
+      .emoji-item:hover { background:rgba(255,255,255,0.12); }
+    </style>
+
     <div class="max-w-2xl mx-auto px-2 pb-10">
       <h2 class="text-3xl font-bold mb-6">📰 Post News</h2>
 
@@ -1216,8 +1410,38 @@ async function loadPostNewsPage(content) {
                class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
         <input id="newsSummary" type="text" placeholder="Short summary (shown on home page) *"
                class="w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400">
-        <textarea id="newsContent" rows="8" placeholder="Full article content *"
-                  class="w-full mb-4 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none"></textarea>
+
+        <!-- ── Rich Text Editor ── -->
+        <div class="border border-white/30 rounded-[20px] mb-4 focus-within:border-emerald-400 transition overflow-visible" style="position:relative">
+          <div class="rte-toolbar" id="rteToolbar">
+            <select class="rte-select" onchange="rteFormat('formatBlock',this.value); this.value=''">
+              <option value="">Paragraph</option>
+              <option value="h2">Heading</option>
+              <option value="h3">Subheading</option>
+            </select>
+            <div class="rte-sep"></div>
+            <button type="button" class="rte-btn" title="Bold" onclick="rteFormat('bold')"><b>B</b></button>
+            <button type="button" class="rte-btn" title="Italic" onclick="rteFormat('italic')"><i>I</i></button>
+            <button type="button" class="rte-btn" title="Underline" onclick="rteFormat('underline')"><u>U</u></button>
+            <div class="rte-sep"></div>
+            <button type="button" class="rte-btn" title="Bullet list" onclick="rteFormat('insertUnorderedList')">≡</button>
+            <button type="button" class="rte-btn" title="Numbered list" onclick="rteFormat('insertOrderedList')">①</button>
+            <button type="button" class="rte-btn" title="Blockquote" onclick="rteFormat('formatBlock','blockquote')" style="font-size:13px">"&nbsp;"</button>
+            <div class="rte-sep"></div>
+            <button type="button" class="rte-btn" title="Insert link" onclick="rteInsertLink()">🔗</button>
+            <button type="button" class="rte-btn" title="Emoji" id="emojiToggleBtn" onclick="toggleEmojiPicker(event)">😊</button>
+            <div class="rte-sep"></div>
+            <button type="button" class="rte-btn" title="Clear formatting" onclick="rteFormat('removeFormat')" style="font-size:11px;width:auto;padding:0 8px">Aa✕</button>
+          </div>
+          <div id="newsRTE" contenteditable="true" data-placeholder="Full article content *"></div>
+
+          <!-- Emoji picker panel (positioned inside the RTE wrapper so it stays in flow) -->
+          <div id="emojiPickerPanel">
+            <input class="emoji-search" type="text" placeholder="Search emoji…" oninput="filterEmojis(this.value)">
+            <div class="emoji-categories" id="emojiCats"></div>
+            <div class="emoji-grid" id="emojiGrid"></div>
+          </div>
+        </div>
 
         <div class="mb-5">
           <p class="text-sm font-semibold text-white/70 mb-2">Photos (optional — click to add, drag to reorder)</p>
@@ -1303,8 +1527,9 @@ window.removeNewsImage = function (index) {
 window.submitNewsArticle = async function () {
   const title   = document.getElementById('newsTitle')?.value.trim();
   const summary = document.getElementById('newsSummary')?.value.trim();
-  const content = document.getElementById('newsContent')?.value.trim();
-  if (!title || !summary || !content) { showToast('Title, summary, and content are required', 'error'); return; }
+  const rteEl   = document.getElementById('newsRTE');
+  const content = rteEl ? rteEl.innerHTML.trim() : '';
+  if (!title || !summary || !content || content === '') { showToast('Title, summary, and content are required', 'error'); return; }
 
   const res = await apiPost('/news', {
     title,
