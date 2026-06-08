@@ -605,7 +605,7 @@ async function loadHomePage(content) {
       <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-5 md:p-6 mb-8 text-white overflow-hidden relative">
         <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
         
-        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
           
           <!-- Left: Title + Date + Podcast -->
           <div class="flex items-start gap-3 min-w-0">
@@ -640,8 +640,8 @@ async function loadHomePage(content) {
           </div>
         </div>
 
-        <!-- Compact Digest -->
-        <div id="todayDigest" class="relative grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        <!-- Ad Spot -->
+        <div id="todayDigest" class="w-full"></div>
       </div>
 
       <!-- Business Spotlight -->
@@ -816,56 +816,30 @@ const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
 
-  // Digest — 2-col grid (Upcoming | Hot Deal) + full-width Ad Spotlight strip below
-  // Load the sponsored ad in the background
+  // Ad Spotlight — full-width strip, same height as weather widget
   let spotlightAdData = null;
   try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
 
-  const adSlotHTML = spotlightAdData && spotlightAdData.image
-    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer h-full"
-            style="background:#000; min-height:80px;"
+  const digestHTML = spotlightAdData && spotlightAdData.image
+    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer"
+            style="background:#000; height:72px;"
             onclick="${spotlightAdData.link ? `window.open('${spotlightAdData.link}','_blank')` : ''}">
          <div class="absolute top-1.5 left-1.5 z-10">
            <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
          </div>
          <img src="${spotlightAdData.image}" alt="${spotlightAdData.businessName || 'Sponsored'}"
-              class="w-full h-full object-contain rounded-2xl" style="display:block;">
-         ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-4 rounded-b-2xl">
+              class="w-full h-full object-contain" style="display:block;">
+         ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
            <p class="text-white text-[11px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
          </div>` : ''}
        </div>`
-    : `<div class="w-full h-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2" style="min-height:80px;">
-         <span class="text-2xl">📣</span>
+    : `<div class="w-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex items-center justify-center gap-3" style="height:72px;">
+         <span class="text-xl">📣</span>
          <div class="text-center">
            <p class="text-[10px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
            <p class="text-[9px] text-white/25 mt-0.5">Your business here — contact admin</p>
          </div>
        </div>`;
-
-  const digestHTML = `
-    <div class="grid grid-cols-2 gap-2">
-
-      <!-- Left col: Upcoming + Hot Deal stacked -->
-      <div class="flex flex-col gap-2">
-        <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
-             class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition flex-1">
-          <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
-          <p class="font-semibold text-sm leading-snug">${eventsData[0] ? eventsData[0].title : 'No upcoming events'}</p>
-        </div>
-
-        <div onclick="${dealsData[0] ? `showDealDetail('${dealsData[0]._id}'); navigate('deals')` : `navigate('deals')`}" 
-             class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition flex-1">
-          <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
-          <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
-        </div>
-      </div>
-
-      <!-- Right col: Ad Spotlight — same width/position as weather widget above -->
-      <div class="flex flex-col">
-        ${adSlotHTML}
-      </div>
-
-    </div>`;
 
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
@@ -8144,7 +8118,7 @@ async function renderAdminAdSpotlight() {
         <div class="text-3xl">📣</div>
         <div>
           <h2 class="text-2xl font-bold">Ad Spotlight</h2>
-          <p class="text-white/50 text-sm">Paid business banner shown full-width on the home screen below the Upcoming &amp; Hot Deal boxes.</p>
+          <p class="text-white/50 text-sm">Paid business banner shown full-width on the home screen below the weather widget.</p>
         </div>
       </div>
 
@@ -8229,7 +8203,7 @@ async function renderAdminAdSpotlight() {
       <!-- SIZE GUIDE -->
       <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
         <p class="font-bold mb-1">📐 Image Size Guide</p>
-        <p class="text-amber-200/70">Upload at <strong>1200 × 300 px</strong> (4:1 leaderboard ratio) for a perfect fit. The ad appears as a full-width strip below the Upcoming &amp; Hot Deal boxes — same width as the whole green card. Landscape/wide images work best.</p>
+        <p class="text-amber-200/70">Upload at <strong>1200 × 300 px</strong> (4:1 leaderboard ratio) for a perfect fit. The ad appears as a full-width strip below the weather widget inside the green card. Landscape/wide images work best.</p>
       </div>
     </div>`;
 }
