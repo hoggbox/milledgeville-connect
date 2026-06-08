@@ -3337,17 +3337,25 @@ window.renderEventsFiltered = function (resetPage = false) {
 
 let events = allEvents.filter(e => {
   const eDate = new Date(e.date);
-  const threeDaysAgo = new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000));
 
-  // Hide events older than 3 days
-  if (eDate < threeDaysAgo) return false;
+  // Only hide very old events when viewing "Upcoming"
+  if (time === 'upcoming') {
+    const threeDaysAgo = new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000));
+    if (eDate < threeDaysAgo) return false;
+    if (eDate < now) return false; // still hide past events in upcoming mode
+  }
 
-  if (time === 'upcoming' && eDate < now)  return false;
-  if (time === 'past'     && eDate >= now) return false;
+  if (time === 'past' && eDate >= now) return false;
+
   if (currentFilter !== 'All' && e.category !== currentFilter) return false;
-  if (search && !e.title.toLowerCase().includes(search) &&
-      !(e.description||'').toLowerCase().includes(search) &&
-      !(e.location||'').toLowerCase().includes(search)) return false;
+
+  if (search && 
+      !e.title.toLowerCase().includes(search) &&
+      !(e.description || '').toLowerCase().includes(search) &&
+      !(e.location || '').toLowerCase().includes(search)) {
+    return false;
+  }
+
   return true;
 });
 
