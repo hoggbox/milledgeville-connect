@@ -9801,6 +9801,78 @@ window.likeShoutout = async function(shoutoutId) {
   }
 };
 
+// ─── PWA INSTALL BUTTON HANDLER ─────────────────────────────────────────────
+let deferredPrompt = null;
+
+// Listen for the install prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();           // Prevent the default mini-infobar
+  deferredPrompt = e;           // Stash the event
+  console.log('✅ beforeinstallprompt captured');
+});
+
+// Make your install button work
+window.installApp = async function() {
+  const btn = document.getElementById('installAppBtn'); // Change to your button ID
+
+  // Android / Desktop Chrome / Edge
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      showToast('✅ App installed!', 'success');
+    } else {
+      showToast('Install cancelled', 'info');
+    }
+    
+    deferredPrompt = null;
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+
+  // iOS Safari (or other browsers that don't support the prompt)
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+    showIOSInstallInstructions();
+    return;
+  }
+
+  // Fallback for other browsers
+  showToast('Use your browser menu → "Add to Home Screen"', 'info');
+};
+
+// Show nice instructions for iOS users
+function showIOSInstallInstructions() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-[99999] p-4';
+  modal.innerHTML = `
+    <div class="bg-[#0f172a] rounded-3xl max-w-sm w-full p-6 text-center">
+      <h3 class="text-xl font-bold mb-4">Install on iPhone / iPad</h3>
+      
+      <div class="text-left space-y-4 text-sm text-white/80">
+        <div class="flex gap-3">
+          <span class="text-2xl flex-shrink-0">1.</span>
+          <p>Tap the <strong>Share</strong> button at the bottom of Safari</p>
+        </div>
+        <div class="flex gap-3">
+          <span class="text-2xl flex-shrink-0">2.</span>
+          <p>Scroll down and tap <strong>"Add to Home Screen"</strong></p>
+        </div>
+        <div class="flex gap-3">
+          <span class="text-2xl flex-shrink-0">3.</span>
+          <p>Tap <strong>"Add"</strong> in the top right</p>
+        </div>
+      </div>
+
+      <button onclick="this.closest('.fixed').remove()" 
+              class="mt-6 w-full bg-emerald-600 hover:bg-emerald-700 py-3.5 rounded-2xl font-semibold">
+        Got it
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
 // ─── NOTE: sendCustomNotification / canSendNotification are defined above ──────
 // Duplicate definitions removed to prevent the second copy from silently
 // overwriting the first and breaking the credit-check flow.
