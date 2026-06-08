@@ -816,32 +816,34 @@ const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
 
-  // Digest — now clickable (3 cols: Upcoming | Hot Deal | Ad Spotlight)
+  // Digest — 2-col grid (Upcoming | Hot Deal) + full-width Ad Spotlight strip below
   // Load the sponsored ad in the background
   let spotlightAdData = null;
   try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
 
   const adSlotHTML = spotlightAdData && spotlightAdData.image
-    ? `<div class="relative overflow-hidden rounded-2xl cursor-pointer"
-            style="background:#000;"
+    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer mt-3"
+            style="background:#000; height:90px;"
             onclick="${spotlightAdData.link ? `window.open('${spotlightAdData.link}','_blank')` : ''}">
          <div class="absolute top-1.5 left-1.5 z-10">
            <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
          </div>
          <img src="${spotlightAdData.image}" alt="${spotlightAdData.businessName || 'Sponsored'}"
-              class="w-full h-full object-cover rounded-2xl" style="max-height:80px;">
-         ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-3 rounded-b-2xl">
-           <p class="text-white text-[10px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
+              class="w-full h-full object-cover rounded-2xl">
+         ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-4 rounded-b-2xl">
+           <p class="text-white text-[11px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
          </div>` : ''}
        </div>`
-    : `<div class="bg-white/5 border border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center p-2 text-center" style="min-height:60px;">
-         <span class="text-lg mb-0.5">📣</span>
-         <p class="text-[9px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
-         <p class="text-[8px] text-white/25 mt-0.5">Available</p>
+    : `<div class="w-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex items-center justify-center gap-3 mt-3" style="height:90px;">
+         <span class="text-2xl">📣</span>
+         <div class="text-left">
+           <p class="text-[10px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
+           <p class="text-[9px] text-white/25 mt-0.5">Your business here — contact admin</p>
+         </div>
        </div>`;
 
   const digestHTML = `
-    <div class="grid grid-cols-3 gap-2">
+    <div class="grid grid-cols-2 gap-2">
       <div onclick="${eventsData[0] ? `showEventDetail('${eventsData[0]._id}'); navigate('events')` : `navigate('events')`}" 
            class="bg-white/15 hover:bg-white/25 rounded-2xl p-3 cursor-pointer transition">
         <div class="text-[10px] uppercase tracking-widest text-emerald-200 font-bold mb-1">📅 Upcoming</div>
@@ -853,9 +855,8 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
         <div class="text-[10px] uppercase tracking-widest text-amber-200 font-bold mb-1">🔥 Hot Deal</div>
         <p class="font-semibold text-sm leading-snug">${dealsData[0] ? dealsData[0].title : 'No active deals'}</p>
       </div>
-
-      ${adSlotHTML}
-    </div>`;
+    </div>
+    ${adSlotHTML}`;
 
   document.getElementById('todayDigest').innerHTML = digestHTML;
 
@@ -8134,7 +8135,7 @@ async function renderAdminAdSpotlight() {
         <div class="text-3xl">📣</div>
         <div>
           <h2 class="text-2xl font-bold">Ad Spotlight</h2>
-          <p class="text-white/50 text-sm">Paid business banner shown on the home screen beside the Hot Deal box.</p>
+          <p class="text-white/50 text-sm">Paid business banner shown full-width on the home screen below the Upcoming &amp; Hot Deal boxes.</p>
         </div>
       </div>
 
@@ -8190,7 +8191,7 @@ async function renderAdminAdSpotlight() {
               <div id="adDropLabel" class="space-y-1">
                 <div class="text-3xl">🖼️</div>
                 <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
-                <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">800 × 600 px</strong> (4:3 ratio) · Max 2 MB</p>
+                <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">1200 × 300 px</strong> (4:1 leaderboard) · Max 2 MB</p>
               </div>
             </div>
           </div>
@@ -8219,7 +8220,7 @@ async function renderAdminAdSpotlight() {
       <!-- SIZE GUIDE -->
       <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
         <p class="font-bold mb-1">📐 Image Size Guide</p>
-        <p class="text-amber-200/70">Upload at <strong>800 × 600 px</strong> (4:3 ratio) for a perfect fit inside the banner spotlight slot. The slot matches the height of the Hot Deal box and will crop/fit automatically.</p>
+        <p class="text-amber-200/70">Upload at <strong>1200 × 300 px</strong> (4:1 leaderboard ratio) for a perfect fit. The ad appears as a full-width strip below the Upcoming &amp; Hot Deal boxes — same width as the whole green card. Landscape/wide images work best.</p>
       </div>
     </div>`;
 }
