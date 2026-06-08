@@ -3632,8 +3632,10 @@ const tabs = [
   { id: 'deals',         label: 'Deals',          icon: '🔥' },
   { id: 'events',        label: 'Events',         icon: '📅' },
   { id: 'homes',         label: 'Marketplace Items', icon: '🛒' },
-  { id: 'notifications', label: 'Notifications',  icon: '📢' },
-  { id: 'analytics',     label: 'Analytics',      icon: '📊' },
+
+  // ─── REMOVED: Notifications & Analytics tabs (credit/pro system disabled) ───
+  // { id: 'notifications', label: 'Notifications',  icon: '📢' },
+  // { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
 
   // === GET SUBSCRIPTION STATUS ===
@@ -8269,52 +8271,8 @@ let isPostingShoutout = false; // guard used by the correct postShoutoutWithPhot
 //     Omitting imageUrl here means images never show in notifications from this path.
 //     DO NOT remove the imageUrl field from the apiPost call below.
 window.sendCustomNotification = async function() {
-  const title = document.getElementById('customTitle')?.value.trim();
-  const body  = document.getElementById('customBody')?.value.trim();
-
-  if (!title || !body) {
-    showToast('Title and message are required', 'error');
-    return;
-  }
-
-  // Client-side credit pre-check (2 credits for custom)
-  const canSend = await window.canSendNotification(true);
-  if (!canSend) {
-    showToast('Not enough credits. Upgrade to Pro!', 'error');
-    return;
-  }
-
-  const btn = document.querySelector('#notificationsContent button[onclick="sendCustomNotification()"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-
-  try {
-    // ⚠️  Always pass imageUrl — the API will handle base64 → thumb URL conversion.
-    //     Omitting it here means notification images never show in this code path.
-    const payload = { title, body };
-    if (_bizPostPendingImage) payload.imageUrl = _bizPostPendingImage;
-
-    const res = await apiPost('/owner/custom-notification', payload);
-
-    if (res.success) {
-      showToast('✅ Custom notification sent to all users!', 'success');
-      document.getElementById('customTitle').value = '';
-      document.getElementById('customBody').value  = '';
-      document.getElementById('customTitle').dispatchEvent(new Event('input'));
-      document.getElementById('customBody').dispatchEvent(new Event('input'));
-      // Refresh the credit counter in the tab
-      if (res.credits !== undefined) {
-        const creditEl = document.getElementById('notifCreditDisplay');
-        if (creditEl) creditEl.textContent = res.credits;
-      }
-    } else {
-      showToast(res.message || 'Failed to send notification', 'error');
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to send notification', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '📢 Send to All Users <span class="opacity-60 font-normal">(2 credits)</span>'; }
-  }
+  showToast("Custom notifications have been disabled.", "info");
+  return;
 };
 
 window.nextOnboardingSlide = function() {
@@ -8463,129 +8421,30 @@ window.handleOwnerLogoUpload = async function(input) {
 };
 
 // Client-side credit helpers
+// Credits / Pro system removed — always allow
 window.canSendNotification = async function(isCustom = false) {
-  if (!currentUser) return false;
-  try {
-    const sub = await apiGet('/owner/subscription');
-    const credits = sub.credits ?? currentUser.notificationCredits ?? 0;
-    const cost = isCustom ? 2 : 2;   // both custom and template = 2 credits (matches api.js)
-    return credits >= cost;
-  } catch (e) {
-    console.error('Credit check failed', e);
-    return false;
-  }
+  return true;
 };
 
 // ─── GOOGLE PLAY BILLING - BUY PRO TIER ─────────────────────────────────────
 window.buyProTier = async function() {
-  if (!window.Capacitor) {
-    showToast('Google Play Billing only works in the Android app', 'error');
-    return;
-  }
-
-  try {
-    showToast('Opening Google Play...', 'success');
-
-    const { InAppPurchase2 } = window.Capacitor.Plugins;
-
-    // Replace with your actual Google Play product ID
-    const productId = 'pro_monthly';   // ← Change this if your product ID is different
-
-    await InAppPurchase2.buy({
-      productId: productId,
-      type: 'subs'   // recurring subscription in Play Console
-    });
-
-    // This will be called by the purchase listener below when successful
-  } catch (err) {
-    console.error(err);
-    showToast('Purchase failed or cancelled', 'error');
-  }
+  showToast("Pro tier purchases have been disabled.", "info");
 };
 
 // ─── BUY CREDIT PACK (10 credits for $4.99) ─────────────────────────────────
 window.buyCreditPack = async function() {
-  if (!window.Capacitor) {
-    showToast('Credit purchases are only available in the Android app', 'error');
-    return;
-  }
-
-  try {
-    showToast('Opening Google Play...', 'success');
-
-    const { InAppPurchase2 } = window.Capacitor.Plugins;
-
-    // ←←← CHANGE THIS if your product ID in Google Play Console is different
-    const productId = 'credits_10_pack';
-
-    await InAppPurchase2.buy({
-      productId: productId,
-      type: 'consumable'   // Important: this is a one-time consumable, not a subscription
-    });
-
-    // The actual credit grant happens in purchaseSucceeded listener below
-  } catch (err) {
-    console.error(err);
-    showToast('Purchase failed or cancelled', 'error');
-  }
+  showToast("Credit purchases have been disabled.", "info");
 };
 
-// Listen for successful purchase and activate Pro on backend
-function setupBillingListener() {
-  if (!window.Capacitor) return;
-
-  const { InAppPurchase2 } = window.Capacitor.Plugins;
-
-InAppPurchase2.addListener('purchaseSucceeded', async (purchase) => {
-  try {
-    const productId = purchase.productId || '';
-
-    if (productId.includes('pro_monthly')) {
-      // Existing Pro subscription flow
-      const res = await apiPost('/owner/upgrade', {
-        orderId: purchase.orderId || purchase.transactionId,
-        productId: productId
-      });
-
-      if (res.success) {
-        showToast('🎉 Thank you! You are now Business Pro!', 'success');
-        loadOwnerDashboard(document.getElementById('content'));
-      }
-    } 
-    else if (productId.includes('credits_10_pack') || productId.includes('credit')) {
-      // New credit pack flow
-      const res = await apiPost('/owner/buy-credits', {
-        orderId: purchase.orderId || purchase.transactionId,
-        productId: productId,
-        credits: 10
-      });
-
-      if (res.success) {
-        showToast('✅ 10 credits added to your account!', 'success');
-        // Refresh the notifications tab so credit count updates
-        if (typeof loadNotificationsTab === 'function') {
-          loadNotificationsTab();
-        }
-      }
-    }
-  } catch (e) {
-    showToast('Failed to activate purchase', 'error');
-  }
-});
-
-  InAppPurchase2.addListener('purchaseFailed', () => {
-    showToast('Purchase failed or cancelled', 'error');
-  });
-}
-
-// Call this once when app loads (add near the bottom of your file)
-document.addEventListener('DOMContentLoaded', () => {
-  setupBillingListener();
-});
+// ─── GOOGLE PLAY BILLING (DISABLED) ─────────────────────────────────────
+// We removed the Pro tier + credit system, so these are no longer used.
 
 window.showCreditInfo = function() {
-  showToast(`Pro Tier gives 12 credits/month.\nCustom Notification = 2 credits\nTemplate = 2 credits`, 'success');
+  showToast("The credit / Pro system has been removed.", "info");
 };
+
+// The billing listener below has been removed because we no longer sell
+// Pro subscriptions or credit packs through the app.
 
 window.saveOwnerBusinessLogo = async function() {
   if (!pendingOwnerLogo) {
