@@ -8479,14 +8479,22 @@ window.saveOwnerBusinessLogo = async function() {
       showToast('✅ Logo updated!', 'success');
       pendingOwnerLogo = null;
 
-      // Update the logo in our local cache so it shows immediately on directory cards
-      const index = allBusinesses.findIndex(b => b._id === res.business._id);
+      // Update the logo in our local cache
+      const index = allBusinesses.findIndex(b => String(b._id) === String(res.business._id));
       if (index !== -1) {
         allBusinesses[index].logo = res.business.logo;
       }
 
       // Refresh the owner dashboard
       loadOwnerDashboard(document.getElementById('content'));
+
+      // If the user is currently on the directory page, refresh it too
+      if (currentPage === 'directory') {
+        const content = document.getElementById('content');
+        if (content) {
+          renderDirectory(allBusinesses);
+        }
+      }
     } else {
       showToast(res.message || 'Failed to save logo', 'error');
     }
