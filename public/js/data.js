@@ -3724,6 +3724,11 @@ const tabs = [
 
     <input id="ownerLogoUpload" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
            onchange="handleOwnerLogoUpload(this)">
+
+    <button id="ownerLogoSaveBtn" onclick="saveOwnerBusinessLogo()"
+            class="hidden w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-8 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 transition">
+      💾 Save Logo
+    </button>
     
     <p class="text-xs text-white/40 text-center">Recommended: Square image • Max 5MB</p>
   </div>
@@ -8389,6 +8394,10 @@ window.handleOwnerLogoUpload = async function(input) {
                style="aspect-ratio: 1 / 1;" 
                alt="Logo Preview">`;
       }
+
+      // Show the save button now that a logo is staged
+      const saveBtn = document.getElementById('ownerLogoSaveBtn');
+      if (saveBtn) saveBtn.classList.remove('hidden');
     };
     reader.readAsDataURL(squareLogo);
 
@@ -8479,10 +8488,19 @@ window.saveOwnerBusinessLogo = async function() {
       showToast('✅ Logo updated!', 'success');
       pendingOwnerLogo = null;
 
+      // Hide the save button
+      const saveBtn = document.getElementById('ownerLogoSaveBtn');
+      if (saveBtn) saveBtn.classList.add('hidden');
+
       // Update the logo in our local cache
       const index = allBusinesses.findIndex(b => String(b._id) === String(res.business._id));
       if (index !== -1) {
         allBusinesses[index].logo = res.business.logo;
+      }
+
+      // Keep currentUser in sync
+      if (currentUser?.verifiedBusiness) {
+        currentUser.verifiedBusiness.logo = res.business.logo;
       }
 
       // Refresh the owner dashboard
