@@ -2659,12 +2659,13 @@ async function loadShoutoutsPage(content) {
 // Make sure router can call it
 window.loadShoutoutsPage = loadShoutoutsPage;
 
-// ─── SHOUTOUT IMAGE LIGHTBOX ──────────────────────────────────────────────────
+// ─── SHOUTOUT IMAGE LIGHTBOX (Fixed) ─────────────────────────────────────────
 window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
-  // Find the shoutout's images from the DOM's img src attributes within its card
   const card = document.getElementById(`shoutout-${shoutoutId}`);
   if (!card) return;
-  const imgs = Array.from(card.querySelectorAll('.hide-scrollbar img')).map(img => img.src);
+
+  // Fixed selector — use the actual container class from renderShoutoutCard
+  const imgs = Array.from(card.querySelectorAll('.sc-images img')).map(img => img.src);
   if (!imgs.length) return;
 
   let current = startIndex;
@@ -2677,14 +2678,17 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
       <div id="shoutoutImgLightbox" class="fixed inset-0 bg-black/95 z-[14000] flex items-center justify-center">
         <button onclick="document.getElementById('shoutoutImgLightbox').remove()"
                 class="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl font-bold transition z-10">✕</button>
+
         ${imgs.length > 1 ? `
           <button onclick="shoutoutLightboxPrev()" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">‹</button>
           <button onclick="shoutoutLightboxNext()" class="absolute right-16 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white text-xl transition z-10">›</button>` : ''}
+
         <div class="max-w-full max-h-full flex flex-col items-center px-16">
           <img src="${imgs[current]}" alt="Photo ${current+1}" class="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl">
           ${imgs.length > 1 ? `<p class="text-white/50 text-sm mt-3">${current+1} / ${imgs.length}</p>` : ''}
         </div>
       </div>`;
+
     document.body.insertAdjacentHTML('beforeend', html);
   }
 
