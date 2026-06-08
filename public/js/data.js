@@ -822,13 +822,13 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   const digestHTML = spotlightAdData && spotlightAdData.image
     ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer"
-            style="background:#000; height:72px;"
+            style="height:72px;"
             onclick="${spotlightAdData.link ? `window.open('${spotlightAdData.link}','_blank')` : ''}">
          <div class="absolute top-1.5 left-1.5 z-10">
            <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
          </div>
          <img src="${spotlightAdData.image}" alt="${spotlightAdData.businessName || 'Sponsored'}"
-              class="w-full h-full object-contain" style="display:block;">
+              class="w-full h-full object-cover" style="display:block;">
          ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
            <p class="text-white text-[11px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
          </div>` : ''}
@@ -8126,8 +8126,8 @@ async function renderAdminAdSpotlight() {
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
         <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Current Spotlight</h3>
         ${hasAd ? `
-          <div class="relative rounded-2xl overflow-hidden mb-4 bg-black" style="aspect-ratio:4/1;">
-            <img src="${current.image}" alt="Current ad" class="w-full h-full object-contain"/>
+          <div class="relative rounded-2xl overflow-hidden mb-4" style="aspect-ratio:4/1;">
+            <img src="${current.image}" alt="Current ad" class="w-full h-full object-cover"/>
             ${current.businessName ? `
             <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
               <p class="text-white text-sm font-bold truncate">${current.businessName}</p>
@@ -8174,7 +8174,7 @@ async function renderAdminAdSpotlight() {
               <div id="adDropLabel" class="space-y-1">
                 <div class="text-3xl">🖼️</div>
                 <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
-                <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">1200 × 300 px</strong> (4:1 leaderboard) · Max 2 MB</p>
+        <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">800 × 200 px</strong> (4:1) · Max 2 MB</p>
               </div>
             </div>
           </div>
@@ -8203,7 +8203,7 @@ async function renderAdminAdSpotlight() {
       <!-- SIZE GUIDE -->
       <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
         <p class="font-bold mb-1">📐 Image Size Guide</p>
-        <p class="text-amber-200/70">Upload at <strong>1200 × 300 px</strong> (4:1 leaderboard ratio) for a perfect fit. The ad appears as a full-width strip below the weather widget inside the green card. Landscape/wide images work best.</p>
+        <p class="text-amber-200/70">Upload at <strong>800 × 200 px</strong> (4:1 ratio) for a perfect fit. The ad fills the strip edge-to-edge with no black bars — keep important text and logos centered so nothing gets clipped on narrower screens.</p>
       </div>
     </div>`;
 }
