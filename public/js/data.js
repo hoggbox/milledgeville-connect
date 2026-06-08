@@ -3702,25 +3702,32 @@ const tabs = [
                         class="w-full bg-white/10 border border-white/20 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 resize-none">${biz.description || ''}</textarea>
             </div>
 
-            <!-- Logo Upload -->
-            <div class="pt-4 border-t border-white/10">
-              <h3 class="font-bold text-lg mb-4 flex items-center gap-2">🏷️ Business Logo</h3>
-              
-              <div class="flex flex-col items-center gap-4">
-                <div id="ownerLogoPreview" class="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white/20 shadow-xl flex items-center justify-center text-6xl bg-white/10">
-                  ${biz.logo 
-                    ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
-                    : (biz.category?.icon || '🏪')}
-                </div>
+<!-- Logo Upload -->
+<div class="pt-4 border-t border-white/10">
+  <h3 class="font-bold text-lg mb-4 flex items-center gap-2">🏷️ Business Logo</h3>
+  
+  <div class="flex flex-col items-center gap-4">
+    
+    <!-- Square Logo Preview -->
+    <div id="ownerLogoPreview" 
+         class="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white/20 shadow-xl bg-white/10 flex items-center justify-center text-6xl">
+      
+      ${biz.logo 
+        ? `<img src="${biz.logo}" class="w-full h-full object-cover">` 
+        : `<span>${biz.category?.icon || '🏪'}</span>`}
+    </div>
 
-                <button onclick="document.getElementById('ownerLogoUpload').click()" 
-                        class="bg-emerald-600 hover:bg-emerald-700 px-8 py-3 rounded-2xl font-semibold flex items-center gap-2">
-                  📸 Upload New Logo
-                </button>
-                <input id="ownerLogoUpload" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
-                       onchange="handleOwnerLogoUpload(this)">
-              </div>
-            </div>
+    <button onclick="document.getElementById('ownerLogoUpload').click()" 
+            class="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-8 py-3 rounded-2xl font-semibold flex items-center gap-2 transition">
+      📸 Upload New Logo
+    </button>
+
+    <input id="ownerLogoUpload" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+           onchange="handleOwnerLogoUpload(this)">
+    
+    <p class="text-xs text-white/40 text-center">Recommended: Square image • Max 5MB</p>
+  </div>
+</div>
 
             <!-- Business Hours -->
             <div>
@@ -8359,24 +8366,77 @@ window.handleOwnerLogoUpload = async function(input) {
   const file = input.files[0];
   if (!file) return;
 
-  if (file.size > 4 * 1024 * 1024) {
-    showToast('Logo must be under 4MB', 'error');
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Logo must be under 5MB', 'error');
+    input.value = '';
     return;
   }
 
   try {
-    const compressed = await compressImage(file, 400, 0.85);
+    // Create a square logo (400x400)
+    const squareLogo = await createSquareLogo(file, 400);
+
     const reader = new FileReader();
     reader.onload = e => {
       pendingOwnerLogo = e.target.result;
+
+      // Update preview (square)
       const preview = document.getElementById('ownerLogoPreview');
-      if (preview) preview.innerHTML = `<img src="${pendingOwnerLogo}" class="w-full h-full object-cover">`;
+      if (preview) {
+        preview.innerHTML = `
+          <img src="${pendingOwnerLogo}" 
+               class="w-full h-full object-cover rounded-2xl" 
+               style="aspect-ratio: 1 / 1;" 
+               alt="Logo Preview">`;
+      }
     };
-    reader.readAsDataURL(compressed);
+    reader.readAsDataURL(squareLogo);
+
   } catch (e) {
+    console.error(e);
     showToast('Failed to process logo', 'error');
   }
+
+  input.value = '';
 };
+
+// Helper function to create a square logo
+async function createSquareLogo(file, size = 400) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext('2d');
+        
+        // Fill background (optional - white or transparent)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+
+        // Calculate cropping to make it square
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+
+        ctx.drawImage(
+          img,
+          sx, sy, minSide, minSide,   // source crop (center square)
+          0, 0, size, size            // destination (full square)
+        );
+
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.85);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 // Client-side credit helpers
 // Credits / Pro system removed — always allow
@@ -8418,7 +8478,15 @@ window.saveOwnerBusinessLogo = async function() {
     if (res.business) {
       showToast('✅ Logo updated!', 'success');
       pendingOwnerLogo = null;
-      loadOwnerDashboard(document.getElementById('content')); // refresh
+
+      // Update the logo in our local cache so it shows immediately on directory cards
+      const index = allBusinesses.findIndex(b => b._id === res.business._id);
+      if (index !== -1) {
+        allBusinesses[index].logo = res.business.logo;
+      }
+
+      // Refresh the owner dashboard
+      loadOwnerDashboard(document.getElementById('content'));
     } else {
       showToast(res.message || 'Failed to save logo', 'error');
     }
