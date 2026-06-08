@@ -4626,8 +4626,6 @@ async function loadOwnerEvents() {
 }
 
 window.addOwnerDeal = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for deals
-
   const title = document.getElementById('dealTitle').value.trim();
   const desc = document.getElementById('dealDesc').value.trim();
   const expires = document.getElementById('dealExpires').value;
@@ -4636,13 +4634,17 @@ window.addOwnerDeal = async function() {
   if (!title) return showToast('Deal title required', 'error');
 
   try {
-    const res = await apiPost('/owner/deals', { 
-      title, description: desc, expires, category 
+    const res = await apiPost('/owner/deals', {
+      title, description: desc, expires, category
     });
 
     if (res._id) {
       showToast('🔥 Deal posted!', 'success');
-      // Clear fields
+      if (res.credits !== undefined) {
+        currentUser.notificationCredits = res.credits;
+        const creditEl = document.getElementById('notifCreditDisplay');
+        if (creditEl) creditEl.textContent = res.credits;
+      }
       document.getElementById('dealTitle').value = '';
       document.getElementById('dealDesc').value = '';
       loadOwnerDashboard(document.getElementById('content'));
@@ -4660,8 +4662,6 @@ window.deleteOwnerDeal = async function (id) {
 };
 
 window.addOwnerEvent = async function() {
-  if (!(await checkNotificationCredits(1))) return;   // 1 credit for events
-
   const title = document.getElementById('eventTitle').value.trim();
   const date = document.getElementById('eventDate').value;
   const location = document.getElementById('eventLocation').value.trim();
@@ -4671,13 +4671,17 @@ window.addOwnerEvent = async function() {
   if (!title || !date) return showToast('Title and date required', 'error');
 
   try {
-    const res = await apiPost('/owner/events', { 
-      title, date, location, description: desc, category 
+    const res = await apiPost('/owner/events', {
+      title, date, location, description: desc, category
     });
 
     if (res._id) {
       showToast('📅 Event posted!', 'success');
-      // Clear fields
+      if (res.credits !== undefined) {
+        currentUser.notificationCredits = res.credits;
+        const creditEl = document.getElementById('notifCreditDisplay');
+        if (creditEl) creditEl.textContent = res.credits;
+      }
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';

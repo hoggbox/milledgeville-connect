@@ -2890,18 +2890,23 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-broadcastPush(
-  '🔥 New Deal Available!',
-  title,
-  { 
-    page: 'deals', 
-    id: deal._id.toString(),
-    url: `/deals/${deal._id}`
-  },
-  { type: 'deal' }
-);
+    // Push notification costs 1 credit — deal saves regardless, push skipped if out of credits
+    const deducted = await deductNotificationCredit(req.userId);
+    if (deducted) {
+      broadcastPush(
+        '🔥 New Deal Available!',
+        title,
+        {
+          page: 'deals',
+          id: deal._id.toString(),
+          url: `/deals/${deal._id}`
+        },
+        { type: 'deal' }
+      );
+    }
 
-    res.json(deal);
+    const updatedUser = await User.findById(req.userId).select('notificationCredits');
+    res.json({ ...deal.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2941,18 +2946,23 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    broadcastPush(
-    '📅 New Event Posted!',
-    title + (location ? ` · ${location}` : ''),
-    { 
-    page: 'events', 
-    id: event._id.toString(),
-    url: `/events/${event._id}`
-    },
-    { type: 'event' }
-);
+    // Push notification costs 1 credit — event saves regardless, push skipped if out of credits
+    const deducted = await deductNotificationCredit(req.userId);
+    if (deducted) {
+      broadcastPush(
+        '📅 New Event Posted!',
+        title + (location ? ` · ${location}` : ''),
+        {
+          page: 'events',
+          id: event._id.toString(),
+          url: `/events/${event._id}`
+        },
+        { type: 'event' }
+      );
+    }
 
-    res.json(event);
+    const updatedUser = await User.findById(req.userId).select('notificationCredits');
+    res.json({ ...event.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
