@@ -1484,6 +1484,17 @@ broadcastPush(
   }
 });
 
+// GET /api/lostitems/:id — fetch single lost/found item by ID
+router.get('/lostitems/:id', optionalAuth, async (req, res) => {
+  try {
+    const item = await LostItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Item not found' });
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -1632,6 +1643,17 @@ router.post('/marketplace', authenticate, async (req, res) => {
       );
     }
 
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/marketplace/:id — fetch single marketplace item by ID
+router.get('/marketplace/:id', optionalAuth, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Item not found' });
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -5965,13 +5965,9 @@ window.postMarketplaceItem = async function() {
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
   try {
-    const res = await apiGet('/marketplace');
-    const items = res.items || res;
-    const item = Array.isArray(items) 
-      ? items.find(i => String(i._id) === String(id)) 
-      : null;
+    const item = await apiGet(`/marketplace/${id}`);
 
-    if (!item) {
+    if (!item || !item._id) {
       showToast('Item not found', 'error');
       return;
     }
@@ -7287,13 +7283,9 @@ window.showDealDetail = async function(dealId) {
 // ─── LOST & FOUND DETAIL ─────────────────────────────────────────────────────
 window.showLostDetail = async function(id) {
   try {
-    const res = await apiGet('/lostitems');
-    const items = res.items || res;
-    const item = Array.isArray(items) 
-      ? items.find(i => String(i._id) === String(id))
-      : null;
+    const item = await apiGet(`/lostitems/${id}`);
 
-    if (!item) {
+    if (!item || !item._id) {
       showToast('Item not found', 'error');
       return;
     }
