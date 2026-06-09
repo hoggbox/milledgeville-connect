@@ -2426,10 +2426,15 @@ router.post('/news', authenticate, async (req, res) => {
     });
 
     // === SEND PUSH NOTIFICATION ===
+    const newsThumb = (article.images && article.images.length > 0)
+      ? `https://www.milledgevilleconnect.com/api/news-thumb/${article._id}`
+      : null;
+
     broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
-      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` }
+      { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
+      { imageUrl: newsThumb }
     );
 
     res.json(article);
@@ -4130,6 +4135,32 @@ router.get('/marketplace-thumb/:id', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Marketplace thumb error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// GET /api/news-thumb/:id — serves first image of a news article for push notifications
+router.get('/news-thumb/:id', async (req, res) => {
+  try {
+    const article = await News.findById(req.params.id).select('images');
+    if (!article?.images?.length) return res.status(404).send('Not found');
+
+    const raw = article.images[0];
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('News thumb error:', err);
     res.status(500).send('Error');
   }
 });
