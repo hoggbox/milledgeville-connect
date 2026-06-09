@@ -1424,6 +1424,7 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
+        .select('-images')
         .populate('owner', 'name'),
       LostItem.countDocuments()
     ]);
@@ -1571,6 +1572,7 @@ router.get('/marketplace', optionalAuth, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
+        .select('-images')
         .populate('seller', 'name'),
       MarketplaceItem.countDocuments({ status: 'available' })
     ]);
