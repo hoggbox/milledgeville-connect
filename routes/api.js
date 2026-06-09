@@ -1463,6 +1463,10 @@ router.post('/lostitems', authenticate, async (req, res) => {
       authorName: user.name
     });
 
+const lostItemThumb = (item.images && item.images.length > 0)
+  ? `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`
+  : null;
+
 broadcastPush(
   isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
   `${user.name} posted: ${title}`,
@@ -1471,7 +1475,7 @@ broadcastPush(
     id: item._id.toString(),
     url: `/lostfound/${item._id}`
   },
-  { type: 'lost' }
+  { type: 'lost', imageUrl: lostItemThumb }
 );
 
     res.json(item);
@@ -1618,11 +1622,15 @@ router.post('/marketplace', authenticate, async (req, res) => {
         ? `🏠 New Listing from ${user.verifiedBusiness.name || user.name}`
         : `🛒 New from ${user.verifiedBusiness.name || user.name}`;
 
+      const marketplaceThumb = (item.images && item.images.length > 0)
+        ? `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`
+        : null;
+
       broadcastPush(
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
-        { type: 'marketplace', subCategory: category }
+        { type: 'marketplace', subCategory: category, imageUrl: marketplaceThumb }
       );
     }
 
@@ -4050,6 +4058,58 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Shoutout thumb error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// GET /api/lostitem-thumb/:id — serves first image of a lost/found item for push notifications
+router.get('/lostitem-thumb/:id', async (req, res) => {
+  try {
+    const item = await LostItem.findById(req.params.id).select('images');
+    if (!item?.images?.length) return res.status(404).send('Not found');
+
+    const raw = item.images[0];
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('LostItem thumb error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// GET /api/marketplace-thumb/:id — serves first image of a marketplace listing for push notifications
+router.get('/marketplace-thumb/:id', async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id).select('images');
+    if (!item?.images?.length) return res.status(404).send('Not found');
+
+    const raw = item.images[0];
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) return res.status(400).send('Invalid image format');
+
+    const [, mimeType, base64Data] = match;
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.set({
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('Marketplace thumb error:', err);
     res.status(500).send('Error');
   }
 });
