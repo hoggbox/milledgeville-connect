@@ -3075,7 +3075,8 @@ if (sendNotify) {
       },
       { 
         type: 'marketplace', 
-        subCategory: 'Homes'     // ← Important
+        subCategory: 'Homes',     // ← Important
+        imageUrl: item.images?.length ? `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}` : null
       }
     );
   }
@@ -3569,7 +3570,6 @@ User.schema.methods.findByIdAndUpdate = function(id, update, options) {
 //     The shoutout route stores images[] as base64; the business-post and
 //     custom-notification routes do the same. Do NOT add substring/replace logic
 //     that would touch these fields.
-// with hacker booby traps lol
 function sanitizeContent(fields = {}) {
   const out = {};
   const textFields = ['text', 'description', 'caption', 'title', 'body', 'reason', 'summary', 'content'];
@@ -3621,26 +3621,6 @@ function sanitizeContent(fields = {}) {
     }
   }
   return out;
-}
-
-// toast for hackers message
-
-function checkForHackerShit(text) {
-  const lower = text.toLowerCase();
-  const badPatterns = ['<script', 'javascript:', 'onerror=', 'alert('];
-
-  if (badPatterns.some(p => lower.includes(p))) {
-    const roasts = [
-      "Bro really tried that in 2026?",
-      "My 12 year old cousin writes better XSS than this.",
-      "Nice try. Logged and mocked.",
-      "The FBI has been notified (jk... or am I?)",
-      "Error: Skill issue detected."
-    ];
-    showToast(roasts[Math.floor(Math.random() * roasts.length)], 'error');
-    return true;
-  }
-  return false;
 }
 
 // ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
