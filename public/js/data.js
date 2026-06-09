@@ -248,7 +248,7 @@ window.submitRating = async function (businessId, score) {
 
 
 // ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
-window.handlePushNotificationClick = function(data) {
+window.handlePushNotificationClick = async function(data) {
   if (!data?.page) {
     navigate('home');
     return;
@@ -266,24 +266,24 @@ window.handlePushNotificationClick = function(data) {
     }
   } 
   else if (page === 'marketplace' || page === 'market') {
-    navigate('marketplace');
-    if (id) setTimeout(() => showMarketplaceDetail(id), 800);
+    await navigate('marketplace');
+    if (id) showMarketplaceDetail(id);
   } 
   else if (page === 'lostfound' || page === 'lost') {
-    navigate('lostfound');
-    if (id) setTimeout(() => showLostDetail(id), 800);
+    await navigate('lostfound');
+    if (id) showLostDetail(id);
   } 
   else if (page === 'events' || page === 'event') {
-    navigate('events');
-    if (id) setTimeout(() => showEventDetail(id), 800);
+    await navigate('events');
+    if (id) setTimeout(() => showEventDetail(id), 300);
   } 
   else if (page === 'deals' || page === 'deal') {
-    navigate('deals');
-    if (id) setTimeout(() => showDealDetail(id), 800);
+    await navigate('deals');
+    if (id) setTimeout(() => showDealDetail(id), 300);
   } 
   else if (page === 'news') {
-    navigate('news');
-    if (id) setTimeout(() => openNewsArticle(id), 800);
+    await navigate('news');
+    if (id) openNewsArticle(id);
   } 
   else if (page === 'messages') {
     navigate('messages');
@@ -5596,9 +5596,8 @@ window.showLostItemDetail = async function(id) {
   currentLostItemId = id;
   
   try {
-    const res = await apiGet('/lostitems');
-    const items = res.items || res;
-    const item = Array.isArray(items) ? items.find(i => String(i._id) === String(id)) : null;
+    let item = (_allLostItems || []).find(i => String(i._id) === String(id));
+    if (!item) item = await apiGet(`/lostitems/${id}`);
 
     if (!item) {
       showToast('Item not found', 'error');
@@ -5964,13 +5963,13 @@ window.postMarketplaceItem = async function() {
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
   try {
-    const res = await apiGet('/marketplace');
-    const items = res.items || res;
-    const item = Array.isArray(items) 
-      ? items.find(i => String(i._id) === String(id)) 
-      : null;
-
+    // Use in-memory cache if available (instant), otherwise fetch by ID directly
+    let item = (allMarketplaceItems || []).find(i => String(i._id) === String(id));
     if (!item) {
+      item = await apiGet(`/marketplace/${id}`);
+    }
+
+    if (!item || !item._id) {
       showToast('Item not found', 'error');
       return;
     }
@@ -6228,7 +6227,7 @@ async function loadLostFoundPage(content) {
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
 
-  // Fetch fresh data every visit so new posts always appear
+  // Fetch fresh data every visit
   try {
     const res = await apiGet('/lostitems?page=1&limit=100');
     _allLostItems = res.items || [];
@@ -6414,7 +6413,7 @@ async function loadMarketplacePage(content) {
       </div>
     </div>`;
 
-  // Fetch fresh data every visit so new listings always appear
+  // Always fetch fresh so new listings appear immediately
   try {
     const res = await apiGet('/marketplace?limit=100');
     allMarketplaceItems = res.items || res || [];
@@ -7282,13 +7281,13 @@ window.showDealDetail = async function(dealId) {
 // ─── LOST & FOUND DETAIL ─────────────────────────────────────────────────────
 window.showLostDetail = async function(id) {
   try {
-    const res = await apiGet('/lostitems');
-    const items = res.items || res;
-    const item = Array.isArray(items) 
-      ? items.find(i => String(i._id) === String(id))
-      : null;
-
+    // Use in-memory cache if available (instant), otherwise fetch by ID directly
+    let item = (_allLostItems || []).find(i => String(i._id) === String(id));
     if (!item) {
+      item = await apiGet(`/lostitems/${id}`);
+    }
+
+    if (!item || !item._id) {
       showToast('Item not found', 'error');
       return;
     }
@@ -7420,10 +7419,8 @@ window.postLostComment = async function(itemId) {
     input.value = '';
     showToast('Comment posted!', 'success');
 
-    // Refresh the modal comments
-    const res = await apiGet('/lostitems');
-    const items = res.items || res;
-    const updated = items.find(i => String(i._id) === String(itemId));
+    // Refresh the modal comments — fetch by ID directly
+    const updated = await apiGet(`/lostitems/${itemId}`);
 
     const container = document.getElementById('lostCommentsContainer');
     if (container && updated?.comments) {
