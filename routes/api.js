@@ -199,7 +199,8 @@ router.post('/flag', authenticate, async (req, res) => {
       return res.status(409).json({ message: 'You have already flagged this post' });
     }
     console.error('Flag error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -259,7 +260,8 @@ router.post('/shoutouts/:id/flag', authenticate, async (req, res) => {
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ message: 'You have already flagged this post' });
     console.error('Flag error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -293,7 +295,8 @@ router.post('/users/:id/report', authenticate, async (req, res) => {
     res.json({ message: 'Report submitted. Our team will review it.' });
   } catch (err) {
     console.error('Report user error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -346,7 +349,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { text, images, location } = clean;
     // ────────────────────────────────────────────────────────────────────────
 
@@ -436,7 +439,8 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     res.json(shoutout);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -575,7 +579,8 @@ router.get('/admin/flagged', authenticate, requireAdmin, async (req, res) => {
 
     res.json(reports);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -626,7 +631,8 @@ router.post('/admin/flagged/:reportId/restore', authenticate, requireAdmin, asyn
     res.json({ message: 'Post restored and author timeout lifted', docId: contentId });
   } catch (err) {
     console.error('Restore error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -665,7 +671,8 @@ router.delete('/admin/flagged/:reportId', authenticate, requireAdmin, async (req
     res.json({ message: 'Post permanently deleted' });
   } catch (err) {
     console.error('Delete error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -689,7 +696,8 @@ router.get('/admin/reports', authenticate, requireAdmin, async (req, res) => {
 
     res.json(reports);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -710,7 +718,8 @@ router.patch('/admin/reports/:id', authenticate, requireAdmin, async (req, res) 
     if (!report) return res.status(404).json({ message: 'Report not found' });
     res.json(report);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -733,7 +742,8 @@ router.post('/admin/users/:id/unmute', authenticate, requireAdmin, async (req, r
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: `${user.name} has been unmuted`, user });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -796,7 +806,8 @@ router.post('/admin/users/:id/mute', authenticate, requireAdmin, async (req, res
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: `${user.name} has been muted`, user });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -809,7 +820,8 @@ router.delete('/admin/shoutouts/:id', authenticate, requireAdmin, async (req, re
     await Shoutout.findByIdAndDelete(req.params.id);
     res.json({ message: 'Shoutout deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1073,6 +1085,10 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           }
           break;
 
+        case 'news':
+          if (prefs.news === false) shouldSend = false;
+          break;
+
         case 'custom':
           // Verified business custom notifications — always send
           shouldSend = true;
@@ -1101,7 +1117,8 @@ router.get('/messages/inbox', authenticate, async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(messages);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1135,7 +1152,8 @@ router.post('/messages/mark-as-read', authenticate, async (req, res) => {
 
     res.json({ message: 'Conversation marked as read' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1150,13 +1168,14 @@ router.get('/messages/conversation/:otherUserId', authenticate, async (req, res)
     }).populate('sender', 'name avatar').sort({ createdAt: 1 });
     res.json(messages);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
 router.post('/messages', authenticate, async (req, res) => {
   try {
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { receiverId, text } = clean;
     if (!receiverId || !text?.trim()) 
       return res.status(400).json({ message: 'Receiver and message text required' });
@@ -1188,7 +1207,8 @@ router.post('/messages', authenticate, async (req, res) => {
 
     res.json(message);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1198,7 +1218,8 @@ router.patch('/messages/:id/read', authenticate, async (req, res) => {
     if (!msg) return res.status(404).json({ message: 'Message not found' });
     res.json(msg);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1212,7 +1233,8 @@ router.delete('/messages/:id', authenticate, async (req, res) => {
     await msg.deleteOne();
     res.json({ message: 'Message deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1230,7 +1252,8 @@ router.delete('/messages/conversation/:otherId', authenticate, async (req, res) 
     });
     res.json({ deleted: result.deletedCount });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1241,7 +1264,8 @@ router.delete('/messages/inbox', authenticate, async (req, res) => {
     const result = await Message.deleteMany({ receiver: req.userId });
     res.json({ deleted: result.deletedCount });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1252,7 +1276,8 @@ router.delete('/messages/outbox', authenticate, async (req, res) => {
     const result = await Message.deleteMany({ sender: req.userId });
     res.json({ deleted: result.deletedCount });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1269,7 +1294,8 @@ router.post('/users/:id/block', authenticate, async (req, res) => {
     await user.save();
     res.json({ blocked: idx === -1 });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1279,7 +1305,8 @@ router.get('/users/:id', optionalAuth, async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1319,7 +1346,8 @@ router.post('/push/subscribe', authenticate, async (req, res) => {
     res.json({ message: 'Web push subscription saved' });
   } catch (err) {
     console.error('Push subscribe error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1329,7 +1357,8 @@ router.post('/push/unsubscribe', authenticate, async (req, res) => {
     await User.findByIdAndUpdate(req.userId, { pushEnabled: false });
     res.json({ message: 'Unsubscribed' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1347,7 +1376,8 @@ router.get('/feed', optionalAuth, async (req, res) => {
     ]);
     res.json({ shoutouts, events, deals });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1363,7 +1393,8 @@ router.post('/events/:id/rsvp', authenticate, async (req, res) => {
     await event.save();
     res.json({ rsvpCount: event.rsvps.length, going: idx === -1 });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1395,7 +1426,8 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 // Follow business
@@ -1408,7 +1440,8 @@ router.post('/business/:id/follow', authenticate, async (req, res) => {
     await user.save();
     res.json({ following: user.following });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1440,7 +1473,8 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1448,7 +1482,7 @@ router.post('/lostitems', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { title, description, images, location, type, itemType, isPet, date } = clean;
 
     const item = await LostItem.create({
@@ -1481,7 +1515,8 @@ broadcastPush(
 
     res.json(item);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1492,7 +1527,8 @@ router.get('/lostitems/:id', optionalAuth, async (req, res) => {
     if (!item) return res.status(404).json({ message: 'Item not found' });
     res.json(item);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1528,7 +1564,8 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
     }
     res.json(lost.comments[lost.comments.length - 1]);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1556,7 +1593,8 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
 
     res.json({ message: 'Marked as resolved', item: lost });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1588,7 +1626,8 @@ router.get('/marketplace', optionalAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1596,7 +1635,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { title, description, price, images, category, condition, homeNotifDetails } = clean;
 
     const item = await MarketplaceItem.create({
@@ -1647,7 +1686,8 @@ router.post('/marketplace', authenticate, async (req, res) => {
 
     res.json(item);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1658,7 +1698,8 @@ router.get('/marketplace/:id', optionalAuth, async (req, res) => {
     if (!item) return res.status(404).json({ message: 'Item not found' });
     res.json(item);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1694,7 +1735,8 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
     }
     res.json(item.comments[item.comments.length - 1]);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1722,7 +1764,8 @@ router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
 
     res.json({ message: 'Marked as sold', item });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1732,7 +1775,8 @@ router.get('/admin/lostitems', authenticate, requireAdminOrModerator, async (req
     const items = await LostItem.find().sort({ createdAt: -1 }).populate('owner', 'name');
     res.json(items);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1741,7 +1785,8 @@ router.delete('/admin/lostitems/:id', authenticate, requireAdminOrModerator, asy
     await LostItem.findByIdAndDelete(req.params.id);
     res.json({ message: 'Lost & Found item deleted by admin' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1750,7 +1795,8 @@ router.get('/admin/marketplace', authenticate, requireAdminOrModerator, async (r
     const items = await MarketplaceItem.find().sort({ createdAt: -1 }).populate('seller', 'name');
     res.json(items);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1759,7 +1805,8 @@ router.delete('/admin/marketplace/:id', authenticate, requireAdminOrModerator, a
     await MarketplaceItem.findByIdAndDelete(req.params.id);
     res.json({ message: 'Marketplace item deleted by admin' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1799,7 +1846,8 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
       reputationAwarded: wasNewLike ? 8 : 0
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1814,7 +1862,8 @@ router.delete('/shoutouts/:id', authenticate, async (req, res) => {
     await shoutout.deleteOne();
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1832,7 +1881,8 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
     await shoutout.save();
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1845,7 +1895,8 @@ router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
     await lost.save();
     res.json({ message: 'Marked as resolved', item: lost });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1858,7 +1909,8 @@ router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
     await item.save();
     res.json({ message: 'Marked as sold', item });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -1874,7 +1926,8 @@ router.put('/owner/business/menu', authenticate, async (req, res) => {
     );
     res.json({ message: 'Menu updated', business });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2031,7 +2084,8 @@ router.post('/auth/login', async (req, res) => {
     u.isAdmin = ADMIN_EMAILS.has(user.email);
     res.json({ token, user: u });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2043,7 +2097,8 @@ router.get('/auth/me', authenticate, async (req, res) => {
     u.isAdmin = ADMIN_EMAILS.has(user.email);
     res.json({ user: u });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2071,7 +2126,8 @@ router.patch('/auth/profile', authenticate, async (req, res) => {
 
     res.json({ user: sanitizeUser(user) });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2097,7 +2153,8 @@ router.get('/directory', optionalAuth, async (req, res) => {
     const categories = await Category.find().select('name icon _id').lean();
     res.json({ businesses, categories });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2124,7 +2181,8 @@ router.get('/resources', async (req, res) => {
     });
     res.json({ businesses, categories: resourceCats });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2151,7 +2209,8 @@ router.get('/popular', optionalAuth, async (req, res) => {
       .slice(0, 5);
     res.json(sorted);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2171,7 +2230,8 @@ router.post('/business/:id/rate', authenticate, async (req, res) => {
     const avg = Math.round((business.ratings.reduce((s, r) => s + r.score, 0) / business.ratings.length) * 10) / 10;
     res.json({ avg, count: business.ratings.length });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2180,13 +2240,14 @@ router.get('/business/:id/reviews', optionalAuth, async (req, res) => {
     const reviews = await Review.find({ business: req.params.id }).sort({ createdAt: -1 });
     res.json(reviews);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
 router.post('/business/:id/reviews', authenticate, async (req, res) => {
   try {
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { rating, title, body } = clean;
     if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ message: 'Rating 1-5 required' });
@@ -2223,7 +2284,8 @@ router.post('/business/:id/reviews', authenticate, async (req, res) => {
 
     res.json(review);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2237,7 +2299,8 @@ router.delete('/business/:id/reviews/:reviewId', authenticate, async (req, res) 
     await review.deleteOne();
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2247,7 +2310,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const comment = { 
       text: (clean.text || '').trim(), 
       author: user.name, 
@@ -2267,7 +2330,8 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
 
     res.json(shoutout.comments[shoutout.comments.length - 1]);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2279,7 +2343,7 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
     const comment  = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
 
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const reply = { 
       text: (clean.text || '').trim(), 
       author: user.name, 
@@ -2299,7 +2363,8 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
 
     res.json(comment.replies[comment.replies.length - 1]);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2319,7 +2384,8 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
     await shoutout.save();
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2350,7 +2416,8 @@ router.get('/events', optionalAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2382,7 +2449,8 @@ router.get('/deals', optionalAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2391,7 +2459,8 @@ router.get('/news', optionalAuth, async (req, res) => {
     const news = await News.find().sort({ createdAt: -1 });
     res.json(news);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2401,7 +2470,8 @@ router.get('/news/:id', optionalAuth, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     res.json(article);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2412,7 +2482,7 @@ router.post('/news', authenticate, async (req, res) => {
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { title, summary, content, images } = clean;
 
     if (!title || !summary || !content)
@@ -2436,12 +2506,13 @@ router.post('/news', authenticate, async (req, res) => {
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
       { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
-      { imageUrl: newsThumb }
+      { type: 'news', imageUrl: newsThumb }
     );
 
     res.json(article);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2461,7 +2532,8 @@ router.put('/news/:id', authenticate, async (req, res) => {
     await article.save();
     res.json(article);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2476,7 +2548,8 @@ router.delete('/news/:id', authenticate, async (req, res) => {
     await article.deleteOne();
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2698,7 +2771,8 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
 
   } catch (err) {
     console.error('Claim error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2760,7 +2834,8 @@ router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('PIN verify error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2774,7 +2849,8 @@ router.get('/claim/status/:businessId', authenticate, async (req, res) => {
     if (!claim) return res.json({ status: 'none' });
     res.json({ status: claim.status, score: claim.confidenceScore, fastTrack: claim.fastTrack });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2798,7 +2874,8 @@ router.put('/owner/business', authenticate, async (req, res) => {
     ).populate('category');
     res.json(business);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2823,7 +2900,8 @@ router.post('/owner/business/photos', authenticate, async (req, res) => {
     await business.save();
     res.json({ message: 'Photos updated', photos: business.photos });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2844,7 +2922,8 @@ router.delete('/owner/business/photos/:index', authenticate, async (req, res) =>
     await business.save();
     res.json({ message: 'Photo deleted', photos: business.photos });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2904,7 +2983,8 @@ router.get('/owner/deals', authenticate, async (req, res) => {
     const deals = await Deal.find({ owner: req.userId }).sort({ createdAt: -1 });
     res.json(deals);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2943,7 +3023,8 @@ router.post('/owner/deals', authenticate, async (req, res) => {
     const updatedUser = await User.findById(req.userId).select('notificationCredits');
     res.json({ ...deal.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2952,7 +3033,8 @@ router.delete('/owner/deals/:id', authenticate, async (req, res) => {
     await Deal.findOneAndDelete({ _id: req.params.id, owner: req.userId });
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2961,7 +3043,8 @@ router.get('/owner/events', authenticate, async (req, res) => {
     const events = await Event.find({ owner: req.userId }).sort({ date: 1 });
     res.json(events);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -2999,7 +3082,8 @@ router.post('/owner/events', authenticate, async (req, res) => {
     const updatedUser = await User.findById(req.userId).select('notificationCredits');
     res.json({ ...event.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3008,7 +3092,8 @@ router.delete('/owner/events/:id', authenticate, async (req, res) => {
     await Event.findOneAndDelete({ _id: req.params.id, owner: req.userId });
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3023,7 +3108,8 @@ router.get('/owner/homes', authenticate, async (req, res) => {
     }).sort({ createdAt: -1 });
     res.json(items);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3036,7 +3122,7 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can post home listings' });
     }
 
-    const clean = sanitizeContent(req.body);
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const { title, description, price, condition, address, sendNotify } = clean;
 
     if (!title?.trim()) return res.status(400).json({ message: 'Title is required' });
@@ -3085,7 +3171,8 @@ if (sendNotify) {
     res.json(item);
   } catch (err) {
     console.error('Owner homes post error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3101,7 +3188,8 @@ router.delete('/owner/homes/:id', authenticate, async (req, res) => {
     await item.deleteOne();
     res.json({ message: 'Listing deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3196,7 +3284,8 @@ router.delete('/admin/business/:id', authenticate, requireAdmin, async (req, res
     await Business.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3208,7 +3297,8 @@ router.get('/admin/claims', authenticate, requireAdmin, async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(claims);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3250,7 +3340,8 @@ if (decision === 'approved') {
 
     res.json({ message: `Claim ${decision}` });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3259,7 +3350,8 @@ router.delete('/admin/events/:id', authenticate, requireAdmin, async (req, res) 
     await Event.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3268,7 +3360,8 @@ router.delete('/admin/deals/:id', authenticate, requireAdmin, async (req, res) =
     await Deal.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3294,7 +3387,8 @@ router.patch('/admin/users/:id/news-access', authenticate, requireAdmin, async (
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'Updated', user: sanitizeUser(user) });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3309,7 +3403,8 @@ router.post('/admin/users/:id/moderator', authenticate, requireAdmin, async (req
     await user.save();
     res.json({ success: true, isModerator: user.isModerator });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3324,7 +3419,8 @@ router.post('/admin/users/:id/reputation', authenticate, requireAdmin, async (re
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ success: true, reputation: user.reputation });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3337,7 +3433,8 @@ router.delete('/admin/users/:id', authenticate, requireAdmin, async (req, res) =
     await user.deleteOne();
     res.json({ message: 'User deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3352,7 +3449,8 @@ router.post('/admin/users/:id/ip-ban', authenticate, requireAdmin, async (req, r
     await user.save();
     res.json({ success: true, isIpBanned: user.isIpBanned });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3361,7 +3459,8 @@ router.get('/messages/unread-count', authenticate, async (req, res) => {
     const count = await Message.countDocuments({ receiver: req.userId, read: false });
     res.json({ count });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3370,7 +3469,8 @@ router.delete('/admin/news/:id', authenticate, requireAdmin, async (req, res) =>
     await News.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3402,7 +3502,8 @@ router.get('/search', optionalAuth, async (req, res) => {
     ];
     res.json({ results });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3494,7 +3595,8 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Still-there error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3538,7 +3640,8 @@ router.post('/shoutouts/:id/clear', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Clear error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -3570,21 +3673,49 @@ User.schema.methods.findByIdAndUpdate = function(id, update, options) {
 //     The shoutout route stores images[] as base64; the business-post and
 //     custom-notification routes do the same. Do NOT add substring/replace logic
 //     that would touch these fields.
-function sanitizeContent(fields = {}) {
+function sanitizeContent(fields = {}, meta = {}) {
   const out = {};
   const textFields = ['text', 'description', 'caption', 'title', 'body', 'reason', 'summary', 'content'];
+
+  // Decode HTML entities so &#58; -> : etc. are caught before pattern matching
+  function decodeEntities(str) {
+    return str
+      .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+      .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/&colon;/gi, ':')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>');
+  }
+
+  const suspicious = [
+    '<script', 'javascript:', 'vbscript:', 'onerror=', 'onload=', 'onclick=',
+    'onmouseover=', 'onfocus=', 'alert(', 'document.cookie', 'document.location',
+    'window.location', 'eval(', 'expression(', '<iframe', '<object', '<embed'
+  ];
 
   for (const [key, val] of Object.entries(fields)) {
     if (typeof val === 'string') {
 
-      // Only check for XSS on actual text fields, not image fields
       if (textFields.includes(key.toLowerCase())) {
-        const lowerVal = val.toLowerCase();
-        const suspicious = ['<script', 'javascript:', 'onerror=', 'onload=', 'alert(', 'document.cookie'];
+        // Decode entities first so obfuscated payloads are caught
+        const decoded = decodeEntities(val).toLowerCase();
 
-        if (suspicious.some(p => lowerVal.includes(p))) {
-          console.warn(`[SECURITY] Possible XSS attempt on field "${key}"`);
-          // You can add funny toast logic here later if needed
+        if (suspicious.some(p => decoded.includes(p))) {
+          const userId = meta.userId || 'unknown';
+          const ip     = meta.ip     || 'unknown';
+          console.warn(`[SECURITY] XSS attempt blocked | user: ${userId} | ip: ${ip} | field: "${key}" | payload: ${val.substring(0, 300)}`);
+          const xssJokes = [
+            'Nice try, hacker man 👀',
+            'lmaooo bro really tried to XSS a community app',
+            'Your \'hacking\' has been logged and nobody is impressed',
+            'Script kiddie detected 🚨',
+            'That\'s cute. Really.',
+            'Sir this is a Milledgeville traffic app',
+            'We\'ve notified the cyber police 👮',
+            'Error 1337: Skill issue detected',
+          ];
+          const joke = xssJokes[Math.floor(Math.random() * xssJokes.length)];
+          throw Object.assign(new Error(joke), { status: 400, xss: true });
         }
       }
 
@@ -4051,7 +4182,8 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
     res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
   } catch (err) {
     console.error('Business post create error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4195,7 +4327,8 @@ router.get('/business-posts/post/:postId', async (req, res) => {
     if (!post) return res.status(404).json({ message: 'Post not found' });
     res.json(post);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4208,7 +4341,8 @@ router.get('/business-posts/:businessId', async (req, res) => {
       .limit(50);
     res.json(posts);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4221,7 +4355,8 @@ router.get('/business-posts', async (req, res) => {
       .limit(30);
     res.json(posts);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4233,7 +4368,8 @@ router.get('/owner/business-posts', authenticate, async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(posts);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4245,7 +4381,8 @@ router.delete('/owner/business-posts/:id', authenticate, async (req, res) => {
     await post.deleteOne();
     res.json({ message: 'Post deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4359,7 +4496,8 @@ router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (
       .sort({ createdAt: -1 });
     res.json(items);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4370,7 +4508,8 @@ router.post('/admin/scheduled-notifications', authenticate, requireAdmin, async 
     res.status(201).json(doc);
   } catch (err) {
     console.error('Create scheduled notification error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4484,7 +4623,8 @@ router.patch('/admin/scheduled-notifications/:id', authenticate, requireAdmin, a
 
   } catch (err) {
     console.error('PATCH scheduled notification error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4514,7 +4654,8 @@ router.get('/admin/spotlight-ad', async (req, res) => {
     res.json({ image: ad.image, businessName: ad.businessName, link: ad.link });
   } catch (err) {
     console.error('GET spotlight-ad error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4529,7 +4670,8 @@ router.post('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res) 
     res.json({ message: 'Spotlight ad saved', id: ad._id });
   } catch (err) {
     console.error('POST spotlight-ad error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
@@ -4540,7 +4682,8 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
     res.json({ message: 'Spotlight ad removed' });
   } catch (err) {
     console.error('DELETE spotlight-ad error:', err);
-    res.status(500).json({ message: err.message });
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
   }
 });
 
