@@ -5963,11 +5963,8 @@ window.postMarketplaceItem = async function() {
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
   try {
-    // Use in-memory cache if available (instant), otherwise fetch by ID directly
-    let item = (allMarketplaceItems || []).find(i => String(i._id) === String(id));
-    if (!item) {
-      item = await apiGet(`/marketplace/${id}`);
-    }
+    // Always fetch the full item by ID — the list cache has images stripped for performance
+    const item = await apiGet(`/marketplace/${id}`);
 
     if (!item || !item._id) {
       showToast('Item not found', 'error');
@@ -6229,7 +6226,7 @@ async function loadLostFoundPage(content) {
 
   // Fetch fresh data every visit
   try {
-    const res = await apiGet('/lostitems?page=1&limit=100');
+    const res = await apiGet('/lostitems?page=1&limit=30');
     _allLostItems = res.items || [];
   } catch (e) {
     console.error('Lost & Found fetch failed', e);
@@ -6276,9 +6273,13 @@ function renderLostItemsPage() {
       <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
-          ${item.images?.[0] ? 
-            `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" loading="lazy" alt="">` : 
-            `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl">🔎</div>`}
+          <div class="w-24 h-24 flex-shrink-0 relative">
+            <img src="/api/lostitem-thumb/${item._id}" 
+                 class="w-24 h-24 object-cover rounded-2xl" 
+                 loading="lazy" alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🔎</div>
+          </div>
           
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between">
@@ -6415,7 +6416,7 @@ async function loadMarketplacePage(content) {
 
   // Always fetch fresh so new listings appear immediately
   try {
-    const res = await apiGet('/marketplace?limit=100');
+    const res = await apiGet('/marketplace?limit=30');
     allMarketplaceItems = res.items || res || [];
   } catch (e) {
     console.error(e);
@@ -6524,9 +6525,13 @@ async function renderMarketplacePage() {
       <div onclick="showMarketplaceDetail('${item._id}')" 
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
         <div class="flex gap-4">
-          ${item.images?.[0] 
-            ? `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" loading="lazy" alt="">` 
-            : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0">🛒</div>`}
+          <div class="w-24 h-24 flex-shrink-0 relative">
+            <img src="/api/marketplace-thumb/${item._id}" 
+                 class="w-24 h-24 object-cover rounded-2xl" 
+                 loading="lazy" alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🛒</div>
+          </div>
           
           <div class="flex-1 min-w-0">
             <div class="flex justify-between items-start">
@@ -7281,11 +7286,8 @@ window.showDealDetail = async function(dealId) {
 // ─── LOST & FOUND DETAIL ─────────────────────────────────────────────────────
 window.showLostDetail = async function(id) {
   try {
-    // Use in-memory cache if available (instant), otherwise fetch by ID directly
-    let item = (_allLostItems || []).find(i => String(i._id) === String(id));
-    if (!item) {
-      item = await apiGet(`/lostitems/${id}`);
-    }
+    // Always fetch the full item by ID — the list cache has images stripped for performance
+    const item = await apiGet(`/lostitems/${id}`);
 
     if (!item || !item._id) {
       showToast('Item not found', 'error');
