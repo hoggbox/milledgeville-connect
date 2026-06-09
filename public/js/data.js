@@ -440,6 +440,39 @@ window.shareContent = async function(type, title, extra = '') {
   }
 };
 
+// === FUNNY XSS BOOBY TRAP (Client Side) ===
+function checkForSketchyInput(text, fieldName = '') {
+  if (!text || typeof text !== 'string') return false;
+
+  const lower = text.toLowerCase();
+  const badStuff = [
+    '<script', 'javascript:', 'onerror=', 'onload=', 
+    'onclick=', 'onmouseover=', 'alert(', 'document.cookie',
+    '<iframe', 'eval('
+  ];
+
+  const isSketchy = badStuff.some(pattern => lower.includes(pattern));
+
+  if (isSketchy) {
+    const roasts = [
+      "Bro really tried that in 2026? 💀",
+      "Nice try. My disappointment is immeasurable.",
+      "That's the best you got? Weak.",
+      "Logged. Mocked. Blocked.",
+      "Error 418: I'm a teapot. Also your hack failed.",
+      "The only thing getting pwned is your ego.",
+      "Did you really think that would work? Lmao.",
+      "Attempt logged. Your mom has been notified."
+    ];
+
+    const message = roasts[Math.floor(Math.random() * roasts.length)];
+    showToast(message, 'error');
+    console.warn(`[Hacker Trap] Sketchy input detected in ${fieldName || 'a field'}`);
+    return true;
+  }
+  return false;
+}
+
 // ─── SAFE Clickable User Helper (Clean Rep Badge) ─────────────────────────────
 function renderClickableUser(userData, fallbackName = 'Anonymous') {
   if (!userData) return fallbackName;
