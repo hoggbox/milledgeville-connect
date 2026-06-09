@@ -248,7 +248,7 @@ window.submitRating = async function (businessId, score) {
 
 
 // ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
-window.handlePushNotificationClick = async function(data) {
+window.handlePushNotificationClick = function(data) {
   if (!data?.page) {
     navigate('home');
     return;
@@ -266,24 +266,24 @@ window.handlePushNotificationClick = async function(data) {
     }
   } 
   else if (page === 'marketplace' || page === 'market') {
-    await navigate('marketplace');
-    if (id) showMarketplaceDetail(id);
+    navigate('marketplace');
+    if (id) setTimeout(() => showMarketplaceDetail(id), 800);
   } 
   else if (page === 'lostfound' || page === 'lost') {
-    await navigate('lostfound');
-    if (id) showLostDetail(id);
+    navigate('lostfound');
+    if (id) setTimeout(() => showLostDetail(id), 800);
   } 
   else if (page === 'events' || page === 'event') {
-    await navigate('events');
-    if (id) setTimeout(() => showEventDetail(id), 300);
+    navigate('events');
+    if (id) setTimeout(() => showEventDetail(id), 800);
   } 
   else if (page === 'deals' || page === 'deal') {
-    await navigate('deals');
-    if (id) setTimeout(() => showDealDetail(id), 300);
+    navigate('deals');
+    if (id) setTimeout(() => showDealDetail(id), 800);
   } 
   else if (page === 'news') {
-    await navigate('news');
-    if (id) openNewsArticle(id);
+    navigate('news');
+    if (id) setTimeout(() => openNewsArticle(id), 800);
   } 
   else if (page === 'messages') {
     navigate('messages');
@@ -1336,7 +1336,7 @@ async function loadNewsPage(content) {
       <div onclick="openNewsArticle('${n._id}')"
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
         ${n.images?.[0]
-          ? `<img src="${n.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">`
+          ? `<img src="${n.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" loading="lazy" alt="">`
           : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">📰</div>`}
         <div class="flex-1 min-w-0">
           <p class="font-semibold leading-tight line-clamp-2">${esc(n.title)}</p>
@@ -2797,7 +2797,7 @@ function renderShoutoutCard(s) {
   </div>
   ${s.images && s.images.length ? `
     <div class="sc-images">
-      ${s.images.map((src, i) => `<img src="${src}" onclick="openShoutoutImageViewer('${s._id}',${i})" alt="">`).join('')}
+      ${s.images.map((src, i) => `<img src="${src}" onclick="openShoutoutImageViewer('${s._id}',${i})" loading="lazy" alt="">`).join('')}
     </div>` : ''}
   <div class="sc-divider"></div>
   <div class="sc-actions">
@@ -6243,10 +6243,8 @@ async function loadLostFoundPage(content) {
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
 
-  // Fetch all items once and cache them — search/filter then runs instantly in-memory
-  _allLostItems = [];
+  // Fetch fresh data every visit so new posts always appear
   try {
-    // Fetch up to 100 items in one shot so search/filter work client-side without extra requests
     const res = await apiGet('/lostitems?page=1&limit=100');
     _allLostItems = res.items || [];
   } catch (e) {
@@ -6295,7 +6293,7 @@ function renderLostItemsPage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
           ${item.images?.[0] ? 
-            `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` : 
+            `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" loading="lazy" alt="">` : 
             `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl">🔎</div>`}
           
           <div class="flex-1 min-w-0">
@@ -6426,17 +6424,17 @@ async function loadMarketplacePage(content) {
         <button onclick="setMarketCategoryFilter('General')" id="cat-General"
                 class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📦 General</button>
       </div>
-      <div id="marketItemsList" class="space-y-4 min-h-[400px]"></div>
+      <div id="marketItemsList" class="space-y-4 min-h-[400px]">
+        ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
+      </div>
     </div>`;
 
-  // Load data once and cache it
-  if (allMarketplaceItems.length === 0) {
-    try {
-      const res = await apiGet('/marketplace');
-      allMarketplaceItems = res.items || res || [];
-    } catch (e) {
-      console.error(e);
-    }
+  // Fetch fresh data every visit so new listings always appear
+  try {
+    const res = await apiGet('/marketplace?limit=100');
+    allMarketplaceItems = res.items || res || [];
+  } catch (e) {
+    console.error(e);
   }
 
   window.currentMarketSearch = '';
@@ -6498,8 +6496,6 @@ async function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
   if (!container) return;
 
-  container.innerHTML = `<div class="py-20 text-center text-white/40">Loading marketplace...</div>`;
-
   let filtered = allMarketplaceItems || [];
 
   // Apply search filter
@@ -6545,7 +6541,7 @@ async function renderMarketplacePage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
         <div class="flex gap-4">
           ${item.images?.[0] 
-            ? `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" alt="">` 
+            ? `<img src="${item.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" loading="lazy" alt="">` 
             : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0">🛒</div>`}
           
           <div class="flex-1 min-w-0">
