@@ -1463,10 +1463,6 @@ router.post('/lostitems', authenticate, async (req, res) => {
       authorName: user.name
     });
 
-const lostItemThumb = (item.images && item.images.length > 0)
-  ? `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`
-  : null;
-
 broadcastPush(
   isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
   `${user.name} posted: ${title}`,
@@ -1475,7 +1471,7 @@ broadcastPush(
     id: item._id.toString(),
     url: `/lostfound/${item._id}`
   },
-  { type: 'lost', imageUrl: lostItemThumb }
+  { type: 'lost' }
 );
 
     res.json(item);
@@ -1584,7 +1580,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     const clean = sanitizeContent(req.body);
-    const { title, description, price, images, category, condition, notifyCommunity, homeNotifDetails } = clean;
+    const { title, description, price, images, category, condition, homeNotifDetails } = clean;
 
     const item = await MarketplaceItem.create({
       title,
@@ -1597,9 +1593,8 @@ router.post('/marketplace', authenticate, async (req, res) => {
       condition: condition || 'used'
     });
 
-    // ── Community notification — only if verified business owner checked the box ──
-    if (notifyCommunity && user.verifiedBusiness) {
-      // Build a rich, listing-specific notification body
+    // ── Community notification — sent for every new marketplace listing ──
+    {
       let notifBody = '';
 
       if (category === 'Homes' && homeNotifDetails) {
@@ -1612,15 +1607,14 @@ router.post('/marketplace', authenticate, async (req, res) => {
         if (address) parts.push(address);
         notifBody = parts.join(' · ');
       } else {
-        // Non-home listing — simpler body
         notifBody = price && Number(price) > 0
           ? `${title} — $${Number(price).toLocaleString()}`
           : title;
       }
 
       const notifTitle = category === 'Homes'
-        ? `🏠 New Listing from ${user.verifiedBusiness.name || user.name}`
-        : `🛒 New from ${user.verifiedBusiness.name || user.name}`;
+        ? `🏠 New Home Listing from ${user.name}`
+        : `🛒 New Marketplace Listing from ${user.name}`;
 
       const marketplaceThumb = (item.images && item.images.length > 0)
         ? `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`
@@ -4058,58 +4052,6 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Shoutout thumb error:', err);
-    res.status(500).send('Error');
-  }
-});
-
-// GET /api/lostitem-thumb/:id — serves first image of a lost/found item for push notifications
-router.get('/lostitem-thumb/:id', async (req, res) => {
-  try {
-    const item = await LostItem.findById(req.params.id).select('images');
-    if (!item?.images?.length) return res.status(404).send('Not found');
-
-    const raw = item.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
-
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.send(buffer);
-  } catch (err) {
-    console.error('LostItem thumb error:', err);
-    res.status(500).send('Error');
-  }
-});
-
-// GET /api/marketplace-thumb/:id — serves first image of a marketplace listing for push notifications
-router.get('/marketplace-thumb/:id', async (req, res) => {
-  try {
-    const item = await MarketplaceItem.findById(req.params.id).select('images');
-    if (!item?.images?.length) return res.status(404).send('Not found');
-
-    const raw = item.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
-
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.send(buffer);
-  } catch (err) {
-    console.error('Marketplace thumb error:', err);
     res.status(500).send('Error');
   }
 });
