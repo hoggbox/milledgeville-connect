@@ -188,42 +188,12 @@ if (window.Capacitor && window.Capacitor.Plugins?.PushNotifications) {
     console.log('🔔 Notification tapped:', action);
 
     const data = action?.notification?.data || {};
-    const page = data.page;
-    const id   = data.id;
+    if (!data.page) return;
 
-    if (!page) return;
-
-    // Navigate to the right page, then scroll to/highlight the specific post
-    if (typeof loadPage === 'function') {
-      // Directory deep-link: use loadDirectoryAndOpen so the business card actually opens
-      if ((page === 'directory' || page === 'business') && id) {
-        if (typeof window.loadDirectoryAndOpen === 'function') {
-          window.loadDirectoryAndOpen(id);
-        } else {
-          loadPage('directory');
-        }
-        return;
-      }
-
-      loadPage(page).then(() => {
-        if (id && page === 'shoutouts') {
-          // Increased delay for better reliability after page load
-          setTimeout(() => {
-            const el = document.getElementById('shoutout-' + id);
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el.classList.add('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
-              
-              // Remove highlight after 4 seconds
-              setTimeout(() => {
-                el.classList.remove('ring-4', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-900');
-              }, 4000);
-            } else {
-              console.warn(`Could not find shoutout-${id} element`);
-            }
-          }, 800);
-        }
-      });
+    // Delegate to the unified deep-link handler in data.js so all platforms
+    // behave identically — marketplace, lost & found, news, events, deals, etc.
+    if (typeof window.handlePushNotificationClick === 'function') {
+      window.handlePushNotificationClick(data);
     }
   });
 }
