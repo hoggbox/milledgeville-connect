@@ -3569,12 +3569,26 @@ User.schema.methods.findByIdAndUpdate = function(id, update, options) {
 //     The shoutout route stores images[] as base64; the business-post and
 //     custom-notification routes do the same. Do NOT add substring/replace logic
 //     that would touch these fields.
+// with hacker booby traps lol
 function sanitizeContent(fields = {}) {
   const out = {};
+  const textFields = ['text', 'description', 'caption', 'title', 'body', 'reason', 'summary', 'content'];
+
   for (const [key, val] of Object.entries(fields)) {
     if (typeof val === 'string') {
-      // Skip HTML sanitization for base64 image data URLs — they are binary
-      // payloads, not user-supplied text, and the regex + substring will corrupt them
+
+      // Only check for XSS on actual text fields, not image fields
+      if (textFields.includes(key.toLowerCase())) {
+        const lowerVal = val.toLowerCase();
+        const suspicious = ['<script', 'javascript:', 'onerror=', 'onload=', 'alert(', 'document.cookie'];
+
+        if (suspicious.some(p => lowerVal.includes(p))) {
+          console.warn(`[SECURITY] Possible XSS attempt on field "${key}"`);
+          // You can add funny toast logic here later if needed
+        }
+      }
+
+      // Protect base64 images
       if (/^data:image\/(jpeg|png|webp|gif);base64,/i.test(val)) {
         out[key] = val;
       } else {
@@ -3585,22 +3599,48 @@ function sanitizeContent(fields = {}) {
           .trim()
           .substring(0, 10000);
       }
-    } else if (Array.isArray(val)) {
-      // Handle arrays (e.g. images: [...]) — sanitize each element individually
+    } 
+    else if (Array.isArray(val)) {
+      // Handle image arrays safely
       out[key] = val.map(item => {
-        if (typeof item === 'string' && /^data:image\/(jpeg|png|webp|gif);base64,/i.test(item)) {
-          return item; // base64 image — pass through untouched
+        if (typeof item === 'string' && /^data:image\//i.test(item)) {
+          return item; // keep base64 images untouched
         }
         if (typeof item === 'string') {
-          return item.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '').replace(/\0/g, '').trim().substring(0, 10000);
+          return item.replace(/<script[\s\S]*?<\/script>/gi, '')
+                     .replace(/<[^>]+>/g, '')
+                     .replace(/\0/g, '')
+                     .trim()
+                     .substring(0, 10000);
         }
         return item;
       });
-    } else {
+    } 
+    else {
       out[key] = val;
     }
   }
   return out;
+}
+
+// toast for hackers message
+
+function checkForHackerShit(text) {
+  const lower = text.toLowerCase();
+  const badPatterns = ['<script', 'javascript:', 'onerror=', 'alert('];
+
+  if (badPatterns.some(p => lower.includes(p))) {
+    const roasts = [
+      "Bro really tried that in 2026?",
+      "My 12 year old cousin writes better XSS than this.",
+      "Nice try. Logged and mocked.",
+      "The FBI has been notified (jk... or am I?)",
+      "Error: Skill issue detected."
+    ];
+    showToast(roasts[Math.floor(Math.random() * roasts.length)], 'error');
+    return true;
+  }
+  return false;
 }
 
 // ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
