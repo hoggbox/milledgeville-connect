@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help & Support — Milledgeville Connect</title>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0f1e;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 20px 80px;
+    }
+
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 36px;
+      font-weight: 700;
+      font-size: 18px;
+      color: #34d399;
+      text-decoration: none;
+    }
+    .brand-dot { width: 10px; height: 10px; border-radius: 50%; background: #34d399; }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #f1f5f9;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 15px;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    /* Category cards */
+    .categories {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .cat-card {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 16px;
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .cat-card .icon { font-size: 20px; display: block; margin-bottom: 6px; }
+    .cat-card strong { color: #e2e8f0; display: block; margin-bottom: 2px; }
+
+    /* Form */
+    .form-card {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 20px;
+      padding: 28px;
+    }
+    .form-card h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 6px;
+    }
+    .form-card .form-desc {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .field { margin-bottom: 18px; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    label .req { color: #f87171; margin-left: 2px; }
+
+    input, textarea, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font-size: 15px;
+      color: #e2e8f0;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    input::placeholder, textarea::placeholder { color: #334155; }
+    input:focus, textarea:focus, select:focus { border-color: #334155; }
+    textarea { resize: vertical; min-height: 110px; }
+    select option { background: #0f172a; }
+
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: #059669;
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      margin-top: 8px;
+    }
+    .submit-btn:hover:not(:disabled) { background: #047857; }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .status {
+      display: none;
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .status.success {
+      display: block;
+      background: #052e16;
+      border: 1px solid #166534;
+      color: #86efac;
+    }
+    .status.error {
+      display: block;
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+    }
+
+    .footer-note {
+      margin-top: 32px;
+      font-size: 13px;
+      color: #475569;
+      text-align: center;
+      line-height: 1.7;
+    }
+    .footer-note a { color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <a href="https://www.milledgevilleconnect.com" class="brand">
+      <div class="brand-dot"></div>
+      Milledgeville Connect
+    </a>
+
+    <h1>🛟 Help & Support</h1>
+    <p class="subtitle">
+      Having an issue with the app? We're here to help. Fill out the form below and we'll get back to you as soon as possible.
+    </p>
+
+    <div class="categories">
+      <div class="cat-card">
+        <span class="icon">🐛</span>
+        <strong>Bug Report</strong>
+        Something in the app isn't working correctly
+      </div>
+      <div class="cat-card">
+        <span class="icon">🔐</span>
+        <strong>Account Issue</strong>
+        Can't log in, locked out, or profile problems
+      </div>
+      <div class="cat-card">
+        <span class="icon">🚩</span>
+        <strong>Report Content</strong>
+        Inappropriate posts, spam, or abusive users
+      </div>
+      <div class="cat-card">
+        <span class="icon">💡</span>
+        <strong>Feature Request</strong>
+        Suggest an improvement or new feature
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h2>Contact Us</h2>
+      <p class="form-desc">We typically respond within 24–48 hours.</p>
+
+      <form id="helpForm">
+        <div class="field">
+          <label>Your name <span class="req">*</span></label>
+          <input type="text" id="fromName" placeholder="Jane Smith" required>
+        </div>
+
+        <div class="field">
+          <label>Your email address <span class="req">*</span></label>
+          <input type="email" id="fromEmail" placeholder="you@example.com" required>
+        </div>
+
+        <div class="field">
+          <label>Category <span class="req">*</span></label>
+          <select id="category" required>
+            <option value="">— Select a category —</option>
+            <option value="Bug Report">🐛 Bug Report</option>
+            <option value="Account Issue">🔐 Account Issue</option>
+            <option value="Report Content">🚩 Report Content</option>
+            <option value="Feature Request">💡 Feature Request</option>
+            <option value="General Question">❓ General Question</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Describe your issue <span class="req">*</span></label>
+          <textarea id="message" placeholder="Please be as detailed as possible — what happened, what you expected, and any steps to reproduce the issue..." required></textarea>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          Send Message
+        </button>
+      </form>
+
+      <div class="status" id="statusMsg"></div>
+    </div>
+
+    <p class="footer-note">
+      You can also email us directly at <a href="mailto:imhoggbox@gmail.com">imhoggbox@gmail.com</a><br>
+      <a href="https://www.milledgevilleconnect.com/privacy.html">Privacy Policy</a> &nbsp;·&nbsp;
+      <a href="https://www.milledgevilleconnect.com/delete-account.html">Delete Account</a>
+    </p>
+
+  </div>
+
+  <script>
+    const EMAILJS_PUBLIC_KEY  = 'YSUcIejx7kNcxZZ2z';
+    const EMAILJS_SERVICE_ID  = 'service_r9xqcpl';
+    const EMAILJS_TEMPLATE_ID = 'template_b5g402c';
+
+    emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+    document.getElementById('helpForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const btn    = document.getElementById('submitBtn');
+      const status = document.getElementById('statusMsg');
+
+      const name     = document.getElementById('fromName').value.trim();
+      const email    = document.getElementById('fromEmail').value.trim();
+      const category = document.getElementById('category').value;
+      const message  = document.getElementById('message').value.trim();
+
+      if (!name || !email || !category || !message) {
+        status.className = 'status error';
+        status.textContent = 'Please fill in all required fields.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      status.className = 'status';
+
+      try {
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          from_name:  name,
+          from_email: email,
+          category:   category,
+          message:    message,
+          sent_at:    new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
+        });
+
+        status.className = 'status success';
+        status.innerHTML = '✅ <strong>Message sent!</strong><br>Thanks for reaching out. We\'ll get back to you at ' + email + ' within 24–48 hours.';
+        document.getElementById('helpForm').reset();
+
+      } catch (err) {
+        console.error(err);
+        status.className = 'status error';
+        status.innerHTML = '❌ Something went wrong. Please email us directly at <a href="mailto:imhoggbox@gmail.com" style="color:#fca5a5">imhoggbox@gmail.com</a>.';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Send Message';
+    });
+  </script>
+</body>
+</html>
