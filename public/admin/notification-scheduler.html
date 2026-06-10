@@ -10,6 +10,31 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+<script>
+  (async () => {
+    const unauthorized = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="text-align:center;color:white;">
+          <div style="font-size:3rem;margin-bottom:1rem;">🚫</div>
+          <h1 style="font-size:1.5rem;font-weight:600;margin-bottom:0.5rem;">Not Authorized</h1>
+          <p style="color:#94a3b8;margin-bottom:1.5rem;">You don't have permission to view this page.</p>
+          <a href="/" style="display:inline-block;background:#10b981;color:white;padding:0.75rem 1.5rem;border-radius:0.75rem;text-decoration:none;font-weight:600;">Go Home</a>
+        </div>
+      </div>`;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) { document.body.innerHTML = unauthorized; return; }
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) { document.body.innerHTML = unauthorized; return; }
+      const user = await res.json();
+      if (!user?.isAdmin) { document.body.innerHTML = unauthorized; return; }
+    } catch (e) {
+      document.body.innerHTML = unauthorized;
+    }
+  })();
+</script>
 <style>
   :root {
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
