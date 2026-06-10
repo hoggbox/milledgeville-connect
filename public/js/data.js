@@ -5969,8 +5969,12 @@ window.postMarketplaceItem = async function() {
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
   try {
-    let item = (allMarketplaceItems || []).find(i => String(i._id) === String(id));
-    if (!item) item = await apiGet(`/marketplace/${id}`);
+    // Always fetch full item by ID — list cache has images stripped
+    let item = await apiGet(`/marketplace/${id}`);
+    if (!item || !item._id) {
+      // Fallback to cache if fetch fails (no images but at least shows metadata)
+      item = (allMarketplaceItems || []).find(i => String(i._id) === String(id));
+    }
 
     if (!item || !item._id) {
       showToast('Item not found', 'error');
@@ -7308,8 +7312,12 @@ window.showDealDetail = async function(dealId) {
 // ─── LOST & FOUND DETAIL ─────────────────────────────────────────────────────
 window.showLostDetail = async function(id) {
   try {
-    let item = (_allLostItems || []).find(i => String(i._id) === String(id));
-    if (!item) item = await apiGet(`/lostitems/${id}`);
+    // Always fetch full item by ID — list cache has images stripped
+    let item = await apiGet(`/lostitems/${id}`);
+    if (!item || !item._id) {
+      // Fallback to cache if fetch fails (no images but at least shows metadata)
+      item = (_allLostItems || []).find(i => String(i._id) === String(id));
+    }
 
     if (!item || !item._id) {
       showToast('Item not found', 'error');
