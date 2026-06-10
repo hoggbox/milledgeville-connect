@@ -24,6 +24,8 @@ const shoutoutSchema = new mongoose.Schema({
   comments: [commentSchema],
   images:   [{ type: String }],
   hidden:   { type: Boolean, default: false },
+  location:     { type: String, default: null },
+  lastBumpedAt: { type: Date, default: Date.now },
 
   // ── AUTO-MOD ──────────────────────────────────────────────────────────────
   flaggedBy:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
