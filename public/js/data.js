@@ -634,6 +634,16 @@ async function markConversationAsRead(otherId) {
 // markMessagesAsRead is defined below (near the messages system) to avoid duplication
 
 // ─── Page Router ──────────────────────────────────────────────────────────────
+// ── Stale-navigation guard ────────────────────────────────────────────────────
+// Each loadPage call stamps content with a unique token. Page loaders call
+// isNavStale(content, token) after every await; if it returns true the user
+// has already navigated away and the loader returns early instead of crashing
+// on getElementById calls that no longer exist.
+let _navSeq = 0;
+function isNavStale(content, token) {
+  return !content || content.dataset.navToken !== token;
+}
+
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
@@ -649,6 +659,10 @@ async function loadPage(page) {
     if (el.id !== 'content' && !PERMANENT_MODALS.has(el.id)) el.remove();
   });
 
+  // Stamp this navigation so page loaders can detect if they've been superseded
+  const _navToken = String(++_navSeq);
+  content.dataset.navToken = _navToken;
+
   // Show spinner immediately so navigation feels instant (no frozen UI)
   content.innerHTML = `
     <div class="flex items-center justify-center min-h-[40vh]">
@@ -658,19 +672,19 @@ async function loadPage(page) {
       </div>
     </div>`;
 
-  if (page === 'messages')        { await loadMessagesPage(content); return; }
-  if (page === 'admin')           { await loadAdminPage(content);        return; }
-  if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
-  if (page === 'home')            { await loadHomePage(content);          return; }
-  if (page === 'directory')       { await loadDirectoryPage(content);     return; }
-  if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
-  if (page === 'lostfound')       { await loadLostFoundPage(content);     return; }   // ← NEW
-  if (page === 'marketplace')     { await loadMarketplacePage(content);   return; }   // ← NEW
-  if (page === 'events')          { await loadEventsPage(content);           return; }
-  if (page === 'deals')           { await loadDealsPage(content);            return; }
-  if (page === 'news')            { await loadNewsPage(content);          return; }
-  if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
-  if (page === 'resources')       { await loadResourcesPage(content);     return; }
+  if (page === 'messages')        { await loadMessagesPage(content, _navToken); return; }
+  if (page === 'admin')           { await loadAdminPage(content, _navToken);        return; }
+  if (page === 'owner-dashboard') { await loadOwnerDashboard(content, _navToken);   return; }
+  if (page === 'home')            { await loadHomePage(content, _navToken);          return; }
+  if (page === 'directory')       { await loadDirectoryPage(content, _navToken);     return; }
+  if (page === 'shoutouts')       { await loadShoutoutsPage(content, _navToken);     return; }
+  if (page === 'lostfound')       { await loadLostFoundPage(content, _navToken);     return; }
+  if (page === 'marketplace')     { await loadMarketplacePage(content, _navToken);   return; }
+  if (page === 'events')          { await loadEventsPage(content, _navToken);           return; }
+  if (page === 'deals')           { await loadDealsPage(content, _navToken);            return; }
+  if (page === 'news')            { await loadNewsPage(content, _navToken);          return; }
+  if (page === 'post-news')       { await loadPostNewsPage(content, _navToken);      return; }
+  if (page === 'resources')       { await loadResourcesPage(content, _navToken);     return; }
 }
 
 window.navigate = loadPage;
@@ -783,7 +797,7 @@ function wmoCond(code) {
   }
 
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
-async function loadHomePage(content) {
+async function loadHomePage(content, _navToken) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
@@ -994,6 +1008,8 @@ const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
   apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
 
+if (isNavStale(content, _navToken)) return;
+
 const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
@@ -1001,6 +1017,8 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
   // Ad Spotlight — full-width strip, same height as weather widget
   let spotlightAdData = null;
   try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
+
+  if (isNavStale(content, _navToken)) return;
 
   const digestHTML = spotlightAdData && spotlightAdData.image
     ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer"
@@ -6119,7 +6137,7 @@ window.markMarketSold = async function() {
 // In-memory cache for lost & found items (avoids re-fetching on every search/filter)
 let _allLostItems = [];
 
-async function loadLostFoundPage(content) {
+async function loadLostFoundPage(content, _navToken) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2">
       <div class="flex justify-between items-center mb-6">
@@ -6160,6 +6178,8 @@ async function loadLostFoundPage(content) {
   } catch (e) {
     console.error('Lost & Found fetch failed', e);
   }
+
+  if (isNavStale(content, _navToken)) return;
 
   // Live search — no network call, just re-filter the cache
   document.getElementById('lostSearchInput').addEventListener('input', debounce(() => {
@@ -6282,7 +6302,7 @@ window.filterAndRenderLostItems = function() {
   renderLostItemsPage();
 };
 
-async function loadMarketplacePage(content) {
+async function loadMarketplacePage(content, _navToken) {
 
   // Fix select dropdown visibility in dark mode
   const style = document.createElement('style');
@@ -6350,6 +6370,8 @@ async function loadMarketplacePage(content) {
   } catch (e) {
     console.error(e);
   }
+
+  if (isNavStale(content, _navToken)) return;
 
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
