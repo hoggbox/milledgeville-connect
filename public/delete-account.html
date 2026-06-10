@@ -3,22 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Delete Account - Milledgeville Connect</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Delete Account — Milledgeville Connect</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+    h1 { color: #111; }
+    .warning { background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffeaa7; }
+    form { margin-top: 30px; }
+    input, textarea, button { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    button { background: #ef4444; color: white; border: none; cursor: pointer; }
+    button:hover { background: #dc2626; }
+  </style>
 </head>
-<body class="bg-zinc-950 text-white min-h-screen flex items-center justify-center p-4">
-  <div class="max-w-md w-full bg-zinc-900 rounded-3xl p-8 text-center">
-    <h1 class="text-3xl font-bold mb-6">Delete My Account</h1>
-    <p class="text-zinc-400 mb-8">
-      This will permanently delete your account and all associated data.
-    </p>
-    <button onclick="window.location.href='https://www.milledgevilleconnect.com/app.html#profile'" 
-            class="w-full bg-red-600 hover:bg-red-700 py-4 rounded-2xl font-semibold">
-      Go to App & Delete Account
-    </button>
-    <p class="text-xs text-zinc-500 mt-6">
-      You must be logged in to the app to complete deletion.
-    </p>
+<body>
+  <h1>Delete Your Account</h1>
+  
+  <div class="warning">
+    <strong>Warning:</strong> Deleting your account is permanent. All your posts, messages, likes, and data will be removed and cannot be recovered.
   </div>
+
+  <h2>Option 1: Delete inside the app (recommended)</h2>
+  <p>Open the Milledgeville Connect app → go to your profile → Settings → “Delete Account” and follow the prompts.</p>
+
+  <h2>Option 2: Request deletion here (if you can’t open the app)</h2>
+  <form action="mailto:imhoggbox@gmail.com?subject=Account%20Deletion%20Request" method="post" enctype="text/plain">
+    <label>Your email address</label>
+    <input type="email" name="email" required placeholder="you@example.com">
+
+    <label>Reason for deletion (optional)</label>
+    <textarea name="reason" rows="4" placeholder="Optional feedback..."></textarea>
+
+    <button type="submit">Send Deletion Request</button>
+  </form>
+
+  <p style="font-size: 14px; color: #666; margin-top: 40px;">
+    We will process your request within 48 hours and permanently delete your account and all associated data.<br>
+    <a href="https://www.milledgevilleconnect.com/privacy.html">View our Privacy Policy</a>
+  </p>
 </body>
 </html>
