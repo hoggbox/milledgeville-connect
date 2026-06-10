@@ -8983,6 +8983,13 @@ window.showDeleteAccountModal = function() {
           </p>
         </div>
 
+        <div class="mt-4 text-center">
+          <a href="https://www.milledgevilleconnect.com/delete-account.html" target="_blank" rel="noopener noreferrer"
+             class="inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white/80 underline underline-offset-2 transition">
+            🌐 Prefer to request deletion via the web?
+          </a>
+        </div>
+
         <div class="mt-6 bg-red-500/10 border border-red-500/20 rounded-2xl p-5 text-sm space-y-2">
           <p class="font-semibold text-red-300 mb-1">What gets deleted immediately:</p>
           <p class="text-white/60">• Your profile and account</p>
