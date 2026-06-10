@@ -6280,7 +6280,7 @@ function renderLostItemsPage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="/api/lostitem-thumb/${item._id}" 
+            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
                  class="w-24 h-24 object-cover rounded-2xl" 
                  loading="lazy" alt=""
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -6532,7 +6532,7 @@ async function renderMarketplacePage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="/api/marketplace-thumb/${item._id}" 
+            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
                  class="w-24 h-24 object-cover rounded-2xl" 
                  loading="lazy" alt=""
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
