@@ -4537,7 +4537,6 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
 
 module.exports = router;
 
-const express = require('express');
 const router  = express.Router();
 const mongoose = require('mongoose');
 
