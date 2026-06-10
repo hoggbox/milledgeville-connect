@@ -634,16 +634,6 @@ async function markConversationAsRead(otherId) {
 // markMessagesAsRead is defined below (near the messages system) to avoid duplication
 
 // ─── Page Router ──────────────────────────────────────────────────────────────
-// ── Stale-navigation guard ────────────────────────────────────────────────────
-// Each loadPage call stamps content with a unique token. Page loaders call
-// isNavStale(content, token) after every await; if it returns true the user
-// has already navigated away and the loader returns early instead of crashing
-// on getElementById calls that no longer exist.
-let _navSeq = 0;
-function isNavStale(content, token) {
-  return !content || content.dataset.navToken !== token;
-}
-
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
@@ -659,10 +649,6 @@ async function loadPage(page) {
     if (el.id !== 'content' && !PERMANENT_MODALS.has(el.id)) el.remove();
   });
 
-  // Stamp this navigation so page loaders can detect if they've been superseded
-  const _navToken = String(++_navSeq);
-  content.dataset.navToken = _navToken;
-
   // Show spinner immediately so navigation feels instant (no frozen UI)
   content.innerHTML = `
     <div class="flex items-center justify-center min-h-[40vh]">
@@ -672,19 +658,19 @@ async function loadPage(page) {
       </div>
     </div>`;
 
-  if (page === 'messages')        { await loadMessagesPage(content, _navToken); return; }
-  if (page === 'admin')           { await loadAdminPage(content, _navToken);        return; }
-  if (page === 'owner-dashboard') { await loadOwnerDashboard(content, _navToken);   return; }
-  if (page === 'home')            { await loadHomePage(content, _navToken);          return; }
-  if (page === 'directory')       { await loadDirectoryPage(content, _navToken);     return; }
-  if (page === 'shoutouts')       { await loadShoutoutsPage(content, _navToken);     return; }
-  if (page === 'lostfound')       { await loadLostFoundPage(content, _navToken);     return; }
-  if (page === 'marketplace')     { await loadMarketplacePage(content, _navToken);   return; }
-  if (page === 'events')          { await loadEventsPage(content, _navToken);           return; }
-  if (page === 'deals')           { await loadDealsPage(content, _navToken);            return; }
-  if (page === 'news')            { await loadNewsPage(content, _navToken);          return; }
-  if (page === 'post-news')       { await loadPostNewsPage(content, _navToken);      return; }
-  if (page === 'resources')       { await loadResourcesPage(content, _navToken);     return; }
+  if (page === 'messages')        { await loadMessagesPage(content); return; }
+  if (page === 'admin')           { await loadAdminPage(content);        return; }
+  if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
+  if (page === 'home')            { await loadHomePage(content);          return; }
+  if (page === 'directory')       { await loadDirectoryPage(content);     return; }
+  if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
+  if (page === 'lostfound')       { await loadLostFoundPage(content);     return; }   // ← NEW
+  if (page === 'marketplace')     { await loadMarketplacePage(content);   return; }   // ← NEW
+  if (page === 'events')          { await loadEventsPage(content);           return; }
+  if (page === 'deals')           { await loadDealsPage(content);            return; }
+  if (page === 'news')            { await loadNewsPage(content);          return; }
+  if (page === 'post-news')       { await loadPostNewsPage(content);      return; }
+  if (page === 'resources')       { await loadResourcesPage(content);     return; }
 }
 
 window.navigate = loadPage;
@@ -797,7 +783,7 @@ function wmoCond(code) {
   }
 
 // ─── HOME PAGE — WITH BUSINESS SPOTLIGHT + FILTERS + TODAY DIGEST ─────
-async function loadHomePage(content, _navToken) {
+async function loadHomePage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
@@ -1008,8 +994,6 @@ const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
   apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
 ]);
 
-if (isNavStale(content, _navToken)) return;
-
 const eventsData = eventsRes.events || [];
 const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
@@ -1017,8 +1001,6 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
   // Ad Spotlight — full-width strip, same height as weather widget
   let spotlightAdData = null;
   try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
-
-  if (isNavStale(content, _navToken)) return;
 
   const digestHTML = spotlightAdData && spotlightAdData.image
     ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer"
@@ -6126,6 +6108,53 @@ window.removeMarketImage = function(index) {
   renderMarketImagePreviews();
 };
 
+// ─── LOST & FOUND IMAGE HANDLERS ─────────────────────────────────────────────
+window.handleLostImages = function(input) {
+  const files = Array.from(input.files);
+  if (!window._lostImages) window._lostImages = [];
+
+  const remaining = 6 - window._lostImages.length;
+  if (remaining <= 0) {
+    showToast('Maximum 6 photos allowed', 'error');
+    return;
+  }
+
+  const toProcess = files.slice(0, remaining);
+
+  toProcess.forEach(file => {
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 8MB)`, 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      window._lostImages.push(e.target.result);
+      renderLostImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+function renderLostImagePreviews() {
+  const container = document.getElementById('lostImagePreviews');
+  if (!container || !window._lostImages) return;
+
+  container.innerHTML = window._lostImages.map((src, i) => `
+    <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200">
+      <img src="${src}" class="w-full h-full object-cover">
+      <button onclick="removeLostImage(${i})"
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center">✕</button>
+    </div>
+  `).join('');
+}
+
+window.removeLostImage = function(index) {
+  if (!window._lostImages) return;
+  window._lostImages.splice(index, 1);
+  renderLostImagePreviews();
+};
+
 window.markMarketSold = async function() {
   if (confirm('Mark this item as sold?')) {
     await apiPost(`/marketplace/${currentMarketItemId}/sold`, {});
@@ -6137,7 +6166,7 @@ window.markMarketSold = async function() {
 // In-memory cache for lost & found items (avoids re-fetching on every search/filter)
 let _allLostItems = [];
 
-async function loadLostFoundPage(content, _navToken) {
+async function loadLostFoundPage(content) {
   content.innerHTML = `
     <div class="max-w-2xl mx-auto px-2">
       <div class="flex justify-between items-center mb-6">
@@ -6178,8 +6207,6 @@ async function loadLostFoundPage(content, _navToken) {
   } catch (e) {
     console.error('Lost & Found fetch failed', e);
   }
-
-  if (isNavStale(content, _navToken)) return;
 
   // Live search — no network call, just re-filter the cache
   document.getElementById('lostSearchInput').addEventListener('input', debounce(() => {
@@ -6223,7 +6250,7 @@ function renderLostItemsPage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="/api/lostitem-thumb/${item._id}" 
+            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
                  class="w-24 h-24 object-cover rounded-2xl" 
                  loading="lazy" alt=""
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -6302,7 +6329,7 @@ window.filterAndRenderLostItems = function() {
   renderLostItemsPage();
 };
 
-async function loadMarketplacePage(content, _navToken) {
+async function loadMarketplacePage(content) {
 
   // Fix select dropdown visibility in dark mode
   const style = document.createElement('style');
@@ -6370,8 +6397,6 @@ async function loadMarketplacePage(content, _navToken) {
   } catch (e) {
     console.error(e);
   }
-
-  if (isNavStale(content, _navToken)) return;
 
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
@@ -6477,7 +6502,7 @@ async function renderMarketplacePage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="/api/marketplace-thumb/${item._id}" 
+            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
                  class="w-24 h-24 object-cover rounded-2xl" 
                  loading="lazy" alt=""
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
