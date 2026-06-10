@@ -4,6 +4,11 @@ let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
+// ─── PAGE-LEVEL CACHES ────────────────────────────────────────────────────────
+let _allDeals = [];
+let _allNews = [];
+let _allResources = [];
+let _resourceCategories = [];
 // ─── DIRECTORY PAGINATION STATE ─────────────────────────────────────────────
 let directoryCurrentPage = 1;
 const DIRECTORY_PAGE_SIZE = 8;
@@ -988,7 +993,7 @@ if (allBusinesses.length === 0) {
 }
 
 const [eventsRes, dealsRes, newsData, shoutoutsRes] = await Promise.all([
-  apiGet('/events').catch(() => ({ events: [] })),
+  apiGet('/events?limit=200').catch(() => ({ events: [] })),
   apiGet('/deals').catch(() => ({ deals: [] })),
   apiGet('/news').catch(() => []),
   apiGet('/shoutouts').catch(() => ({ shoutouts: [] }))
@@ -1352,15 +1357,29 @@ async function loadNewsPage(content) {
     </div>`;
 
   try {
+    // Render from cache immediately if available
+    if (window._allNews && window._allNews.length) renderArticles(window._allNews);
+
     const articles = await apiGet('/news');
     const container = document.getElementById('newsFeedList');
     if (!container) return;
 
     if (!articles || articles.length === 0) {
-      container.innerHTML = `<p class="text-white/40 text-center py-16">No news articles yet.</p>`;
+      if (!window._allNews || !window._allNews.length)
+        container.innerHTML = `<p class="text-white/40 text-center py-16">No news articles yet.</p>`;
       return;
     }
 
+    window._allNews = articles;
+    renderArticles(articles);
+  } catch (err) {
+    const container = document.getElementById('newsFeedList');
+    if (container && !window._allNews) container.innerHTML = `<p class="text-white/40 text-center py-12">Failed to load news.</p>`;
+  }
+
+  function renderArticles(articles) {
+    const container = document.getElementById('newsFeedList');
+    if (!container) return;
     container.innerHTML = articles.map(n => `
       <div onclick="openNewsArticle('${n._id}')"
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
@@ -1377,9 +1396,6 @@ async function loadNewsPage(content) {
           </div>
         </div>
       </div>`).join('');
-  } catch (err) {
-    const container = document.getElementById('newsFeedList');
-    if (container) container.innerHTML = `<p class="text-white/40 text-center py-12">Failed to load news.</p>`;
   }
 }
 
@@ -1877,8 +1893,9 @@ async function showBusinessDetail(id) {
   const count   = business.ratings ? business.ratings.length : 0;
   const isOwned = !!business.owner;
 
-  const reviews = await apiGet(`/business/${id}/reviews`);
-  const preview = (reviews || []).slice(0, 3);
+  // Use cached reviews if available; otherwise render modal immediately and load async
+  const cachedReviews = window._bizReviewsCache?.[id];
+  const preview = (cachedReviews || []).slice(0, 3);
 
   const isFollowing = currentUser && business.followers && business.followers.includes(currentUser._id);
   const openStatus  = getOpenStatus(business.hours);
@@ -2018,14 +2035,14 @@ async function showBusinessDetail(id) {
           <!-- Reviews Section -->
           <div class="border-t border-white/10 pt-5 mb-5">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold text-lg">⭐ Reviews <span class="text-sm font-normal text-white/50">(${reviews.length})</span></h3>
-              ${reviews.length > 3 ? `
+              <h3 class="font-bold text-lg" id="biz-reviews-hdr-${id}">⭐ Reviews <span class="text-sm font-normal text-white/50">(${cachedReviews ? cachedReviews.length : (preview.length + (preview.length >= 3 ? '+' : ''))})</span></h3>
+              ${cachedReviews && cachedReviews.length > 3 ? `
                 <button onclick="showAllReviews('${id}')" class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition">
                   See all →
                 </button>` : ''}
             </div>
 
-            ${reviews.length > 0 ? renderReviewSummary(reviews) : ''}
+            ${cachedReviews && cachedReviews.length > 0 ? renderReviewSummary(cachedReviews) : ''}
 
             <!-- Write a review -->
             ${currentUser ? `
@@ -2066,10 +2083,13 @@ async function showBusinessDetail(id) {
 
             <!-- Review cards -->
             <div id="reviewCards-${id}" class="space-y-3">
-              ${preview.length ? preview.map(r => renderReviewCard(r, id)).join('') : `
+              ${preview.length ? preview.map(r => renderReviewCard(r, id)).join('') : cachedReviews ? `
                 <div class="text-center py-6 text-white/40 text-sm">
                   <p class="text-3xl mb-2">💬</p>
                   No reviews yet — be the first!
+                </div>` : `
+                <div class="space-y-3">
+                  ${[1,2].map(() => `<div class="bg-white/5 rounded-2xl p-4 animate-pulse h-16"></div>`).join('')}
                 </div>`}
             </div>
           </div>
@@ -2093,8 +2113,33 @@ async function showBusinessDetail(id) {
     </div>`;
 
   document.body.insertAdjacentHTML('beforeend', modalHTML);
-  window._currentBizReviews = reviews;
+  window._currentBizReviews = cachedReviews || [];
   window._currentBizId = id;
+
+  // If no cached reviews, load them in the background and inject when ready
+  if (!cachedReviews) {
+    apiGet(`/business/${id}/reviews`).then(reviews => {
+      if (!reviews) return;
+      if (!window._bizReviewsCache) window._bizReviewsCache = {};
+      window._bizReviewsCache[id] = reviews;
+      window._currentBizReviews = reviews;
+
+      const cards = document.getElementById(`reviewCards-${id}`);
+      if (cards) {
+        cards.innerHTML = reviews.length
+          ? reviews.slice(0, 3).map(r => renderReviewCard(r, id)).join('')
+          : `<div class="text-center py-6 text-white/40 text-sm"><p class="text-3xl mb-2">💬</p>No reviews yet — be the first!</div>`;
+      }
+      const hdr = document.getElementById(`biz-reviews-hdr-${id}`);
+      if (hdr) hdr.innerHTML = `⭐ Reviews <span class="text-sm font-normal text-white/50">(${reviews.length})</span>`;
+      if (reviews.length > 0) {
+        const summaryAnchor = cards?.previousElementSibling;
+        if (summaryAnchor && summaryAnchor.classList.contains('biz-review-summary')) {
+          summaryAnchor.outerHTML = renderReviewSummary(reviews);
+        }
+      }
+    }).catch(() => {});
+  }
 }
 
 window.toggleFollow = async function (businessId) {
@@ -3205,16 +3250,32 @@ async function loadDealsPage(content) {
     renderDealsPage();
   }, 300));
 
+  // Render from cache instantly if available, then refresh in background
+  if (_allDeals && _allDeals.length) renderDealsPage();
   await renderDealsPage();
 }
 
 async function renderDealsPage() {
+  const container = document.getElementById('dealsList');
+  if (!container) return;
+
+  // Render from cache immediately if available
+  if (_allDeals && _allDeals.length) {
+    _renderDealsHTML(_allDeals, container);
+  }
+
   const res = await apiGet(`/deals?page=${window.currentDealsPage}&limit=8`);
   const deals = res.deals || [];
   const pagination = res.pagination || {};
 
-  const container = document.getElementById('dealsList');
-  
+  _allDeals = deals;
+  if (document.getElementById('dealsList')) {
+    _renderDealsHTML(deals, document.getElementById('dealsList'));
+    renderDealsPagination(pagination);
+  }
+}
+
+function _renderDealsHTML(deals, container) {
   let filtered = deals.filter(deal => {
     const matchesSearch = !window.currentDealsSearch || 
       deal.title.toLowerCase().includes(window.currentDealsSearch) ||
@@ -3251,7 +3312,6 @@ async function renderDealsPage() {
   }
 
   container.innerHTML = html;
-  renderDealsPagination(pagination);
 }
 
 function renderDealsPagination(p) {
@@ -3288,7 +3348,7 @@ window.filterAndRenderDeals = function() {
 
 // ─── EVENTS PAGE — WITH RSVP BUTTONS ──────────────────────────────────────────
 async function loadEventsPage(content) {
-  const [eventsRes] = await Promise.all([apiGet('/events'), ensureDirCategories()]);
+  const [eventsRes] = await Promise.all([apiGet('/events?limit=200'), ensureDirCategories()]);
   const allEvents = Array.isArray(eventsRes) ? eventsRes : (eventsRes?.events || []);
   window._allEvents   = allEvents;
   window._eventFilter = 'All';
@@ -3524,11 +3584,17 @@ async function loadResourcesPage(content) {
       </div>
     </div>`;
 
+  // Render from cache immediately if available
+  if (_allResources && _allResources.length) {
+    _renderResourcesContent(content, _allResources, _resourceCategories || []);
+  }
+
   try {
     const data = await apiGet('/resources');
 
     if (!data || data.message) {
-      content.innerHTML = `
+      if (!_allResources || !_allResources.length) {
+        content.innerHTML = `
         <div class="max-w-2xl mx-auto px-2 py-16 text-center">
           <p class="text-4xl mb-4">⚠️</p>
           <p class="text-white/60 text-sm">Could not load resources. Please try again.</p>
@@ -3537,29 +3603,51 @@ async function loadResourcesPage(content) {
             Retry
           </button>
         </div>`;
+      }
       return;
     }
 
     _allResources = data.businesses || [];
     _resourceCategories = data.categories || [];
 
-    const RESOURCE_CATS = [
-      { name: 'Churches',           icon: '⛪' },
-      { name: 'Recycling Centers',  icon: '♻️' },
-      { name: 'Fishing Spots',      icon: '🎣' },
-      { name: 'Parks & Recreation', icon: '🌳' },
-      { name: 'Libraries',          icon: '📚' },
-    ];
+    _allResources = data.businesses || [];
+    _resourceCategories = data.categories || [];
+    if (!document.getElementById('content')) return;
+    _renderResourcesContent(content, _allResources, _resourceCategories);
 
-    const presentCatNames = new Set(_allResources.map(b => b.category?.name).filter(Boolean));
-    const visibleCats = RESOURCE_CATS.filter(c => presentCatNames.has(c.name));
+  } catch (err) {
+    if (!_allResources || !_allResources.length) {
+      content.innerHTML = `
+      <div class="max-w-2xl mx-auto px-2 py-16 text-center">
+        <p class="text-4xl mb-4">⚠️</p>
+        <p class="text-white/60 text-sm">Could not load resources. Please try again.</p>
+        <button onclick="loadResourcesPage(document.getElementById('content'))" 
+                class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-sm font-semibold transition">
+          Retry
+        </button>
+      </div>`;
+    }
+  }
+}
 
-    content.innerHTML = `
+function _renderResourcesContent(content, resources, categories) {
+  const RESOURCE_CATS = [
+    { name: 'Churches',           icon: '⛪' },
+    { name: 'Recycling Centers',  icon: '♻️' },
+    { name: 'Fishing Spots',      icon: '🎣' },
+    { name: 'Parks & Recreation', icon: '🌳' },
+    { name: 'Libraries',          icon: '📚' },
+  ];
+
+  const presentCatNames = new Set(resources.map(b => b.category?.name).filter(Boolean));
+  const visibleCats = RESOURCE_CATS.filter(c => presentCatNames.has(c.name));
+
+  content.innerHTML = `
       <div class="max-w-2xl mx-auto px-2 pb-10">
       
         <div class="flex items-center justify-between mb-5">
           <h2 class="text-3xl md:text-4xl font-bold">🌍 Community Resources</h2>
-          <span class="text-sm text-white/40">${_allResources.length} listed</span>
+          <span class="text-sm text-white/40">${resources.length} listed</span>
         </div>
         <p class="text-white/50 text-sm mb-5 leading-relaxed">
           Free and public resources available to everyone in the Milledgeville community.
@@ -3590,20 +3678,9 @@ async function loadResourcesPage(content) {
         <div id="resourcesResults"></div>
       </div>`;
 
-    window._activeResourceFilter = 'All';
-    renderResourcesList(_allResources);
-
-  } catch (err) {
-    content.innerHTML = `
-      <div class="max-w-2xl mx-auto px-2 py-16 text-center">
-        <p class="text-4xl mb-4">⚠️</p>
-        <p class="text-white/60 text-sm">Could not load resources. Please try again.</p>
-        <button onclick="loadResourcesPage(document.getElementById('content'))" 
-                class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-sm font-semibold transition">
-          Retry
-        </button>
-      </div>`;
-  }
+  _allResources = resources;
+  window._activeResourceFilter = 'All';
+  renderResourcesList(resources);
 }
 
 window.filterResources = function (categoryName) {
@@ -5892,8 +5969,8 @@ window.postMarketplaceItem = async function() {
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
   try {
-    // Always fetch the full item by ID — the list cache has images stripped for performance
-    const item = await apiGet(`/marketplace/${id}`);
+    let item = (allMarketplaceItems || []).find(i => String(i._id) === String(id));
+    if (!item) item = await apiGet(`/marketplace/${id}`);
 
     if (!item || !item._id) {
       showToast('Item not found', 'error');
@@ -6108,53 +6185,6 @@ window.removeMarketImage = function(index) {
   renderMarketImagePreviews();
 };
 
-// ─── LOST & FOUND IMAGE HANDLERS ─────────────────────────────────────────────
-window.handleLostImages = function(input) {
-  const files = Array.from(input.files);
-  if (!window._lostImages) window._lostImages = [];
-
-  const remaining = 6 - window._lostImages.length;
-  if (remaining <= 0) {
-    showToast('Maximum 6 photos allowed', 'error');
-    return;
-  }
-
-  const toProcess = files.slice(0, remaining);
-
-  toProcess.forEach(file => {
-    if (file.size > 8 * 1024 * 1024) {
-      showToast(`${file.name} is too large (max 8MB)`, 'error');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = e => {
-      window._lostImages.push(e.target.result);
-      renderLostImagePreviews();
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
-function renderLostImagePreviews() {
-  const container = document.getElementById('lostImagePreviews');
-  if (!container || !window._lostImages) return;
-
-  container.innerHTML = window._lostImages.map((src, i) => `
-    <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200">
-      <img src="${src}" class="w-full h-full object-cover">
-      <button onclick="removeLostImage(${i})"
-              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center">✕</button>
-    </div>
-  `).join('');
-}
-
-window.removeLostImage = function(index) {
-  if (!window._lostImages) return;
-  window._lostImages.splice(index, 1);
-  renderLostImagePreviews();
-};
-
 window.markMarketSold = async function() {
   if (confirm('Mark this item as sold?')) {
     await apiPost(`/marketplace/${currentMarketItemId}/sold`, {});
@@ -6250,7 +6280,7 @@ function renderLostItemsPage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
+            <img src="/api/lostitem-thumb/${item._id}" 
                  class="w-24 h-24 object-cover rounded-2xl" 
                  loading="lazy" alt=""
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -6502,7 +6532,7 @@ async function renderMarketplacePage() {
            class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
+            <img src="/api/marketplace-thumb/${item._id}" 
                  class="w-24 h-24 object-cover rounded-2xl" 
                  loading="lazy" alt=""
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -7138,8 +7168,16 @@ window.toggleRSVP = async function(eventId) {
 };
 
 window.showEventDetail = async function(eventId) {
-  const events = await apiGet('/events');
-  const event = events.find(e => e._id === eventId);
+  let event = (window._allEvents || []).find(e => e._id === eventId || String(e._id) === String(eventId));
+  if (!event) {
+    // Not in cache — fetch directly
+    try { event = await apiGet(`/events/${eventId}`); } catch(e) {}
+  }
+  if (!event) {
+    // Last resort: full fetch
+    const events = await apiGet('/events?limit=200');
+    event = (Array.isArray(events) ? events : (events?.events || [])).find(e => String(e._id) === String(eventId));
+  }
   if (!event) return;
 
   const isPast = new Date(event.date) < new Date();
@@ -7213,8 +7251,16 @@ window.showEventDetail = async function(eventId) {
 };
 
 window.showDealDetail = async function(dealId) {
-  const deals = await apiGet('/deals');
-  const deal = deals.find(d => d._id === dealId);
+  let deal = (_allDeals || []).find(d => String(d._id) === String(dealId));
+  if (!deal) {
+    try { deal = await apiGet(`/deals/${dealId}`); } catch(e) {}
+  }
+  if (!deal) {
+    try {
+      const res = await apiGet('/deals?limit=200');
+      deal = (res.deals || res || []).find(d => String(d._id) === String(dealId));
+    } catch(e) {}
+  }
   if (!deal) return;
 
   const modalHTML = `
@@ -7262,8 +7308,8 @@ window.showDealDetail = async function(dealId) {
 // ─── LOST & FOUND DETAIL ─────────────────────────────────────────────────────
 window.showLostDetail = async function(id) {
   try {
-    // Always fetch the full item by ID — the list cache has images stripped for performance
-    const item = await apiGet(`/lostitems/${id}`);
+    let item = (_allLostItems || []).find(i => String(i._id) === String(id));
+    if (!item) item = await apiGet(`/lostitems/${id}`);
 
     if (!item || !item._id) {
       showToast('Item not found', 'error');
