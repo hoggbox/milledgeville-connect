@@ -4245,11 +4245,17 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
 router.get('/lostitem-thumb/:id', async (req, res) => {
   try {
     const item = await LostItem.findById(req.params.id).select('images');
-    if (!item?.images?.length) return res.status(404).send('Not found');
+    if (!item?.images?.length) return res.status(404).set('Cache-Control', 'no-store').send('Not found');
 
     const raw = item.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+
+    // If stored as an external URL, redirect to it
+    if (/^https?:\/\//i.test(raw)) {
+      return res.redirect(302, raw);
+    }
+
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,(.+)$/);
+    if (!match) return res.status(400).set('Cache-Control', 'no-store').send('Invalid image format');
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -4263,7 +4269,7 @@ router.get('/lostitem-thumb/:id', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('LostItem thumb error:', err);
-    res.status(500).send('Error');
+    res.status(500).set('Cache-Control', 'no-store').send('Error');
   }
 });
 
@@ -4271,11 +4277,17 @@ router.get('/lostitem-thumb/:id', async (req, res) => {
 router.get('/marketplace-thumb/:id', async (req, res) => {
   try {
     const item = await MarketplaceItem.findById(req.params.id).select('images');
-    if (!item?.images?.length) return res.status(404).send('Not found');
+    if (!item?.images?.length) return res.status(404).set('Cache-Control', 'no-store').send('Not found');
 
     const raw = item.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+
+    // If stored as an external URL, redirect to it
+    if (/^https?:\/\//i.test(raw)) {
+      return res.redirect(302, raw);
+    }
+
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,(.+)$/);
+    if (!match) return res.status(400).set('Cache-Control', 'no-store').send('Invalid image format');
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -4289,7 +4301,7 @@ router.get('/marketplace-thumb/:id', async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error('Marketplace thumb error:', err);
-    res.status(500).send('Error');
+    res.status(500).set('Cache-Control', 'no-store').send('Error');
   }
 });
 

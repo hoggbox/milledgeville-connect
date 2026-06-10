@@ -915,7 +915,7 @@ window.showUserProfileModal = async function (userId) {
     const html = `
       <div onclick="if(event.target.id==='userProfileModal') hideUserProfileModal()" 
            id="userProfileModal"
-           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[13000] flex items-end md:items-center md:justify-center overflow-y-auto">
+           class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end md:items-center md:justify-center overflow-y-auto">
         
         <div onclick="event.stopImmediatePropagation()" 
              class="bg-[#0f172a] text-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
@@ -990,6 +990,9 @@ window.showUserProfileModal = async function (userId) {
         </div>
       </div>`;
 
+    // Remove any stale instance so the modal is always appended last (highest paint order)
+    const stale = document.getElementById('userProfileModal');
+    if (stale) stale.remove();
     document.body.insertAdjacentHTML('beforeend', html);
 
   } catch (e) {

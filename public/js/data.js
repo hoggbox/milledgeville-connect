@@ -440,38 +440,6 @@ window.shareContent = async function(type, title, extra = '') {
   }
 };
 
-// === FUNNY XSS BOOBY TRAP (Client Side) ===
-function checkForSketchyInput(text, fieldName = '') {
-  if (!text || typeof text !== 'string') return false;
-
-  const lower = text.toLowerCase();
-  const badStuff = [
-    '<script', 'javascript:', 'onerror=', 'onload=', 
-    'onclick=', 'onmouseover=', 'alert(', 'document.cookie',
-    '<iframe', 'eval('
-  ];
-
-  const isSketchy = badStuff.some(pattern => lower.includes(pattern));
-
-  if (isSketchy) {
-    const roasts = [
-      "Bro really tried that in 2026? 💀",
-      "Nice try. My disappointment is immeasurable.",
-      "That's the best you got? Weak.",
-      "Logged. Mocked. Blocked.",
-      "Error 418: I'm a teapot. Also your hack failed.",
-      "The only thing getting pwned is your ego.",
-      "Did you really think that would work? Lmao.",
-      "Attempt logged. Your mom has been notified."
-    ];
-
-    const message = roasts[Math.floor(Math.random() * roasts.length)];
-    showToast(message, 'error');
-    console.warn(`[Hacker Trap] Sketchy input detected in ${fieldName || 'a field'}`);
-    return true;
-  }
-  return false;
-}
 
 // ─── SAFE Clickable User Helper (Clean Rep Badge) ─────────────────────────────
 function renderClickableUser(userData, fallbackName = 'Anonymous') {
@@ -507,6 +475,35 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
             ${displayName}${repHTML}${devBadge}
           </span>`;
 }
+
+// ─── User Profile Modal Z-Index Fix ──────────────────────────────────────────
+// Ensures the user profile modal always stacks above detail modals (z-[14000]+)
+// by elevating it to z-[20000] immediately after showUserProfileModal opens it.
+(function patchUserProfileModalZIndex() {
+  const PROFILE_MODAL_ID = 'userProfileModal';
+  const TARGET_Z = '20000';
+
+  // MutationObserver watching for the modal being added to body
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        // Direct match or contains the modal
+        const modal = node.id === PROFILE_MODAL_ID ? node : node.querySelector?.(`#${PROFILE_MODAL_ID}`);
+        if (modal) {
+          modal.style.zIndex = TARGET_Z;
+          // Also apply Tailwind-style class if used
+          modal.classList.forEach(cls => {
+            if (/^z-\[/.test(cls)) modal.classList.remove(cls);
+          });
+          modal.classList.add(`z-[${TARGET_Z}]`);
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: false });
+})();
 
 // ─── In-App Update Banner ───────────────────────────────────────────────────
 function showUpdateBanner(newVersion) {
