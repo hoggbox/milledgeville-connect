@@ -410,6 +410,11 @@ content.innerHTML = `
     ⚙️ Settings & Privacy
   </button>
 
+  <button onclick="window.open('https://www.milledgevilleconnect.com/help.html', '_blank')" 
+          class="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-white py-4 rounded-3xl font-semibold text-lg transition">
+    ❓ Help & Support
+  </button>
+
   <button onclick="logout()" 
           class="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border border-red-500/30 text-red-400 py-4 rounded-3xl font-semibold text-lg transition">
     Logout
