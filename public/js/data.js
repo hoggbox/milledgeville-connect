@@ -321,13 +321,13 @@ window.handlePushNotificationClick = async function(data) {
 // ─── Service Worker → App message bridge ────────────────────────────────────
 // When the SW receives a notification click and the app is already open,
 // it posts a message instead of doing a hard navigate so we can deep-link in-place.
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type === 'PUSH_NOTIFICATION_CLICK') {
-      window.handlePushNotificationClick(event.data.data);
-    }
-  });
-}
+navigator.serviceWorker.addEventListener('message', (event) => {
+  const { type, data } = event.data;
+  if (type === 'PUSH_NOTIFICATION_CLICK') {
+    // handle navigation — this should be synchronous
+    showPage(data.page, data.id);
+  }
+});
 
 // ─── COLD LAUNCH DEEP LINK HANDLER ──────────────────────────────────────────
 // Handles when app is opened from a closed state via notification
@@ -536,10 +536,13 @@ window.dismissUpdateBanner = function() {
 };
 
 window.downloadUpdate = function() {
+  // ⚠️ Play Store policy: updates must go through the Play Store, not a direct APK link.
+  // Replace PLAY_STORE_URL below with your actual app listing URL.
+  const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.milledgevilleconnect.app';
   apiPost('/analytics/update-clicked', { version: CURRENT_APP_VERSION }).catch(() => {});
-  window.open(LATEST_APK_URL, '_blank');
+  window.open(PLAY_STORE_URL, '_blank');
   dismissUpdateBanner();
-  showToast("✅ Opening download page...", "success");
+  showToast("✅ Opening Play Store...", "success");
 };
 
 async function checkForAppUpdate() {
@@ -944,13 +947,9 @@ function _renderSpotlight(businesses) {
   if (!sb.length) sb = [...businesses].slice(0, 8);
 
   spotEl.innerHTML = sb.map(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';   // ← Pro check
-
     return `
       <div onclick="showBusinessDetail('${b._id}')"
-           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
-        
-        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow">PRO</div>` : ''}
+           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative">
 
         <div class="flex items-center gap-3 mb-3">
           ${b.logo
@@ -1803,14 +1802,9 @@ function renderDirectory(businesses) {
   let html = '<div class="space-y-3">';
 
   pageBusinesses.forEach(b => {
-    const isPro = b.owner && b.owner.subscriptionTier === 'pro';
-
     html += `
       <div onclick="showBusinessDetail('${b._id}')" 
-           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative ${isPro ? 'ring-2 ring-violet-400 shadow-xl shadow-violet-500/30' : ''}">
-        
-        ${isPro ? `<div class="absolute -top-2 -right-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow z-10">PRO</div>` : ''}
-
+           class="bg-[#0f172a] border border-white/10 hover:border-white/20 rounded-3xl p-5 cursor-pointer transition flex items-center gap-4 relative">
         ${b.logo 
           ? `<img src="${b.logo}" class="w-12 h-12 rounded-2xl object-cover flex-shrink-0 border border-white/10" alt="">` 
           : `<div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
@@ -3915,10 +3909,7 @@ const tabs = [
   // { id: 'analytics',     label: 'Analytics',      icon: '📊' },
 ];
 
-  // === GET SUBSCRIPTION STATUS ===
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  const isPro = sub.tier === 'pro';
-  const credits = sub.credits || 0;
+  // Credits/Pro system removed — no subscription fetch needed
 
   content.innerHTML = `
     <div class="max-w-2xl mx-auto pb-10">
@@ -4215,26 +4206,9 @@ const tabs = [
 
 <!-- ═══ TAB: Notifications ════════════════════════════════════════════════════ -->
 <div id="dtabContent-notifications" class="hidden">
-  ${!isPro ? `
-  <div class="bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-3xl p-8 text-center mb-4">
-    <div class="text-5xl mb-4">📢</div>
-    <h3 class="text-xl font-bold mb-2">Push Notifications</h3>
-    <p class="text-white/60 mb-6 text-sm leading-relaxed">Send push notifications directly to app users' devices to promote your business, deals, events, and listings.</p>
-    <div class="space-y-2 text-sm text-white/60 mb-6 text-left max-w-xs mx-auto">
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 20 credits / month included</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Pre-built templates (1 credit each)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Custom message with bold / italic (2 credits)</div>
-      <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Deep-link to any listing, deal, or event</div>
-    </div>
-    <button onclick="buyProTier()" class="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-10 py-4 rounded-3xl font-bold shadow-xl transition">
-      🚀 Upgrade to Business Pro
-    </button>
-  </div>
-  ` : `
   <div id="notificationsContent">
     <div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>
   </div>
-  `}
 </div>
 
       </div>
@@ -4351,11 +4325,6 @@ window.submitBizPhotoPost = async function() {
       clearBizPostImage();
       const captionEl = document.getElementById('bizPostCaption');
       if (captionEl) captionEl.value = '';
-      // Refresh credit display
-      if (res.credits !== undefined) {
-        const creditEl = document.getElementById('notifCreditDisplay');
-        if (creditEl) creditEl.textContent = res.credits;
-      }
       // Refresh post history
       loadBizPostHistory();
     } else {
@@ -4547,57 +4516,17 @@ async function loadNotificationsTab() {
 
   el.innerHTML = `<div class="text-white/30 text-center py-12 text-sm">Loading notification center…</div>`;
 
-  let credits = 0;
-  let tier = 'free';
-  try {
-    const sub = await apiGet('/owner/subscription');
-    credits = sub.credits ?? 0;
-    tier    = sub.tier   ?? 'free';
-  } catch (e) {
-    console.error('Failed to load subscription', e);
-  }
-
-  const isPro   = tier === 'pro';
+  // Credits/Pro system removed — all verified owners can send notifications
   const bizName = currentUser?.verifiedBusiness?.name || currentUser?.name || 'Your Business';
 
   el.innerHTML = `
     <div class="space-y-5 p-4">
 
-      <!-- Credit balance -->
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <div class="text-xs text-white/50 mb-1">Available Credits</div>
-            <div class="text-3xl font-black text-white" id="notifCreditDisplay">${credits}</div>
-          </div>
-          <div class="text-right">
-            <div class="text-xs text-white/40">Photo post notify = 2 credits</div>
-            <div class="text-xs text-white/40">Custom notification = 2 credits</div>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-          ${!isPro ? `
-            <button onclick="buyProTier()" 
-                    class="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition">
-              🚀 Upgrade to Pro (12 credits/mo)
-            </button>
-          ` : ''}
-
-          <button onclick="buyCreditPack()" 
-                  class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold py-2.5 px-4 rounded-2xl transition flex items-center justify-center gap-2">
-            💳 Buy 10 Credits <span class="text-[10px] opacity-75">($4.99)</span>
-          </button>
-        </div>
-
-        <p class="text-[10px] text-white/40 mt-2 text-center">One-time credit packs never expire. Pro members get 12 fresh credits every month.</p>
-      </div>
-
       <!-- ── Unified notification form ── -->
       <div class="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
         <div>
           <h4 class="font-bold text-white">📢 Send Notification</h4>
-          <p class="text-xs text-white/50 mt-0.5">Broadcast to all users — 2 credits. Add a photo to make it visual.</p>
+          <p class="text-xs text-white/50 mt-0.5">Broadcast to all users. Add a photo to make it visual.</p>
         </div>
 
         <!-- From badge -->
@@ -4675,13 +4604,7 @@ async function loadNotificationsTab() {
           </div>
         </div>
 
-        <!-- Cost badge + send button -->
-        <div class="flex items-center gap-2 text-xs text-white/30 justify-center">
-          <span>💳 2 credits</span>
-          <span>·</span>
-          <span id="unifiedCostNote">text-only broadcast</span>
-        </div>
-
+        <!-- Send button -->
         <button onclick="sendUnifiedNotification()"
                 id="unifiedSendBtn"
                 class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg">
@@ -4740,13 +4663,6 @@ window.sendUnifiedNotification = async function() {
 
   const hasPhoto = !!_bizPostPendingImage;
 
-  // Credit pre-check (2 credits either way)
-  const canSend = await window.canSendNotification(true);
-  if (!canSend) {
-    showToast('Not enough credits. Buy more or upgrade to Pro!', 'error');
-    return;
-  }
-
   const btn = document.getElementById('unifiedSendBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
 
@@ -4796,13 +4712,6 @@ window.sendUnifiedNotification = async function() {
     const bodyEl  = document.getElementById('customBody');
     if (titleEl) { titleEl.value = ''; titleEl.dispatchEvent(new Event('input')); }
     if (bodyEl)  { bodyEl.value  = ''; bodyEl.dispatchEvent(new Event('input')); }
-
-    // Refresh credit counter
-    const newCredits = res.credits ?? res.notificationCredits;
-    if (newCredits !== undefined) {
-      const creditEl = document.getElementById('notifCreditDisplay');
-      if (creditEl) creditEl.textContent = newCredits;
-    }
 
   } catch (e) {
     console.error(e);
@@ -4907,11 +4816,6 @@ window.addOwnerDeal = async function() {
 
     if (res._id) {
       showToast('🔥 Deal posted!', 'success');
-      if (res.credits !== undefined) {
-        currentUser.notificationCredits = res.credits;
-        const creditEl = document.getElementById('notifCreditDisplay');
-        if (creditEl) creditEl.textContent = res.credits;
-      }
       document.getElementById('dealTitle').value = '';
       document.getElementById('dealDesc').value = '';
       loadOwnerDashboard(document.getElementById('content'));
@@ -4944,11 +4848,6 @@ window.addOwnerEvent = async function() {
 
     if (res._id) {
       showToast('📅 Event posted!', 'success');
-      if (res.credits !== undefined) {
-        currentUser.notificationCredits = res.credits;
-        const creditEl = document.getElementById('notifCreditDisplay');
-        if (creditEl) creditEl.textContent = res.credits;
-      }
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';
@@ -7654,18 +7553,15 @@ async function loadOwnerAnalytics() {
   container.innerHTML = `<div class="text-white/30 text-center py-8 text-sm">Loading analytics…</div>`;
 
   try {
-    const [deals, events, homes, sub] = await Promise.all([
+    const [deals, events, homes] = await Promise.all([
       apiGet('/owner/deals').catch(() => []),
       apiGet('/owner/events').catch(() => []),
-      apiGet('/owner/homes').catch(() => []),
-      apiGet('/owner/subscription').catch(() => ({}))
+      apiGet('/owner/homes').catch(() => [])
     ]);
 
     const totalDeals = deals.length;
     const totalEvents = events.length;
     const totalListings = homes.length;
-    const credits = sub.credits || 0;
-    const tier = sub.tier || 'free';
 
     container.innerHTML = `
       <div class="space-y-4">
@@ -7683,11 +7579,6 @@ async function loadOwnerAnalytics() {
           <div class="bg-white/10 rounded-3xl p-5">
             <div class="text-xs text-white/50">Marketplace Listings</div>
             <div class="text-4xl font-black mt-1">${totalListings}</div>
-          </div>
-          <div class="bg-white/10 rounded-3xl p-5">
-            <div class="text-xs text-white/50">Notification Credits</div>
-            <div class="text-4xl font-black mt-1">${credits}</div>
-            <div class="text-xs text-white/40 mt-1">${tier === 'pro' ? 'Pro Tier' : 'Free Tier'}</div>
           </div>
         </div>
 
@@ -8773,19 +8664,8 @@ window.viewReportedContent = async function (type, id) {
   }
 };
 
-// Credit check helper for other posting functions
-async function checkNotificationCredits(required = 2) {
-  // Only verified business owners have a credit system at all
-  if (!currentUser || !currentUser.verifiedBusiness) return true;
-  if (currentUser.subscriptionTier === 'pro') return true;
-
-  const sub = await apiGet('/owner/subscription').catch(() => ({}));
-  if ((sub.credits || 0) < required) {
-    showToast(`Need ${required} credits. Upgrade to Pro!`, 'error');
-    return false;
-  }
-  return true;
-}
+// Credit check removed — all verified owners can send notifications
+async function checkNotificationCredits() { return true; }
 
 // ─── OWNER LOGO UPLOAD HELPERS ───────────────────────────────────────────────
 let pendingOwnerLogo = null;
@@ -8870,31 +8750,8 @@ async function createSquareLogo(file, size = 400) {
   });
 }
 
-// Client-side credit helpers
-// Credits / Pro system removed — always allow
-window.canSendNotification = async function(isCustom = false) {
-  return true;
-};
-
-// ─── GOOGLE PLAY BILLING - BUY PRO TIER ─────────────────────────────────────
-window.buyProTier = async function() {
-  showToast("Pro tier purchases have been disabled.", "info");
-};
-
-// ─── BUY CREDIT PACK (10 credits for $4.99) ─────────────────────────────────
-window.buyCreditPack = async function() {
-  showToast("Credit purchases have been disabled.", "info");
-};
-
-// ─── GOOGLE PLAY BILLING (DISABLED) ─────────────────────────────────────
-// We removed the Pro tier + credit system, so these are no longer used.
-
-window.showCreditInfo = function() {
-  showToast("The credit / Pro system has been removed.", "info");
-};
-
-// The billing listener below has been removed because we no longer sell
-// Pro subscriptions or credit packs through the app.
+// Credits / Pro system removed — always allow notifications
+window.canSendNotification = async function() { return true; };
 
 window.saveOwnerBusinessLogo = async function() {
   if (!pendingOwnerLogo) {
@@ -9479,30 +9336,6 @@ function renderHomesPage() {
   }
 }
 
-// Call this after login and on owner-dashboard load
-window.validateProSubscription = async function() {
-  if (!currentUser || !window.Capacitor) return;
-
-  try {
-    // Get the latest purchase token from Google Play (you'll need to store it)
-    const { InAppPurchase2 } = window.Capacitor.Plugins;
-    const purchases = await InAppPurchase2.getPurchases();
-
-    const proPurchase = purchases.find(p => p.productId.includes('pro_monthly'));
-    if (!proPurchase?.purchaseToken) return;
-
-    const res = await apiPost('/owner/validate-subscription', {
-      purchaseToken: proPurchase.purchaseToken
-    });
-
-    if (res.success) {
-      currentUser.subscriptionTier = res.tier;
-      if (res.credits !== undefined) currentUser.notificationCredits = res.credits;
-    }
-  } catch (e) {
-    console.error('Subscription validation failed', e);
-  }
-};
 
 // ─── SETTINGS & PRIVACY MODAL ────────────────────────────────────────────────
 // Single authoritative definition (profile.js no longer has a copy).

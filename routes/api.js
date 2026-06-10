@@ -1951,15 +1951,6 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     const business = await Business.findById(user.verifiedBusiness).select('name');
     const bizName  = business?.name || user.name;
 
-    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
-    const deducted = await deductNotificationCredit(req.userId);
-    if (!deducted) {
-      return res.status(403).json({
-        message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
-        outOfCredits: true
-      });
-    }
-
     // Prepend business name to the body so recipients always know who sent it
     const stampedBody = `${bizName} · ${body.trim()}`;
 
@@ -2005,9 +1996,8 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       { type: 'custom', imageUrl: notifImageUrl }
     );
 
-    // Return updated credit balance so the frontend can refresh the display
-    const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
+    // Return success
+    res.json({ success: true, message: 'Notification sent' });
   } catch (err) {
     console.error('Custom notification error:', err);
     res.status(500).json({ message: 'Failed to send notification' });
@@ -2032,8 +2022,6 @@ router.post('/auth/register', async (req, res) => {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
-      notificationCredits: 0,        // ← Normal users start with 0
-      subscriptionTier: 'free'
     });
 
     const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -2044,8 +2032,6 @@ router.post('/auth/register', async (req, res) => {
         _id: newUser._id,
         name: newUser.name,
         email: newUser.email,
-        notificationCredits: newUser.notificationCredits,
-        subscriptionTier: newUser.subscriptionTier
       }
     });
 
@@ -2702,17 +2688,16 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
       await claim.save();
       await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
 
-      // Grant 5 free starter credits as a one-time registration gift
+      // Update user's verified business
       await User.findByIdAndUpdate(req.userId, {
         verifiedBusiness: business._id,
-        notificationCredits: 5
       });
 
       // Send a personal welcome push to the new owner
       sendPushToUser(
         req.userId,
-        '🎉 Business Verified! You have 5 free credits',
-        `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+        '🎉 Business Verified!',
+        `Welcome to Milledgeville Connect, ${business.name}! Your business dashboard is ready — start posting deals, events, and updates to the community!`,
         { page: 'home' }
       );
 
@@ -2721,8 +2706,7 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
         autoApproved: true,
         score,
         signals,
-        notificationCredits: 5,
-        message: "✅ Verified automatically! Your business dashboard is ready. We've gifted you 5 free notification credits to get started!"
+        message: "✅ Verified automatically! Your business dashboard is ready."
       });
     }
 
@@ -2740,11 +2724,14 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
             to: normalizePhone(phone).replace(/^(\d{3})(\d{3})(\d{4})$/, '+1$1$2$3')
           });
         } catch (smsErr) {
-          console.warn('[Verify] SMS failed — PIN logged:', pin, smsErr.message);
+          // SMS failed — do NOT log the PIN in plaintext
+          console.warn('[Verify] SMS failed for user', req.userId, ':', smsErr.message);
         }
       } else {
-        // Dev/no-SMS fallback: log to server console so you can test
-        console.log(`[Verify] PIN for ${req.userId} / ${req.params.businessId}: ${pin}`);
+        // Twilio not configured — PIN cannot be delivered; reject the request
+        return res.status(503).json({
+          message: 'SMS verification is not available at this time. Please try the manual review path or contact support.'
+        });
       }
 
       return res.json({
@@ -2809,10 +2796,9 @@ router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
       isRestaurant: !!isRestaurant 
     });
 
-    // Grant 5 free starter credits as a one-time registration gift
+    // Update user's verified business
     await User.findByIdAndUpdate(req.userId, {
       verifiedBusiness: business._id,
-      notificationCredits: 5
     });
 
     // Log to admin for audit
@@ -2821,16 +2807,15 @@ router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
     // Send a personal welcome push to the new owner
     sendPushToUser(
       req.userId,
-      '🎉 Business Verified! You have 5 free credits',
-      `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+      '🎉 Business Verified!',
+      `Welcome to Milledgeville Connect, ${business.name}! Your business dashboard is ready — start posting deals, events, and updates to the community!`,
       { page: 'home' }
     );
 
     res.json({
       status: 'approved',
       pinVerified: true,
-      notificationCredits: 5,
-      message: "✅ Business successfully verified and claimed! We've gifted you 5 free notification credits to get started!"
+      message: "✅ Business successfully verified and claimed! Your dashboard is ready."
     });
   } catch (err) {
     console.error('PIN verify error:', err);
@@ -3005,23 +2990,19 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-    // Push notification costs 1 credit — deal saves regardless, push skipped if out of credits
-    const deducted = await deductNotificationCredit(req.userId);
-    if (deducted) {
-      broadcastPush(
-        '🔥 New Deal Available!',
-        title,
-        {
-          page: 'deals',
-          id: deal._id.toString(),
-          url: `/deals/${deal._id}`
-        },
-        { type: 'deal' }
-      );
-    }
+    // Always send push notification for verified owners (no credit gate)
+    broadcastPush(
+      '🔥 New Deal Available!',
+      title,
+      {
+        page: 'deals',
+        id: deal._id.toString(),
+        url: `/deals/${deal._id}`
+      },
+      { type: 'deal' }
+    );
 
-    const updatedUser = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...deal.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
+    res.json(deal);
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
@@ -3064,23 +3045,19 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    // Push notification costs 1 credit — event saves regardless, push skipped if out of credits
-    const deducted = await deductNotificationCredit(req.userId);
-    if (deducted) {
-      broadcastPush(
-        '📅 New Event Posted!',
-        title + (location ? ` · ${location}` : ''),
-        {
-          page: 'events',
-          id: event._id.toString(),
-          url: `/events/${event._id}`
-        },
-        { type: 'event' }
-      );
-    }
+    // Always send push notification for verified owners (no credit gate)
+    broadcastPush(
+      '📅 New Event Posted!',
+      title + (location ? ` · ${location}` : ''),
+      {
+        page: 'events',
+        id: event._id.toString(),
+        url: `/events/${event._id}`
+      },
+      { type: 'event' }
+    );
 
-    const updatedUser = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...event.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
+    res.json(event);
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
@@ -3755,106 +3732,23 @@ function sanitizeContent(fields = {}, meta = {}) {
 }
 
 // ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
+// Monetization removed — all verified business owners have full access for free.
 router.get('/owner/subscription', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Normal users (no verified business) have zero access to credits
-    if (!user.verifiedBusiness) {
-      return res.json({
-        tier: 'free',
-        credits: 0,
-        expires: null
-      });
-    }
-
-    // Verified business owners start with 5 free credits if field was never set.
-    // Grant those 5 credits now and persist so we don't keep re-granting.
-    if (user.notificationCredits === undefined || user.notificationCredits === null) {
-      user.notificationCredits = 5;
-      await user.save();
-    }
-
-    res.json({
-      tier: user.subscriptionTier || 'free',
-      credits: user.notificationCredits,
-      expires: user.subscriptionExpiry
-    });
-
+    res.json({ tier: 'free', credits: 0, expires: null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// ─── GOOGLE PLAY SUBSCRIPTION VALIDATION ────────────────────────────────────
-// Called by the Android app after a purchase/renewal to verify with Google
-// and activate / refresh the user's Pro tier + 12 monthly credits.
+// ─── SUBSCRIPTION VALIDATION (REMOVED) ──────────────────────────────────────
+// Google Play billing / subscription system removed — app is free.
+// Route kept as a no-op stub so any lingering client calls don't 500.
 router.post('/owner/validate-subscription', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Must be a verified business owner to have a subscription
-    if (!user.verifiedBusiness) {
-      return res.status(403).json({ message: 'Only verified business owners can subscribe' });
-    }
-
-    const { purchaseToken } = req.body;
-    if (!purchaseToken) {
-      return res.status(400).json({ message: 'purchaseToken required' });
-    }
-
-    const packageName  = 'com.ghogg.milledgevilleconnect';
-    const productId    = 'pro_monthly_29_99';
-
-    const response = await fetch(
-      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GOOGLE_PLAY_ACCESS_TOKEN}`
-        }
-      }
-    );
-
-    const data = await response.json();
-
-    if (data.expiryTimeMillis && parseInt(data.expiryTimeMillis) > Date.now()) {
-      // Subscription is active — upgrade user and grant 12 credits for this cycle
-      const newExpiry = new Date(parseInt(data.expiryTimeMillis));
-
-      // Only reset credits when the expiry has actually rolled forward
-      // (avoid double-granting if the app sends the token twice in the same cycle)
-      const creditReset = !user.subscriptionExpiry ||
-                          newExpiry.getTime() > new Date(user.subscriptionExpiry).getTime();
-
-      user.subscriptionTier   = 'pro';
-      user.subscriptionExpiry = newExpiry;
-      if (creditReset) user.notificationCredits = 12;
-      await user.save();
-
-      return res.json({
-        success: true,
-        tier: 'pro',
-        credits: user.notificationCredits,
-        expires: user.subscriptionExpiry
-      });
-    } else {
-      // Subscription expired or cancelled — downgrade to free, keep remaining credits
-      user.subscriptionTier = 'free';
-      await user.save();
-      return res.json({
-        success: true,
-        tier: 'free',
-        credits: user.notificationCredits
-      });
-    }
-
-  } catch (err) {
-    console.error('Subscription validation error:', err);
-    res.status(500).json({ message: 'Validation failed' });
-  }
+  res.json({ success: true, tier: 'free', credits: 0 });
 });
 
 // ─── UPDATE BUSINESS LOGO ───────────────────────────────────────────────────
@@ -3895,28 +3789,10 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── BUY CREDIT PACK (one-time purchase) ─────────────────────────────────────
+// ─── BUY CREDIT PACK (REMOVED) ───────────────────────────────────────────────
+// Monetization removed — stub kept so old clients don't 500.
 router.post('/owner/buy-credits', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user || !user.verifiedBusiness) {
-      return res.status(403).json({ message: 'Only verified business owners can buy credits' });
-    }
-
-    const { credits = 10 } = req.body;
-
-    user.notificationCredits = (user.notificationCredits || 0) + Number(credits);
-    await user.save();
-
-    res.json({ 
-      success: true, 
-      credits: user.notificationCredits,
-      message: `${credits} credits added successfully`
-    });
-  } catch (err) {
-    console.error('Buy credits error:', err);
-    res.status(500).json({ message: 'Failed to add credits' });
-  }
+  res.json({ success: false, message: 'Credit purchases are no longer available.' });
 });
 
 // VAPID Public Key route is defined earlier in the PUSH NOTIFICATION ROUTES section
@@ -4065,55 +3941,15 @@ router.delete('/user/delete-account', authenticate, async (req, res) => {
 // Pro users have their 12 monthly credits refreshed each billing cycle.
 // Normal users (no verifiedBusiness) should never reach this function,
 // but we guard against it anyway.
+// ─── CREDIT DEDUCTION (REMOVED) ─────────────────────────────────────────────
+// Monetization removed — push notifications are free for all verified owners.
+// Stub kept so any missed call sites fail gracefully instead of crashing.
 async function deductNotificationCredit(userId) {
-  const user = await User.findById(userId);
-  if (!user) return false;
-
-  // Non-owners cannot use notification credits at all
-  if (!user.verifiedBusiness) return false;
-
-  const cost = 2;
-
-  if ((user.notificationCredits || 0) < cost) {
-    return false; // Out of credits — blocked for both free and pro owners
-  }
-
-  user.notificationCredits -= cost;
-  await user.save();
-  return true;
+  return true; // always allow
 }
 
-// ─── PRO TIER MONTHLY CREDIT RESET ──────────────────────────────────────────
-// Runs daily but only resets credits for users whose subscriptionExpiry has
-// rolled over into a new billing cycle (i.e. expiry advanced since last reset).
-async function resetProCredits() {
-  try {
-    const now = new Date();
-    // Only reset users whose billing cycle just renewed:
-    // their subscriptionExpiry is in the future AND creditsLastReset is before
-    // the start of the current billing period (i.e. before their last expiry rollover).
-    const result = await User.updateMany(
-      {
-        subscriptionTier: 'pro',
-        subscriptionExpiry: { $gt: now },
-        // creditsLastReset is either unset or older than one billing period ago
-        $or: [
-          { creditsLastReset: { $exists: false } },
-          { $expr: { $lt: ['$creditsLastReset', { $subtract: ['$subscriptionExpiry', 30 * 24 * 60 * 60 * 1000] }] } }
-        ]
-      },
-      {
-        $set: { notificationCredits: 12, creditsLastReset: now }
-      }
-    );
-
-    if (result.modifiedCount > 0) {
-      console.log(`✅ Reset ${result.modifiedCount} Pro users to 12 credits (billing cycle rollover)`);
-    }
-  } catch (err) {
-    console.error('Monthly credit reset failed:', err);
-  }
-}
+// ─── PRO TIER MONTHLY CREDIT RESET (REMOVED) ────────────────────────────────
+// Subscription system removed. No-op.
 
 
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
@@ -4125,9 +3961,7 @@ router.get('/app/version', (req, res) => {
   res.json({ latest: CURRENT_VERSION });
 });
 
-// Check daily whether any billing cycles have rolled over
-setInterval(resetProCredits, 24 * 60 * 60 * 1000); // every 24 hours
-resetProCredits(); // run once on server start
+// (resetProCredits cron removed — subscription system disabled)
 
 // ─── BUSINESS POSTS (Photo Updates) ──────────────────────────────────────────
 // Verified business owners can create a photo post with a caption.
@@ -4164,22 +3998,18 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       image,
     });
 
-    // Optional push notification — costs 2 credits
+    // Optional push notification — always allowed for verified owners
     if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId);
-      if (deducted) {
-        const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-        await broadcastPush(
-          pushTitle,
-          caption?.trim() || 'Posted a new photo update — tap to see it!',
-          { page: 'business-post', id: post._id.toString() },
-          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
-        );
-      }
+      const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
+      await broadcastPush(
+        pushTitle,
+        caption?.trim() || 'Posted a new photo update — tap to see it!',
+        { page: 'business-post', id: post._id.toString() },
+        { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
+      );
     }
 
-    const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
+    res.json(post);
   } catch (err) {
     console.error('Business post create error:', err);
     const statusCode = err.status || 500;
@@ -4206,6 +4036,7 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4233,6 +4064,7 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
       'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4265,6 +4097,7 @@ router.get('/lostitem-thumb/:id', async (req, res) => {
       'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4297,6 +4130,7 @@ router.get('/marketplace-thumb/:id', async (req, res) => {
       'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4323,6 +4157,7 @@ router.get('/news-thumb/:id', async (req, res) => {
       'Cache-Control':  'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4542,6 +4377,7 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
       'Cache-Control': 'public, max-age=86400',
       'Content-Length': buffer.length,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
