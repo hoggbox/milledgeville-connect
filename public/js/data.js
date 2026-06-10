@@ -2892,11 +2892,56 @@ function renderShoutoutCard(s) {
     <div class="sc-comments">
       ${comments.map(c => renderCommentRow(c, s._id)).join('')}
       ${currentUser ? `
-        <div class="sc-comment-input">
-          <div class="sc-comment-avatar">${currentUser.name[0].toUpperCase()}</div>
-          <input id="commentinput-${s._id}" type="text" placeholder="Write a comment\u2026"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
-          <button onclick="submitComment('${s._id}')">Post</button>
+        <div class="sc-comment-input" style="flex-direction:column;align-items:stretch;gap:6px;padding:10px;">
+          <!-- Text row -->
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="sc-comment-avatar">${currentUser.name[0].toUpperCase()}</div>
+            <input id="commentinput-${s._id}" type="text" placeholder="Write a comment…"
+                   style="flex:1;min-width:0;"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
+          </div>
+          <!-- Toolbar row -->
+          <div style="display:flex;align-items:center;gap:6px;padding-left:34px;">
+            <!-- Emoji toggle -->
+            <button type="button" title="Emoji"
+                    onclick="toggleCommentEmoji('${s._id}',event)"
+                    style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:5px 8px;cursor:pointer;font-size:16px;line-height:1;color:#fff;">😊</button>
+            <!-- GIF toggle -->
+            <button type="button" title="GIF"
+                    onclick="toggleCommentGif('${s._id}',event)"
+                    style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:800;color:#34d399;letter-spacing:.5px;">GIF</button>
+            <!-- Photo upload -->
+            <label title="Photo" style="background:rgba(255,255,255,0.08);border-radius:10px;padding:5px 8px;cursor:pointer;font-size:15px;line-height:1;">
+              📷<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;"
+                       onchange="handleCommentImage('${s._id}',this)">
+            </label>
+            <!-- Image preview (shown after pick) -->
+            <div id="comment-img-preview-${s._id}" style="display:none;position:relative;">
+              <img id="comment-img-thumb-${s._id}" style="height:36px;width:36px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.2);">
+              <button onclick="clearCommentImage('${s._id}')"
+                      style="position:absolute;top:-5px;right:-5px;background:#ef4444;border:none;border-radius:50%;width:16px;height:16px;font-size:9px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+            </div>
+            <div style="flex:1;"></div>
+            <button onclick="submitComment('${s._id}')"
+                    style="background:#059669;border:none;border-radius:10px;padding:5px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Post</button>
+          </div>
+          <!-- Emoji panel (per-comment, hidden by default) -->
+          <div id="comment-emoji-panel-${s._id}" style="display:none;padding-left:34px;">
+            <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;max-height:180px;overflow:hidden;">
+              <input type="text" placeholder="Search emoji…" oninput="filterCommentEmoji('${s._id}',this.value)"
+                     style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+              <div id="comment-emoji-cats-${s._id}" style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto;padding-bottom:2px;"></div>
+              <div id="comment-emoji-grid-${s._id}" style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:2px;max-height:100px;overflow-y:auto;"></div>
+            </div>
+          </div>
+          <!-- GIF panel (per-comment, hidden by default) -->
+          <div id="comment-gif-panel-${s._id}" style="display:none;padding-left:34px;">
+            <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;">
+              <input type="text" placeholder="Search GIFs…" oninput="searchCommentGif('${s._id}',this.value)"
+                     style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+              <div id="comment-gif-grid-${s._id}" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:160px;overflow-y:auto;"></div>
+            </div>
+          </div>
         </div>` : `
         <p class="sc-sign-in-prompt"><button onclick="showAuthModal()">Sign in</button> to comment</p>`}
     </div>
@@ -2945,6 +2990,10 @@ function renderCommentRow(c, shoutoutId) {
                         class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
             </div>
             <p class="text-sm text-white/80 mt-0.5">${c.text}</p>
+            ${c.image ? `
+              <img src="${c.image}" alt="comment image"
+                   onclick="openCommentImageLightbox('${c.image}')"
+                   style="margin-top:6px;max-width:180px;max-height:160px;object-fit:cover;border-radius:10px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);">` : ''}
           </div>
           ${currentUser ? `
             <div class="flex items-center gap-3 mt-1 ml-2">
@@ -3005,10 +3054,17 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
     const shoutoutId = contentTypeOrShoutoutId;
     if (!requireAuth('Sign in to comment.')) return;
     const input = document.getElementById(`commentinput-${shoutoutId}`);
-    if (!input || !input.value.trim()) return;
-    const text = input.value.trim();
-    input.value = '';
-    const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text });
+    const text = input ? input.value.trim() : '';
+    const image = window._commentImages?.[shoutoutId] || null;
+    if (!text && !image) return;
+    if (input) input.value = '';
+    clearCommentImage(shoutoutId);
+    // Close emoji/gif panels
+    const ep = document.getElementById(`comment-emoji-panel-${shoutoutId}`);
+    const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
+    if (ep) ep.style.display = 'none';
+    if (gp) gp.style.display = 'none';
+    const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
     if (res._id) {
       await loadShoutoutsPage(document.getElementById('content'));
     } else {
@@ -3047,6 +3103,182 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
     showToast('Failed to post comment', 'error');
   }
 };
+
+// ─── Comment Rich Composer Helpers ───────────────────────────────────────────
+
+// Per-comment stored images (GIF URL or compressed base64)
+if (!window._commentImages) window._commentImages = {};
+
+// ── Emoji ────────────────────────────────────────────────────────────────────
+window.toggleCommentEmoji = function(shoutoutId, e) {
+  e.stopPropagation();
+  const ep = document.getElementById(`comment-emoji-panel-${shoutoutId}`);
+  const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
+  if (!ep) return;
+  const opening = ep.style.display === 'none';
+  ep.style.display = opening ? 'block' : 'none';
+  if (gp) gp.style.display = 'none';
+  if (opening) initCommentEmojiPanel(shoutoutId);
+};
+
+function initCommentEmojiPanel(shoutoutId) {
+  const catsEl = document.getElementById(`comment-emoji-cats-${shoutoutId}`);
+  const gridEl = document.getElementById(`comment-emoji-grid-${shoutoutId}`);
+  if (!catsEl || !gridEl) return;
+  if (catsEl.children.length) return; // already init'd
+  const cats = Object.keys(EMOJI_DATA);
+  catsEl.innerHTML = cats.map((cat, i) =>
+    `<button onclick="showCommentEmojiCat('${shoutoutId}','${CSS.escape(cat)}')"
+             style="background:${i===0?'rgba(52,211,153,0.2)':'rgba(255,255,255,0.06)'};border:none;border-radius:8px;padding:4px 8px;cursor:pointer;font-size:14px;white-space:nowrap;flex-shrink:0;"
+             data-cat-btn-${shoutoutId}="${CSS.escape(cat)}">${cat.split(' ')[0]}</button>`
+  ).join('');
+  renderCommentEmojiGrid(shoutoutId, EMOJI_DATA[cats[0]]);
+}
+
+window.showCommentEmojiCat = function(shoutoutId, catKey) {
+  const catsEl = document.getElementById(`comment-emoji-cats-${shoutoutId}`);
+  if (catsEl) [...catsEl.children].forEach(b => b.style.background = 'rgba(255,255,255,0.06)');
+  const activeBtn = catsEl?.querySelector(`[data-cat-btn-${shoutoutId}="${catKey}"]`);
+  if (activeBtn) activeBtn.style.background = 'rgba(52,211,153,0.2)';
+  const key = Object.keys(EMOJI_DATA).find(k => CSS.escape(k) === catKey);
+  if (key) renderCommentEmojiGrid(shoutoutId, EMOJI_DATA[key]);
+};
+
+function renderCommentEmojiGrid(shoutoutId, emojis) {
+  const gridEl = document.getElementById(`comment-emoji-grid-${shoutoutId}`);
+  if (!gridEl) return;
+  gridEl.innerHTML = emojis.map(em =>
+    `<button onclick="insertCommentEmoji('${shoutoutId}','${em}')"
+             style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px;border-radius:6px;line-height:1;"
+             onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+             onmouseout="this.style.background='none'">${em}</button>`
+  ).join('');
+}
+
+window.filterCommentEmoji = function(shoutoutId, query) {
+  const all = Object.values(EMOJI_DATA).flat();
+  renderCommentEmojiGrid(shoutoutId, all);
+};
+
+window.insertCommentEmoji = function(shoutoutId, emoji) {
+  const input = document.getElementById(`commentinput-${shoutoutId}`);
+  if (!input) return;
+  const pos = input.selectionStart || input.value.length;
+  input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
+  input.focus();
+  input.selectionStart = input.selectionEnd = pos + emoji.length;
+};
+
+// ── GIF (Tenor) ──────────────────────────────────────────────────────────────
+const GIPHY_KEY = 'IkfP6Kz9uXuy1enByh5hpf2VjG2EUIIr'; // Get free key at developers.giphy.com
+let _gifSearchTimer = null;
+
+window.toggleCommentGif = function(shoutoutId, e) {
+  e.stopPropagation();
+  const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
+  const ep = document.getElementById(`comment-emoji-panel-${shoutoutId}`);
+  if (!gp) return;
+  const opening = gp.style.display === 'none';
+  gp.style.display = opening ? 'block' : 'none';
+  if (ep) ep.style.display = 'none';
+  if (opening) searchCommentGif(shoutoutId, '');
+};
+
+window.searchCommentGif = function(shoutoutId, query) {
+  clearTimeout(_gifSearchTimer);
+  _gifSearchTimer = setTimeout(async () => {
+    const grid = document.getElementById(`comment-gif-grid-${shoutoutId}`);
+    if (!grid) return;
+    grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:11px;text-align:center;padding:8px;">Loading…</p>';
+    try {
+      const endpoint = !query
+        ? `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_KEY}&limit=12&rating=pg`
+        : `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(query)}&limit=12&rating=pg`;
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      const results = data.data || [];
+      if (!results.length) { grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:11px;text-align:center;padding:8px;">No results</p>'; return; }
+      grid.innerHTML = results.map(r => {
+        const url = r.images?.original?.url || '';
+        const preview = r.images?.fixed_height_small?.url || url;
+        return `<img src="${preview}" alt="gif" loading="lazy"
+                     onclick="pickCommentGif('${shoutoutId}','${url}')"
+                     style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;">`;
+      }).join('');
+    } catch(err) {
+      grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:11px;text-align:center;padding:8px;">Could not load GIFs</p>';
+    }
+  }, 400);
+};
+
+window.pickCommentGif = function(shoutoutId, gifUrl) {
+  // Store GIF URL as the comment image
+  if (!window._commentImages) window._commentImages = {};
+  window._commentImages[shoutoutId] = gifUrl;
+  // Show preview
+  const preview = document.getElementById(`comment-img-preview-${shoutoutId}`);
+  const thumb = document.getElementById(`comment-img-thumb-${shoutoutId}`);
+  if (preview && thumb) { thumb.src = gifUrl; preview.style.display = 'flex'; }
+  // Close GIF panel
+  const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
+  if (gp) gp.style.display = 'none';
+};
+
+// ── Photo upload ─────────────────────────────────────────────────────────────
+window.handleCommentImage = async function(shoutoutId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { showToast('Image too large (max 8MB)', 'error'); return; }
+  showToast('Compressing…', 'success');
+  try {
+    const compressed = await compressImage(file, 900, 0.70);
+    const base64 = await new Promise(resolve => {
+      const r = new FileReader(); r.onload = e => resolve(e.target.result); r.readAsDataURL(compressed);
+    });
+    if (!window._commentImages) window._commentImages = {};
+    window._commentImages[shoutoutId] = base64;
+    const preview = document.getElementById(`comment-img-preview-${shoutoutId}`);
+    const thumb = document.getElementById(`comment-img-thumb-${shoutoutId}`);
+    if (preview && thumb) { thumb.src = base64; preview.style.display = 'flex'; }
+  } catch(err) { showToast('Could not process image', 'error'); }
+};
+
+window.clearCommentImage = function(shoutoutId) {
+  if (window._commentImages) delete window._commentImages[shoutoutId];
+  const preview = document.getElementById(`comment-img-preview-${shoutoutId}`);
+  if (preview) preview.style.display = 'none';
+  const thumb = document.getElementById(`comment-img-thumb-${shoutoutId}`);
+  if (thumb) thumb.src = '';
+};
+
+// ── Comment image lightbox ────────────────────────────────────────────────────
+window.openCommentImageLightbox = function(src) {
+  const existing = document.getElementById('commentImgLightbox');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = 'commentImgLightbox';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  el.innerHTML = `
+    <button onclick="document.getElementById('commentImgLightbox').remove()"
+            style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    <img src="${src}" style="max-width:90vw;max-height:88vh;object-fit:contain;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,0.8);">`;
+  el.onclick = (e) => { if (e.target === el) el.remove(); };
+  document.body.appendChild(el);
+};
+
+// Close emoji/gif panels when clicking outside
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('[id^="comment-emoji-panel-"]').forEach(panel => {
+    if (!panel.contains(e.target) && !e.target.closest('[onclick*="toggleCommentEmoji"]')) {
+      panel.style.display = 'none';
+    }
+  });
+  document.querySelectorAll('[id^="comment-gif-panel-"]').forEach(panel => {
+    if (!panel.contains(e.target) && !e.target.closest('[onclick*="toggleCommentGif"]')) {
+      panel.style.display = 'none';
+    }
+  });
+});
 
 window.toggleReplyBox = function (shoutoutId, commentId) {
   const box = document.getElementById(`replybox-${commentId}`);
