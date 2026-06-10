@@ -4535,11 +4535,6 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
   }
 });
 
-module.exports = router;
-
-const router  = express.Router();
-const mongoose = require('mongoose');
-
 // ─── SECURITY MIDDLEWARE ─────────────────────────────────────────────────────
 const { sanitizeBody, securityHeaders } = require('./Sanitize'); // adjust path if needed
 
