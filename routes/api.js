@@ -1389,10 +1389,16 @@ router.post('/events/:id/rsvp', authenticate, async (req, res) => {
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     const idx = event.rsvps.indexOf(req.userId);
-    if (idx === -1) event.rsvps.push(req.userId);
-    else event.rsvps.splice(idx, 1);
+    const adding = idx === -1;
+    if (adding) {
+      event.rsvps.push(req.userId);
+      // Reset reminder flag so this user gets notified when the event is tomorrow
+      event.rsvpReminderSent = false;
+    } else {
+      event.rsvps.splice(idx, 1);
+    }
     await event.save();
-    res.json({ rsvpCount: event.rsvps.length, going: idx === -1 });
+    res.json({ rsvpCount: event.rsvps.length, going: adding });
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
