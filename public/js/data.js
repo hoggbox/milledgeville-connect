@@ -354,13 +354,14 @@ window.handlePushNotificationClick = async function(data) {
 // ─── Service Worker → App message bridge ────────────────────────────────────
 // When the SW receives a notification click and the app is already open,
 // it posts a message instead of doing a hard navigate so we can deep-link in-place.
-navigator.serviceWorker.addEventListener('message', (event) => {
-  const { type, data } = event.data;
-  if (type === 'PUSH_NOTIFICATION_CLICK') {
-    // handle navigation — this should be synchronous
-    showPage(data.page, data.id);
-  }
-});
+// OLD (working):
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'PUSH_NOTIFICATION_CLICK') {
+      window.handlePushNotificationClick(event.data.data);
+    }
+  });
+}
 
 // ─── COLD LAUNCH DEEP LINK HANDLER ──────────────────────────────────────────
 // Handles when app is opened from a closed state via notification
