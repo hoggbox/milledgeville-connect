@@ -3486,8 +3486,7 @@ window.openThumbViewer = function(evt, src) {
 document.addEventListener('click', function(e) {
   const img = e.target.closest('.lost-viewer-img');
   if (!img) return;
-  e.stopImmediatePropagation();
-  e.preventDefault();
+  e.stopPropagation();
   openImageViewerForLost(img.dataset.src || img.src);
 });
 
