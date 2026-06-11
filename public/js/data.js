@@ -3486,7 +3486,8 @@ window.openThumbViewer = function(evt, src) {
 document.addEventListener('click', function(e) {
   const img = e.target.closest('.lost-viewer-img');
   if (!img) return;
-  e.stopPropagation();
+  e.stopImmediatePropagation();
+  e.preventDefault();
   openImageViewerForLost(img.dataset.src || img.src);
 });
 
@@ -6147,10 +6148,11 @@ window.showLostItemDetail = async function(id) {
             <p class="text-slate-500 text-sm">${item.location ? '📍 ' + esc(item.location) : ''} • ${timeAgo(item.createdAt)}</p>
 
             ${item.images && item.images.length ? `
+              ${(() => { window._lostItemModalImages = item.images; })() || ''}
               <div class="grid grid-cols-2 gap-3 my-6">
-                ${item.images.map(src => `
-                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer lost-viewer-img" 
-                       data-src="${src.replace(/"/g, '&quot;')}">
+                ${item.images.map((src, i) => `
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer" 
+                       onclick="event.stopImmediatePropagation(); openImageViewerForLost(window._lostItemModalImages[${i}])">
                 `).join('')}
               </div>` : ''}
 
@@ -6518,10 +6520,11 @@ window.showMarketplaceDetail = async function(id) {
           <div class="p-6">
             <!-- Images -->
             ${item.images && item.images.length ? `
+              ${(() => { window._marketModalImages = item.images; })() || ''}
               <div class="grid grid-cols-2 gap-3 mb-6">
-                ${item.images.map(src => `
-                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10 lost-viewer-img" 
-                       data-src="${src.replace(/"/g, '&quot;')}">
+                ${item.images.map((src, i) => `
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
+                       onclick="event.stopImmediatePropagation(); openImageViewerForLost(window._marketModalImages[${i}])">
                 `).join('')}
               </div>` : ''}
 
@@ -7868,8 +7871,8 @@ window.showLostDetail = async function(id) {
       ${item.images && item.images.length ? `
         <div class="grid grid-cols-2 gap-3 mb-6">
           ${item.images.map((src, index) => `
-            <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10 lost-modal-img" 
-                 data-index="${index}">
+            <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
+                 onclick="event.stopImmediatePropagation(); openImageViewerForLost(window._lostModalImages[${index}])">
           `).join('')}
         </div>` : ''}
 
