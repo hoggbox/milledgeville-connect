@@ -3482,6 +3482,15 @@ window.openThumbViewer = function(evt, src) {
 };
 
 // ── Full-image viewer used in lost & found and marketplace detail modals ──────
+// Delegated handler — works for any .lost-viewer-img added dynamically to DOM
+document.addEventListener('click', function(e) {
+  const img = e.target.closest('.lost-viewer-img');
+  if (!img) return;
+  e.stopImmediatePropagation();
+  e.preventDefault();
+  openImageViewerForLost(img.dataset.src || img.src);
+});
+
 window.openImageViewerForLost = function(src) {
   const existing = document.getElementById('_imgViewerForLost');
   if (existing) existing.remove();
@@ -6141,8 +6150,8 @@ window.showLostItemDetail = async function(id) {
             ${item.images && item.images.length ? `
               <div class="grid grid-cols-2 gap-3 my-6">
                 ${item.images.map(src => `
-                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer" 
-                       onclick="openImageViewerForLost('${src}')">
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer lost-viewer-img" 
+                       data-src="${src.replace(/"/g, '&quot;')}">
                 `).join('')}
               </div>` : ''}
 
@@ -6512,8 +6521,8 @@ window.showMarketplaceDetail = async function(id) {
             ${item.images && item.images.length ? `
               <div class="grid grid-cols-2 gap-3 mb-6">
                 ${item.images.map(src => `
-                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
-                       onclick="openImageViewerForLost('${src}')">
+                  <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10 lost-viewer-img" 
+                       data-src="${src.replace(/"/g, '&quot;')}">
                 `).join('')}
               </div>` : ''}
 
