@@ -13,6 +13,7 @@ const commentSchema = new mongoose.Schema({
   image:    { type: String, default: null },
   author:   String,
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  likes:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   replies:  [replySchema],
   createdAt:{ type: Date, default: Date.now }
 });

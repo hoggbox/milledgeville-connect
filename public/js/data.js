@@ -2997,6 +2997,11 @@ function renderCommentRow(c, shoutoutId) {
           </div>
           ${currentUser ? `
             <div class="flex items-center gap-3 mt-1 ml-2">
+              <button id="comment-like-btn-${c._id}" onclick="likeComment('${shoutoutId}','${c._id}')" 
+                      class="flex items-center gap-1 text-[11px] text-white/40 hover:text-pink-400 transition font-semibold">
+                <span id="comment-like-icon-${c._id}">${(c.likes||[]).includes(currentUser?._id||currentUser?.id) ? '\u2764\uFE0F' : '\uD83E\uDD0D'}</span>
+                <span id="comment-like-count-${c._id}">${(c.likes||[]).length || ''}</span>
+              </button>
               <button onclick="toggleReplyBox('${shoutoutId}','${c._id}')" 
                       class="text-[11px] text-white/40 hover:text-emerald-400 transition font-semibold">Reply</button>
             </div>
@@ -3033,6 +3038,17 @@ window.toggleLike = async function (shoutoutId) {
   }
 };
 
+window.likeComment = async function(shoutoutId, commentId) {
+  if (!requireAuth('Sign in to like comments.')) return;
+  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/like`, {});
+  if (res.likes !== undefined) {
+    const icon  = document.getElementById(`comment-like-icon-${commentId}`);
+    const count = document.getElementById(`comment-like-count-${commentId}`);
+    if (icon)  icon.textContent  = res.liked ? '\u2764\uFE0F' : '\uD83E\uDD0D';
+    if (count) count.textContent = res.likes || '';
+  }
+};
+
 window.toggleCommentSection = function (shoutoutId) {
   const section = document.getElementById(`comment-section-${shoutoutId}`);
   if (!section) return;
@@ -3066,7 +3082,48 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
     if (gp) gp.style.display = 'none';
     const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
     if (res._id) {
-      await loadShoutoutsPage(document.getElementById('content'));
+      // Build a synthetic comment object from the API response and append it
+      // to the DOM without reloading the whole page (which would collapse comments).
+      const newComment = {
+        _id:       res._id       || ('tmp_' + Date.now()),
+        author:    res.author    || currentUser?.name || '',
+        authorId:  res.authorId  || currentUser?._id  || currentUser?.id || '',
+        text:      res.text      || text,
+        image:     res.image     || image || null,
+        likes:     res.likes     || [],
+        replies:   res.replies   || [],
+        createdAt: res.createdAt || new Date().toISOString(),
+      };
+
+      // Append the new comment row into the existing comment list
+      const commentList = document.querySelector(`#comment-section-${shoutoutId} .sc-comments`);
+      if (commentList) {
+        // Insert before the comment-input row (last child) so it appears above the input
+        const inputRow = commentList.querySelector('.sc-comment-input');
+        const rowHtml = renderCommentRow(newComment, shoutoutId);
+        const tmp = document.createElement('div');
+        tmp.innerHTML = rowHtml;
+        if (inputRow) {
+          commentList.insertBefore(tmp.firstElementChild, inputRow);
+        } else {
+          commentList.appendChild(tmp.firstElementChild);
+        }
+      }
+
+      // Update the comment count badge on the toggle button
+      const countBadge = document.querySelector(`#shoutout-${shoutoutId} .sc-react span:last-child`);
+      if (countBadge) {
+        const prev = parseInt(countBadge.textContent, 10) || 0;
+        countBadge.textContent = prev + 1;
+      }
+
+      // Keep the comment section visible and scroll the new comment into view
+      const section = document.getElementById(`comment-section-${shoutoutId}`);
+      if (section) section.classList.remove('hidden');
+
+      // Re-focus the input for quick follow-up comments
+      const newInput = document.getElementById(`commentinput-${shoutoutId}`);
+      if (newInput) setTimeout(() => newInput.focus(), 50);
     } else {
       showToast(res.message || 'Error posting comment', 'error');
     }
@@ -3309,7 +3366,15 @@ window.deleteComment = async function (shoutoutId, commentId) {
   if (!confirm('Delete this comment?')) return;
   const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}`);
   if (res.message === 'Deleted') {
-    await loadShoutoutsPage(document.getElementById('content'));
+    // Remove the comment row from DOM without reloading the page
+    const row = document.getElementById(`comment-${commentId}`);
+    if (row) row.remove();
+    // Decrement the comment count badge
+    const countBadge = document.querySelector(`#shoutout-${shoutoutId} .sc-react span:last-child`);
+    if (countBadge) {
+      const prev = parseInt(countBadge.textContent, 10) || 1;
+      countBadge.textContent = Math.max(0, prev - 1);
+    }
   } else {
     showToast(res.message || 'Error', 'error');
   }
