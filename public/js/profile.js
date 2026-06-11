@@ -727,7 +727,7 @@ try {
     const saved = await apiGet('/user/notification-preferences');
     if (saved && typeof saved === 'object') {
       prefs.trafficAlerts    = saved.shoutouts   ?? prefs.trafficAlerts;
-      prefs.trafficComments  = saved.comments === true;   // ← Only ON if explicitly true
+      prefs.trafficComments = saved.comments === true;
       prefs.deals            = saved.deals       ?? prefs.deals;
       prefs.events           = saved.events      ?? prefs.events;
       prefs.lostFound        = saved.lostFound   ?? prefs.lostFound;
@@ -866,10 +866,12 @@ window.saveNotificationPreferences = async function() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
 
   const get = id => document.getElementById(id)?.checked ?? true;
+  // Comments on traffic alerts is opt-in, so default to false if element missing
+  const getOptIn = id => document.getElementById(id)?.checked ?? false;
 
   const preferences = {
     shoutouts:  get('np-trafficAlerts'),
-    comments:   get('np-trafficComments'),
+    comments:   getOptIn('np-trafficComments'),
     deals:      get('np-deals'),
     events:     get('np-events'),
     lostFound:  get('np-lostFound'),

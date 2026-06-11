@@ -1067,7 +1067,8 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           break;
 
         case 'comment':
-          if (prefs.comments === false) shouldSend = false;
+          // Opt-in: only send if user has explicitly turned this ON (defaults to OFF)
+          if (prefs.comments !== true) shouldSend = false;
           break;
 
         case 'marketplace':
@@ -3973,51 +3974,49 @@ router.get('/user/marketplace-preferences', authenticate, async (req, res) => {
   }
 });
 
-// ─── NOTIFICATION PREFERENCES ────────────────────────────────────────────────
-// POST /api/user/notification-preferences
-// Saves the full notificationPreferences object from the settings modal.
-router.post('/user/notification-preferences', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    const { preferences } = req.body;
-    if (!preferences || typeof preferences !== 'object') {
-      return res.status(400).json({ message: 'preferences object is required' });
-    }
-
-    // Only allow toggling of the fields defined in the schema.
-    // Verified-business custom notifications are NOT included — they cannot be turned off.
-    user.notificationPreferences = {
-      events:    typeof preferences.events    === 'boolean' ? preferences.events    : (user.notificationPreferences?.events    ?? true),
-      deals:     typeof preferences.deals     === 'boolean' ? preferences.deals     : (user.notificationPreferences?.deals     ?? true),
-      shoutouts: typeof preferences.shoutouts === 'boolean' ? preferences.shoutouts : (user.notificationPreferences?.shoutouts ?? true),
-      lostFound: typeof preferences.lostFound === 'boolean' ? preferences.lostFound : (user.notificationPreferences?.lostFound ?? true),
-      messages:  typeof preferences.messages  === 'boolean' ? preferences.messages  : (user.notificationPreferences?.messages  ?? true),
-      comments:  typeof preferences.comments  === 'boolean' ? preferences.comments  : (user.notificationPreferences?.comments  ?? true),
-      marketplace: {
-        all:       typeof preferences.marketplace?.all       === 'boolean' ? preferences.marketplace.all       : (user.notificationPreferences?.marketplace?.all       ?? true),
-        homes:     typeof preferences.marketplace?.homes     === 'boolean' ? preferences.marketplace.homes     : (user.notificationPreferences?.marketplace?.homes     ?? true),
-        cars:      typeof preferences.marketplace?.cars      === 'boolean' ? preferences.marketplace.cars      : (user.notificationPreferences?.marketplace?.cars      ?? true),
-        furniture: typeof preferences.marketplace?.furniture === 'boolean' ? preferences.marketplace.furniture : (user.notificationPreferences?.marketplace?.furniture ?? true),
-        other:     typeof preferences.marketplace?.other     === 'boolean' ? preferences.marketplace.other     : (user.notificationPreferences?.marketplace?.other     ?? true),
-      }
-    };
-
-    await user.save();
-    res.json({ success: true, preferences: user.notificationPreferences });
-  } catch (err) {
-    console.error('Save notification preferences error:', err);
-    res.status(500).json({ message: 'Failed to save preferences' });
-  }
-});
-
 // GET /api/user/notification-preferences
 router.get('/user/notification-preferences', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('notificationPreferences');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user.notificationPreferences || {});
+
+    // Safe defaults — comments is OFF by default
+    const defaults = {
+      events:    true,
+      deals:     true,
+      shoutouts: true,
+      comments:  false,           // ← Traffic alert comments = OFF by default
+      lostFound: true,
+      messages:  true,
+      marketplace: {
+        all:       true,
+        homes:     true,
+        cars:      true,
+        furniture: true,
+        other:     true
+      }
+    };
+
+    const prefs = user.notificationPreferences || {};
+
+    // Merge saved values over defaults
+    const final = {
+      events:    prefs.events    ?? defaults.events,
+      deals:     prefs.deals     ?? defaults.deals,
+      shoutouts: prefs.shoutouts ?? defaults.shoutouts,
+      comments:  prefs.comments  ?? defaults.comments,     // ← Will now default to false
+      lostFound: prefs.lostFound ?? defaults.lostFound,
+      messages:  prefs.messages  ?? defaults.messages,
+      marketplace: {
+        all:       prefs.marketplace?.all       ?? defaults.marketplace.all,
+        homes:     prefs.marketplace?.homes     ?? defaults.marketplace.homes,
+        cars:      prefs.marketplace?.cars      ?? defaults.marketplace.cars,
+        furniture: prefs.marketplace?.furniture ?? defaults.marketplace.furniture,
+        other:     prefs.marketplace?.other     ?? defaults.marketplace.other,
+      }
+    };
+
+    res.json(final);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load preferences' });
   }
