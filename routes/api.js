@@ -4212,10 +4212,11 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':                     mimeType,
+      'Cache-Control':                    'public, max-age=86400',
+      'Content-Length':                   buffer.length,
+      'Access-Control-Allow-Origin':      '*',
+      'Cross-Origin-Resource-Policy':     'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4239,10 +4240,11 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':                   mimeType,
+      'Cache-Control':                  'public, max-age=86400',
+      'Content-Length':                 buffer.length,
+      'Access-Control-Allow-Origin':    '*',
+      'Cross-Origin-Resource-Policy':   'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4271,10 +4273,11 @@ router.get('/lostitem-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':                   mimeType,
+      'Cache-Control':                  'public, max-age=86400',
+      'Content-Length':                 buffer.length,
+      'Access-Control-Allow-Origin':    '*',
+      'Cross-Origin-Resource-Policy':   'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4303,10 +4306,11 @@ router.get('/marketplace-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':                   mimeType,
+      'Cache-Control':                  'public, max-age=86400',
+      'Content-Length':                 buffer.length,
+      'Access-Control-Allow-Origin':    '*',
+      'Cross-Origin-Resource-Policy':   'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4329,10 +4333,11 @@ router.get('/news-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':   mimeType,
-      'Cache-Control':  'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':                   mimeType,
+      'Cache-Control':                  'public, max-age=86400',
+      'Content-Length':                 buffer.length,
+      'Access-Control-Allow-Origin':    '*',
+      'Cross-Origin-Resource-Policy':   'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
@@ -4548,10 +4553,11 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=86400',
-      'Content-Length': buffer.length,
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type':                   mimeType,
+      'Cache-Control':                  'public, max-age=86400',
+      'Content-Length':                 buffer.length,
+      'Access-Control-Allow-Origin':    '*',
+      'Cross-Origin-Resource-Policy':   'cross-origin',
     });
     res.send(buffer);
   } catch (err) {
