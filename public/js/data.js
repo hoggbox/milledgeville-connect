@@ -3457,6 +3457,32 @@ window.openThumbViewer = function(evt, src) {
   document.body.appendChild(el);
 };
 
+// ── Full-image viewer used in lost & found and marketplace detail modals ──────
+window.openImageViewerForLost = function(src) {
+  const existing = document.getElementById('_imgViewerForLost');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = '_imgViewerForLost';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+  el.innerHTML = `
+    <button onclick="document.getElementById('_imgViewerForLost').remove()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    <img src="${src}" style="max-width:90vw;max-height:88vh;object-fit:contain;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,0.8);">`;
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  document.body.appendChild(el);
+};
+
+// ── Show/hide home-specific fields in the marketplace post form ───────────────
+window.toggleMarketHomeFields = function() {
+  const cat = document.getElementById('marketCategory')?.value;
+  const fields = document.getElementById('marketHomeFields');
+  if (!fields) return;
+  if (cat === 'Homes') {
+    fields.classList.remove('hidden');
+  } else {
+    fields.classList.add('hidden');
+  }
+};
+
 // ── Comment image lightbox ────────────────────────────────────────────────────
 window.openCommentImageLightbox = function(src) {
   const existing = document.getElementById('commentImgLightbox');
