@@ -1067,8 +1067,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
           break;
 
         case 'comment':
-          // Opt-in: only send if user has explicitly turned this ON (defaults to OFF)
-          if (prefs.comments !== true) shouldSend = false;
+          if (prefs.comments === false) shouldSend = false;
           break;
 
         case 'marketplace':
@@ -2312,22 +2311,11 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
     const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
-
-    // image may be a GIF URL (from Giphy picker) or a base64 data-URL (photo upload)
-    const commentImage = (clean.image || req.body.image || '').trim() || undefined;
-
     const comment = { 
       text: (clean.text || '').trim(), 
       author: user.name, 
-      authorId: user._id,
-      ...(commentImage ? { image: commentImage } : {})
+      authorId: user._id 
     };
-
-    // Guard: schema requires text OR image
-    if (!comment.text && !commentImage) {
-      return res.status(400).json({ message: 'Comment must have text or an image' });
-    }
-
     shoutout.comments.push(comment);
     await shoutout.save();
 
@@ -3974,49 +3962,51 @@ router.get('/user/marketplace-preferences', authenticate, async (req, res) => {
   }
 });
 
+// ─── NOTIFICATION PREFERENCES ────────────────────────────────────────────────
+// POST /api/user/notification-preferences
+// Saves the full notificationPreferences object from the settings modal.
+router.post('/user/notification-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { preferences } = req.body;
+    if (!preferences || typeof preferences !== 'object') {
+      return res.status(400).json({ message: 'preferences object is required' });
+    }
+
+    // Only allow toggling of the fields defined in the schema.
+    // Verified-business custom notifications are NOT included — they cannot be turned off.
+    user.notificationPreferences = {
+      events:    typeof preferences.events    === 'boolean' ? preferences.events    : (user.notificationPreferences?.events    ?? true),
+      deals:     typeof preferences.deals     === 'boolean' ? preferences.deals     : (user.notificationPreferences?.deals     ?? true),
+      shoutouts: typeof preferences.shoutouts === 'boolean' ? preferences.shoutouts : (user.notificationPreferences?.shoutouts ?? true),
+      lostFound: typeof preferences.lostFound === 'boolean' ? preferences.lostFound : (user.notificationPreferences?.lostFound ?? true),
+      messages:  typeof preferences.messages  === 'boolean' ? preferences.messages  : (user.notificationPreferences?.messages  ?? true),
+      comments:  typeof preferences.comments  === 'boolean' ? preferences.comments  : (user.notificationPreferences?.comments  ?? true),
+      marketplace: {
+        all:       typeof preferences.marketplace?.all       === 'boolean' ? preferences.marketplace.all       : (user.notificationPreferences?.marketplace?.all       ?? true),
+        homes:     typeof preferences.marketplace?.homes     === 'boolean' ? preferences.marketplace.homes     : (user.notificationPreferences?.marketplace?.homes     ?? true),
+        cars:      typeof preferences.marketplace?.cars      === 'boolean' ? preferences.marketplace.cars      : (user.notificationPreferences?.marketplace?.cars      ?? true),
+        furniture: typeof preferences.marketplace?.furniture === 'boolean' ? preferences.marketplace.furniture : (user.notificationPreferences?.marketplace?.furniture ?? true),
+        other:     typeof preferences.marketplace?.other     === 'boolean' ? preferences.marketplace.other     : (user.notificationPreferences?.marketplace?.other     ?? true),
+      }
+    };
+
+    await user.save();
+    res.json({ success: true, preferences: user.notificationPreferences });
+  } catch (err) {
+    console.error('Save notification preferences error:', err);
+    res.status(500).json({ message: 'Failed to save preferences' });
+  }
+});
+
 // GET /api/user/notification-preferences
 router.get('/user/notification-preferences', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('notificationPreferences');
     if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Safe defaults — comments is OFF by default
-    const defaults = {
-      events:    true,
-      deals:     true,
-      shoutouts: true,
-      comments:  false,           // ← Traffic alert comments = OFF by default
-      lostFound: true,
-      messages:  true,
-      marketplace: {
-        all:       true,
-        homes:     true,
-        cars:      true,
-        furniture: true,
-        other:     true
-      }
-    };
-
-    const prefs = user.notificationPreferences || {};
-
-    // Merge saved values over defaults
-    const final = {
-      events:    prefs.events    ?? defaults.events,
-      deals:     prefs.deals     ?? defaults.deals,
-      shoutouts: prefs.shoutouts ?? defaults.shoutouts,
-      comments:  prefs.comments  ?? defaults.comments,     // ← Will now default to false
-      lostFound: prefs.lostFound ?? defaults.lostFound,
-      messages:  prefs.messages  ?? defaults.messages,
-      marketplace: {
-        all:       prefs.marketplace?.all       ?? defaults.marketplace.all,
-        homes:     prefs.marketplace?.homes     ?? defaults.marketplace.homes,
-        cars:      prefs.marketplace?.cars      ?? defaults.marketplace.cars,
-        furniture: prefs.marketplace?.furniture ?? defaults.marketplace.furniture,
-        other:     prefs.marketplace?.other     ?? defaults.marketplace.other,
-      }
-    };
-
-    res.json(final);
+    res.json(user.notificationPreferences || {});
   } catch (err) {
     res.status(500).json({ message: 'Failed to load preferences' });
   }
@@ -4212,11 +4202,10 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':                     mimeType,
-      'Cache-Control':                    'public, max-age=86400',
-      'Content-Length':                   buffer.length,
-      'Access-Control-Allow-Origin':      '*',
-      'Cross-Origin-Resource-Policy':     'cross-origin',
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -4240,11 +4229,10 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':                   mimeType,
-      'Cache-Control':                  'public, max-age=86400',
-      'Content-Length':                 buffer.length,
-      'Access-Control-Allow-Origin':    '*',
-      'Cross-Origin-Resource-Policy':   'cross-origin',
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -4273,11 +4261,10 @@ router.get('/lostitem-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':                   mimeType,
-      'Cache-Control':                  'public, max-age=86400',
-      'Content-Length':                 buffer.length,
-      'Access-Control-Allow-Origin':    '*',
-      'Cross-Origin-Resource-Policy':   'cross-origin',
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -4306,11 +4293,10 @@ router.get('/marketplace-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':                   mimeType,
-      'Cache-Control':                  'public, max-age=86400',
-      'Content-Length':                 buffer.length,
-      'Access-Control-Allow-Origin':    '*',
-      'Cross-Origin-Resource-Policy':   'cross-origin',
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -4333,11 +4319,10 @@ router.get('/news-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':                   mimeType,
-      'Cache-Control':                  'public, max-age=86400',
-      'Content-Length':                 buffer.length,
-      'Access-Control-Allow-Origin':    '*',
-      'Cross-Origin-Resource-Policy':   'cross-origin',
+      'Content-Type':   mimeType,
+      'Cache-Control':  'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
@@ -4553,11 +4538,10 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.set({
-      'Content-Type':                   mimeType,
-      'Cache-Control':                  'public, max-age=86400',
-      'Content-Length':                 buffer.length,
-      'Access-Control-Allow-Origin':    '*',
-      'Cross-Origin-Resource-Policy':   'cross-origin',
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Length': buffer.length,
+      'Access-Control-Allow-Origin': '*',
     });
     res.send(buffer);
   } catch (err) {
