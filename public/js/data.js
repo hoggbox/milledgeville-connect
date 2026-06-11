@@ -7869,8 +7869,8 @@ window.showLostDetail = async function(id) {
       ${item.images && item.images.length ? `
         <div class="grid grid-cols-2 gap-3 mb-6">
           ${item.images.map((src, index) => `
-            <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10" 
-                 onclick="openMarketImageViewer(${index}, ${JSON.stringify(item.images)})">
+            <img src="${src}" class="rounded-2xl aspect-video object-cover cursor-pointer border border-white/10 lost-modal-img" 
+                 data-index="${index}">
           `).join('')}
         </div>` : ''}
 
@@ -7934,6 +7934,7 @@ window.showLostDetail = async function(id) {
   </div>
 </div>`;
 
+    window._lostModalImages = item.images || [];
     document.body.insertAdjacentHTML('beforeend', html);
 
     // Load comments
@@ -7952,6 +7953,18 @@ window.hideLostDetailModal = function() {
   const modal = document.getElementById('lostDetailModal');
   if (modal) modal.remove();
 };
+
+// Lost & Found modal image viewer
+// Images stored in window._lostModalImages when modal opens.
+// Thumbnails use data-index so no URLs ever touch an onclick attribute.
+document.addEventListener('click', function(e) {
+  const img = e.target.closest('.lost-modal-img');
+  if (!img) return;
+  e.stopImmediatePropagation();
+  const index = parseInt(img.dataset.index, 10) || 0;
+  const src = (window._lostModalImages || [])[index] || img.src;
+  openImageViewerForLost(src);
+});
 
 window.postLostComment = async function(itemId) {
   const input = document.getElementById('lostCommentInput');
