@@ -3442,6 +3442,30 @@ window.clearCommentImage = function(shoutoutId) {
 };
 
 // ── Thumbnail viewer for marketplace / lost & found list cards ────────────────
+// -- Lost & Found image preview handler --------------------------------------
+window.handleLostImages = function(input) {
+  const container = document.getElementById('lostImagePreviews');
+  if (!container) return;
+  const files = Array.from(input.files);
+  if (!files.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = '';
+  files.forEach((file, i) => {
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(file.name + ' is too large (max 8MB)', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const div = document.createElement('div');
+      div.className = 'relative w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0';
+      div.innerHTML = '<img src="' + e.target.result + '" class="w-full h-full object-cover">';
+      container.appendChild(div);
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 window.openThumbViewer = function(evt, src) {
   evt.stopImmediatePropagation();
   evt.preventDefault();
