@@ -3150,18 +3150,29 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
   if (isShoutout) {
     const shoutoutId = contentTypeOrShoutoutId;
     if (!requireAuth('Sign in to comment.')) return;
-    const input = document.getElementById(`commentinput-${shoutoutId}`);
-    const text = input ? input.value.trim() : '';
-    const image = window._commentImages?.[shoutoutId] || null;
-    if (!text && !image) return;
-    if (input) input.value = '';
-    clearCommentImage(shoutoutId);
-    // Close emoji/gif panels
-    const ep = document.getElementById(`comment-emoji-panel-${shoutoutId}`);
-    const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
-    if (ep) ep.style.display = 'none';
-    if (gp) gp.style.display = 'none';
-    const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
+const input = document.getElementById(`commentinput-${shoutoutId}`);
+const text = input ? input.value.trim() : '';
+const image = window._commentImages?.[shoutoutId] || null;   // ← Capture image FIRST
+
+if (!text && !image) return;
+
+// === XSS PROTECTION ===
+if (text && checkForSketchyInput(text, 'comment')) {
+  if (input) input.value = text;
+  return;
+}
+
+// Clear input + image data AFTER capturing
+if (input) input.value = '';
+clearCommentImage(shoutoutId);
+
+// Close emoji/gif panels
+const ep = document.getElementById(`comment-emoji-panel-${shoutoutId}`);
+const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
+if (ep) ep.style.display = 'none';
+if (gp) gp.style.display = 'none';
+
+const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
     if (res._id) {
       // Build a synthetic comment object from the API response and append it
       // to the DOM without reloading the whole page (which would collapse comments).
