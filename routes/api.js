@@ -2310,7 +2310,6 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     await shoutout.save();
 
     // Broadcast to everyone who enabled "Comments on Traffic Alerts"
-    const commentText = (req.body.text || '').trim();
     broadcastPush(
     `💬 New comment on Traffic Alert`,
     `${user.name}: ${commentText.substring(0, 65)}${commentText.length > 65 ? '...' : ''}`,
