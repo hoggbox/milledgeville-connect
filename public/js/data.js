@@ -9486,7 +9486,7 @@ window.showNotificationSettingsModal = async function() {
     shoutouts: prefs.shoutouts !== false,
     lostFound: prefs.lostFound !== false,
     messages:  prefs.messages  !== false,
-    comments:  prefs.comments  !== true,
+    comments:  prefs.comments  === true,
     marketplace: {
       all:       prefs.marketplace?.all       !== false,
       homes:     prefs.marketplace?.homes     !== false,
@@ -9599,7 +9599,7 @@ window.saveNotificationPreferences = async function() {
     shoutouts: document.getElementById('pref-shoutouts')?.checked ?? true,
     lostFound: document.getElementById('pref-lostfound')?.checked ?? true,
     messages: document.getElementById('pref-messages')?.checked ?? true,
-    comments: document.getElementById('pref-comments')?.checked ?? true,
+    comments: document.getElementById('pref-comments')?.checked ?? false,
     marketplace: {
       all: document.getElementById('pref-market-all')?.checked ?? true,
       homes: document.getElementById('pref-market-homes')?.checked ?? true,
