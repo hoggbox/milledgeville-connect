@@ -84,6 +84,34 @@ function sanitizeNewsHtml(html) {
   return tmp.innerHTML;
 }
 
+// ─── Basic client-side sketchy input / XSS guard (for comments) ─────────────
+window.checkForSketchyInput = function(text, type = 'comment') {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.trim();
+  if (!t) return false;
+
+  // Obvious script / event handler / data URL injection attempts
+  if (/<script|javascript:|on\w+\s*=|data:text\/html/i.test(t)) {
+    showToast('Please don\'t include scripts or code in comments.', 'error');
+    return true;
+  }
+
+  // Extremely long single token (spam / link obfuscation)
+  if (/\S{55,}/.test(t)) {
+    showToast('That looks like spam. Please break it up.', 'error');
+    return true;
+  }
+
+  // Too many raw URLs in one comment
+  const urlCount = (t.match(/https?:\/\//gi) || []).length;
+  if (urlCount > 2) {
+    showToast('Too many links in one comment.', 'error');
+    return true;
+  }
+
+  return false; // passes basic checks
+};
+
 // ─── RTE helpers ─────────────────────────────────────────────────────────────
 window.rteFormat = function(cmd, val) {
   document.getElementById('newsRTE')?.focus();
