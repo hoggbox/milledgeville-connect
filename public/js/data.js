@@ -3000,7 +3000,7 @@ function renderCommentRow(c, shoutoutId) {
                 <button onclick="deleteComment('${shoutoutId}','${c._id}')" 
                         class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
             </div>
-            <p class="text-sm text-white/80 mt-0.5">${c.text}</p>
+            ${c.text ? `<p class="text-sm text-white/80 mt-0.5">${c.text}</p>` : ''}
             ${c.image ? `
               <img src="${c.image}" alt="comment image"
                    onclick="openCommentImageLightbox('${c.image}')"
@@ -3016,7 +3016,7 @@ function renderCommentRow(c, shoutoutId) {
               <button onclick="toggleReplyBox('${shoutoutId}','${c._id}')" 
                       class="text-[11px] text-white/40 hover:text-emerald-400 transition font-semibold">Reply</button>
             </div>
-            <div id="replybox-${c._id}" class="hidden mt-2 flex items-start gap-2">
+            <div id="replybox-${c._id}" style="display:none;" class="mt-2 flex items-start gap-2">
               <div class="w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
               <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-1.5">
                 <input id="replyinput-${c._id}" type="text"
@@ -3414,8 +3414,8 @@ document.addEventListener('click', function(e) {
 window.toggleReplyBox = function (shoutoutId, commentId) {
   const box = document.getElementById(`replybox-${commentId}`);
   if (!box) return;
-  const isHidden = box.classList.contains('hidden');
-  box.classList.toggle('hidden', !isHidden);
+  const isHidden = box.style.display === 'none' || box.style.display === '';
+  box.style.display = isHidden ? 'flex' : 'none';
   if (isHidden) {
     const input = document.getElementById(`replyinput-${commentId}`);
     if (input) { input.focus(); }

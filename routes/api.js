@@ -2311,11 +2311,22 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
     const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+
+    // image may be a GIF URL (from Giphy picker) or a base64 data-URL (photo upload)
+    const commentImage = (clean.image || req.body.image || '').trim() || undefined;
+
     const comment = { 
       text: (clean.text || '').trim(), 
       author: user.name, 
-      authorId: user._id 
+      authorId: user._id,
+      ...(commentImage ? { image: commentImage } : {})
     };
+
+    // Guard: schema requires text OR image
+    if (!comment.text && !commentImage) {
+      return res.status(400).json({ message: 'Comment must have text or an image' });
+    }
+
     shoutout.comments.push(comment);
     await shoutout.save();
 
