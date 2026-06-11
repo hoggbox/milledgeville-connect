@@ -4515,6 +4515,59 @@ function getNextRecurringDate(daysArray, currentScheduledFor) {
 setInterval(processScheduledNotifications, 30 * 1000);
 processScheduledNotifications(); // run once on startup
 
+// --- RSVP Day-Before Reminders ---
+// Runs every 15 minutes. Finds events happening tomorrow (within a 23-25 hr
+// window) whose rsvpReminderSent flag is not yet set, sends a personal push
+// to each RSVP'd user, then marks the event so it never fires again.
+async function processRsvpReminders() {
+  try {
+    const now = new Date();
+
+    // Window: events whose date falls 23-25 hours from now (2-hr catch window)
+    const windowStart = new Date(now.getTime() + 23 * 60 * 60 * 1000);
+    const windowEnd   = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+
+    const events = await Event.find({
+      date: { $gte: windowStart, $lte: windowEnd },
+      rsvpReminderSent: { $ne: true },
+      rsvps: { $exists: true, $not: { $size: 0 } }
+    });
+
+    for (const event of events) {
+      const title = "Tomorrow: " + event.title;
+      const body  = event.location
+        ? "Don't forget - happening tomorrow at " + event.location + "!"
+        : "Don't forget - your event is happening tomorrow!";
+
+      const data = {
+        type:    'event',
+        eventId: event._id.toString(),
+        url:     '/events'
+      };
+
+      console.log('[RSVP Reminder] Sending to ' + event.rsvps.length + ' user(s) for "' + event.title + '"');
+
+      for (const userId of event.rsvps) {
+        try {
+          await sendPushToUser(userId, title, body, data, event.image || null);
+        } catch (err) {
+          console.error('[RSVP Reminder] Failed for user ' + userId + ':', err.message);
+        }
+      }
+
+      // Mark so we never fire again for this event
+      event.rsvpReminderSent = true;
+      await event.save();
+    }
+  } catch (err) {
+    console.error('[RSVP Reminder] Error:', err);
+  }
+}
+
+// Run every 15 minutes
+setInterval(processRsvpReminders, 15 * 60 * 1000);
+processRsvpReminders(); // run once on startup
+
 // GET /api/admin/scheduled-notifications
 router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
   try {

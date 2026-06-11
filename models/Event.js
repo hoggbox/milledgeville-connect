@@ -11,6 +11,10 @@ const eventSchema = new mongoose.Schema({
   hidden:     { type: Boolean, default: false },
   rsvps:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
+  // ── RSVP Reminder ─────────────────────────────────────────────────────────
+  rsvpReminderSent: { type: Boolean, default: false },
+  // ─────────────────────────────────────────────────────────────────────────
+
   // ── AUTO-MOD ──────────────────────────────────────────────────────────────
   flaggedBy:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   autoHidden: { type: Boolean, default: false },
