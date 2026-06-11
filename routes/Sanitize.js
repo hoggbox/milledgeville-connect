@@ -49,11 +49,12 @@ function deepSanitize(obj, depth = 0) {
   }
 
   if (typeof obj === 'string') {
-    // Don't truncate base64 image data URLs (they are often 100k+ chars)
+    // Don't touch base64 image data URLs (they are often 100k+ chars and contain no HTML)
     if (obj.startsWith('data:image/')) {
       return obj.replace(/\0/g, '');
     }
-    return obj.replace(/\0/g, '').substring(0, 10000);
+    // Strip HTML/script tags from every other string before storing
+    return htmlStrip(obj).substring(0, 10000);
   }
   return obj;
 }

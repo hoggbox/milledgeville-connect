@@ -1538,16 +1538,17 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
     const lost = await LostItem.findById(req.params.id);
     if (!lost) return res.status(404).json({ message: 'Not found' });
 
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const comment = { 
-  text: (req.body.text || '').trim(), 
-  author: user.name, 
-  authorId: user._id 
-};
+      text: (clean.text || '').trim(), 
+      author: user.name, 
+      authorId: user._id 
+    };
     lost.comments.push(comment);
     await lost.save();
 
     if (lost.owner && lost.owner.toString() !== req.userId) {
-      const commentText = (req.body.text || '').trim();
+      const commentText = (clean.text || '').trim();
       const itemOwner = await User.findById(lost.owner).select('notificationPreferences');
       if (!itemOwner || itemOwner.notificationPreferences?.comments !== false) {
         sendPushToUser(
@@ -1709,16 +1710,17 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
 
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
     const comment = { 
-    text: (req.body.text || '').trim(), 
-    author: user.name, 
-    authorId: user._id 
-  };
+      text: (clean.text || '').trim(), 
+      author: user.name, 
+      authorId: user._id 
+    };
     item.comments.push(comment);
     await item.save();
 
     if (item.seller && item.seller.toString() !== req.userId) {
-      const commentText = (req.body.text || '').trim();
+      const commentText = (clean.text || '').trim();
       const sellerUser = await User.findById(item.seller).select('notificationPreferences');
       if (!sellerUser || sellerUser.notificationPreferences?.comments !== false) {
         sendPushToUser(
@@ -2874,7 +2876,8 @@ router.put('/owner/business', authenticate, async (req, res) => {
     if (!user.verifiedBusiness)
       return res.status(403).json({ message: 'No verified business' });
 
-    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = req.body;
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const { name, address, phone, website, description, email, hours, priceRange, tags, logo } = clean;
     const updates = { name, address, phone, website, description };
     if (email     !== undefined) updates.email     = email;
     if (hours     !== undefined) updates.hours     = hours;
@@ -3005,7 +3008,8 @@ router.get('/owner/deals', authenticate, async (req, res) => {
 router.post('/owner/deals', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, description, expires, category } = req.body;
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const { title, description, expires, category } = clean;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
@@ -3061,7 +3065,8 @@ router.get('/owner/events', authenticate, async (req, res) => {
 router.post('/owner/events', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).populate({ path: 'verifiedBusiness', populate: { path: 'category' } });
-    const { title, date, location, description, category } = req.body;
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const { title, date, location, description, category } = clean;
 
     let resolvedCategory = category;
     if (!resolvedCategory && user.verifiedBusiness) {
