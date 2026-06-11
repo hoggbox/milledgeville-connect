@@ -2847,7 +2847,7 @@ function renderShoutoutCard(s) {
     : '';
 
   return `
-<div id="shoutout-${s._id}" class="sc">
+<div id="shoutout-${s._id}" class="sc" data-comments="${esc(JSON.stringify(s.comments||[]))}">
   <div class="sc-body">
     <div class="sc-header">
       <div class="sc-author">
@@ -2888,63 +2888,74 @@ function renderShoutoutCard(s) {
       </button>
     </div>
   </div>
-  <div id="comment-section-${s._id}" class="hidden">
-    <div class="sc-comments">
-      ${comments.map(c => renderCommentRow(c, s._id)).join('')}
-      ${currentUser ? `
-        <div class="sc-comment-input" style="flex-direction:column;align-items:stretch;gap:6px;padding:10px;">
-          <!-- Text row -->
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div class="sc-comment-avatar">${currentUser.name[0].toUpperCase()}</div>
-            <input id="commentinput-${s._id}" type="text" placeholder="Write a comment…"
-                   style="flex:1;min-width:0;"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
-          </div>
-          <!-- Toolbar row -->
-          <div style="display:flex;align-items:center;gap:6px;padding-left:34px;">
-            <!-- Emoji toggle -->
-            <button type="button" title="Emoji"
-                    onclick="toggleCommentEmoji('${s._id}',event)"
-                    style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:5px 8px;cursor:pointer;font-size:16px;line-height:1;color:#fff;">😊</button>
-            <!-- GIF toggle -->
-            <button type="button" title="GIF"
-                    onclick="toggleCommentGif('${s._id}',event)"
-                    style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:800;color:#34d399;letter-spacing:.5px;">GIF</button>
-            <!-- Photo upload -->
-            <label title="Photo" style="background:rgba(255,255,255,0.08);border-radius:10px;padding:5px 8px;cursor:pointer;font-size:15px;line-height:1;">
-              📷<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;"
-                       onchange="handleCommentImage('${s._id}',this)">
-            </label>
-            <!-- Image preview (shown after pick) -->
-            <div id="comment-img-preview-${s._id}" style="display:none;position:relative;">
-              <img id="comment-img-thumb-${s._id}" style="height:36px;width:36px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.2);">
-              <button onclick="clearCommentImage('${s._id}')"
-                      style="position:absolute;top:-5px;right:-5px;background:#ef4444;border:none;border-radius:50%;width:16px;height:16px;font-size:9px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
-            </div>
-            <div style="flex:1;"></div>
-            <button onclick="submitComment('${s._id}')"
-                    style="background:#059669;border:none;border-radius:10px;padding:5px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Post</button>
-          </div>
-          <!-- Emoji panel (per-comment, hidden by default) -->
-          <div id="comment-emoji-panel-${s._id}" style="display:none;padding-left:34px;">
-            <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;max-height:180px;overflow:hidden;">
-              <input type="text" placeholder="Search emoji…" oninput="filterCommentEmoji('${s._id}',this.value)"
-                     style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
-              <div id="comment-emoji-cats-${s._id}" style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto;padding-bottom:2px;"></div>
-              <div id="comment-emoji-grid-${s._id}" style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:2px;max-height:100px;overflow-y:auto;"></div>
-            </div>
-          </div>
-          <!-- GIF panel (per-comment, hidden by default) -->
-          <div id="comment-gif-panel-${s._id}" style="display:none;padding-left:34px;">
-            <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;">
-              <input type="text" placeholder="Search GIFs…" oninput="searchCommentGif('${s._id}',this.value)"
-                     style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
-              <div id="comment-gif-grid-${s._id}" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:160px;overflow-y:auto;"></div>
-            </div>
-          </div>
-        </div>` : `
-        <p class="sc-sign-in-prompt"><button onclick="showAuthModal()">Sign in</button> to comment</p>`}
+  <div id="comment-section-${s._id}" class="hidden" style="border-top:1px solid rgba(255,255,255,0.07);padding-top:0;">
+    <!-- Sort tabs -->
+    <div id="comment-tabs-${s._id}" style="display:flex;align-items:center;gap:2px;padding:8px 12px 4px;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <span style="font-size:11px;color:rgba(255,255,255,0.4);margin-right:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Sort:</span>
+      <button onclick="setCommentSort('${s._id}','relevant')" id="csort-relevant-${s._id}"
+              style="background:rgba(52,211,153,0.18);border:none;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;color:#34d399;cursor:pointer;">Top</button>
+      <button onclick="setCommentSort('${s._id}','newest')" id="csort-newest-${s._id}"
+              style="background:rgba(255,255,255,0.06);border:none;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);cursor:pointer;">Newest</button>
+      <button onclick="setCommentSort('${s._id}','all')" id="csort-all-${s._id}"
+              style="background:rgba(255,255,255,0.06);border:none;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);cursor:pointer;">All</button>
     </div>
+    <!-- Comment list -->
+    <div id="comment-list-${s._id}" style="padding:4px 0 0;"></div>
+    <!-- View more button (shown when collapsed) -->
+    <div id="comment-more-${s._id}" style="display:none;padding:4px 14px 8px;">
+      <button onclick="expandComments('${s._id}')"
+              style="background:none;border:none;color:#34d399;font-size:13px;font-weight:700;cursor:pointer;padding:4px 0;">
+        ▾ View more comments
+      </button>
+    </div>
+    <!-- Compose -->
+    ${currentUser ? `
+      <div style="display:flex;flex-direction:column;gap:6px;padding:8px 12px 10px;border-top:1px solid rgba(255,255,255,0.06);">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          <div style="width:30px;height:30px;background:#059669;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;margin-top:2px;">${currentUser.name[0].toUpperCase()}</div>
+          <div style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 12px;transition:border-color 0.2s;"
+               onfocus="this.style.borderColor='rgba(52,211,153,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+            <input id="commentinput-${s._id}" type="text" placeholder="Write a comment…"
+                   style="width:100%;background:none;border:none;color:#fff;font-size:14px;outline:none;display:block;"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${s._id}');}">
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <button type="button" onclick="toggleCommentEmoji('${s._id}',event)"
+                      style="background:none;border:none;font-size:18px;cursor:pointer;padding:0;line-height:1;opacity:0.7;" title="Emoji">😊</button>
+              <button type="button" onclick="toggleCommentGif('${s._id}',event)"
+                      style="background:rgba(255,255,255,0.1);border:none;border-radius:6px;padding:2px 6px;font-size:10px;font-weight:800;color:#34d399;cursor:pointer;letter-spacing:.5px;">GIF</button>
+              <label style="cursor:pointer;font-size:16px;opacity:0.7;" title="Photo">
+                📷<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="handleCommentImage('${s._id}',this)">
+              </label>
+              <div id="comment-img-preview-${s._id}" style="display:none;position:relative;">
+                <img id="comment-img-thumb-${s._id}" style="height:28px;width:28px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
+                <button onclick="clearCommentImage('${s._id}')"
+                        style="position:absolute;top:-5px;right:-5px;background:#ef4444;border:none;border-radius:50%;width:14px;height:14px;font-size:8px;color:#fff;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;">✕</button>
+              </div>
+              <div style="flex:1;"></div>
+              <button onclick="submitComment('${s._id}')"
+                      style="background:#059669;border:none;border-radius:14px;padding:4px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Post</button>
+            </div>
+          </div>
+        </div>
+        <div id="comment-emoji-panel-${s._id}" style="display:none;padding-left:38px;">
+          <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;max-height:180px;overflow:hidden;">
+            <input type="text" placeholder="Search emoji…" oninput="filterCommentEmoji('${s._id}',this.value)"
+                   style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+            <div id="comment-emoji-cats-${s._id}" style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto;padding-bottom:2px;"></div>
+            <div id="comment-emoji-grid-${s._id}" style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:2px;max-height:100px;overflow-y:auto;"></div>
+          </div>
+        </div>
+        <div id="comment-gif-panel-${s._id}" style="display:none;padding-left:38px;">
+          <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;">
+            <input type="text" placeholder="Search GIFs…" oninput="searchCommentGif('${s._id}',this.value)"
+                   style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+            <div id="comment-gif-grid-${s._id}" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:160px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>` : `
+      <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.06);">
+        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.4);"><button onclick="showAuthModal()" style="background:none;border:none;color:#34d399;cursor:pointer;font-weight:700;padding:0;">Sign in</button> to comment</p>
+      </div>`}
   </div>
 </div>`;
 }
@@ -3049,12 +3060,82 @@ window.likeComment = async function(shoutoutId, commentId) {
   }
 };
 
+// ─── Comment sort state ───────────────────────────────────────────────────────
+if (!window._commentSortState) window._commentSortState = {};   // shoutoutId → 'relevant'|'newest'|'all'
+if (!window._commentDataCache) window._commentDataCache = {};   // shoutoutId → comments array
+const COMMENT_PREVIEW = 3; // rows shown before "View more"
+
+function _renderCommentList(shoutoutId) {
+  const listEl = document.getElementById(`comment-list-${shoutoutId}`);
+  const moreEl = document.getElementById(`comment-more-${shoutoutId}`);
+  if (!listEl) return;
+
+  const allComments = window._commentDataCache[shoutoutId] || [];
+  const sort = window._commentSortState[shoutoutId] || 'relevant';
+
+  let sorted = [...allComments];
+  if (sort === 'relevant') {
+    sorted.sort((a, b) => ((b.likes||[]).length - (a.likes||[]).length) || (new Date(b.createdAt) - new Date(a.createdAt)));
+  } else if (sort === 'newest') {
+    sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+  // 'all' = insertion order (as-is from server)
+
+  const expanded = listEl.dataset.expanded === '1';
+  const visible = expanded ? sorted : sorted.slice(0, COMMENT_PREVIEW);
+  const hidden  = sorted.length - visible.length;
+
+  listEl.innerHTML = visible.map(c => renderCommentRow(c, shoutoutId)).join('');
+
+  if (moreEl) {
+    if (hidden > 0) {
+      moreEl.style.display = 'block';
+      const btn = moreEl.querySelector('button');
+      if (btn) btn.textContent = `▾ View ${hidden} more comment${hidden !== 1 ? 's' : ''}`;
+    } else {
+      moreEl.style.display = 'none';
+    }
+  }
+}
+
+window.setCommentSort = function(shoutoutId, sort) {
+  window._commentSortState[shoutoutId] = sort;
+  // Update tab styles
+  ['relevant','newest','all'].forEach(s => {
+    const btn = document.getElementById(`csort-${s}-${shoutoutId}`);
+    if (!btn) return;
+    const active = s === sort;
+    btn.style.background   = active ? 'rgba(52,211,153,0.18)' : 'rgba(255,255,255,0.06)';
+    btn.style.color        = active ? '#34d399' : 'rgba(255,255,255,0.5)';
+    btn.style.fontWeight   = active ? '700' : '600';
+  });
+  _renderCommentList(shoutoutId);
+};
+
+window.expandComments = function(shoutoutId) {
+  const listEl = document.getElementById(`comment-list-${shoutoutId}`);
+  if (listEl) listEl.dataset.expanded = '1';
+  _renderCommentList(shoutoutId);
+};
+
 window.toggleCommentSection = function (shoutoutId) {
   const section = document.getElementById(`comment-section-${shoutoutId}`);
   if (!section) return;
   const isHidden = section.classList.contains('hidden');
   section.classList.toggle('hidden', !isHidden);
   if (isHidden) {
+    // Seed sort state default if not yet set
+    if (!window._commentSortState[shoutoutId]) window._commentSortState[shoutoutId] = 'relevant';
+    // Pull comments from the card's data attribute if we haven't cached them yet
+    if (!window._commentDataCache[shoutoutId]) {
+      const card = document.getElementById(`shoutout-${shoutoutId}`);
+      if (card && card.dataset.comments) {
+        try { window._commentDataCache[shoutoutId] = JSON.parse(card.dataset.comments); } catch(e) {}
+      }
+    }
+    _renderCommentList(shoutoutId);
+    // Set active tab visual
+    window.setCommentSort(shoutoutId, window._commentSortState[shoutoutId]);
     const input = document.getElementById(`commentinput-${shoutoutId}`);
     if (input) setTimeout(() => { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 50);
   }
@@ -3095,20 +3176,13 @@ window.submitComment = async function(contentTypeOrShoutoutId, contentId) {
         createdAt: res.createdAt || new Date().toISOString(),
       };
 
-      // Append the new comment row into the existing comment list
-      const commentList = document.querySelector(`#comment-section-${shoutoutId} .sc-comments`);
-      if (commentList) {
-        // Insert before the comment-input row (last child) so it appears above the input
-        const inputRow = commentList.querySelector('.sc-comment-input');
-        const rowHtml = renderCommentRow(newComment, shoutoutId);
-        const tmp = document.createElement('div');
-        tmp.innerHTML = rowHtml;
-        if (inputRow) {
-          commentList.insertBefore(tmp.firstElementChild, inputRow);
-        } else {
-          commentList.appendChild(tmp.firstElementChild);
-        }
-      }
+      // Push into cache and re-render the comment list
+      if (!window._commentDataCache[shoutoutId]) window._commentDataCache[shoutoutId] = [];
+      window._commentDataCache[shoutoutId].push(newComment);
+      // Expand so the new comment is always visible
+      const listEl = document.getElementById(`comment-list-${shoutoutId}`);
+      if (listEl) listEl.dataset.expanded = '1';
+      _renderCommentList(shoutoutId);
 
       // Update the comment count badge on the toggle button
       const countBadge = document.querySelector(`#shoutout-${shoutoutId} .sc-react span:last-child`);
@@ -3356,7 +3430,14 @@ window.submitReply = async function (shoutoutId, commentId) {
   input.value = '';
   const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies`, { text });
   if (res._id) {
-    await loadShoutoutsPage(document.getElementById('content'));
+    // Update the reply in the cache
+    const cache = window._commentDataCache[shoutoutId] || [];
+    const comment = cache.find(c => c._id === commentId);
+    if (comment) {
+      comment.replies = comment.replies || [];
+      comment.replies.push({ _id: res._id, author: res.author || currentUser?.name, text, createdAt: new Date().toISOString() });
+    }
+    _renderCommentList(shoutoutId);
   } else {
     showToast(res.message || 'Error posting reply', 'error');
   }
@@ -3366,9 +3447,11 @@ window.deleteComment = async function (shoutoutId, commentId) {
   if (!confirm('Delete this comment?')) return;
   const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}`);
   if (res.message === 'Deleted') {
-    // Remove the comment row from DOM without reloading the page
-    const row = document.getElementById(`comment-${commentId}`);
-    if (row) row.remove();
+    // Remove from cache
+    if (window._commentDataCache[shoutoutId]) {
+      window._commentDataCache[shoutoutId] = window._commentDataCache[shoutoutId].filter(c => c._id !== commentId);
+    }
+    _renderCommentList(shoutoutId);
     // Decrement the comment count badge
     const countBadge = document.querySelector(`#shoutout-${shoutoutId} .sc-react span:last-child`);
     if (countBadge) {
