@@ -289,25 +289,32 @@ window.handlePushNotificationClick = async function(data) {
 
   const { page, id } = data;
 
-  if (page === 'shoutouts' || page === 'shoutout') {
-    navigate('shoutouts');
+if (page === 'shoutouts' || page === 'shoutout') {
+  navigate('shoutouts');
 
-    if (id) {
-      setTimeout(() => {
-        const el = document.getElementById(`shoutout-${id}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (id) {
+    const tryScrollAndHighlight = (attempt = 1) => {
+      const el = document.getElementById(`shoutout-${id}`);
 
-          // Temporary green highlight
-          el.classList.add('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400', 'transition-all');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-          setTimeout(() => {
-            el.classList.remove('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400');
-          }, 2500);
-        }
-      }, 900);
-    }
-  } 
+        // Green highlight
+        el.classList.add('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400', 'transition-all');
+
+        setTimeout(() => {
+          el.classList.remove('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400');
+        }, 2800);
+      } 
+      else if (attempt < 6) {
+        // Retry up to 6 times (every 450ms)
+        setTimeout(() => tryScrollAndHighlight(attempt + 1), 450);
+      }
+    };
+
+    setTimeout(() => tryScrollAndHighlight(), 600);
+  }
+}
   else if (page === 'marketplace' || page === 'market') {
     await navigate('marketplace');
     if (id) showMarketplaceDetail(id);
@@ -1134,9 +1141,11 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
 visibleItems.forEach(item => {
   if (item.type === 'news') {
     const n = item.data;
+    const newsThumb = n.images && n.images[0] ? n.images[0] : null;
     html += `
       <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-        <div class="flex-1">
+        ${newsThumb ? `<img src="${newsThumb}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0 self-start" loading="lazy" alt="" onerror="this.style.display='none'">` : ''}
+        <div class="flex-1 min-w-0">
           <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
           <h4 class="font-semibold text-lg mt-2">${esc(n.title)}</h4>
           <p class="text-white/70 line-clamp-2">${esc(n.summary || '')}</p>
@@ -6715,8 +6724,9 @@ function renderLostItemsPage() {
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
             <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
-                 class="w-24 h-24 object-cover rounded-2xl" 
+                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
                  loading="lazy" alt=""
+                 onclick="event.stopPropagation();openCommentImageLightbox('https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
             <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🔎</div>
           </div>
@@ -6967,8 +6977,9 @@ async function renderMarketplacePage() {
         <div class="flex gap-4">
           <div class="w-24 h-24 flex-shrink-0 relative">
             <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
-                 class="w-24 h-24 object-cover rounded-2xl" 
+                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
                  loading="lazy" alt=""
+                 onclick="event.stopPropagation();openCommentImageLightbox('https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}')"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
             <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🛒</div>
           </div>
