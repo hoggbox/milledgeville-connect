@@ -723,15 +723,16 @@ window.showNotificationSettingsModal = async function() {
     marketplace: { all: true, homes: true, cars: true, furniture: true, other: true }
   };
 
-  try {
+try {
     const saved = await apiGet('/user/notification-preferences');
     if (saved && typeof saved === 'object') {
       prefs.trafficAlerts    = saved.shoutouts   ?? prefs.trafficAlerts;
-      prefs.trafficComments  = saved.comments    ?? prefs.trafficComments;
+      prefs.trafficComments  = saved.comments === true;   // ← Only ON if explicitly true
       prefs.deals            = saved.deals       ?? prefs.deals;
       prefs.events           = saved.events      ?? prefs.events;
       prefs.lostFound        = saved.lostFound   ?? prefs.lostFound;
       prefs.messages         = saved.messages    ?? prefs.messages;
+
       if (saved.marketplace) {
         prefs.marketplace.all       = saved.marketplace.all       ?? true;
         prefs.marketplace.homes     = saved.marketplace.homes     ?? true;
@@ -740,7 +741,7 @@ window.showNotificationSettingsModal = async function() {
         prefs.marketplace.other     = saved.marketplace.other     ?? true;
       }
     }
-  } catch (e) { /* use defaults */ }
+} catch (e) { /* use defaults */ }
 
   function toggle(id, checked) {
     return `

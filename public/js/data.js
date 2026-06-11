@@ -9486,7 +9486,7 @@ window.showNotificationSettingsModal = async function() {
     shoutouts: prefs.shoutouts !== false,
     lostFound: prefs.lostFound !== false,
     messages:  prefs.messages  !== false,
-    comments:  prefs.comments  !== false,
+    comments:  prefs.comments  !== true,
     marketplace: {
       all:       prefs.marketplace?.all       !== false,
       homes:     prefs.marketplace?.homes     !== false,
