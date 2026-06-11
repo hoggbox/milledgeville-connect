@@ -2324,32 +2324,6 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
   }
 });
 
-router.post('/shoutouts/:id/comments/:commentId/like', authenticate, async (req, res) => {
-  try {
-    const shoutout = await Shoutout.findById(req.params.id);
-    if (!shoutout) return res.status(404).json({ message: 'Not found' });
-
-    const comment = shoutout.comments.id(req.params.commentId);
-    if (!comment) return res.status(404).json({ message: 'Comment not found' });
-
-    const userId = req.userId.toString();
-    const idx = comment.likes.findIndex(id => id.toString() === userId);
-    const liked = idx === -1;
-
-    if (liked) {
-      comment.likes.push(req.userId);
-    } else {
-      comment.likes.splice(idx, 1);
-    }
-
-    await shoutout.save();
-    res.json({ likes: comment.likes.length, liked });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
 router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (req, res) => {
   try {
     const user     = await User.findById(req.userId);
