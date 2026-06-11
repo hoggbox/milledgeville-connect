@@ -9,11 +9,19 @@ const replySchema = new mongoose.Schema({
 });
 
 const commentSchema = new mongoose.Schema({
-  text:     { type: String, required: true },
+  text:     { type: String, default: '' },
+  image:    { type: String, default: null },
   author:   String,
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   replies:  [replySchema],
   createdAt:{ type: Date, default: Date.now }
+});
+
+commentSchema.pre('validate', function(next) {
+  if (!this.text && !this.image) {
+    return next(new Error('Comment must have text or an image'));
+  }
+  next();
 });
 
 const shoutoutSchema = new mongoose.Schema({

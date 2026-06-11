@@ -2297,10 +2297,14 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
     const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
-    const comment = { 
-      text: (clean.text || '').trim(), 
-      author: user.name, 
-      authorId: user._id 
+    const commentText = (clean.text || '').trim();
+    const commentImage = clean.image || null;
+    if (!commentText && !commentImage) return res.status(400).json({ message: 'Comment must have text or an image' });
+    const comment = {
+      text: commentText,
+      image: commentImage,
+      author: user.name,
+      authorId: user._id
     };
     shoutout.comments.push(comment);
     await shoutout.save();
