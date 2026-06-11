@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
     shoutouts:  { type: Boolean, default: true },
     lostFound:  { type: Boolean, default: true },
     messages:   { type: Boolean, default: true },
-    comments:   { type: Boolean, default: true },
+    comments:   { type: Boolean, default: false },
 
     // Marketplace has its own sub-preferences
     marketplace: {
