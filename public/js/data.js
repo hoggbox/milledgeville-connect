@@ -291,11 +291,21 @@ window.handlePushNotificationClick = async function(data) {
 
   if (page === 'shoutouts' || page === 'shoutout') {
     navigate('shoutouts');
+
     if (id) {
       setTimeout(() => {
         const el = document.getElementById(`shoutout-${id}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 800);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          // Temporary green highlight
+          el.classList.add('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400', 'transition-all');
+
+          setTimeout(() => {
+            el.classList.remove('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400');
+          }, 2500);
+        }
+      }, 900);
     }
   } 
   else if (page === 'marketplace' || page === 'market') {
