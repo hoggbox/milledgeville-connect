@@ -28,7 +28,7 @@
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) { document.body.innerHTML = unauthorized; return; }
-      const user = await res.json();
+      const { user } = await res.json();
       if (!user?.isAdmin) { document.body.innerHTML = unauthorized; return; }
     } catch (e) {
       document.body.innerHTML = unauthorized;
@@ -2422,7 +2422,9 @@ function getNextRunDisplay(n) {
   });
 }
 
-init().catch(e => console.error('Init error:', e));
+document.addEventListener('DOMContentLoaded', () => {
+  init().catch(e => console.error('Init error:', e));
+});
 
 // ═══════════════════════════════════════════════════
 // RICH TEXT EDITOR (RTE) — message body
