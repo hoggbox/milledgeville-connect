@@ -356,7 +356,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
     // ── Hard 45-second rate limit (existing) ──────────────────────────────────
-    if (user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
+    if (!user.isAdmin && user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
       return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
     }
 
@@ -371,7 +371,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     }
 
     // ── Admin/system mute check ────────────────────────────────────────────────
-    if (user.isMuted) {
+    if (!user.isAdmin && user.isMuted) {
       return res.status(403).json({
         message: 'Your account has been muted by an administrator for excessive posting. Contact support if you believe this is an error.',
         muted: true
@@ -383,7 +383,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const windowStart = now - SPAM_WINDOW_MS;
     const recentPosts = (user.recentPostTimes || []).filter(t => new Date(t).getTime() > windowStart);
 
-    if (recentPosts.length >= SPAM_POST_LIMIT) {
+    if (!user.isAdmin && recentPosts.length >= SPAM_POST_LIMIT) {
       user.isMuted = true;
       await user.save();
 
