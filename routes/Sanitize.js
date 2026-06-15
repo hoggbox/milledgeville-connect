@@ -58,12 +58,21 @@ function deepSanitize(obj, depth = 0) {
   return obj;
 }
 
-// ─── Special sanitiser for AUTH routes (login/register) ───────────────────────
+// ─── Special sanitiser for AUTH routes (login/register/forgot-password) ───────
 function sanitizeAuth(body) {
   const safe = {};
-  if (body.name)     safe.name = htmlStrip(body.name).substring(0, 80);
-  if (body.email)    safe.email = htmlStrip(body.email).substring(0, 200).toLowerCase();
-  if (body.password) safe.password = body.password;        // ← DO NOT strip password
+  if (body.name)             safe.name = htmlStrip(body.name).substring(0, 80);
+  if (body.email)            safe.email = htmlStrip(body.email).substring(0, 200).toLowerCase();
+  if (body.password)         safe.password = body.password;        // ← DO NOT strip password
+
+  // ── Security question / answer (registration) ───────────────────────────────
+  if (body.securityQuestion) safe.securityQuestion = htmlStrip(body.securityQuestion).substring(0, 200);
+  if (body.securityAnswer)   safe.securityAnswer = body.securityAnswer; // ← DO NOT strip, gets hashed as-is
+
+  // ── Forgot-password flow ─────────────────────────────────────────────────────
+  if (body.answer)      safe.answer = body.answer;            // ← DO NOT strip, compared against hash
+  if (body.newPassword) safe.newPassword = body.newPassword;  // ← DO NOT strip password
+
   return safe;
 }
 
@@ -72,8 +81,16 @@ function sanitizeBody(req, res, next) {
   if (req.body && typeof req.body === 'object') {
     const path = req.path.toLowerCase();
 
-    // Special handling for login / register
-    if (path.includes('/auth/login') || path.includes('/auth/register')) {
+    // Special handling for login / register / forgot-password
+    // (these routes carry raw credential-like fields — name, email, password,
+    //  securityQuestion, securityAnswer, answer, newPassword — that must pass
+    //  through untouched rather than being stripped by deepSanitize's
+    //  field-name blocklists or string truncation)
+    if (
+      path.includes('/auth/login') ||
+      path.includes('/auth/register') ||
+      path.includes('/auth/forgot-password')
+    ) {
       req.body = sanitizeAuth(req.body);
     } else {
       req.body = deepSanitize(req.body);
