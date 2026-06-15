@@ -544,7 +544,7 @@ router.post('/auth/change-password', authenticate, async (req, res) => {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = newPassword; // pre('save') hook hashes it once
     await user.save();
 
     res.json({ success: true, message: 'Password updated successfully' });
@@ -4907,6 +4907,43 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
     console.error('DELETE spotlight-ad error:', err);
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── ONE-TIME MIGRATION: hash any plain-text securityAnswer values ─────────────
+// GET /api/admin/fix-security-answers
+// Requires an authenticated admin (same as your other /admin routes).
+// Run once, confirm the response counts look right, then delete this route.
+router.get('/admin/fix-security-answers', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}).select('+securityAnswer').lean();
+
+    let alreadyHashed = 0;
+    let nowHashed     = 0;
+    let skipped       = 0; // no answer stored at all
+
+    for (const u of users) {
+      if (!u.securityAnswer) { skipped++; continue; }
+
+      // bcrypt hashes start with $2a$ or $2b$ and are 60 chars long.
+      const looksHashed = /^\$2[ab]\$\d+\$/.test(u.securityAnswer);
+      if (looksHashed) { alreadyHashed++; continue; }
+
+      const hashed = await bcrypt.hash(u.securityAnswer.trim().toLowerCase(), 10);
+      await User.updateOne({ _id: u._id }, { $set: { securityAnswer: hashed } });
+      nowHashed++;
+    }
+
+    res.json({
+      message: 'Migration complete',
+      total: users.length,
+      alreadyHashed,
+      nowHashed,
+      skipped,
+    });
+  } catch (err) {
+    console.error('fix-security-answers migration error:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
