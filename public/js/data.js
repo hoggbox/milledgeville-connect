@@ -3253,7 +3253,7 @@ function renderShoutoutCard(s) {
       <div class="sc-author">
         <div class="sc-avatar">${authorLetter}</div>
         <div>
-          <div class="sc-name">${renderClickableUser(s.authorId || s.author)}</div>
+          <div class="sc-name">${renderClickableUser(s.authorId ? { _id: s.authorId, name: s.author || 'Anonymous' } : s.author)}</div>
           <div class="sc-time">${timeAgo(s.createdAt)}</div>
         </div>
       </div>
@@ -3377,7 +3377,7 @@ function renderCommentRow(c, shoutoutId) {
           <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
           <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
             <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-white/80">${r.author}</span>
+              <span class="text-xs font-semibold text-white/80">${renderClickableUser(r.authorId ? { _id: r.authorId, name: r.author || 'Anonymous' } : r.author)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
             </div>
             <p class="text-sm text-white/75">${r.text}</p>
@@ -3394,7 +3394,7 @@ function renderCommentRow(c, shoutoutId) {
         <div class="flex-1 min-w-0">
           <div class="bg-white/5 rounded-2xl px-3 py-2 inline-block max-w-full">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-xs font-semibold text-white/80">${c.author}</span>
+              <span class="text-xs font-semibold text-white/80">${renderClickableUser(c.authorId ? { _id: c.authorId, name: c.author || 'Anonymous' } : c.author)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
               ${isCommentAuthor || userIsAdmin ? `
                 <button onclick="deleteComment('${shoutoutId}','${c._id}')" 
