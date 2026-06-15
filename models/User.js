@@ -99,7 +99,11 @@ const userSchema = new mongoose.Schema({
 
   // Account Deletion
   deletionRequestedAt: { type: Date, default: null },
-  deletionReason:      { type: String, default: '' }
+  deletionReason:      { type: String, default: '' },
+
+  // Password Recovery
+  securityQuestion: { type: String, default: '' },
+  securityAnswer:   { type: String, default: '', select: false }  // hidden by default; use .select('+securityAnswer') to load
 });
 
 userSchema.pre('save', async function (next) {

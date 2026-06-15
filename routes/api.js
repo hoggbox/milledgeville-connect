@@ -507,8 +507,8 @@ router.post('/auth/forgot-password/reset', async (req, res) => {
       return res.status(401).json({ message: 'Incorrect answer. Please try again.' });
     }
 
-    // Hash and save the new password
-    user.password = await bcrypt.hash(newPassword, 10);
+    // Assign plain text — the User pre-save hook hashes it (avoid double-hashing)
+    user.password = newPassword;
     await user.save();
 
     res.json({ success: true, message: 'Password reset successfully.' });
@@ -2042,12 +2042,16 @@ router.post('/auth/register', async (req, res) => {
       return res.status(400).json({ message: 'An account with this email already exists' });
     }
 
+    const hashedAnswer = securityAnswer
+      ? await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10)
+      : '';
+
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,           // ← Use normalized version
       password,
       securityQuestion,
-      securityAnswer: securityAnswer?.trim() || ''
+      securityAnswer: hashedAnswer
     });
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
