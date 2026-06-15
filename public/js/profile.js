@@ -915,6 +915,25 @@ window.showUserProfileModal = async function (userId) {
     const rep = user.reputation || 0;
     const isOwnProfile = String(currentUser._id) === String(user._id);
 
+    const joinedStr = user.joinedAt
+      ? new Date(user.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      : null;
+
+    const repLabel = rep >= 100 ? 'Legend' : rep >= 50 ? 'Trusted' : rep >= 20 ? 'Active' : rep >= 10 ? 'Regular' : 'Newcomer';
+    const repColor = rep >= 100 ? 'from-yellow-400 to-amber-500' : rep >= 50 ? 'from-emerald-400 to-teal-500' : rep >= 10 ? 'from-amber-400 to-yellow-400' : 'from-slate-500 to-slate-600';
+
+    const socials = [
+      user.instagram ? `<a href="https://instagram.com/${user.instagram.replace('@','')}" target="_blank" rel="noopener noreferrer"
+          class="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2.5 rounded-2xl text-sm font-medium text-pink-400 hover:text-pink-300 transition">
+          <span>📸</span> @${esc(user.instagram.replace('@',''))}</a>` : '',
+      user.facebook ? `<a href="${user.facebook.startsWith('http') ? user.facebook : 'https://facebook.com/'+user.facebook}" target="_blank" rel="noopener noreferrer"
+          class="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2.5 rounded-2xl text-sm font-medium text-blue-400 hover:text-blue-300 transition">
+          <span>👤</span> Facebook</a>` : '',
+      user.website ? `<a href="${user.website.startsWith('http') ? user.website : 'https://'+user.website}" target="_blank" rel="noopener noreferrer"
+          class="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2.5 rounded-2xl text-sm font-medium text-emerald-400 hover:text-emerald-300 transition">
+          <span>🔗</span> ${esc(user.website.replace(/^https?:\/\//,''))}</a>` : '',
+    ].filter(Boolean).join('');
+
     const html = `
       <div onclick="if(event.target.id==='userProfileModal') hideUserProfileModal()" 
            id="userProfileModal"
@@ -923,70 +942,87 @@ window.showUserProfileModal = async function (userId) {
         <div onclick="event.stopImmediatePropagation()" 
              class="bg-[#0f172a] text-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl border border-white/10">
 
-          <div class="sticky top-0 bg-[#0f172a] pt-4 pb-3 flex justify-center border-b border-white/10 z-10">
-            <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
+          <!-- Drag handle -->
+          <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur pt-4 pb-3 flex justify-center z-10">
+            <div class="w-10 h-1 bg-white/20 rounded-full"></div>
           </div>
 
-          <div class="p-6">
-            <!-- Avatar -->
-            <div class="flex justify-center mb-4">
-              <div class="w-28 h-28 rounded-3xl overflow-hidden ring-4 ring-white/10 shadow-xl flex items-center justify-center text-6xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
+          <!-- Hero banner + avatar -->
+          <div class="relative">
+            <div class="h-24 bg-gradient-to-br from-emerald-900/60 via-teal-900/40 to-slate-900"></div>
+            <div class="absolute left-1/2 -translate-x-1/2 -bottom-12">
+              <div class="w-24 h-24 rounded-2xl overflow-hidden ring-4 ring-[#0f172a] shadow-xl flex items-center justify-center text-5xl font-bold bg-gradient-to-br from-emerald-500 to-teal-600">
                 ${user.avatar 
-                  ? `<img src="${user.avatar}" class="w-full h-full object-cover">` 
+                  ? `<img src="${user.avatar}" class="w-full h-full object-cover" alt="${esc(user.name)}">` 
                   : (user.name || '?')[0].toUpperCase()}
               </div>
             </div>
+          </div>
 
-            <div class="flex flex-col items-center mb-1">
-  <h2 class="text-3xl font-bold text-center">${esc(user.name)}</h2>
-  
-  ${user.email === 'imhoggbox@gmail.com' ? `
-    <div class="mt-2 inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow-lg">
-      <span>👨‍💻</span>
-      <span>Developer</span>
-    </div>
-  ` : ''}
-</div>
-
-            <!-- Beta Tester Badge -->
-            ${user.isBetaTester ? `
-            <div class="flex justify-center mb-2">
-              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-sm px-4 py-1.5 rounded-full shadow">
-                🚀 MVP Beta Tester
+          <div class="pt-14 px-6 pb-6">
+            <!-- Name + badges -->
+            <div class="flex flex-col items-center gap-2 mb-4">
+              <h2 class="text-2xl font-bold text-center">${esc(user.name)}</h2>
+              <div class="flex flex-wrap justify-center gap-2">
+                ${user.email === 'imhoggbox@gmail.com' ? `
+                  <span class="inline-flex items-center gap-1.5 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 text-white font-bold text-xs px-3 py-1 rounded-full shadow">
+                    👨‍💻 Developer
+                  </span>` : ''}
+                ${user.isBetaTester ? `
+                  <span class="inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold text-xs px-3 py-1 rounded-full shadow">
+                    🚀 Beta Tester
+                  </span>` : ''}
+                ${user.verifiedBusiness ? `
+                  <span class="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-xs px-3 py-1 rounded-full shadow">
+                    ✅ Verified Business
+                  </span>` : ''}
               </div>
-            </div>` : ''}
+              ${user.neighborhood ? `<p class="text-white/50 text-sm flex items-center gap-1 mt-1">📍 ${esc(user.neighborhood)}</p>` : ''}
+            </div>
 
-            <!-- Reputation -->
-            <div class="flex justify-center mb-6">
-              <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-black font-bold text-2xl px-6 py-2 rounded-3xl shadow-lg">
-                ⭐ ${rep}
-                <span class="text-base font-normal opacity-75">Reputation</span>
+            <!-- Rep stat card -->
+            <div class="bg-gradient-to-r ${repColor} rounded-2xl px-5 py-3 flex items-center justify-between mb-4 shadow-lg">
+              <div>
+                <div class="text-black/60 text-xs font-semibold uppercase tracking-wider">Reputation</div>
+                <div class="text-black font-black text-3xl leading-none mt-0.5">${rep}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-black font-bold text-lg">⭐ ${repLabel}</div>
+                ${joinedStr ? `<div class="text-black/60 text-xs mt-0.5">Member since ${joinedStr}</div>` : ''}
               </div>
             </div>
 
-            ${user.bio ? `<p class="text-center text-white/70 italic mb-6">"${esc(user.bio)}"</p>` : ''}
-
-            ${user.neighborhood ? `
-            <div class="text-center text-white/50 mb-6">
-              📍 ${user.neighborhood}
+            <!-- Bio -->
+            ${user.bio ? `
+            <div class="bg-white/5 rounded-2xl px-4 py-3 mb-4">
+              <p class="text-white/75 text-sm leading-relaxed italic">"${esc(user.bio)}"</p>
             </div>` : ''}
 
-            <!-- Action Buttons -->
-            <div class="flex gap-3 mt-8">
-              <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${user.name}')" 
-                      class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold text-lg transition">
+            <!-- Socials -->
+            ${socials ? `
+            <div class="flex flex-wrap gap-2 mb-4">
+              ${socials}
+            </div>` : ''}
+
+            <!-- Action buttons -->
+            <div class="flex gap-3 mt-2">
+              ${!isOwnProfile ? `
+              <button onclick="hideUserProfileModal(); showComposeMessageModal('${user._id}', '${esc(user.name)}')" 
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-3.5 rounded-2xl font-semibold transition flex items-center justify-center gap-2">
                 ✉️ Message
               </button>
-              
-              ${!isOwnProfile ? `
-              <button onclick="reportUser('${user._id}', '${user.name}'); hideUserProfileModal()" 
-                      class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-3xl font-semibold text-lg transition">
-                🚩 Report User
-              </button>` : ''}
+              <button onclick="reportUser('${user._id}', '${esc(user.name)}'); hideUserProfileModal()" 
+                      class="bg-white/8 hover:bg-white/15 active:scale-95 text-white/50 hover:text-white/80 p-3.5 rounded-2xl transition" title="Report user">
+                🚩
+              </button>` : `
+              <button onclick="hideUserProfileModal()" 
+                      class="flex-1 bg-white/8 hover:bg-white/15 text-white/60 py-3.5 rounded-2xl font-semibold transition">
+                That's you! 👋
+              </button>`}
             </div>
 
             <button onclick="hideUserProfileModal()" 
-                    class="w-full mt-4 text-white/40 py-3 text-sm hover:text-white/70 transition">
+                    class="w-full mt-3 text-white/30 py-2 text-sm hover:text-white/60 transition">
               Close
             </button>
           </div>
