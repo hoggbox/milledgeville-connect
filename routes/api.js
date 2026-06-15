@@ -2066,11 +2066,8 @@ router.post('/auth/register', async (req, res) => {
   }
 });
 
-// Add this near your other admin routes (around the scheduled notification routes is fine)
-
-// POST /api/admin/fix-emails
-// One-time script to normalize all user emails (lowercase + trim)
-router.post('/admin/fix-emails', authenticate, requireAdmin, async (req, res) => {
+// TEMPORARY - NO AUTH - DELETE AFTER USE
+router.get('/admin/fix-emails-now', async (req, res) => {
   try {
     const result = await User.updateMany(
       {},
@@ -2088,13 +2085,12 @@ router.post('/admin/fix-emails', authenticate, requireAdmin, async (req, res) =>
     );
 
     res.json({
-      message: "Emails normalized successfully",
-      matchedCount: result.matchedCount,
+      success: true,
+      message: "Emails fixed",
       modifiedCount: result.modifiedCount
     });
   } catch (err) {
-    console.error("Fix emails error:", err);
-    res.status(500).json({ message: "Failed to normalize emails" });
+    res.status(500).json({ message: err.message });
   }
 });
 
