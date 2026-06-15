@@ -355,10 +355,13 @@ router.post('/shoutouts', authenticate, async (req, res) => {
 
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
 
-    // ── Hard 45-second rate limit (existing) ──────────────────────────────────
-    if (!user.isAdmin && user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
-      return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
-    }
+// ── Hard 45-second rate limit (existing) ──────────────────────────────────────
+// Exempt: admin accounts and the relay bot account
+const RATE_LIMIT_EXEMPT_EMAILS = new Set(['imhoggbox@gmail.com', 'milledgevilleconnect@gmail.com']);
+const isRateLimitExempt = user.isAdmin || RATE_LIMIT_EXEMPT_EMAILS.has((user.email || '').toLowerCase());
+if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45000) {
+  return res.status(429).json({ message: 'Please wait 45 seconds before posting again.' });
+}
 
     // ── 24-hour timeout from community flags ───────────────────────────────────
     if (user.isPostTimedOut()) {
@@ -2568,6 +2571,87 @@ router.delete('/news/:id', authenticate, async (req, res) => {
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── NEWS COMMENTS ───────────────────────────────────────────────────────────
+
+router.post('/news/:id/comments', authenticate, async (req, res) => {
+  try {
+    const user    = await User.findById(req.userId);
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const commentImage = (clean.image || req.body.image || '').trim() || undefined;
+    const comment = {
+      text:     (clean.text || '').trim(),
+      author:   user.name,
+      authorId: user._id,
+      ...(commentImage ? { image: commentImage } : {}),
+    };
+    if (!comment.text && !commentImage) {
+      return res.status(400).json({ message: 'Comment must have text or an image' });
+    }
+
+    article.comments.push(comment);
+    await article.save();
+    res.json(article.comments[article.comments.length - 1]);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.delete('/news/:id/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const user    = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    const comment = article.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+    comment.deleteOne();
+    await article.save();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, res) => {
+  try {
+    const user    = await User.findById(req.userId);
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    const comment = article.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const reply = { text: (clean.text || '').trim(), author: user.name, authorId: user._id };
+    if (!reply.text) return res.status(400).json({ message: 'Reply cannot be empty' });
+    comment.replies.push(reply);
+    await article.save();
+    res.json(comment.replies[comment.replies.length - 1]);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.post('/news/:id/comments/:commentId/like', authenticate, async (req, res) => {
+  try {
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    const comment = article.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const uid   = article._id.constructor(req.userId);
+    const idx   = comment.likes.findIndex(l => l.toString() === req.userId);
+    const liked = idx === -1;
+    if (liked) comment.likes.push(uid); else comment.likes.splice(idx, 1);
+    await article.save();
+    res.json({ liked, likes: comment.likes.length });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
   }
 });
 

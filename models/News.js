@@ -15,6 +15,23 @@ const newsSchema = new mongoose.Schema({
   flaggedBy:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   autoHidden: { type: Boolean, default: false },
   // ─────────────────────────────────────────────────────────────────────────
+
+  // ── COMMENTS ──────────────────────────────────────────────────────────────
+  comments: [{
+    text:      { type: String, default: '' },
+    author:    { type: String },
+    authorId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    image:     { type: String },
+    likes:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    createdAt: { type: Date, default: Date.now },
+    replies: [{
+      text:      { type: String, required: true },
+      author:    { type: String },
+      authorId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      createdAt: { type: Date, default: Date.now },
+    }],
+  }],
+  // ─────────────────────────────────────────────────────────────────────────
 });
 
 module.exports = mongoose.model('News', newsSchema);

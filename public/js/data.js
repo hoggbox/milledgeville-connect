@@ -1320,6 +1320,49 @@ window.openNewsArticle = async function (articleId) {
 
           ${imagesHTML}
 
+          <!-- ── COMMENT SECTION ── -->
+          <div style="margin-top:32px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px;">
+            <div style="display:flex;align-items:center;gap:2px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:8px;">
+              <button onclick="setNewsCommentSort('${article._id}','relevant')" id="ncsort-relevant-${article._id}"
+                      style="font-size:11px;border:none;border-radius:10px;padding:4px 10px;cursor:pointer;font-weight:700;background:rgba(52,211,153,0.18);color:#34d399;">Relevant</button>
+              <button onclick="setNewsCommentSort('${article._id}','newest')" id="ncsort-newest-${article._id}"
+                      style="font-size:11px;border:none;border-radius:10px;padding:4px 10px;cursor:pointer;font-weight:600;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);">Newest</button>
+              <button onclick="setNewsCommentSort('${article._id}','all')" id="ncsort-all-${article._id}"
+                      style="font-size:11px;border:none;border-radius:10px;padding:4px 10px;cursor:pointer;font-weight:600;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);">All</button>
+              <span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.35);">💬 <span id="news-comment-count-${article._id}">${(article.comments||[]).length}</span></span>
+            </div>
+            <div id="news-comment-list-${article._id}" style="padding:4px 0 0;"></div>
+            <div id="news-comment-more-${article._id}" style="display:none;padding:4px 0 8px;">
+              <button onclick="expandNewsComments('${article._id}')"
+                      style="background:none;border:none;color:rgba(52,211,153,0.8);font-size:12px;cursor:pointer;padding:0;font-weight:600;"></button>
+            </div>
+            ${currentUser ? `
+            <div style="display:flex;align-items:center;gap-8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 12px;margin-top:8px;gap:8px;">
+              <div style="width:28px;height:28px;background:#475569;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${currentUser.name[0].toUpperCase()}</div>
+              <input id="news-commentinput-${article._id}" type="text" placeholder="Write a comment…"
+                     style="flex:1;background:transparent;border:none;color:white;font-size:13px;outline:none;"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewsComment('${article._id}');}">
+              <button type="button" onclick="toggleNewsCommentEmoji('${article._id}',event)"
+                      style="background:none;border:none;cursor:pointer;font-size:16px;padding:0;line-height:1;" title="Emoji">😊</button>
+              <div id="news-comment-img-preview-${article._id}" style="display:none;position:relative;align-items:center;">
+                <img id="news-comment-img-thumb-${article._id}" style="height:28px;width:28px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
+                <button onclick="clearNewsCommentImage('${article._id}')"
+                        style="position:absolute;top:-4px;right:-4px;width:14px;height:14px;background:#ef4444;border:none;border-radius:50%;color:white;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+              </div>
+              <button onclick="submitNewsComment('${article._id}')"
+                      style="background:#34d399;border:none;border-radius:12px;color:#0f172a;font-size:12px;font-weight:700;padding:5px 12px;cursor:pointer;">Post</button>
+            </div>
+            <div id="news-comment-emoji-panel-${article._id}" style="display:none;padding-left:38px;margin-top:6px;">
+              <div style="background:rgba(15,23,42,0.97);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px;">
+                <input type="text" placeholder="Search emoji…" oninput="filterNewsCommentEmoji('${article._id}',this.value)"
+                       style="width:100%;background:rgba(255,255,255,0.06);border:none;border-radius:8px;padding:5px 8px;color:white;font-size:11px;outline:none;margin-bottom:6px;box-sizing:border-box;">
+                <div id="news-comment-emoji-cats-${article._id}" style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto;padding-bottom:2px;"></div>
+                <div id="news-comment-emoji-grid-${article._id}" style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:2px;max-height:100px;overflow-y:auto;"></div>
+              </div>
+            </div>` : `
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.4);"><button onclick="showAuthModal()" style="background:none;border:none;color:#34d399;cursor:pointer;font-weight:700;padding:0;">Sign in</button> to comment</p>`}
+          </div>
+
           <div class="mt-8 space-y-3">
             ${canDelete ? `
               <button onclick="deleteNewsArticle('${article._id}')" 
@@ -1338,6 +1381,14 @@ window.openNewsArticle = async function (articleId) {
 
   document.body.insertAdjacentHTML('beforeend', modalHTML);
   window._newsArticleImages = article.images || [];
+
+  // Seed comment cache and render
+  if (!window._newsCommentSortState) window._newsCommentSortState = {};
+  if (!window._newsCommentDataCache) window._newsCommentDataCache = {};
+  window._newsCommentSortState[article._id] = 'relevant';
+  window._newsCommentDataCache[article._id] = article.comments || [];
+  _renderNewsCommentList(article._id);
+  setNewsCommentSort(article._id, 'relevant');
 };
 
 window.closeNewsArticle = function () {
@@ -1356,6 +1407,307 @@ window.deleteNewsArticle = async function (id) {
     showToast(res.message || 'Error', 'error');
   }
 };
+
+// ─── NEWS COMMENTS ────────────────────────────────────────────────────────────
+if (!window._newsCommentSortState) window._newsCommentSortState = {};
+if (!window._newsCommentDataCache) window._newsCommentDataCache = {};
+if (!window._newsCommentImages)    window._newsCommentImages    = {};
+const NEWS_COMMENT_PREVIEW = 3;
+
+function renderNewsCommentRow(c, articleId) {
+  const cLetter = c.author ? c.author[0].toUpperCase() : '?';
+  const replies  = c.replies || [];
+  const userIsAdmin = isAdmin();
+  const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
+
+  let repliesHtml = '';
+  if (replies.length) {
+    repliesHtml = `<div class="ml-9 mt-1 space-y-1">`;
+    replies.forEach(r => {
+      const rLetter = r.author ? r.author[0].toUpperCase() : '?';
+      repliesHtml += `
+        <div class="flex items-start gap-2" id="news-reply-${r._id}">
+          <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
+          <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-white/80">${r.author}</span>
+              <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
+            </div>
+            <p class="text-sm text-white/75">${r.text}</p>
+          </div>
+        </div>`;
+    });
+    repliesHtml += `</div>`;
+  }
+
+  return `
+    <div class="comment-block" id="news-comment-${c._id}">
+      <div class="flex items-start gap-2">
+        <div class="w-7 h-7 bg-slate-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${cLetter}</div>
+        <div class="flex-1 min-w-0">
+          <div class="bg-white/5 rounded-2xl px-3 py-2 inline-block max-w-full">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-semibold text-white/80">${c.author}</span>
+              <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
+              ${isCommentAuthor || userIsAdmin ? `
+                <button onclick="deleteNewsComment('${articleId}','${c._id}')"
+                        class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
+            </div>
+            ${c.text ? `<p class="text-sm text-white/80 mt-0.5">${esc(c.text)}</p>` : ''}
+            ${c.image ? `
+              <img src="${c.image}" alt="comment image"
+                   onclick="openCommentImageLightbox('${c.image}')"
+                   style="margin-top:6px;max-width:180px;max-height:160px;object-fit:cover;border-radius:10px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);">` : ''}
+          </div>
+          ${currentUser ? `
+            <div class="flex items-center gap-3 mt-1 ml-2">
+              <button id="news-comment-like-btn-${c._id}" onclick="likeNewsComment('${articleId}','${c._id}')"
+                      class="flex items-center gap-1 text-[11px] text-white/40 hover:text-pink-400 transition font-semibold">
+                <span id="news-comment-like-icon-${c._id}">${(c.likes||[]).includes(currentUser?._id||currentUser?.id) ? '\u2764\uFE0F' : '\uD83E\uDD0D'}</span>
+                <span id="news-comment-like-count-${c._id}">${(c.likes||[]).length || ''}</span>
+              </button>
+              <button onclick="toggleNewsReplyBox('${articleId}','${c._id}')"
+                      class="text-[11px] text-white/40 hover:text-emerald-400 transition font-semibold">Reply</button>
+            </div>
+            <div id="news-replybox-${c._id}" style="display:none;" class="mt-2 flex items-start gap-2">
+              <div class="w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${currentUser.name[0].toUpperCase()}</div>
+              <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-1.5">
+                <input id="news-replyinput-${c._id}" type="text"
+                  class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
+                  placeholder="Reply to ${esc(c.author)}…"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewsReply('${articleId}','${c._id}');}">
+                <button onclick="submitNewsReply('${articleId}','${c._id}')"
+                        class="text-emerald-400 hover:text-emerald-300 transition text-xs font-semibold">Post</button>
+              </div>
+            </div>` : `
+            <div class="flex items-center gap-3 mt-1 ml-2">
+              <button onclick="showAuthModal({message:'Sign in to reply.'})"
+                      class="text-[11px] text-white/40 hover:text-emerald-400 transition font-semibold">Reply</button>
+            </div>`}
+        </div>
+      </div>
+      ${repliesHtml}
+    </div>`;
+}
+
+function _renderNewsCommentList(articleId) {
+  const listEl = document.getElementById(`news-comment-list-${articleId}`);
+  const moreEl = document.getElementById(`news-comment-more-${articleId}`);
+  if (!listEl) return;
+
+  const allComments = window._newsCommentDataCache[articleId] || [];
+  const sort = window._newsCommentSortState[articleId] || 'relevant';
+
+  let sorted = [...allComments];
+  if (sort === 'relevant') {
+    sorted.sort((a, b) => ((b.likes||[]).length - (a.likes||[]).length) || (new Date(b.createdAt) - new Date(a.createdAt)));
+  } else if (sort === 'newest') {
+    sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  const expanded = listEl.dataset.expanded === '1';
+  const visible  = expanded ? sorted : sorted.slice(0, NEWS_COMMENT_PREVIEW);
+  const hidden   = sorted.length - visible.length;
+
+  listEl.innerHTML = visible.map(c => renderNewsCommentRow(c, articleId)).join('');
+
+  if (moreEl) {
+    if (hidden > 0) {
+      moreEl.style.display = 'block';
+      const btn = moreEl.querySelector('button');
+      if (btn) btn.textContent = `▾ View ${hidden} more comment${hidden !== 1 ? 's' : ''}`;
+    } else {
+      moreEl.style.display = 'none';
+    }
+  }
+}
+
+window.setNewsCommentSort = function(articleId, sort) {
+  window._newsCommentSortState[articleId] = sort;
+  ['relevant','newest','all'].forEach(s => {
+    const btn = document.getElementById(`ncsort-${s}-${articleId}`);
+    if (!btn) return;
+    const active = s === sort;
+    btn.style.background = active ? 'rgba(52,211,153,0.18)' : 'rgba(255,255,255,0.06)';
+    btn.style.color      = active ? '#34d399' : 'rgba(255,255,255,0.5)';
+    btn.style.fontWeight = active ? '700' : '600';
+  });
+  _renderNewsCommentList(articleId);
+};
+
+window.expandNewsComments = function(articleId) {
+  const listEl = document.getElementById(`news-comment-list-${articleId}`);
+  if (listEl) listEl.dataset.expanded = '1';
+  _renderNewsCommentList(articleId);
+};
+
+window.submitNewsComment = async function(articleId) {
+  if (!requireAuth('Sign in to comment.')) return;
+  const input = document.getElementById(`news-commentinput-${articleId}`);
+  const text  = input ? input.value.trim() : '';
+  const image = window._newsCommentImages?.[articleId] || null;
+  if (!text && !image) return;
+  if (text && checkForSketchyInput(text, 'comment')) { if (input) input.value = text; return; }
+
+  if (input) input.value = '';
+  clearNewsCommentImage(articleId);
+  const ep = document.getElementById(`news-comment-emoji-panel-${articleId}`);
+  if (ep) ep.style.display = 'none';
+
+  const res = await apiPost(`/news/${articleId}/comments`, { text, image });
+  if (res._id) {
+    const newComment = {
+      _id:       res._id,
+      author:    res.author    || currentUser?.name || '',
+      authorId:  res.authorId  || currentUser?._id  || currentUser?.id || '',
+      text:      res.text      || text,
+      image:     res.image     || image || null,
+      likes:     res.likes     || [],
+      replies:   res.replies   || [],
+      createdAt: res.createdAt || new Date().toISOString(),
+    };
+    if (!window._newsCommentDataCache[articleId]) window._newsCommentDataCache[articleId] = [];
+    window._newsCommentDataCache[articleId].push(newComment);
+    const listEl = document.getElementById(`news-comment-list-${articleId}`);
+    if (listEl) listEl.dataset.expanded = '1';
+    _renderNewsCommentList(articleId);
+
+    const countEl = document.getElementById(`news-comment-count-${articleId}`);
+    if (countEl) countEl.textContent = (window._newsCommentDataCache[articleId] || []).length;
+
+    const newInput = document.getElementById(`news-commentinput-${articleId}`);
+    if (newInput) setTimeout(() => newInput.focus(), 50);
+  } else {
+    showToast(res.message || 'Error posting comment', 'error');
+  }
+};
+
+window.deleteNewsComment = async function(articleId, commentId) {
+  if (!confirm('Delete this comment?')) return;
+  const res = await apiDelete(`/news/${articleId}/comments/${commentId}`);
+  if (res.message === 'Deleted') {
+    if (window._newsCommentDataCache[articleId]) {
+      window._newsCommentDataCache[articleId] = window._newsCommentDataCache[articleId].filter(c => c._id !== commentId);
+    }
+    _renderNewsCommentList(articleId);
+    const countEl = document.getElementById(`news-comment-count-${articleId}`);
+    if (countEl) countEl.textContent = (window._newsCommentDataCache[articleId] || []).length;
+  } else {
+    showToast(res.message || 'Error', 'error');
+  }
+};
+
+window.likeNewsComment = async function(articleId, commentId) {
+  if (!requireAuth('Sign in to like comments.')) return;
+  const res = await apiPost(`/news/${articleId}/comments/${commentId}/like`, {});
+  if (res.likes !== undefined) {
+    const icon  = document.getElementById(`news-comment-like-icon-${commentId}`);
+    const count = document.getElementById(`news-comment-like-count-${commentId}`);
+    if (icon)  icon.textContent  = res.liked ? '\u2764\uFE0F' : '\uD83E\uDD0D';
+    if (count) count.textContent = res.likes || '';
+  }
+};
+
+window.toggleNewsReplyBox = function(articleId, commentId) {
+  const box = document.getElementById(`news-replybox-${commentId}`);
+  if (!box) return;
+  const isHidden = box.style.display === 'none' || box.style.display === '';
+  box.style.display = isHidden ? 'flex' : 'none';
+  if (isHidden) { const inp = document.getElementById(`news-replyinput-${commentId}`); if (inp) inp.focus(); }
+};
+
+window.submitNewsReply = async function(articleId, commentId) {
+  if (!requireAuth('Sign in to reply.')) return;
+  const input = document.getElementById(`news-replyinput-${commentId}`);
+  if (!input || !input.value.trim()) return;
+  const text = input.value.trim();
+  input.value = '';
+  const res = await apiPost(`/news/${articleId}/comments/${commentId}/replies`, { text });
+  if (res._id) {
+    const cache = window._newsCommentDataCache[articleId] || [];
+    const comment = cache.find(c => c._id === commentId);
+    if (comment) {
+      comment.replies = comment.replies || [];
+      comment.replies.push({ _id: res._id, author: res.author || currentUser?.name, text, createdAt: new Date().toISOString() });
+    }
+    _renderNewsCommentList(articleId);
+  } else {
+    showToast(res.message || 'Error posting reply', 'error');
+  }
+};
+
+// ── News comment emoji panel ──────────────────────────────────────────────────
+window.toggleNewsCommentEmoji = function(articleId, e) {
+  e.stopPropagation();
+  const ep = document.getElementById(`news-comment-emoji-panel-${articleId}`);
+  if (!ep) return;
+  const opening = ep.style.display === 'none' || ep.style.display === '';
+  ep.style.display = opening ? 'block' : 'none';
+  if (opening) initNewsCommentEmojiPanel(articleId);
+};
+
+function initNewsCommentEmojiPanel(articleId) {
+  const catsEl = document.getElementById(`news-comment-emoji-cats-${articleId}`);
+  const gridEl = document.getElementById(`news-comment-emoji-grid-${articleId}`);
+  if (!catsEl || !gridEl || catsEl.children.length) return;
+  const cats = Object.keys(EMOJI_DATA);
+  catsEl.innerHTML = cats.map((cat, i) =>
+    `<button onclick="showNewsCommentEmojiCat('${articleId}','${CSS.escape(cat)}')"
+             style="background:${i===0?'rgba(52,211,153,0.2)':'rgba(255,255,255,0.06)'};border:none;border-radius:8px;padding:4px 8px;cursor:pointer;font-size:14px;white-space:nowrap;flex-shrink:0;"
+             data-ncat-btn-${articleId}="${CSS.escape(cat)}">${cat.split(' ')[0]}</button>`
+  ).join('');
+  renderNewsCommentEmojiGrid(articleId, EMOJI_DATA[cats[0]]);
+}
+
+window.showNewsCommentEmojiCat = function(articleId, catKey) {
+  const catsEl = document.getElementById(`news-comment-emoji-cats-${articleId}`);
+  if (catsEl) [...catsEl.children].forEach(b => b.style.background = 'rgba(255,255,255,0.06)');
+  const activeBtn = catsEl?.querySelector(`[data-ncat-btn-${articleId}="${catKey}"]`);
+  if (activeBtn) activeBtn.style.background = 'rgba(52,211,153,0.2)';
+  const key = Object.keys(EMOJI_DATA).find(k => CSS.escape(k) === catKey);
+  if (key) renderNewsCommentEmojiGrid(articleId, EMOJI_DATA[key]);
+};
+
+function renderNewsCommentEmojiGrid(articleId, emojis) {
+  const gridEl = document.getElementById(`news-comment-emoji-grid-${articleId}`);
+  if (!gridEl) return;
+  gridEl.innerHTML = emojis.map(em =>
+    `<button onclick="insertNewsCommentEmoji('${articleId}','${em}')"
+             style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px;border-radius:6px;line-height:1;"
+             onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+             onmouseout="this.style.background='none'">${em}</button>`
+  ).join('');
+}
+
+window.filterNewsCommentEmoji = function(articleId, query) {
+  renderNewsCommentEmojiGrid(articleId, Object.values(EMOJI_DATA).flat());
+};
+
+window.insertNewsCommentEmoji = function(articleId, emoji) {
+  const input = document.getElementById(`news-commentinput-${articleId}`);
+  if (!input) return;
+  const pos = input.selectionStart || input.value.length;
+  input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
+  input.focus();
+  input.selectionStart = input.selectionEnd = pos + emoji.length;
+};
+
+window.clearNewsCommentImage = function(articleId) {
+  if (window._newsCommentImages) delete window._newsCommentImages[articleId];
+  const preview = document.getElementById(`news-comment-img-preview-${articleId}`);
+  if (preview) preview.style.display = 'none';
+  const thumb = document.getElementById(`news-comment-img-thumb-${articleId}`);
+  if (thumb) thumb.src = '';
+};
+
+// Close news comment emoji panels when clicking outside
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('[id^="news-comment-emoji-panel-"]').forEach(panel => {
+    if (!panel.contains(e.target) && !e.target.closest('[onclick*="toggleNewsCommentEmoji"]')) {
+      panel.style.display = 'none';
+    }
+  });
+});
 
 // ─── IMAGE LIGHTBOX ───────────────────────────────────────────────────────────
 window.openImageViewer = function (articleId, startIndex) {
