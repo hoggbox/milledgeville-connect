@@ -2027,59 +2027,108 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
 // ─── REGISTER ───────────────────────────────────────────────────────────────
 router.post('/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, securityQuestion, securityAnswer } = req.body;
 
-    if (!name?.trim() || !email?.trim() || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required' });
     }
 
-    const existing = await User.findOne({ email: email.toLowerCase().trim() });
-    if (existing) return res.status(409).json({ message: 'Email already in use' });
+    // ✅ FIX: Normalize email here too
+    const normalizedEmail = email.toLowerCase().trim();
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check if user already exists (using normalized email)
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(400).json({ message: 'An account with this email already exists' });
+    }
 
-    const newUser = await User.create({
+    const user = await User.create({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      notificationCredits: 0,        // ← Normal users start with 0
-      subscriptionTier: 'free'
+      email: normalizedEmail,           // ← Use normalized version
+      password,
+      securityQuestion,
+      securityAnswer: securityAnswer?.trim() || ''
     });
 
-    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const u = sanitizeUser(user);
+    u.isAdmin = ADMIN_EMAILS.has(user.email);
 
-    res.json({ 
-      token, 
-      user: {
-        _id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        notificationCredits: newUser.notificationCredits,
-        subscriptionTier: newUser.subscriptionTier
-      }
-    });
+    res.status(201).json({ token, user: u });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Registration failed' });
+    console.error('Registration error:', err);
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'An account with this email already exists' });
+    }
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message || 'Registration failed' });
+  }
+});
+
+// Add this near your other admin routes (around the scheduled notification routes is fine)
+
+// POST /api/admin/fix-emails
+// One-time script to normalize all user emails (lowercase + trim)
+router.post('/admin/fix-emails', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const result = await User.updateMany(
+      {},
+      [
+        {
+          $set: {
+            email: {
+              $trim: {
+                input: { $toLower: "$email" }
+              }
+            }
+          }
+        }
+      ]
+    );
+
+    res.json({
+      message: "Emails normalized successfully",
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) {
+    console.error("Fix emails error:", err);
+    res.status(500).json({ message: "Failed to normalize emails" });
   }
 });
 
 router.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase() }).populate('verifiedBusiness');
-    if (!user) return res.status(400).json({ message: 'Invalid email or password' });
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // ✅ FIX: Always lowercase + trim
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const user = await User.findOne({ email: normalizedEmail })
+                           .populate('verifiedBusiness');
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
 
     const match = await user.comparePassword(password);
-    if (!match) return res.status(400).json({ message: 'Invalid email or password' });
+    if (!match) {
+      return res.status(400).json({ message: 'Invalid email or password' });
+    }
 
     // IP ban check
-    if (user.isIpBanned) return res.status(403).json({ message: 'Account suspended.' });
+    if (user.isIpBanned) {
+      return res.status(403).json({ message: 'Account suspended.' });
+    }
 
     const loginIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
 
-    // Record login IP (keep last 20 unique entries, newest first)
+    // Record login IP
     const existingIps = user.loginIps || [];
     const alreadyLogged = existingIps.some(e => e.ip === loginIp);
     if (!alreadyLogged) {
@@ -2091,11 +2140,14 @@ router.post('/auth/login', async (req, res) => {
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     const u = sanitizeUser(user);
-    u.isAdmin = ADMIN_EMAILS.has(user.email);
+    u.isAdmin = ADMIN_EMAILS.has(user.email.toLowerCase()); // also normalize here
+
     res.json({ token, user: u });
+
   } catch (err) {
+    console.error('Login error:', err);
     const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
+    res.status(statusCode).json({ message: err.message || 'Login failed' });
   }
 });
 
