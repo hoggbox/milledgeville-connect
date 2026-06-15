@@ -1559,7 +1559,8 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
     if (lost.owner && lost.owner.toString() !== req.userId) {
       const commentText = (req.body.text || '').trim();
       const itemOwner = await User.findById(lost.owner).select('notificationPreferences');
-      if (!itemOwner || itemOwner.notificationPreferences?.comments !== false) {
+      // Opt-in: only send if the user has the global "Comments" toggle turned ON (defaults to OFF)
+      if (itemOwner && itemOwner.notificationPreferences?.comments === true) {
         sendPushToUser(
           lost.owner,
           '💬 New comment on your lost item',
@@ -1730,7 +1731,8 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
     if (item.seller && item.seller.toString() !== req.userId) {
       const commentText = (req.body.text || '').trim();
       const sellerUser = await User.findById(item.seller).select('notificationPreferences');
-      if (!sellerUser || sellerUser.notificationPreferences?.comments !== false) {
+      // Opt-in: only send if the user has the global "Comments" toggle turned ON (defaults to OFF)
+      if (sellerUser && sellerUser.notificationPreferences?.comments === true) {
         sendPushToUser(
           item.seller,
           '💬 New message on your listing',
@@ -2426,12 +2428,16 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
     await shoutout.save();
 
     if (comment.authorId && comment.authorId.toString() !== req.userId) {
-      sendPushToUser(
-        comment.authorId,
-        '↩️ New Reply',
-        `${user.name} replied to your comment`,
-        { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` }
-      );
+      // Opt-in: only send if the user has the global "Comments" toggle turned ON (defaults to OFF)
+      const commentAuthor = await User.findById(comment.authorId).select('notificationPreferences');
+      if (commentAuthor && commentAuthor.notificationPreferences?.comments === true) {
+        sendPushToUser(
+          comment.authorId,
+          '↩️ New Reply',
+          `${user.name} replied to your comment`,
+          { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` }
+        );
+      }
     }
 
     res.json(comment.replies[comment.replies.length - 1]);
@@ -4116,18 +4122,51 @@ router.get('/user/marketplace-preferences', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/user/notification-preferences
+router.post('/user/notification-preferences', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const p = req.body.preferences || {};
+
+    user.notificationPreferences = {
+      events:    p.events    !== false,
+      deals:     p.deals     !== false,
+      shoutouts: p.shoutouts !== false,
+      comments:  p.comments  === true,   // global "Comments & Replies" toggle — opt-in, defaults to OFF
+      lostFound: p.lostFound !== false,
+      messages:  p.messages  !== false,
+      marketplace: {
+        all:       p.marketplace?.all       !== false,
+        homes:     p.marketplace?.homes     !== false,
+        cars:      p.marketplace?.cars      !== false,
+        furniture: p.marketplace?.furniture !== false,
+        other:     p.marketplace?.other     !== false,
+      }
+    };
+
+    await user.save();
+
+    res.json({ success: true, preferences: user.notificationPreferences });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to save preferences' });
+  }
+});
+
 // GET /api/user/notification-preferences
 router.get('/user/notification-preferences', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('notificationPreferences');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Safe defaults — comments is OFF by default
+    // Safe defaults — comments is OFF by default (global toggle, applies to traffic alerts, marketplace, lost & found, etc.)
     const defaults = {
       events:    true,
       deals:     true,
       shoutouts: true,
-      comments:  false,           // ← Traffic alert comments = OFF by default
+      comments:  false,
       lostFound: true,
       messages:  true,
       marketplace: {

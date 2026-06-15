@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema({
     shoutouts:  { type: Boolean, default: true },
     lostFound:  { type: Boolean, default: true },
     messages:   { type: Boolean, default: true },
+
+    // Global "Comments & Replies" toggle. Covers replies/comments on traffic
+    // alerts, marketplace listings, lost & found posts, etc. Opt-in:
+    // defaults to false for all (new and existing) users.
     comments:   { type: Boolean, default: false },
 
     // Marketplace has its own sub-preferences

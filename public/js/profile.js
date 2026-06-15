@@ -715,7 +715,7 @@ window.showNotificationSettingsModal = async function() {
   // Load current prefs from server
   let prefs = {
     trafficAlerts: true,
-    trafficComments: false,
+    comments: false,
     deals: true,
     events: true,
     lostFound: true,
@@ -727,7 +727,7 @@ try {
     const saved = await apiGet('/user/notification-preferences');
     if (saved && typeof saved === 'object') {
       prefs.trafficAlerts    = saved.shoutouts   ?? prefs.trafficAlerts;
-      prefs.trafficComments = saved.comments === true;
+      prefs.comments         = saved.comments === true;
       prefs.deals            = saved.deals       ?? prefs.deals;
       prefs.events           = saved.events      ?? prefs.events;
       prefs.lostFound        = saved.lostFound   ?? prefs.lostFound;
@@ -798,11 +798,16 @@ try {
             </div>
           </div>
 
+          <!-- Comments & Replies — applies everywhere (traffic alerts, marketplace, lost & found, etc.) -->
+          <div class="bg-white/5 rounded-2xl px-5 py-1">
+            <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Comments & Replies</p>
+            ${row('np-comments', '💬', 'Comments & Replies', 'Replies to your traffic alerts, marketplace listings, lost & found posts, and more. Off by default — turn on to get notified.', prefs.comments)}
+          </div>
+
           <!-- Traffic Alerts -->
           <div class="bg-white/5 rounded-2xl px-5 py-1">
             <p class="text-xs font-bold text-white/30 uppercase tracking-wider pt-3 pb-1">Traffic & Community</p>
             ${row('np-trafficAlerts',   '🚗', 'New Traffic Alerts',       'Shoutouts posted by the community',        prefs.trafficAlerts)}
-            ${row('np-trafficComments', '💬', 'Comments on Traffic Posts','When someone replies to a traffic alert',  prefs.trafficComments)}
           </div>
 
           <!-- Deals & Events -->
@@ -866,12 +871,12 @@ window.saveNotificationPreferences = async function() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
 
   const get = id => document.getElementById(id)?.checked ?? true;
-  // Comments on traffic alerts is opt-in, so default to false if element missing
+  // Comments & Replies is opt-in (covers traffic alerts, marketplace, lost & found, etc.), so default to false if element missing
   const getOptIn = id => document.getElementById(id)?.checked ?? false;
 
   const preferences = {
     shoutouts:  get('np-trafficAlerts'),
-    comments:   getOptIn('np-trafficComments'),
+    comments:   getOptIn('np-comments'),
     deals:      get('np-deals'),
     events:     get('np-events'),
     lostFound:  get('np-lostFound'),
