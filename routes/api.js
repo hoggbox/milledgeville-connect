@@ -1580,6 +1580,32 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
   }
 });
 
+// ─── EDIT LOST & FOUND ITEM ──────────────────────────────────────────────────
+router.put('/lostitems/:id', authenticate, async (req, res) => {
+  try {
+    const lost = await LostItem.findById(req.params.id);
+    if (!lost) return res.status(404).json({ message: 'Not found' });
+    if (lost.owner.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const { title, description, type, isPet, location, date, images } = clean;
+
+    if (title)                              lost.title       = title.trim();
+    if (description !== undefined)          lost.description = (description || '').trim();
+    if (type && ['lost','found'].includes(type)) lost.type   = type;
+    if (typeof isPet === 'boolean')         lost.isPet       = isPet;
+    if (location !== undefined)             lost.location    = (location || '').trim();
+    if (date !== undefined)                 lost.date        = date ? new Date(date) : null;
+    if (Array.isArray(images))              lost.images      = images;
+
+    await lost.save();
+    res.json(lost);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
 router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
   try {
     const lost = await LostItem.findById(req.params.id);
@@ -1749,6 +1775,31 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── EDIT MARKETPLACE LISTING ────────────────────────────────────────────────
+router.put('/marketplace/:id', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    if (item.seller.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const { title, description, price, category, condition, images } = clean;
+
+    if (title)             item.title       = title.trim();
+    if (description !== undefined) item.description = (description || '').trim();
+    if (price !== undefined && !isNaN(Number(price))) item.price = Number(price);
+    if (category)          item.category    = category;
+    if (condition)         item.condition   = condition;
+    if (Array.isArray(images)) item.images  = images;
+
+    await item.save();
+    res.json(item);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
   }
 });
 

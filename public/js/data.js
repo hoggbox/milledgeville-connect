@@ -7179,8 +7179,13 @@ function renderLostItemsPage() {
               <span>${timeAgo(item.createdAt)}</span>
             </div>
 
-            <!-- Report Button -->
+            <!-- Card Actions -->
             <div class="mt-3 flex justify-end gap-3">
+              ${currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id) ? `
+              <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')" 
+                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
+                ✏️ Edit
+              </button>` : ''}
               <button onclick="event.stopImmediatePropagation(); shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
                       class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
                 🔗 Share
@@ -7425,6 +7430,23 @@ async function renderMarketplacePage() {
               <span>${timeAgo(item.createdAt)}</span>
               <span class="text-white/40">•</span>
               ${renderClickableUser(item.seller)}
+            </div>
+
+            <!-- Card Actions -->
+            <div class="mt-3 flex justify-end gap-3">
+              ${currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id) ? `
+              <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
+                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
+                ✏️ Edit
+              </button>` : ''}
+              <button onclick="event.stopImmediatePropagation(); shareContent('market', '${esc(item.title)}', '$${item.price}')"
+                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+                🔗 Share
+              </button>
+              <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')"
+                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+                🚩 Report
+              </button>
             </div>
           </div>
         </div>
