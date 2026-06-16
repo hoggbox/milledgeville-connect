@@ -6527,6 +6527,10 @@ window.showLostItemDetail = async function(id) {
 
           <div class="p-6 border-t bg-slate-50 flex gap-3">
             ${isOwner ? `
+              <button onclick="showEditLostItemModal('${item._id}')"
+                      class="flex-1 bg-sky-600 hover:bg-sky-700 text-white py-4 rounded-3xl font-semibold">
+                ✏️ Edit Post
+              </button>
               <button onclick="markLostResolved()" 
                       class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
                 ✅ Mark as Resolved
@@ -6912,7 +6916,11 @@ window.showMarketplaceDetail = async function(id) {
 
           <!-- Seller Actions -->
           ${isSeller ? `
-            <div class="p-6 border-t border-white/10 bg-white/5 flex justify-end">
+            <div class="p-6 border-t border-white/10 bg-white/5 flex gap-3 justify-end">
+              <button onclick="showEditMarketplaceModal('${item._id}')"
+                      class="bg-sky-600 hover:bg-sky-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+                ✏️ Edit Listing
+              </button>
               <button onclick="markMarketSold()" 
                       class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
                 Mark as Sold ✅
@@ -6947,6 +6955,338 @@ window.hideMarketDetailModal = function() {
   const modal = document.getElementById('marketDetailModal');
   if (modal) modal.remove();
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EDIT MARKETPLACE LISTING
+// ═══════════════════════════════════════════════════════════════════════════════
+window.showEditMarketplaceModal = async function(id) {
+  let item;
+  try { item = await apiGet(`/marketplace/${id}`); } catch(e) { showToast('Could not load listing', 'error'); return; }
+  if (!item || !item._id) { showToast('Item not found', 'error'); return; }
+
+  window._editMarketImages = [...(item.images || [])];
+  const existing = document.getElementById('editMarketModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'editMarketModal';
+  modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[15000]';
+  modal.innerHTML = `
+    <div onclick="if(event.target.id==='editMarketModal')hideEditMarketModal()"
+         class="bg-slate-900 text-white w-full max-w-lg mx-4 rounded-3xl overflow-hidden border border-white/10"
+         style="max-height:92vh;overflow-y:auto">
+      <div class="px-6 pt-6 pb-2">
+        <h2 class="text-2xl font-bold mb-5">✏️ Edit Listing</h2>
+
+        <div class="mb-4">
+          <label class="block text-xs font-semibold mb-1.5 text-white/60">Category</label>
+          <select id="editMarketCategory" class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none text-white">
+            <option value="Homes"       ${item.category==='Homes'?'selected':''}>🏠 Homes (Rent / Sale)</option>
+            <option value="Cars"        ${item.category==='Cars'?'selected':''}>🚗 Cars & Vehicles</option>
+            <option value="Furniture"   ${item.category==='Furniture'?'selected':''}>🪑 Furniture</option>
+            <option value="Electronics" ${item.category==='Electronics'?'selected':''}>📱 Electronics</option>
+            <option value="General"     ${item.category==='General'?'selected':''}>📦 General / Other</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-semibold mb-1.5 text-white/60">Title</label>
+          <input id="editMarketTitle" type="text" value="${esc(item.title || '')}"
+                 class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Price ($)</label>
+            <input id="editMarketPrice" type="number" value="${item.price || 0}"
+                   class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Condition</label>
+            <select id="editMarketCondition" class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+              <option value="used"     ${(item.condition||'used')==='used'?'selected':''}>Used</option>
+              <option value="like-new" ${item.condition==='like-new'?'selected':''}>Like New</option>
+              <option value="new"      ${item.condition==='new'?'selected':''}>New</option>
+              <option value="fair"     ${item.condition==='fair'?'selected':''}>Fair</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-semibold mb-1.5 text-white/60">Description</label>
+          <textarea id="editMarketDesc" rows="4"
+                    class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none resize-none">${esc(item.description || '')}</textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-semibold mb-2 text-white/60">Photos</label>
+          <div id="editMarketImagePreviews" class="flex flex-wrap gap-2 mb-3"></div>
+          <input type="file" id="editMarketImages" multiple accept="image/*"
+                 class="block w-full text-sm text-white/60 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500"
+                 onchange="handleEditMarketImages(this)">
+          <p class="text-xs text-white/40 mt-1">Tap ✕ on a photo to remove it, then add new ones below.</p>
+        </div>
+      </div>
+
+      <div class="p-6 border-t border-white/10 flex gap-3">
+        <button onclick="hideEditMarketModal()"
+                class="flex-1 py-4 rounded-3xl border border-white/20 font-semibold hover:bg-white/5 transition">
+          Cancel
+        </button>
+        <button id="editMarketSaveBtn" onclick="saveEditMarketplace('${id}')"
+                class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold transition">
+          Save Changes
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
+  renderEditMarketImagePreviews();
+};
+
+window.hideEditMarketModal = function() {
+  const m = document.getElementById('editMarketModal');
+  if (m) m.remove();
+  window._editMarketImages = [];
+};
+
+window.handleEditMarketImages = function(input) {
+  if (!window._editMarketImages) window._editMarketImages = [];
+  const remaining = 6 - window._editMarketImages.length;
+  if (remaining <= 0) { showToast('Maximum 6 photos allowed', 'error'); return; }
+  Array.from(input.files).slice(0, remaining).forEach(file => {
+    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => { window._editMarketImages.push(e.target.result); renderEditMarketImagePreviews(); };
+    reader.readAsDataURL(file);
+  });
+};
+
+function renderEditMarketImagePreviews() {
+  const container = document.getElementById('editMarketImagePreviews');
+  if (!container || !window._editMarketImages) return;
+  container.innerHTML = window._editMarketImages.map((src, i) => `
+    <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 flex-shrink-0">
+      <img src="${src}" class="w-full h-full object-cover">
+      <button onclick="removeEditMarketImage(${i})"
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center">✕</button>
+    </div>`).join('');
+}
+
+window.removeEditMarketImage = function(i) {
+  if (window._editMarketImages) { window._editMarketImages.splice(i, 1); renderEditMarketImagePreviews(); }
+};
+
+window.saveEditMarketplace = async function(id) {
+  const title     = document.getElementById('editMarketTitle')?.value.trim();
+  const price     = parseFloat(document.getElementById('editMarketPrice')?.value);
+  const condition = document.getElementById('editMarketCondition')?.value;
+  const category  = document.getElementById('editMarketCategory')?.value;
+  const desc      = document.getElementById('editMarketDesc')?.value.trim();
+  if (!title) { showToast('Title is required', 'error'); return; }
+
+  const btn = document.getElementById('editMarketSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    const res = await apiPut(`/marketplace/${id}`, {
+      title, description: desc, price: isNaN(price) ? 0 : price,
+      condition, category, images: window._editMarketImages || []
+    });
+    if (res && res._id) {
+      showToast('✅ Listing updated!', 'success');
+      hideEditMarketModal();
+      hideMarketDetailModal();
+      allMarketplaceItems = (allMarketplaceItems || []).map(i => String(i._id) === String(id) ? { ...i, ...res } : i);
+      showMarketplaceDetail(id);
+    } else {
+      showToast(res?.message || 'Failed to save', 'error');
+    }
+  } catch(e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EDIT LOST & FOUND POST
+// ═══════════════════════════════════════════════════════════════════════════════
+window.showEditLostItemModal = async function(id) {
+  let item;
+  try { item = await apiGet(`/lostitems/${id}`); } catch(e) { showToast('Could not load item', 'error'); return; }
+  if (!item || !item._id) { showToast('Item not found', 'error'); return; }
+
+  window._editLostImages = [...(item.images || [])];
+  const existing = document.getElementById('editLostModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'editLostModal';
+  modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[15000]';
+  const dateVal = item.date ? new Date(item.date).toISOString().split('T')[0] : '';
+
+  modal.innerHTML = `
+    <div onclick="if(event.target.id==='editLostModal')hideEditLostModal()"
+         class="bg-slate-900 text-white w-full max-w-lg mx-4 rounded-3xl overflow-hidden border border-white/10"
+         style="max-height:92vh;overflow-y:auto">
+      <div class="px-6 pt-6 pb-2">
+        <h2 class="text-2xl font-bold mb-5">✏️ Edit Post</h2>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Type</label>
+            <div class="flex gap-3">
+              <button onclick="selectEditLostType(this,'lost')"
+                      class="flex-1 py-3.5 rounded-2xl border border-white/20 font-semibold transition ${item.type==='lost'?'bg-emerald-600 text-white':'text-white/70'}">
+                Lost
+              </button>
+              <button onclick="selectEditLostType(this,'found')"
+                      class="flex-1 py-3.5 rounded-2xl border border-white/20 font-semibold transition ${item.type==='found'?'bg-emerald-600 text-white':'text-white/70'}">
+                Found
+              </button>
+            </div>
+            <input type="hidden" id="editLostType" value="${item.type || 'lost'}">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Title</label>
+            <input id="editLostTitle" type="text" value="${esc(item.title || '')}"
+                   class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-white/60">Description</label>
+            <textarea id="editLostDesc" rows="4"
+                      class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none resize-none">${esc(item.description || '')}</textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold mb-1.5 text-white/60">Location</label>
+              <input id="editLostLocation" type="text" value="${esc(item.location || '')}" placeholder="Milledgeville, GA"
+                     class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1.5 text-white/60">Date</label>
+              <input id="editLostDate" type="date" value="${dateVal}"
+                     class="w-full bg-white/5 border border-white/20 px-4 py-4 rounded-2xl focus:border-emerald-400 outline-none">
+            </div>
+          </div>
+
+          <label class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 cursor-pointer">
+            <input type="checkbox" id="editIsPet" ${item.isPet?'checked':''} class="w-5 h-5 accent-emerald-500">
+            <span class="font-medium">This is a lost pet 🐾</span>
+          </label>
+
+          <div>
+            <label class="block text-xs font-semibold mb-2 text-white/60">Photos</label>
+            <div id="editLostImagePreviews" class="flex flex-wrap gap-2 mb-3"></div>
+            <input type="file" id="editLostImages" multiple accept="image/*"
+                   class="block w-full text-sm text-white/60 file:mr-4 file:py-3 file:px-6 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500"
+                   onchange="handleEditLostImages(this)">
+            <p class="text-xs text-white/40 mt-1">Tap ✕ on a photo to remove it, then add new ones below.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-6 border-t border-white/10 flex gap-3">
+        <button onclick="hideEditLostModal()"
+                class="flex-1 py-4 rounded-3xl border border-white/20 font-semibold hover:bg-white/5 transition">
+          Cancel
+        </button>
+        <button id="editLostSaveBtn" onclick="saveEditLostItem('${id}')"
+                class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl font-semibold transition">
+          Save Changes
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
+  renderEditLostImagePreviews();
+};
+
+window.selectEditLostType = function(button, type) {
+  document.querySelectorAll('#editLostModal .flex.gap-3 button').forEach(btn => {
+    btn.classList.remove('bg-emerald-600', 'text-white');
+    btn.classList.add('text-white/70');
+  });
+  button.classList.add('bg-emerald-600', 'text-white');
+  button.classList.remove('text-white/70');
+  document.getElementById('editLostType').value = type;
+};
+
+window.hideEditLostModal = function() {
+  const m = document.getElementById('editLostModal');
+  if (m) m.remove();
+  window._editLostImages = [];
+};
+
+window.handleEditLostImages = function(input) {
+  if (!window._editLostImages) window._editLostImages = [];
+  const remaining = 6 - window._editLostImages.length;
+  if (remaining <= 0) { showToast('Maximum 6 photos allowed', 'error'); return; }
+  Array.from(input.files).slice(0, remaining).forEach(file => {
+    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => { window._editLostImages.push(e.target.result); renderEditLostImagePreviews(); };
+    reader.readAsDataURL(file);
+  });
+};
+
+function renderEditLostImagePreviews() {
+  const container = document.getElementById('editLostImagePreviews');
+  if (!container || !window._editLostImages) return;
+  container.innerHTML = window._editLostImages.map((src, i) => `
+    <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 flex-shrink-0">
+      <img src="${src}" class="w-full h-full object-cover">
+      <button onclick="removeEditLostImage(${i})"
+              class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center">✕</button>
+    </div>`).join('');
+}
+
+window.removeEditLostImage = function(i) {
+  if (window._editLostImages) { window._editLostImages.splice(i, 1); renderEditLostImagePreviews(); }
+};
+
+window.saveEditLostItem = async function(id) {
+  const title       = document.getElementById('editLostTitle')?.value.trim();
+  const description = document.getElementById('editLostDesc')?.value.trim();
+  if (!title || !description) { showToast('Title and description are required', 'error'); return; }
+
+  const btn = document.getElementById('editLostSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    const res = await apiPut(`/lostitems/${id}`, {
+      title, description,
+      type:     document.getElementById('editLostType')?.value,
+      isPet:    document.getElementById('editIsPet')?.checked,
+      location: document.getElementById('editLostLocation')?.value.trim(),
+      date:     document.getElementById('editLostDate')?.value || undefined,
+      images:   window._editLostImages || []
+    });
+    if (res && res._id) {
+      showToast('✅ Post updated!', 'success');
+      hideEditLostModal();
+      hideLostDetailModal();
+      _allLostItems = (_allLostItems || []).map(i => String(i._id) === String(id) ? { ...i, ...res } : i);
+      showLostDetail(id);
+    } else {
+      showToast(res?.message || 'Failed to save', 'error');
+    }
+  } catch(e) {
+    console.error(e);
+    showToast('Network error — try again', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
+};
+
+
 
 window.deleteMyMarketItem = async function(id) {
   if (!confirm('Delete this listing? This cannot be undone.')) return;
@@ -8288,7 +8628,11 @@ window.showLostDetail = async function(id) {
 
     <!-- Owner Actions -->
     ${isOwner ? `
-      <div class="p-6 border-t border-white/10 flex justify-end">
+      <div class="p-6 border-t border-white/10 flex gap-3 justify-end">
+        <button onclick="showEditLostItemModal('${item._id}')"
+                class="bg-sky-600 hover:bg-sky-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
+          ✏️ Edit Post
+        </button>
         <button onclick="resolveLostItem('${item._id}')" 
                 class="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3.5 rounded-3xl font-semibold">
           Mark as Resolved ✅
