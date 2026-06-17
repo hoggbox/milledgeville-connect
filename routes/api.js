@@ -954,89 +954,88 @@ function requireAdminOrModerator(req, res, next) {
 
 // Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  const sub = await PushSubscription.findOne({ user: userId });
-  if (!sub) {
-    console.log(`[Push] No subscription record for user ${userId}`);
+  const subs = await PushSubscription.find({ user: userId });
+  if (!subs || subs.length === 0) {
+    console.log(`[Push] No subscription records for user ${userId}`);
     return false;
   }
 
   const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
-  // Only use a real https:// URL as the notification image.
-  // data: URLs are blocked by browsers/FCM in push notifications.
   const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
 
-  if (sub.nativeToken) {
-    try {
-      const message = {
-        token: sub.nativeToken,
-        notification: {
-          title,
-          body,
-          // ✅ FIX: Firebase Admin SDK uses "image", NOT "imageUrl"
-          ...(notifImage ? { image: notifImage } : {})
-        },
-        data: {
-          page: data.page || '',
-          id:   data.id   || '',
-          url:  data.url  || ''
-        },
-        android: {
-          priority: 'high',
+  let sent = false;
+
+  for (const sub of subs) {
+    // Native FCM token (Android / iOS)
+    if (sub.nativeToken) {
+      try {
+        const message = {
+          token: sub.nativeToken,
           notification: {
-            sound:     'default',
-            channelId: 'default',
-            // ✅ FIX: "image" not "imageUrl" here too
+            title,
+            body,
             ...(notifImage ? { image: notifImage } : {})
-          }
-        },
-        // iOS support
-        ...(notifImage ? {
-          apns: {
-            payload: { aps: { 'mutable-content': 1 } },
-            fcmOptions: { image: notifImage }
-          }
-        } : {})
-      };
-      await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-      return true;
-    } catch (err) {
-      console.error(`[Push] FCM failed for ${userId}:`, err.message);
-      if (err.code === 'messaging/registration-token-not-registered') {
-        sub.nativeToken = null;
-        await sub.save();
+          },
+          data: {
+            page: data.page || '',
+            id:   data.id   || '',
+            url:  data.url  || ''
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound:     'default',
+              channelId: 'default',
+              ...(notifImage ? { image: notifImage } : {})
+            }
+          },
+          ...(notifImage ? {
+            apns: {
+              payload: { aps: { 'mutable-content': 1 } },
+              fcmOptions: { image: notifImage }
+            }
+          } : {})
+        };
+        await admin.messaging().send(message);
+        console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+        sent = true;
+      } catch (err) {
+        console.error(`[Push] FCM failed for ${userId}:`, err.message);
+        if (err.code === 'messaging/registration-token-not-registered') {
+          sub.nativeToken = null;
+          await sub.save();
+        }
       }
-      return false;
+      continue;
+    }
+
+    // Web VAPID subscription
+    if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+      try {
+        await webpush.sendNotification(
+          sub.subscription,
+          JSON.stringify({
+            title,
+            body,
+            data,
+            icon:  APP_ICON,
+            badge: APP_ICON,
+            ...(notifImage ? { image: notifImage } : {})
+          })
+        );
+        console.log(`\u2705 Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+        sent = true;
+      } catch (err) {
+        console.error(`[Push] Web push failed for ${userId}:`, err.message);
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          sub.subscription = null;
+          await sub.save();
+        }
+      }
     }
   }
 
-  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
-    try {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data,
-          icon:  APP_ICON,
-          badge: APP_ICON,
-          // ✅ Only attach image when it's a real https:// URL
-          ...(notifImage ? { image: notifImage } : {})
-        })
-      );
-      console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-      return true;
-    } catch (err) {
-      console.error(`[Push] Web push failed for ${userId}:`, err.message);
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        sub.subscription = null;
-        await sub.save();
-      }
-      return false;
-    }
-  }
-
-  return false;
+  return sent;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
