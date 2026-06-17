@@ -4,8 +4,6 @@ let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
-// ─── SSE: real-time shoutout stream ──────────────────────────────────────────
-let _shoutoutSSE = null; // holds the active EventSource, if any
 // ─── PAGE-LEVEL CACHES ────────────────────────────────────────────────────────
 let _allDeals = [];
 let _allNews = [];
@@ -701,12 +699,6 @@ async function markConversationAsRead(otherId) {
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
-
-  // ── Disconnect shoutout SSE when leaving the traffic alerts page ───────────
-  if (_shoutoutSSE && page !== 'shoutouts') {
-    _shoutoutSSE.close();
-    _shoutoutSSE = null;
-  }
 
   // ── Close any open profile toolbox / modals before navigating ─────────────
   const profileModal = document.getElementById('userProfileModal');
@@ -3123,45 +3115,6 @@ async function loadShoutoutsPage(content) {
 
   // Initial render
   await renderPage(1);
-
-  // ── SSE: subscribe to real-time updates ─────────────────────────────────────
-  // Close any leftover connection first (e.g. fast back-navigation)
-  if (_shoutoutSSE) { _shoutoutSSE.close(); _shoutoutSSE = null; }
-
-  _shoutoutSSE = new EventSource('/api/shoutouts/stream');
-
-  // New shoutout posted by someone else — prepend it to page 1 feed
-  _shoutoutSSE.addEventListener('new-shoutout', (e) => {
-    // Only act when still on the shoutouts page and showing page 1
-    if (currentPage !== 'shoutouts' || shoutoutsPage !== 1) return;
-    const s = JSON.parse(e.data);
-    // Skip if it's our own post (we already have it from the apiPost response)
-    if (currentUser && (s.authorId?._id || s.authorId) === (currentUser._id || currentUser.id)) return;
-    const feed = document.getElementById('shoutoutsFeed');
-    if (!feed) return;
-    // Remove the "no alerts" placeholder if present
-    const empty = feed.querySelector('p');
-    if (empty && empty.textContent.includes('No active')) empty.remove();
-    // Prepend the new card
-    const tmp = document.createElement('div');
-    tmp.innerHTML = renderShoutoutCard(s);
-    feed.prepend(tmp.firstElementChild);
-  });
-
-  // Someone voted "Still There" — update that card's counter everywhere
-  _shoutoutSSE.addEventListener('still-there', (e) => {
-    if (currentPage !== 'shoutouts') return;
-    const { id, stillThereCount } = JSON.parse(e.data);
-    const card = document.getElementById(`shoutout-${id}`);
-    if (!card) return;
-    const countSpan = card.querySelector('.sc-pill .sc-pill-count');
-    if (countSpan) countSpan.textContent = stillThereCount;
-  });
-
-  _shoutoutSSE.onerror = () => {
-    // Browser will auto-reconnect; nothing extra needed
-  };
-  // ──────────────────────────────────────────────────────────────────────────
 }
 
 // Make sure router can call it
@@ -10986,7 +10939,7 @@ window.stillThere = async function(shoutoutId, btnElement) {
     const res = await apiPost(`/shoutouts/${shoutoutId}/still-there`, {});
 
     // Update the count shown on the button
-    const countSpan = btnElement.querySelector('span.sc-pill-count');
+    const countSpan = btnElement.querySelector('span.font-mono');
     if (countSpan) {
       countSpan.textContent = res.stillThereCount || 0;
     }
