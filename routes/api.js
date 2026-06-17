@@ -50,6 +50,47 @@ const SpotlightAd = mongoose.models.SpotlightAd || mongoose.model('SpotlightAd',
 //   3. Drop this entire block above the `module.exports = router;` line
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── SSE: REAL-TIME SHOUTOUT STREAM ───────────────────────────────────────────
+// Keeps track of every connected client listening on GET /api/shoutouts/stream
+const _sseShoutoutClients = new Set();
+
+/**
+ * Push a JSON event to every connected SSE client on the shoutout stream.
+ * @param {string} eventName  - SSE event name (e.g. 'new-shoutout', 'still-there')
+ * @param {object} payload    - Serialisable object; sent as the `data:` field
+ */
+function broadcastShoutoutSSE(eventName, payload) {
+  const line = `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const res of _sseShoutoutClients) {
+    try { res.write(line); } catch (_) { _sseShoutoutClients.delete(res); }
+  }
+}
+
+// GET /api/shoutouts/stream  — SSE endpoint (no auth required so guests see live updates too)
+router.get('/shoutouts/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering if present
+  res.flushHeaders();
+
+  // Send an initial heartbeat so the client knows it's connected
+  res.write(': connected\n\n');
+
+  // Keep-alive ping every 25 s (prevents proxies from closing idle connections)
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch (_) { /* client gone */ }
+  }, 25000);
+
+  _sseShoutoutClients.add(res);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    _sseShoutoutClients.delete(res);
+  });
+});
+// ──────────────────────────────────────────────────────────────────────────────
+
 // ─── SPAM DETECTION CONSTANTS ─────────────────────────────────────────────────
 const SPAM_WINDOW_MS    = 5 * 60 * 1000; // 5-minute rolling window
 const SPAM_POST_LIMIT   = 5;             // 5 posts inside that window → muted
@@ -349,7 +390,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { text, images, location } = clean;
     // ────────────────────────────────────────────────────────────────────────
 
@@ -438,6 +479,12 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
       },
       { type: 'shoutout', imageUrl: shoutoutThumb }
     );
+
+    // ── SSE: push new shoutout to every connected client in real time ──────────
+    // Populate authorId so the client has the same shape as the GET /shoutouts response
+    const populated = await shoutout.populate('authorId', 'name avatar');
+    broadcastShoutoutSSE('new-shoutout', populated.toObject());
+    // ──────────────────────────────────────────────────────────────────────────
 
     res.json(shoutout);
   } catch (err) {
@@ -907,89 +954,88 @@ function requireAdminOrModerator(req, res, next) {
 
 // Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  const sub = await PushSubscription.findOne({ user: userId });
-  if (!sub) {
-    console.log(`[Push] No subscription record for user ${userId}`);
+  const subs = await PushSubscription.find({ user: userId });
+  if (!subs || subs.length === 0) {
+    console.log(`[Push] No subscription records for user ${userId}`);
     return false;
   }
 
   const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
-  // Only use a real https:// URL as the notification image.
-  // data: URLs are blocked by browsers/FCM in push notifications.
   const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
 
-  if (sub.nativeToken) {
-    try {
-      const message = {
-        token: sub.nativeToken,
-        notification: {
-          title,
-          body,
-          // ✅ FIX: Firebase Admin SDK uses "image", NOT "imageUrl"
-          ...(notifImage ? { image: notifImage } : {})
-        },
-        data: {
-          page: data.page || '',
-          id:   data.id   || '',
-          url:  data.url  || ''
-        },
-        android: {
-          priority: 'high',
+  let sent = false;
+
+  for (const sub of subs) {
+    // Native FCM token (Android / iOS)
+    if (sub.nativeToken) {
+      try {
+        const message = {
+          token: sub.nativeToken,
           notification: {
-            sound:     'default',
-            channelId: 'default',
-            // ✅ FIX: "image" not "imageUrl" here too
+            title,
+            body,
             ...(notifImage ? { image: notifImage } : {})
-          }
-        },
-        // iOS support
-        ...(notifImage ? {
-          apns: {
-            payload: { aps: { 'mutable-content': 1 } },
-            fcmOptions: { image: notifImage }
-          }
-        } : {})
-      };
-      await admin.messaging().send(message);
-      console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-      return true;
-    } catch (err) {
-      console.error(`[Push] FCM failed for ${userId}:`, err.message);
-      if (err.code === 'messaging/registration-token-not-registered') {
-        sub.nativeToken = null;
-        await sub.save();
+          },
+          data: {
+            page: data.page || '',
+            id:   data.id   || '',
+            url:  data.url  || ''
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound:     'default',
+              channelId: 'default',
+              ...(notifImage ? { image: notifImage } : {})
+            }
+          },
+          ...(notifImage ? {
+            apns: {
+              payload: { aps: { 'mutable-content': 1 } },
+              fcmOptions: { image: notifImage }
+            }
+          } : {})
+        };
+        await admin.messaging().send(message);
+        console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+        sent = true;
+      } catch (err) {
+        console.error(`[Push] FCM failed for ${userId}:`, err.message);
+        if (err.code === 'messaging/registration-token-not-registered') {
+          sub.nativeToken = null;
+          await sub.save();
+        }
       }
-      return false;
+      continue;
+    }
+
+    // Web VAPID subscription
+    if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+      try {
+        await webpush.sendNotification(
+          sub.subscription,
+          JSON.stringify({
+            title,
+            body,
+            data,
+            icon:  APP_ICON,
+            badge: APP_ICON,
+            ...(notifImage ? { image: notifImage } : {})
+          })
+        );
+        console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+        sent = true;
+      } catch (err) {
+        console.error(`[Push] Web push failed for ${userId}:`, err.message);
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          sub.subscription = null;
+          await sub.save();
+        }
+      }
     }
   }
 
-  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
-    try {
-      await webpush.sendNotification(
-        sub.subscription,
-        JSON.stringify({
-          title,
-          body,
-          data,
-          icon:  APP_ICON,
-          badge: APP_ICON,
-          // ✅ Only attach image when it's a real https:// URL
-          ...(notifImage ? { image: notifImage } : {})
-        })
-      );
-      console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-      return true;
-    } catch (err) {
-      console.error(`[Push] Web push failed for ${userId}:`, err.message);
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        sub.subscription = null;
-        await sub.save();
-      }
-      return false;
-    }
-  }
-
-  return false;
+  return sent;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -1179,7 +1225,7 @@ router.get('/messages/conversation/:otherUserId', authenticate, async (req, res)
 
 router.post('/messages', authenticate, async (req, res) => {
   try {
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { receiverId, text } = clean;
     if (!receiverId || !text?.trim()) 
       return res.status(400).json({ message: 'Receiver and message text required' });
@@ -1492,7 +1538,7 @@ router.post('/lostitems', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, images, location, type, itemType, isPet, date } = clean;
 
     const item = await LostItem.create({
@@ -1588,7 +1634,7 @@ router.put('/lostitems/:id', authenticate, async (req, res) => {
     if (lost.owner.toString() !== req.userId)
       return res.status(403).json({ message: 'Not authorized' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, type, isPet, location, date, images } = clean;
 
     if (title)                              lost.title       = title.trim();
@@ -1672,7 +1718,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, price, images, category, condition, homeNotifDetails } = clean;
 
     const item = await MarketplaceItem.create({
@@ -1786,7 +1832,7 @@ router.put('/marketplace/:id', authenticate, async (req, res) => {
     if (item.seller.toString() !== req.userId)
       return res.status(403).json({ message: 'Not authorized' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, price, category, condition, images } = clean;
 
     if (title)             item.title       = title.trim();
@@ -2362,7 +2408,7 @@ router.get('/business/:id/reviews', optionalAuth, async (req, res) => {
 
 router.post('/business/:id/reviews', authenticate, async (req, res) => {
   try {
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { rating, title, body } = clean;
     if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ message: 'Rating 1-5 required' });
@@ -2425,7 +2471,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
 
     // image may be a GIF URL (from Giphy picker) or a base64 data-URL (photo upload)
     const commentImage = (clean.image || req.body.image || '').trim() || undefined;
@@ -2469,7 +2515,7 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
     const comment  = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const reply = { 
       text: (clean.text || '').trim(), 
       author: user.name, 
@@ -2612,7 +2658,7 @@ router.post('/news', authenticate, async (req, res) => {
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, summary, content, images } = clean;
 
     if (!title || !summary || !content)
@@ -2691,7 +2737,7 @@ router.post('/news/:id/comments', authenticate, async (req, res) => {
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const commentImage = (clean.image || req.body.image || '').trim() || undefined;
     const comment = {
       text:     (clean.text || '').trim(),
@@ -2736,7 +2782,7 @@ router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, r
     if (!article) return res.status(404).json({ message: 'Not found' });
     const comment = article.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const reply = { text: (clean.text || '').trim(), author: user.name, authorId: user._id };
     if (!reply.text) return res.status(400).json({ message: 'Reply cannot be empty' });
     comment.replies.push(reply);
@@ -3333,7 +3379,7 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can post home listings' });
     }
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, price, condition, address, sendNotify } = clean;
 
     if (!title?.trim()) return res.status(400).json({ message: 'Title is required' });
@@ -3782,7 +3828,10 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
 //   POST /api/shoutouts/:id/still-there
 //   • Each user can only vote once per shoutout
 //   • Updates lastBumpedAt so it rises in the feed sort
+//   • Every STILL_THERE_THRESHOLD (8) unique votes extends expiresAt by 2 hours
 const CLEAR_THRESHOLD = 8; // number of "cleared" votes needed to mark alert cleared
+const STILL_THERE_THRESHOLD = 8;          // votes needed per extension
+const STILL_THERE_EXTENSION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
   try {
@@ -3798,11 +3847,35 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
     shoutout.stillThereVoters = shoutout.stillThereVoters || [];
     shoutout.stillThereVoters.push(req.userId);
     shoutout.lastBumpedAt = new Date(); // bump it to the top of the feed
+
+    // Every time votes hit a fresh multiple of the threshold, extend expiry by 2 hours
+    let extended = false;
+    const voteCount = shoutout.stillThereVoters.length;
+    if (voteCount % STILL_THERE_THRESHOLD === 0) {
+      const base = shoutout.expiresAt && shoutout.expiresAt.getTime() > Date.now()
+        ? shoutout.expiresAt.getTime()
+        : Date.now();
+      shoutout.expiresAt = new Date(base + STILL_THERE_EXTENSION_MS);
+      extended = true;
+    }
+
     await shoutout.save();
 
+    // ── SSE: push updated count to every connected client ─────────────────────
+    broadcastShoutoutSSE('still-there', {
+      id: shoutout._id.toString(),
+      stillThereCount: voteCount,
+      extended,
+      expiresAt: shoutout.expiresAt
+    });
+    // ──────────────────────────────────────────────────────────────────────────
+
     res.json({
-      stillThereCount: shoutout.stillThereVoters.length,
-      bumped: true
+      stillThereCount: voteCount,
+      bumped: true,
+      extended,
+      threshold: STILL_THERE_THRESHOLD,
+      expiresAt: shoutout.expiresAt
     });
   } catch (err) {
     console.error('Still-there error:', err);
@@ -3913,8 +3986,7 @@ function sanitizeContent(fields = {}, meta = {}) {
 
         if (suspicious.some(p => decoded.includes(p))) {
           const userId = meta.userId || 'unknown';
-          const ip     = meta.ip     || 'unknown';
-          console.warn(`[SECURITY] XSS attempt blocked | user: ${userId} | ip: ${ip} | field: "${key}" | payload: ${val.substring(0, 300)}`);
+          console.warn(`[SECURITY] XSS attempt blocked | user: ${userId} | field: "${key}" | payload: ${val.substring(0, 300)}`);
           const xssJokes = [
             'Nice try, hacker man 👀',
             'lmaooo bro really tried to XSS a community app',

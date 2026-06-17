@@ -4,6 +4,8 @@ let currentEditingBusiness = null;
 let currentMessageReceiver = null; // for compose modal
 let allMarketplaceItems = [];
 let lastBroadcastTime = 0;
+// ─── SSE: real-time shoutout stream ──────────────────────────────────────────
+let _shoutoutSSE = null; // holds the active EventSource, if any
 // ─── PAGE-LEVEL CACHES ────────────────────────────────────────────────────────
 let _allDeals = [];
 let _allNews = [];
@@ -31,6 +33,18 @@ function esc(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ─── Avatar helper ────────────────────────────────────────────────────────────
+// Returns an <img> if the user has a photo, otherwise a letter-circle.
+// size: CSS pixel size (e.g. '30px'). bgColor used for letter fallback only.
+function avatarHtml(name, avatarUrl, size = '30px', radius = '50%', bgColor = '#059669') {
+  const letter = name ? name[0].toUpperCase() : '?';
+  const style = `width:${size};height:${size};border-radius:${radius};flex-shrink:0;object-fit:cover;display:block;`;
+  if (avatarUrl) {
+    return `<img src="${esc(avatarUrl)}" style="${style}" onerror="this.outerHTML='<div style=\\'${style}background:${bgColor};display:flex;align-items:center;justify-content:center;font-size:calc(${size} * 0.45);font-weight:800;color:#fff;\\'>${letter}</div>'" alt="">`;
+  }
+  return `<div style="${style}background:${bgColor};display:flex;align-items:center;justify-content:center;font-size:calc(${size} * 0.45);font-weight:800;color:#fff;">${letter}</div>`;
 }
 
 function sanitizeBroadcast(raw) {
@@ -699,6 +713,12 @@ async function markConversationAsRead(otherId) {
 async function loadPage(page) {
   currentPage = page;
   const content = document.getElementById('content');
+
+  // ── Disconnect shoutout SSE when leaving the traffic alerts page ───────────
+  if (_shoutoutSSE && page !== 'shoutouts') {
+    _shoutoutSSE.close();
+    _shoutoutSSE = null;
+  }
 
   // ── Close any open profile toolbox / modals before navigating ─────────────
   const profileModal = document.getElementById('userProfileModal');
@@ -2115,26 +2135,7 @@ function _renderCategoryBar(categories) {
       </button>`).join('')}`;
 }
 
-async function loadDirectoryAndOpen(businessId) {
-  console.log('🔗 loadDirectoryAndOpen called with:', businessId);   // ← ADD THIS LINE
-  // Make sure we're on the directory page
-  const content = document.getElementById('content');
-  if (content) {
-    await loadDirectoryPage(content);
-  } else {
-    navigate('directory');
-  }
-
-  // Give the directory a moment to render, then open the specific business
-  setTimeout(() => {
-    if (typeof showBusinessDetail === 'function') {
-      showBusinessDetail(businessId);
-    }
-  }, 650);
-}
-
-// Make sure it's globally available for the push handler
-window.loadDirectoryAndOpen = loadDirectoryAndOpen;
+// loadDirectoryAndOpen is defined above (polling-based version) and already exported to window.
 
 // ─── "Open now" badge helper ──────────────────────────────────────────────────
 function getOpenStatus(hoursStr) {
@@ -3024,8 +3025,10 @@ function startVerificationPoll() {}
 
 
 // ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
+let shoutoutsPage = 1; // module-level so all SSE closures share the same value
+
 async function loadShoutoutsPage(content) {
-  let shoutoutsPage = 1;
+  shoutoutsPage = 1;
   const PAGE_SIZE = 8;
 
   const renderPage = async (page = 1) => {
@@ -3134,6 +3137,45 @@ async function loadShoutoutsPage(content) {
 
   // Initial render
   await renderPage(1);
+
+  // ── SSE: subscribe to real-time updates ─────────────────────────────────────
+  // Close any leftover connection first (e.g. fast back-navigation)
+  if (_shoutoutSSE) { _shoutoutSSE.close(); _shoutoutSSE = null; }
+
+  _shoutoutSSE = new EventSource('/api/shoutouts/stream');
+
+  // New shoutout posted by someone else — prepend it to page 1 feed
+  _shoutoutSSE.addEventListener('new-shoutout', (e) => {
+    // Only act when still on the shoutouts page and showing page 1
+    if (currentPage !== 'shoutouts' || shoutoutsPage !== 1) return;
+    const s = JSON.parse(e.data);
+    // Skip if it's our own post (we already have it from the apiPost response)
+    if (currentUser && (s.authorId?._id || s.authorId) === (currentUser._id || currentUser.id)) return;
+    const feed = document.getElementById('shoutoutsFeed');
+    if (!feed) return;
+    // Remove the "no alerts" placeholder if present
+    const empty = feed.querySelector('p');
+    if (empty && empty.textContent.includes('No active')) empty.remove();
+    // Prepend the new card
+    const tmp = document.createElement('div');
+    tmp.innerHTML = renderShoutoutCard(s);
+    feed.prepend(tmp.firstElementChild);
+  });
+
+  // Someone voted "Still There" — update that card's counter everywhere
+  _shoutoutSSE.addEventListener('still-there', (e) => {
+    if (currentPage !== 'shoutouts') return;
+    const { id, stillThereCount } = JSON.parse(e.data);
+    const card = document.getElementById(`shoutout-${id}`);
+    if (!card) return;
+    const countSpan = card.querySelector('.sc-pill .sc-pill-count');
+    if (countSpan) countSpan.textContent = stillThereCount;
+  });
+
+  _shoutoutSSE.onerror = () => {
+    // Browser will auto-reconnect; nothing extra needed
+  };
+  // ──────────────────────────────────────────────────────────────────────────
 }
 
 // Make sure router can call it
@@ -3225,26 +3267,45 @@ window.removeShoutoutImage = function (index) {
 
 window.postShoutoutWithPhoto = async function () {
   if (!requireAuth('Sign in to post traffic alerts.')) return;
+  if (isPostingShoutout) return; // prevent double-tap / double-submit
   const input = document.getElementById('shoutoutInput');
   if (!input || !input.value.trim()) return;
 
-  const res = await apiPost('/shoutouts', { 
-    text: input.value.trim(),
-    images: _pendingShoutoutImages || []
-  });
+  isPostingShoutout = true;
+  try {
+    const res = await apiPost('/shoutouts', {
+      text: input.value.trim(),
+      images: _pendingShoutoutImages || []
+    });
 
-  if (res._id) {
-    showToast('✅ Traffic Alert posted!');
-    _pendingShoutoutImages = [];
-    input.value = '';
-    loadPage('shoutouts');
-  } else {
-    showToast(res.message || 'Error posting traffic alert', 'error');
+    if (res._id) {
+      showToast('✅ Traffic Alert posted!');
+      _pendingShoutoutImages = [];
+      input.value = '';
+      renderShoutoutImagePreviews();
+
+      // Prepend card directly — do NOT call loadPage('shoutouts').
+      // That re-runs loadShoutoutsPage which stacks another SSE listener,
+      // causing every broadcast to fire multiple times.
+      const feed = document.getElementById('shoutoutsFeed');
+      if (feed) {
+        const empty = feed.querySelector('p');
+        if (empty && empty.textContent.includes('No active')) empty.remove();
+        const tmp = document.createElement('div');
+        tmp.innerHTML = renderShoutoutCard(res);
+        feed.prepend(tmp.firstElementChild);
+      }
+    } else {
+      showToast(res.message || 'Error posting traffic alert', 'error');
+    }
+  } finally {
+    isPostingShoutout = false;
   }
 }
 
 function renderShoutoutCard(s) {
-  const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
+  const authorAvatar = s.authorId?.avatar || null;
+  const authorName   = s.author || s.authorId?.name || 'Anonymous';
   const likeCount = s.likes ? s.likes.length : 0;
   const comments = s.comments || [];
   const commentCount = comments.length;
@@ -3262,7 +3323,7 @@ function renderShoutoutCard(s) {
   <div class="sc-body">
     <div class="sc-header">
       <div class="sc-author">
-        <div class="sc-avatar">${authorLetter}</div>
+        ${avatarHtml(authorName, authorAvatar, '36px', '50%', '#059669')}
         <div>
           <div class="sc-name">${renderClickableUser(s.authorId ? { _id: s.authorId?._id || s.authorId, name: s.author || 'Anonymous' } : s.author)}</div>
           <div class="sc-time">${timeAgo(s.createdAt)}</div>
@@ -3323,7 +3384,7 @@ function renderShoutoutCard(s) {
     ${currentUser ? `
       <div style="display:flex;flex-direction:column;gap:6px;padding:8px 12px 10px;border-top:1px solid rgba(255,255,255,0.06);">
         <div style="display:flex;align-items:flex-start;gap:8px;">
-          <div style="width:30px;height:30px;background:#059669;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;margin-top:2px;">${currentUser.name[0].toUpperCase()}</div>
+          <div style="width:30px;height:30px;flex-shrink:0;margin-top:2px;">${avatarHtml(currentUser.name, currentUser.avatar, '30px', '50%', '#059669')}</div>
           <div style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 12px;transition:border-color 0.2s;"
                onfocus="this.style.borderColor='rgba(52,211,153,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
             <input id="commentinput-${s._id}" type="text" placeholder="Write a comment…"
@@ -3372,7 +3433,8 @@ function renderShoutoutCard(s) {
 }
 
 function renderCommentRow(c, shoutoutId) {
-  const cLetter = c.author ? c.author[0].toUpperCase() : '?';
+  const cAvatar = c.authorId?.avatar || null;
+  const cName   = c.author || c.authorId?.name || 'Anonymous';
   const replies = c.replies || [];
   const replyCount = replies.length;
   const userIsAdmin = isAdmin();
@@ -3382,10 +3444,11 @@ function renderCommentRow(c, shoutoutId) {
   if (replyCount > 0) {
     repliesHtml = `<div class="ml-9 mt-1 space-y-1">`;
     replies.forEach(r => {
-      const rLetter = r.author ? r.author[0].toUpperCase() : '?';
+      const rAvatar = r.authorId?.avatar || null;
+      const rName   = r.author || r.authorId?.name || 'Anonymous';
       repliesHtml += `
         <div class="flex items-start gap-2" id="reply-${r._id}">
-          <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
+          <div style="margin-top:2px;">${avatarHtml(rName, rAvatar, '24px', '8px', '#0d9488')}</div>
           <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-white/80">${renderClickableUser(r.authorId ? { _id: r.authorId?._id || r.authorId, name: r.author || 'Anonymous' } : r.author)}</span>
@@ -8392,7 +8455,6 @@ window.showBusinessDetail    = showBusinessDetail;
 window.hideBusinessModal     = hideBusinessModal;
 window.switchAdminTab        = switchAdminTab;
 window.renderDirectory       = renderDirectory;
-window.goToDirectoryPage   = goToDirectoryPage;
 window.getDirections = function(address) {
   if (!address) {
     showToast('No address available for this business', 'error');
@@ -10959,7 +11021,7 @@ window.stillThere = async function(shoutoutId, btnElement) {
     const res = await apiPost(`/shoutouts/${shoutoutId}/still-there`, {});
 
     // Update the count shown on the button
-    const countSpan = btnElement.querySelector('span.font-mono');
+    const countSpan = btnElement.querySelector('span.sc-pill-count');
     if (countSpan) {
       countSpan.textContent = res.stillThereCount || 0;
     }
@@ -10968,7 +11030,11 @@ window.stillThere = async function(shoutoutId, btnElement) {
     btnElement.classList.remove('bg-white/10', 'hover:bg-white/20', 'text-white/80');
     btnElement.classList.add('bg-emerald-500/20', 'text-emerald-400');
 
-    showToast('Thanks for confirming!', 'success');
+    if (res.extended) {
+      showToast(`👀 Thanks for confirming! ${res.threshold} votes reached — alert extended by 2 hours.`, 'success');
+    } else {
+      showToast('Thanks for confirming!', 'success');
+    }
 
   } catch (err) {
     if (err.message && err.message.includes('already confirmed')) {
