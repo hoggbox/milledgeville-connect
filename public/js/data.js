@@ -10968,7 +10968,11 @@ window.stillThere = async function(shoutoutId, btnElement) {
     btnElement.classList.remove('bg-white/10', 'hover:bg-white/20', 'text-white/80');
     btnElement.classList.add('bg-emerald-500/20', 'text-emerald-400');
 
-    showToast('Thanks for confirming!', 'success');
+    if (res.extended) {
+      showToast(`👀 Thanks for confirming! ${res.threshold} votes reached — alert extended by 2 hours.`, 'success');
+    } else {
+      showToast('Thanks for confirming!', 'success');
+    }
 
   } catch (err) {
     if (err.message && err.message.includes('already confirmed')) {

@@ -3782,7 +3782,10 @@ router.post('/push/native-subscribe', authenticate, async (req, res) => {
 //   POST /api/shoutouts/:id/still-there
 //   • Each user can only vote once per shoutout
 //   • Updates lastBumpedAt so it rises in the feed sort
+//   • Every STILL_THERE_THRESHOLD (8) unique votes extends expiresAt by 2 hours
 const CLEAR_THRESHOLD = 8; // number of "cleared" votes needed to mark alert cleared
+const STILL_THERE_THRESHOLD = 8;          // votes needed per extension
+const STILL_THERE_EXTENSION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
   try {
@@ -3798,11 +3801,26 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
     shoutout.stillThereVoters = shoutout.stillThereVoters || [];
     shoutout.stillThereVoters.push(req.userId);
     shoutout.lastBumpedAt = new Date(); // bump it to the top of the feed
+
+    // Every time votes hit a fresh multiple of the threshold, extend expiry by 2 hours
+    let extended = false;
+    const voteCount = shoutout.stillThereVoters.length;
+    if (voteCount % STILL_THERE_THRESHOLD === 0) {
+      const base = shoutout.expiresAt && shoutout.expiresAt.getTime() > Date.now()
+        ? shoutout.expiresAt.getTime()
+        : Date.now();
+      shoutout.expiresAt = new Date(base + STILL_THERE_EXTENSION_MS);
+      extended = true;
+    }
+
     await shoutout.save();
 
     res.json({
-      stillThereCount: shoutout.stillThereVoters.length,
-      bumped: true
+      stillThereCount: voteCount,
+      bumped: true,
+      extended,
+      threshold: STILL_THERE_THRESHOLD,
+      expiresAt: shoutout.expiresAt
     });
   } catch (err) {
     console.error('Still-there error:', err);
