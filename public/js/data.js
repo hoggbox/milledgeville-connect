@@ -3025,10 +3025,8 @@ function startVerificationPoll() {}
 
 
 // ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
-let shoutoutsPage = 1; // module-level so all SSE closures share the same value
-
 async function loadShoutoutsPage(content) {
-  shoutoutsPage = 1;
+  let shoutoutsPage = 1;
   const PAGE_SIZE = 8;
 
   const renderPage = async (page = 1) => {
@@ -3267,39 +3265,21 @@ window.removeShoutoutImage = function (index) {
 
 window.postShoutoutWithPhoto = async function () {
   if (!requireAuth('Sign in to post traffic alerts.')) return;
-  if (isPostingShoutout) return; // prevent double-tap / double-submit
   const input = document.getElementById('shoutoutInput');
   if (!input || !input.value.trim()) return;
 
-  isPostingShoutout = true;
-  try {
-    const res = await apiPost('/shoutouts', {
-      text: input.value.trim(),
-      images: _pendingShoutoutImages || []
-    });
+  const res = await apiPost('/shoutouts', { 
+    text: input.value.trim(),
+    images: _pendingShoutoutImages || []
+  });
 
-    if (res._id) {
-      showToast('✅ Traffic Alert posted!');
-      _pendingShoutoutImages = [];
-      input.value = '';
-      renderShoutoutImagePreviews();
-
-      // Prepend card directly — do NOT call loadPage('shoutouts').
-      // That re-runs loadShoutoutsPage which stacks another SSE listener,
-      // causing every broadcast to fire multiple times.
-      const feed = document.getElementById('shoutoutsFeed');
-      if (feed) {
-        const empty = feed.querySelector('p');
-        if (empty && empty.textContent.includes('No active')) empty.remove();
-        const tmp = document.createElement('div');
-        tmp.innerHTML = renderShoutoutCard(res);
-        feed.prepend(tmp.firstElementChild);
-      }
-    } else {
-      showToast(res.message || 'Error posting traffic alert', 'error');
-    }
-  } finally {
-    isPostingShoutout = false;
+  if (res._id) {
+    showToast('✅ Traffic Alert posted!');
+    _pendingShoutoutImages = [];
+    input.value = '';
+    loadPage('shoutouts');
+  } else {
+    showToast(res.message || 'Error posting traffic alert', 'error');
   }
 }
 
@@ -7576,58 +7556,56 @@ function renderLostItemsPage() {
   if (paginated.length === 0) {
     html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
   } else {
-    html = paginated.map(item => `
-      <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')" 
-           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-        <div class="flex gap-4">
-          <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
-                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
-                 loading="lazy" alt=""
-                 onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🔎</div>
+    html = paginated.map(item => {
+      const isOwner = currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id);
+      const authorName = item.authorName || 'Anonymous';
+      const ownerObj = typeof item.owner === 'object' ? item.owner : { _id: item.owner, name: authorName };
+      return `
+      <div id="lost-${item._id}" class="sc" style="cursor:pointer;" onclick="showLostDetail('${item._id}')">
+        <div class="sc-body">
+          <div class="sc-header">
+            <div class="sc-author">
+              ${avatarHtml(authorName, null, '36px', '50%', '#059669')}
+              <div>
+                <div class="sc-name">${renderClickableUser(ownerObj, authorName)}</div>
+                <div class="sc-time">${timeAgo(item.createdAt)}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${item.isPet ? `<span style="font-size:12px;color:#fbbf24;font-weight:700;">🐾 Pet</span>` : ''}
+              <span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;${item.type === 'lost' ? 'background:rgba(239,68,68,0.2);color:#f87171;' : 'background:rgba(52,211,153,0.2);color:#34d399;'}">${item.type.toUpperCase()}</span>
+              ${isOwner
+                ? `<span class="sc-yours">Yours</span>`
+                : `<button onclick="event.stopImmediatePropagation(); reportContent('lost','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>`}
+            </div>
           </div>
-          
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between">
-              <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">
-                ${item.type.toUpperCase()}
-              </span>
-              ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
-            </div>
-            
-            <h3 class="font-semibold text-lg mt-2">${esc(item.title)}</h3>
-            <p class="text-white/70 line-clamp-2">${esc(item.description)}</p>
-            
-            <div class="flex items-center gap-2 mt-4 text-xs text-white/50">
-              <span>📍 ${item.location || 'Unknown'}</span>
-              <span>·</span>
-              ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
-              <span>·</span>
-              <span>${timeAgo(item.createdAt)}</span>
-            </div>
-
-            <!-- Card Actions -->
-            <div class="mt-3 flex justify-end gap-3">
-              ${currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id) ? `
-              <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')" 
-                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
-                ✏️ Edit
-              </button>` : ''}
-              <button onclick="event.stopImmediatePropagation(); shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
-                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
-                🔗 Share
-              </button>
-              <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
-                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
-                🚩 Report
-              </button>
-            </div>
+          ${item.location ? `<div class="sc-location">📍 ${esc(item.location)}</div>` : ''}
+          <p class="sc-text" style="font-weight:600;font-size:15px;margin-bottom:4px;">${esc(item.title)}</p>
+          ${item.description ? `<p class="sc-text" style="font-size:13px;opacity:0.7;margin-top:0;">${esc(item.description)}</p>` : ''}
+        </div>
+        ${`<div onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')" style="padding:0 0 4px;cursor:zoom-in;">
+          <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}"
+               loading="lazy" alt=""
+               style="width:100%;max-height:220px;object-fit:cover;border-radius:0;"
+               onerror="this.parentElement.style.display='none'">
+        </div>`}
+        <div class="sc-divider"></div>
+        <div class="sc-actions">
+          <button onclick="event.stopImmediatePropagation(); showLostDetail('${item._id}')" class="sc-pill">
+            💬 View Details
+          </button>
+          <div class="sc-reactions">
+            ${isOwner ? `
+            <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')" class="sc-react" style="color:#38bdf8;">
+              <span class="sc-react-icon">✏️</span>
+            </button>` : ''}
+            <button onclick="event.stopImmediatePropagation(); shareContent('lost','${esc(item.title)}','${esc(item.location || '')}')" class="sc-react sc-share">
+              <span class="sc-react-icon">🔗</span>
+            </button>
           </div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   }
 
   container.innerHTML = html;
@@ -7834,49 +7812,53 @@ async function renderMarketplacePage() {
   let html = '<div class="space-y-4">';
 
   pageItems.forEach(item => {
+    const isSeller = currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id);
+    const sellerName = item.sellerName || item.authorName || 'Anonymous';
+    const sellerObj = typeof item.seller === 'object' ? item.seller : { _id: item.seller, name: sellerName };
     html += `
-      <div onclick="showMarketplaceDetail('${item._id}')" 
-           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
-        <div class="flex gap-4">
-          <div class="w-24 h-24 flex-shrink-0 relative">
-            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
-                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
-                 loading="lazy" alt=""
-                 onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}')"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🛒</div>
+      <div id="market-${item._id}" class="sc" style="cursor:pointer;" onclick="showMarketplaceDetail('${item._id}')">
+        <div class="sc-body">
+          <div class="sc-header">
+            <div class="sc-author">
+              ${avatarHtml(sellerName, null, '36px', '50%', '#059669')}
+              <div>
+                <div class="sc-name">${renderClickableUser(sellerObj, sellerName)}</div>
+                <div class="sc-time">${timeAgo(item.createdAt)}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="padding:3px 10px;font-size:11px;font-weight:700;border-radius:999px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);">${item.condition || 'used'}</span>
+              ${isSeller
+                ? `<span class="sc-yours">Yours</span>`
+                : `<button onclick="event.stopImmediatePropagation(); reportContent('market','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>`}
+            </div>
           </div>
-          
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-start">
-              <h3 class="font-semibold text-lg leading-tight pr-2">${esc(item.title)}</h3>
-              <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
-            </div>
-            <p class="text-white/70 line-clamp-2 mt-1">${esc(item.description || '')}</p>
-            
-            <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
-              <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
-              <span>${timeAgo(item.createdAt)}</span>
-              <span class="text-white/40">•</span>
-              ${renderClickableUser(item.seller)}
-            </div>
-
-            <!-- Card Actions -->
-            <div class="mt-3 flex justify-end gap-3">
-              ${currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id) ? `
-              <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
-                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
-                ✏️ Edit
-              </button>` : ''}
-              <button onclick="event.stopImmediatePropagation(); shareContent('market', '${esc(item.title)}', '$${item.price}')"
-                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
-                🔗 Share
-              </button>
-              <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')"
-                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
-                🚩 Report
-              </button>
-            </div>
+          ${item.category ? `<div class="sc-location">🏷️ ${esc(item.category)}</div>` : ''}
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <p class="sc-text" style="font-weight:600;font-size:15px;margin-bottom:4px;flex:1;">${esc(item.title)}</p>
+            <span style="font-size:20px;font-weight:800;color:#34d399;white-space:nowrap;">$${Number(item.price).toLocaleString()}</span>
+          </div>
+          ${item.description ? `<p class="sc-text" style="font-size:13px;opacity:0.7;margin-top:0;">${esc(item.description)}</p>` : ''}
+        </div>
+        <div onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}')" style="padding:0 0 4px;cursor:zoom-in;">
+          <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}"
+               loading="lazy" alt=""
+               style="width:100%;max-height:220px;object-fit:cover;border-radius:0;"
+               onerror="this.parentElement.style.display='none'">
+        </div>
+        <div class="sc-divider"></div>
+        <div class="sc-actions">
+          <button onclick="event.stopImmediatePropagation(); showMarketplaceDetail('${item._id}')" class="sc-pill">
+            💬 View Details
+          </button>
+          <div class="sc-reactions">
+            ${isSeller ? `
+            <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')" class="sc-react" style="color:#38bdf8;">
+              <span class="sc-react-icon">✏️</span>
+            </button>` : ''}
+            <button onclick="event.stopImmediatePropagation(); shareContent('market','${esc(item.title)}','$${item.price}')" class="sc-react sc-share">
+              <span class="sc-react-icon">🔗</span>
+            </button>
           </div>
         </div>
       </div>`;
