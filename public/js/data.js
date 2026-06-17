@@ -6542,15 +6542,6 @@ window.showLostItemDetail = async function(id) {
 
     const isOwner = currentUser && item.owner && 
       String(item.owner._id || item.owner) === String(currentUser._id);
-    const isResolved = item.status === 'resolved';
-
-    let autoDeleteBanner = '';
-    if (isResolved && item.autoDeleteAt) {
-      const daysLeft = Math.max(0, Math.ceil((new Date(item.autoDeleteAt) - Date.now()) / (1000 * 60 * 60 * 24)));
-      autoDeleteBanner = `<div style="background:#fef3c7;border-bottom:1px solid #fde68a;padding:10px 20px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:6px;">
-        ✅ Marked as Resolved &nbsp;·&nbsp; 🗑️ Auto-deletes in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>
-      </div>`;
-    }
 
     const html = `
       <div id="lostDetailModal" onclick="if(event.target.id==='lostDetailModal') hideLostDetailModal()" 
@@ -6559,15 +6550,14 @@ window.showLostItemDetail = async function(id) {
              class="bg-white text-slate-900 w-full max-w-2xl rounded-t-3xl md:rounded-3xl max-h-[92vh] overflow-auto shadow-2xl">
 
           <div class="sticky top-0 bg-white px-6 py-4 border-b flex items-center justify-between">
-            <div class="flex items-center gap-2 flex-wrap">
-              ${isResolved
-                ? `<span class="inline-block px-3 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-700">✅ RESOLVED</span>`
-                : `<span class="inline-block px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">${item.type.toUpperCase()}</span>`}
-              ${item.isPet ? `<span class="text-amber-600 text-sm">🐾 Lost Pet</span>` : ''}
+            <div>
+              <span class="inline-block px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+                ${item.type.toUpperCase()}
+              </span>
+              ${item.isPet ? `<span class="ml-2 text-amber-600">🐾 Lost Pet</span>` : ''}
             </div>
             <button onclick="hideLostDetailModal()" class="text-3xl leading-none text-gray-400 hover:text-gray-600">×</button>
           </div>
-          ${autoDeleteBanner}
 
           <div class="p-6">
             <h1 class="text-2xl font-bold mb-1">${esc(item.title)}</h1>
@@ -6599,15 +6589,15 @@ window.showLostItemDetail = async function(id) {
             </div>
           </div>
 
-          <div class="p-6 border-t bg-slate-50 flex gap-3 flex-wrap">
-            ${isOwner && !isResolved ? `
+          <div class="p-6 border-t bg-slate-50 flex gap-3">
+            ${isOwner ? `
               <button onclick="showEditLostItemModal('${item._id}')"
                       class="flex-1 bg-sky-600 hover:bg-sky-700 text-white py-4 rounded-3xl font-semibold">
                 ✏️ Edit Post
               </button>
               <button onclick="markLostResolved()" 
                       class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
-                ✅ Mark as Found/Resolved
+                ✅ Mark as Resolved
               </button>` : ''}
             <button onclick="shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
                     class="flex-1 bg-sky-50 hover:bg-sky-100 text-sky-700 py-4 rounded-3xl font-semibold transition">
@@ -6658,12 +6648,17 @@ async function renderLostComments(item) {
   container.innerHTML = html;
 }
 
-window.markLostResolved = function() {
+window.markLostResolved = async function() {
   if (!currentLostItemId) return;
-  // Pull title from already-open detail modal if possible
-  const titleEl = document.querySelector('#lostDetailModal h1');
-  const title = titleEl ? titleEl.textContent.trim() : 'this item';
-  confirmMarkLostResolved(currentLostItemId, title);
+  if (!confirm('Mark this item as resolved?')) return;
+  try {
+    await apiPost(`/lostitems/${currentLostItemId}/resolve`, {});
+    showToast('✅ Marked as resolved!');
+    hideLostDetailModal();
+    loadPage('lostfound');
+  } catch (e) {
+    showToast('Error marking resolved', 'error');
+  }
 };
 
 // ====================== MARKETPLACE ======================
@@ -7471,11 +7466,12 @@ window.removeMarketImage = function(index) {
   renderMarketImagePreviews();
 };
 
-window.markMarketSold = function() {
-  if (!currentMarketItemId) return;
-  const titleEl = document.querySelector('#marketDetailModal h2');
-  const title = titleEl ? titleEl.textContent.trim() : 'this listing';
-  confirmMarkMarketSold(currentMarketItemId, title);
+window.markMarketSold = async function() {
+  if (confirm('Mark this item as sold?')) {
+    await apiPost(`/marketplace/${currentMarketItemId}/sold`, {});
+    hideMarketDetailModal();
+    loadPage('marketplace');
+  }
 };
 
 // In-memory cache for lost & found items (avoids re-fetching on every search/filter)
@@ -7493,7 +7489,7 @@ async function loadLostFoundPage(content) {
       </div>
 
       <!-- Search + Filters -->
-      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
         <input id="lostSearchInput" type="text" placeholder="Search lost & found items..." 
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
 
@@ -7505,18 +7501,6 @@ async function loadLostFoundPage(content) {
 </select>
       </div>
 
-      ${currentUser ? `
-      <div class="flex gap-2 mb-5 flex-wrap">
-        <button id="lostMyPostsChip" onclick="toggleLostMyPosts()"
-                class="px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition flex items-center gap-1.5">
-          👤 My Posts
-        </button>
-        <button id="lostShowResolvedChip" onclick="toggleLostShowResolved()"
-                class="px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition items-center gap-1.5 hidden">
-          ✅ Show Resolved
-        </button>
-      </div>` : ''}
-
       <div id="lostItemsList" class="space-y-4">
         ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
       </div>
@@ -7526,23 +7510,13 @@ async function loadLostFoundPage(content) {
   window.currentLostPage = 1;
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
-  window.lostMyPostsActive = false;
-  window.lostShowResolved = false;
-  window._myLostItemsCache = null;
 
-  // Fetch fresh public data every visit
+  // Fetch fresh data every visit
   try {
     const res = await apiGet('/lostitems?page=1&limit=30');
     _allLostItems = res.items || [];
   } catch (e) {
     console.error('Lost & Found fetch failed', e);
-  }
-
-  // Pre-fetch current user's own posts (including resolved) in background
-  if (currentUser) {
-    apiGet('/lostitems?mine=true&limit=100').then(r => {
-      window._myLostItemsCache = r.items || [];
-    }).catch(() => { window._myLostItemsCache = []; });
   }
 
   // Live search — no network call, just re-filter the cache
@@ -7559,23 +7533,16 @@ function renderLostItemsPage() {
   const container = document.getElementById('lostItemsList');
   if (!container) return;
 
-  const myMode = window.lostMyPostsActive;
-  let source = myMode ? (window._myLostItemsCache || []) : _allLostItems;
-
-  let filtered = source.filter(item => {
-    const matchesSearch = !window.currentLostSearch ||
+  // Filter entirely in memory — no network request
+  let filtered = _allLostItems.filter(item => {
+    const matchesSearch = !window.currentLostSearch || 
       (item.title || '').toLowerCase().includes(window.currentLostSearch) ||
       (item.description || '').toLowerCase().includes(window.currentLostSearch);
-
-    const matchesFilter = window.currentLostFilter === 'all' ||
+    
+    const matchesFilter = window.currentLostFilter === 'all' || 
       item.type === window.currentLostFilter;
-
-    // Public feed hides resolved; My Posts shows them only when toggle is on
-    const matchesStatus = myMode
-      ? (window.lostShowResolved || (item.status || 'active') !== 'resolved')
-      : (item.status || 'active') !== 'resolved';
-
-    return matchesSearch && matchesFilter && matchesStatus;
+    
+    return matchesSearch && matchesFilter;
   });
 
   // Client-side pagination
@@ -7587,27 +7554,14 @@ function renderLostItemsPage() {
 
   let html = '';
   if (paginated.length === 0) {
-    html = myMode
-      ? `<p class="text-white/40 text-center py-16">You haven't posted any lost &amp; found items yet.</p>`
-      : `<p class="text-white/40 text-center py-16">No items found.</p>`;
+    html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
   } else {
     html = paginated.map(item => {
       const isOwner = currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id);
       const authorName = item.authorName || 'Anonymous';
       const ownerObj = typeof item.owner === 'object' ? item.owner : { _id: item.owner, name: authorName };
-      const isResolved = item.status === 'resolved';
-
-      // Auto-delete countdown for resolved items in My Posts mode
-      let resolvedBanner = '';
-      if (isResolved && item.autoDeleteAt) {
-        const daysLeft = Math.max(0, Math.ceil((new Date(item.autoDeleteAt) - Date.now()) / (1000 * 60 * 60 * 24)));
-        resolvedBanner = `<div style="background:rgba(99,102,241,0.15);border-top:1px solid rgba(99,102,241,0.3);padding:8px 16px;font-size:12px;color:#a5b4fc;display:flex;align-items:center;gap:6px;">
-          ✅ Marked Resolved &nbsp;·&nbsp; 🗑️ Auto-deletes in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>
-        </div>`;
-      }
-
       return `
-      <div id="lost-${item._id}" class="sc" style="cursor:pointer;${isResolved ? 'opacity:0.65;' : ''}" onclick="showLostDetail('${item._id}')">
+      <div id="lost-${item._id}" class="sc" style="cursor:pointer;" onclick="showLostDetail('${item._id}')">
         <div class="sc-body">
           <div class="sc-header">
             <div class="sc-author">
@@ -7619,9 +7573,7 @@ function renderLostItemsPage() {
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               ${item.isPet ? `<span style="font-size:12px;color:#fbbf24;font-weight:700;">🐾 Pet</span>` : ''}
-              ${isResolved
-                ? `<span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;background:rgba(99,102,241,0.2);color:#a5b4fc;">RESOLVED</span>`
-                : `<span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;${item.type === 'lost' ? 'background:rgba(239,68,68,0.2);color:#f87171;' : 'background:rgba(52,211,153,0.2);color:#34d399;'}">${item.type.toUpperCase()}</span>`}
+              <span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;${item.type === 'lost' ? 'background:rgba(239,68,68,0.2);color:#f87171;' : 'background:rgba(52,211,153,0.2);color:#34d399;'}">${item.type.toUpperCase()}</span>
               ${isOwner
                 ? `<span class="sc-yours">Yours</span>`
                 : `<button onclick="event.stopImmediatePropagation(); reportContent('lost','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>`}
@@ -7631,25 +7583,21 @@ function renderLostItemsPage() {
           <p class="sc-text" style="font-weight:600;font-size:15px;margin-bottom:4px;">${esc(item.title)}</p>
           ${item.description ? `<p class="sc-text" style="font-size:13px;opacity:0.7;margin-top:0;">${esc(item.description)}</p>` : ''}
         </div>
-        <div onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')" style="padding:0 0 4px;cursor:zoom-in;">
+        ${`<div onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')" style="padding:0 0 4px;cursor:zoom-in;">
           <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}"
                loading="lazy" alt=""
                style="width:100%;max-height:220px;object-fit:cover;border-radius:0;"
                onerror="this.parentElement.style.display='none'">
-        </div>
-        ${resolvedBanner}
+        </div>`}
         <div class="sc-divider"></div>
         <div class="sc-actions">
           <button onclick="event.stopImmediatePropagation(); showLostDetail('${item._id}')" class="sc-pill">
             💬 View Details
           </button>
           <div class="sc-reactions">
-            ${isOwner && !isResolved ? `
+            ${isOwner ? `
             <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')" class="sc-react" style="color:#38bdf8;">
               <span class="sc-react-icon">✏️</span>
-            </button>
-            <button onclick="event.stopImmediatePropagation(); confirmMarkLostResolved('${item._id}', '${esc(item.title)}')" class="sc-react" style="color:#34d399;" title="Mark as Found/Resolved">
-              <span class="sc-react-icon">✅</span>
             </button>` : ''}
             <button onclick="event.stopImmediatePropagation(); shareContent('lost','${esc(item.title)}','${esc(item.location || '')}')" class="sc-react sc-share">
               <span class="sc-react-icon">🔗</span>
@@ -7696,86 +7644,8 @@ window.filterAndRenderLostItems = function() {
   renderLostItemsPage();
 };
 
-window.toggleLostMyPosts = async function() {
-  if (!currentUser) { showToast('Sign in to view your posts', 'error'); return; }
-  window.lostMyPostsActive = !window.lostMyPostsActive;
-  window.lostShowResolved = false;
-  window.currentLostPage = 1;
-
-  const chip = document.getElementById('lostMyPostsChip');
-  const resolvedChip = document.getElementById('lostShowResolvedChip');
-  if (chip) {
-    chip.className = window.lostMyPostsActive
-      ? 'px-4 py-2 rounded-2xl text-sm font-semibold bg-emerald-600 text-white transition flex items-center gap-1.5'
-      : 'px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition flex items-center gap-1.5';
-  }
-  if (resolvedChip) {
-    resolvedChip.classList.toggle('hidden', !window.lostMyPostsActive);
-    resolvedChip.classList.toggle('flex', window.lostMyPostsActive);
-    resolvedChip.className = resolvedChip.className.replace('bg-emerald-600 text-white', 'bg-white/10 text-white/70');
-  }
-
-  // Fetch fresh mine data if entering my-posts mode and cache is stale
-  if (window.lostMyPostsActive && !window._myLostItemsCache) {
-    try {
-      const r = await apiGet('/lostitems?mine=true&limit=100');
-      window._myLostItemsCache = r.items || [];
-    } catch(e) { window._myLostItemsCache = []; }
-  }
-  renderLostItemsPage();
-};
-
-window.toggleLostShowResolved = function() {
-  window.lostShowResolved = !window.lostShowResolved;
-  window.currentLostPage = 1;
-  const chip = document.getElementById('lostShowResolvedChip');
-  if (chip) {
-    chip.className = window.lostShowResolved
-      ? 'px-4 py-2 rounded-2xl text-sm font-semibold bg-indigo-600 text-white transition flex items-center gap-1.5'
-      : 'px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition flex items-center gap-1.5';
-  }
-  renderLostItemsPage();
-};
-
-window.confirmMarkLostResolved = function(id, title) {
-  if (document.getElementById('markResolvedModal')) return;
-  const html = `
-    <div id="markResolvedModal" onclick="if(event.target.id==='markResolvedModal') document.getElementById('markResolvedModal').remove()"
-         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[40000] p-4">
-      <div onclick="event.stopPropagation()" class="bg-[#0f172a] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
-        <div class="text-4xl mb-3 text-center">✅</div>
-        <h3 class="text-lg font-bold text-center mb-1">Mark as Found / Resolved?</h3>
-        <p class="text-white/50 text-sm text-center mb-1">"${esc(title)}"</p>
-        <p class="text-white/40 text-xs text-center mb-6">Your post will be hidden from the public feed and <strong class="text-white/60">auto-deleted in 10 days</strong>.</p>
-        <div class="flex gap-3">
-          <button onclick="document.getElementById('markResolvedModal').remove()"
-                  class="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold text-sm transition">Cancel</button>
-          <button onclick="doMarkLostResolved('${id}')"
-                  class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-semibold text-sm transition">Yes, Mark Resolved</button>
-        </div>
-      </div>
-    </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-};
-
-window.doMarkLostResolved = async function(id) {
-  const modal = document.getElementById('markResolvedModal');
-  if (modal) modal.remove();
-  try {
-    await apiPost(`/lostitems/${id}/resolve`, {});
-    showToast('✅ Marked as resolved — will auto-delete in 10 days', 'success');
-    // Refresh my-posts cache
-    if (window._myLostItemsCache) {
-      const item = window._myLostItemsCache.find(i => String(i._id) === String(id));
-      if (item) { item.status = 'resolved'; item.autoDeleteAt = new Date(Date.now() + 10*24*60*60*1000).toISOString(); }
-    }
-    _allLostItems = _allLostItems.filter(i => String(i._id) !== String(id));
-    hideLostDetailModal();
-    renderLostItemsPage();
-  } catch(e) { showToast('Error marking resolved', 'error'); }
-};
-
 async function loadMarketplacePage(content) {
+
   // Fix select dropdown visibility in dark mode
   const style = document.createElement('style');
   style.textContent = `
@@ -7816,7 +7686,7 @@ async function loadMarketplacePage(content) {
       </div>
 
       <!-- Category Filter Chips -->
-      <div class="flex gap-2 overflow-x-auto pb-3 mb-3 hide-scrollbar">
+      <div class="flex gap-2 overflow-x-auto pb-3 mb-4 hide-scrollbar">
         <button onclick="setMarketCategoryFilter('all')" id="cat-all"
                 class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white">All</button>
         <button onclick="setMarketCategoryFilter('Homes')" id="cat-Homes"
@@ -7830,18 +7700,6 @@ async function loadMarketplacePage(content) {
         <button onclick="setMarketCategoryFilter('General')" id="cat-General"
                 class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📦 General</button>
       </div>
-
-      ${currentUser ? `
-      <div class="flex gap-2 mb-4 flex-wrap">
-        <button id="marketMyPostsChip" onclick="toggleMarketMyPosts()"
-                class="px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition flex items-center gap-1.5">
-          👤 My Posts
-        </button>
-        <button id="marketShowSoldChip" onclick="toggleMarketShowSold()"
-                class="px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition items-center gap-1.5 hidden">
-          🏷️ Show Sold
-        </button>
-      </div>` : ''}
       <div id="marketItemsList" class="space-y-4 min-h-[400px]">
         ${[1,2,3,4].map(() => `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`).join('')}
       </div>
@@ -7858,17 +7716,7 @@ async function loadMarketplacePage(content) {
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
   window.currentMarketCategoryFilter = 'all';
-  window.marketMyPostsActive = false;
-  window.marketShowSold = false;
-  window._myMarketItemsCache = null;
   marketplaceCurrentPage = 1;
-
-  // Pre-fetch current user's own listings (including sold) in background
-  if (currentUser) {
-    apiGet('/marketplace?mine=true&limit=100').then(r => {
-      window._myMarketItemsCache = r.items || [];
-    }).catch(() => { window._myMarketItemsCache = []; });
-  }
 
   const searchInput = document.getElementById('marketSearchInput');
   searchInput.addEventListener('input', debounce(() => {
@@ -7881,42 +7729,80 @@ async function loadMarketplacePage(content) {
 }
 
 // Set active category filter
+window.setMarketCategoryFilter = function(category) {
+  window.currentMarketCategoryFilter = category;
+
+  // Update active button styles
+  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
+    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
+    } else {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+    }
+  });
+
+  renderMarketplacePage();
+};
+
+// Improved filter + render function (replaces old filterAndRenderMarketplace if it exists)
+window.filterAndRenderMarketplace = function() {
+  const conditionSelect = document.getElementById('marketConditionFilter');
+  if (conditionSelect) window.currentMarketFilter = conditionSelect.value;
+  marketplaceCurrentPage = 1;
+  renderMarketplacePage();
+};
+
+window.setMarketCategoryFilter = function(category) {
+  window.currentMarketCategoryFilter = category;
+  marketplaceCurrentPage = 1;
+
+  // Update active button styles...
+  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
+    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
+    } else {
+      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+    }
+  });
+
+  renderMarketplacePage();
+};
+
 async function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
   if (!container) return;
 
-  const myMode = window.marketMyPostsActive;
-  let source = myMode ? (window._myMarketItemsCache || []) : (allMarketplaceItems || []);
+  let filtered = allMarketplaceItems || [];
 
-  let filtered = source.filter(item => {
-    const matchesSearch = !window.currentMarketSearch ||
+  // Apply search filter
+  if (window.currentMarketSearch) {
+    filtered = filtered.filter(item =>
       (item.title || '').toLowerCase().includes(window.currentMarketSearch) ||
-      (item.description || '').toLowerCase().includes(window.currentMarketSearch);
+      (item.description || '').toLowerCase().includes(window.currentMarketSearch)
+    );
+  }
 
-    const matchesCondition = !window.currentMarketFilter || window.currentMarketFilter === 'all' ||
-      item.condition === window.currentMarketFilter;
+  // Apply condition filter
+  if (window.currentMarketFilter && window.currentMarketFilter !== 'all') {
+    filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
+  }
 
-    const matchesCategory = !window.currentMarketCategoryFilter || window.currentMarketCategoryFilter === 'all' ||
-      item.category === window.currentMarketCategoryFilter;
+  // Apply category filter
+  if (window.currentMarketCategoryFilter && window.currentMarketCategoryFilter !== 'all') {
+    filtered = filtered.filter(item => item.category === window.currentMarketCategoryFilter);
+  }
 
-    // Public feed shows only available; My Posts shows sold only when toggle is on
-    const matchesStatus = myMode
-      ? (window.marketShowSold || (item.status || 'available') !== 'sold')
-      : (item.status || 'available') === 'available';
-
-    return matchesSearch && matchesCondition && matchesCategory && matchesStatus;
-  });
-
+  // Sort by most recent first
   filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
   currentMarketplaceItems = filtered;
 
   if (filtered.length === 0) {
-    container.innerHTML = myMode
-      ? `<p class="text-white/40 text-center py-20">You haven't posted any listings yet.</p>`
-      : `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+    container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
     return;
   }
 
+  // Pagination logic
   const totalPages = Math.ceil(filtered.length / MARKETPLACE_PAGE_SIZE);
   marketplaceCurrentPage = Math.min(marketplaceCurrentPage, totalPages);
 
@@ -7929,18 +7815,8 @@ async function renderMarketplacePage() {
     const isSeller = currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id);
     const sellerName = item.sellerName || item.authorName || 'Anonymous';
     const sellerObj = typeof item.seller === 'object' ? item.seller : { _id: item.seller, name: sellerName };
-    const isSold = item.status === 'sold';
-
-    let soldBanner = '';
-    if (isSold && item.autoDeleteAt) {
-      const daysLeft = Math.max(0, Math.ceil((new Date(item.autoDeleteAt) - Date.now()) / (1000 * 60 * 60 * 24)));
-      soldBanner = `<div style="background:rgba(99,102,241,0.15);border-top:1px solid rgba(99,102,241,0.3);padding:8px 16px;font-size:12px;color:#a5b4fc;display:flex;align-items:center;gap:6px;">
-        🏷️ Marked Sold &nbsp;·&nbsp; 🗑️ Auto-deletes in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>
-      </div>`;
-    }
-
     html += `
-      <div id="market-${item._id}" class="sc" style="cursor:pointer;${isSold ? 'opacity:0.65;' : ''}" onclick="showMarketplaceDetail('${item._id}')">
+      <div id="market-${item._id}" class="sc" style="cursor:pointer;" onclick="showMarketplaceDetail('${item._id}')">
         <div class="sc-body">
           <div class="sc-header">
             <div class="sc-author">
@@ -7951,9 +7827,7 @@ async function renderMarketplacePage() {
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
-              ${isSold
-                ? `<span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;background:rgba(99,102,241,0.2);color:#a5b4fc;">SOLD</span>`
-                : `<span style="padding:3px 10px;font-size:11px;font-weight:700;border-radius:999px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);">${item.condition || 'used'}</span>`}
+              <span style="padding:3px 10px;font-size:11px;font-weight:700;border-radius:999px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);">${item.condition || 'used'}</span>
               ${isSeller
                 ? `<span class="sc-yours">Yours</span>`
                 : `<button onclick="event.stopImmediatePropagation(); reportContent('market','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>`}
@@ -7962,7 +7836,7 @@ async function renderMarketplacePage() {
           ${item.category ? `<div class="sc-location">🏷️ ${esc(item.category)}</div>` : ''}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
             <p class="sc-text" style="font-weight:600;font-size:15px;margin-bottom:4px;flex:1;">${esc(item.title)}</p>
-            <span style="font-size:20px;font-weight:800;color:${isSold ? '#a5b4fc' : '#34d399'};white-space:nowrap;">$${Number(item.price).toLocaleString()}</span>
+            <span style="font-size:20px;font-weight:800;color:#34d399;white-space:nowrap;">$${Number(item.price).toLocaleString()}</span>
           </div>
           ${item.description ? `<p class="sc-text" style="font-size:13px;opacity:0.7;margin-top:0;">${esc(item.description)}</p>` : ''}
         </div>
@@ -7972,19 +7846,15 @@ async function renderMarketplacePage() {
                style="width:100%;max-height:220px;object-fit:cover;border-radius:0;"
                onerror="this.parentElement.style.display='none'">
         </div>
-        ${soldBanner}
         <div class="sc-divider"></div>
         <div class="sc-actions">
           <button onclick="event.stopImmediatePropagation(); showMarketplaceDetail('${item._id}')" class="sc-pill">
             💬 View Details
           </button>
           <div class="sc-reactions">
-            ${isSeller && !isSold ? `
+            ${isSeller ? `
             <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')" class="sc-react" style="color:#38bdf8;">
               <span class="sc-react-icon">✏️</span>
-            </button>
-            <button onclick="event.stopImmediatePropagation(); confirmMarkMarketSold('${item._id}', '${esc(item.title)}')" class="sc-react" style="color:#a5b4fc;" title="Mark as Sold">
-              <span class="sc-react-icon">🏷️</span>
             </button>` : ''}
             <button onclick="event.stopImmediatePropagation(); shareContent('market','${esc(item.title)}','$${item.price}')" class="sc-react sc-share">
               <span class="sc-react-icon">🔗</span>
@@ -7996,6 +7866,7 @@ async function renderMarketplacePage() {
 
   html += '</div>';
 
+  // Pagination controls
   if (totalPages > 1) {
     html += `
       <div class="flex items-center justify-between mt-6 px-1">
@@ -8004,9 +7875,11 @@ async function renderMarketplacePage() {
                 class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
           ← Previous
         </button>
+
         <div class="text-sm text-white/60">
           Page <span class="font-semibold text-white">${marketplaceCurrentPage}</span> of ${totalPages}
         </div>
+
         <button onclick="goToMarketplacePage(${marketplaceCurrentPage + 1})" 
                 ${marketplaceCurrentPage === totalPages ? 'disabled' : ''}
                 class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
@@ -8056,103 +7929,12 @@ window.changeMarketPage = function(page) {
 };
 
 window.filterAndRenderMarketplace = function() {
-  window.currentMarketFilter = document.getElementById('marketConditionFilter')?.value || 'all';
-  marketplaceCurrentPage = 1;
+  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
+  window.currentMarketPage = 1;
   renderMarketplacePage();
 };
 
-window.setMarketCategoryFilter = function(cat) {
-  window.currentMarketCategoryFilter = cat;
-  ['all','Homes','Cars','Furniture','Electronics','General'].forEach(c => {
-    const btn = document.getElementById('cat-' + c);
-    if (!btn) return;
-    const isActive = c === cat;
-    btn.className = btn.className
-      .replace('bg-emerald-600 text-white', 'bg-white/10 text-white')
-      .replace('bg-white/10 text-white', isActive ? 'bg-emerald-600 text-white' : 'bg-white/10 text-white');
-  });
-  marketplaceCurrentPage = 1;
-  renderMarketplacePage();
-};
-
-window.toggleMarketMyPosts = async function() {
-  if (!currentUser) { showToast('Sign in to view your posts', 'error'); return; }
-  window.marketMyPostsActive = !window.marketMyPostsActive;
-  window.marketShowSold = false;
-  marketplaceCurrentPage = 1;
-
-  const chip = document.getElementById('marketMyPostsChip');
-  const soldChip = document.getElementById('marketShowSoldChip');
-  if (chip) {
-    chip.className = window.marketMyPostsActive
-      ? 'px-4 py-2 rounded-2xl text-sm font-semibold bg-emerald-600 text-white transition flex items-center gap-1.5'
-      : 'px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition flex items-center gap-1.5';
-  }
-  if (soldChip) {
-    soldChip.classList.toggle('hidden', !window.marketMyPostsActive);
-    soldChip.classList.toggle('flex', window.marketMyPostsActive);
-    soldChip.className = (soldChip.className || '').replace('bg-indigo-600 text-white', 'bg-white/10 text-white/70');
-  }
-
-  if (window.marketMyPostsActive && !window._myMarketItemsCache) {
-    try {
-      const r = await apiGet('/marketplace?mine=true&limit=100');
-      window._myMarketItemsCache = r.items || [];
-    } catch(e) { window._myMarketItemsCache = []; }
-  }
-  renderMarketplacePage();
-};
-
-window.toggleMarketShowSold = function() {
-  window.marketShowSold = !window.marketShowSold;
-  marketplaceCurrentPage = 1;
-  const chip = document.getElementById('marketShowSoldChip');
-  if (chip) {
-    chip.className = window.marketShowSold
-      ? 'px-4 py-2 rounded-2xl text-sm font-semibold bg-indigo-600 text-white transition flex items-center gap-1.5'
-      : 'px-4 py-2 rounded-2xl text-sm font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition flex items-center gap-1.5';
-  }
-  renderMarketplacePage();
-};
-
-window.confirmMarkMarketSold = function(id, title) {
-  if (document.getElementById('markSoldModal')) return;
-  const html = `
-    <div id="markSoldModal" onclick="if(event.target.id==='markSoldModal') document.getElementById('markSoldModal').remove()"
-         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[40000] p-4">
-      <div onclick="event.stopPropagation()" class="bg-[#0f172a] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
-        <div class="text-4xl mb-3 text-center">🏷️</div>
-        <h3 class="text-lg font-bold text-center mb-1">Mark as Sold?</h3>
-        <p class="text-white/50 text-sm text-center mb-1">"${esc(title)}"</p>
-        <p class="text-white/40 text-xs text-center mb-6">Your listing will be hidden from the public marketplace and <strong class="text-white/60">auto-deleted in 10 days</strong>.</p>
-        <div class="flex gap-3">
-          <button onclick="document.getElementById('markSoldModal').remove()"
-                  class="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-2xl font-semibold text-sm transition">Cancel</button>
-          <button onclick="doMarkMarketSold('${id}')"
-                  class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-semibold text-sm transition">Yes, Mark Sold</button>
-        </div>
-      </div>
-    </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-};
-
-window.doMarkMarketSold = async function(id) {
-  const modal = document.getElementById('markSoldModal');
-  if (modal) modal.remove();
-  try {
-    await apiPost(`/marketplace/${id}/sold`, {});
-    showToast('🏷️ Marked as sold — will auto-delete in 10 days', 'success');
-    if (window._myMarketItemsCache) {
-      const item = window._myMarketItemsCache.find(i => String(i._id) === String(id));
-      if (item) { item.status = 'sold'; item.autoDeleteAt = new Date(Date.now() + 10*24*60*60*1000).toISOString(); }
-    }
-    allMarketplaceItems = allMarketplaceItems.filter(i => String(i._id) !== String(id));
-    hideMarketDetailModal();
-    renderMarketplacePage();
-  } catch(e) { showToast('Error marking sold', 'error'); }
-};
-
-
+// Simple debounce helper
 function debounce(func, delay) {
   let timeout;
   return function() {
@@ -11047,13 +10829,6 @@ window.showAccountSettingsModal = function() {
               <span class="font-semibold text-sm">Change Password</span>
             </button>
 
-            <!-- My Posts -->
-            <button onclick="hideAccountSettingsModal(); setTimeout(showMyPostsModal, 150)" 
-                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
-              <span class="text-xl">📋</span>
-              <span class="font-semibold text-sm">My Posts</span>
-            </button>
-
             <!-- Delete Account -->
             <div class="bg-red-500/10 border border-red-500/30 rounded-2xl overflow-hidden mt-4">
               <div class="px-5 py-4">
@@ -11082,207 +10857,7 @@ window.hideAccountSettingsModal = function() {
   if (modal) modal.remove();
 };
 
-// ─── MY POSTS MODAL (Lost Items + Marketplace) ────────────────────────────────
-window.showMyPostsModal = async function() {
-  if (document.getElementById('myPostsModal')) return;
-  if (!currentUser) { showToast('Please log in to view your posts', 'error'); return; }
-
-  const html = `
-    <div id="myPostsModal" onclick="if(event.target.id==='myPostsModal') hideMyPostsModal()"
-         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[35000] p-0 sm:p-4">
-      <div onclick="event.stopPropagation()"
-           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col">
-
-        <!-- Header -->
-        <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between flex-shrink-0">
-          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
-          <h2 class="text-lg font-bold flex items-center gap-2">📋 My Posts</h2>
-          <button onclick="hideMyPostsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
-        </div>
-
-        <!-- Tabs -->
-        <div class="flex border-b border-white/10 flex-shrink-0">
-          <button id="myPostsTabLost" onclick="switchMyPostsTab('lost')"
-                  class="flex-1 py-3 text-sm font-semibold text-emerald-400 border-b-2 border-emerald-400 transition">
-            🔍 Lost &amp; Found
-          </button>
-          <button id="myPostsTabMarket" onclick="switchMyPostsTab('market')"
-                  class="flex-1 py-3 text-sm font-semibold text-white/40 border-b-2 border-transparent transition">
-            🛒 Marketplace
-          </button>
-        </div>
-
-        <!-- Filter row -->
-        <div class="px-4 py-3 border-b border-white/5 flex-shrink-0">
-          <!-- Lost filters -->
-          <div id="myPostsLostFilters" class="flex gap-2">
-            <select id="myPostsLostType" onchange="renderMyPosts()"
-                    class="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm text-white">
-              <option value="all">All Types</option>
-              <option value="lost">Lost</option>
-              <option value="found">Found</option>
-            </select>
-          </div>
-          <!-- Market filters -->
-          <div id="myPostsMarketFilters" class="hidden flex gap-2">
-            <select id="myPostsMarketStatus" onchange="renderMyPosts()"
-                    class="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm text-white">
-              <option value="all">All Statuses</option>
-              <option value="available">Available</option>
-              <option value="sold">Sold</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- List area -->
-        <div id="myPostsList" class="overflow-y-auto flex-1 p-4 space-y-3">
-          <div class="flex items-center justify-center py-16 text-white/30">
-            <div class="w-7 h-7 border-2 border-white/20 border-t-emerald-400 rounded-full animate-spin mr-3"></div>
-            Loading…
-          </div>
-        </div>
-
-      </div>
-    </div>`;
-
-  document.body.insertAdjacentHTML('beforeend', html);
-  window._myPostsTab = 'lost';
-  window._myPostsLostCache = null;
-  window._myPostsMarketCache = null;
-  await loadMyPostsData();
-};
-
-window.hideMyPostsModal = function() {
-  const m = document.getElementById('myPostsModal');
-  if (m) m.remove();
-};
-
-window.switchMyPostsTab = function(tab) {
-  window._myPostsTab = tab;
-
-  const tabLost   = document.getElementById('myPostsTabLost');
-  const tabMarket = document.getElementById('myPostsTabMarket');
-  const filLost   = document.getElementById('myPostsLostFilters');
-  const filMarket = document.getElementById('myPostsMarketFilters');
-
-  if (tab === 'lost') {
-    tabLost.className   = 'flex-1 py-3 text-sm font-semibold text-emerald-400 border-b-2 border-emerald-400 transition';
-    tabMarket.className = 'flex-1 py-3 text-sm font-semibold text-white/40 border-b-2 border-transparent transition';
-    filLost.classList.remove('hidden');
-    filMarket.classList.add('hidden');
-  } else {
-    tabMarket.className = 'flex-1 py-3 text-sm font-semibold text-emerald-400 border-b-2 border-emerald-400 transition';
-    tabLost.className   = 'flex-1 py-3 text-sm font-semibold text-white/40 border-b-2 border-transparent transition';
-    filMarket.classList.remove('hidden');
-    filLost.classList.add('hidden');
-  }
-  renderMyPosts();
-};
-
-async function loadMyPostsData() {
-  try {
-    const [lostRes, marketRes] = await Promise.all([
-      apiGet('/lostitems?mine=true&limit=100'),
-      apiGet('/marketplace?mine=true&limit=100')
-    ]);
-    window._myPostsLostCache   = lostRes.items   || lostRes   || [];
-    window._myPostsMarketCache = marketRes.items || marketRes || [];
-  } catch(e) {
-    window._myPostsLostCache   = [];
-    window._myPostsMarketCache = [];
-  }
-  renderMyPosts();
-}
-
-window.renderMyPosts = function() {
-  const container = document.getElementById('myPostsList');
-  if (!container) return;
-
-  const tab = window._myPostsTab;
-
-  if (tab === 'lost') {
-    let items = window._myPostsLostCache || [];
-    const typeVal = (document.getElementById('myPostsLostType') || {}).value || 'all';
-    if (typeVal !== 'all') items = items.filter(i => i.type === typeVal);
-
-    if (!items.length) {
-      container.innerHTML = `<p class="text-white/30 text-center py-16 text-sm">No lost &amp; found posts yet.</p>`;
-      return;
-    }
-    container.innerHTML = items.map(item => {
-      const badge = item.type === 'lost'
-        ? `<span style="padding:2px 8px;font-size:10px;font-weight:800;border-radius:999px;background:rgba(239,68,68,0.2);color:#f87171;">LOST</span>`
-        : `<span style="padding:2px 8px;font-size:10px;font-weight:800;border-radius:999px;background:rgba(52,211,153,0.2);color:#34d399;">FOUND</span>`;
-      const resolved = item.status === 'resolved'
-        ? `<span style="padding:2px 8px;font-size:10px;font-weight:700;border-radius:999px;background:rgba(99,102,241,0.2);color:#a5b4fc;">RESOLVED</span>`
-        : '';
-      return `
-        <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex-1 min-w-0">
-              <div class="flex flex-wrap items-center gap-1.5 mb-1">${badge}${resolved}</div>
-              <p class="font-semibold text-sm truncate">${esc(item.title)}</p>
-              ${item.location ? `<p class="text-white/40 text-xs mt-0.5">📍 ${esc(item.location)}</p>` : ''}
-              <p class="text-white/30 text-xs mt-1">${timeAgo(item.createdAt)}</p>
-            </div>
-            <div class="flex flex-col gap-2 flex-shrink-0">
-              <button onclick="hideMyPostsModal(); setTimeout(() => showLostDetail('${item._id}'), 200)"
-                      class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-medium transition">
-                View
-              </button>
-              <button onclick="hideMyPostsModal(); setTimeout(() => showEditLostItemModal('${item._id}'), 200)"
-                      class="px-3 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 rounded-xl text-xs font-medium transition">
-                ✏️ Edit
-              </button>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-
-  } else {
-    let items = window._myPostsMarketCache || [];
-    const statusVal = (document.getElementById('myPostsMarketStatus') || {}).value || 'all';
-    if (statusVal !== 'all') items = items.filter(i => (i.status || 'available') === statusVal);
-
-    if (!items.length) {
-      container.innerHTML = `<p class="text-white/30 text-center py-16 text-sm">No marketplace listings yet.</p>`;
-      return;
-    }
-    container.innerHTML = items.map(item => {
-      const statusColor = item.status === 'sold'
-        ? 'background:rgba(99,102,241,0.2);color:#a5b4fc;'
-        : 'background:rgba(52,211,153,0.2);color:#34d399;';
-      const statusLabel = (item.status || 'available').toUpperCase();
-      const price = item.price != null ? `$${Number(item.price).toFixed(2)}` : '';
-      return `
-        <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex-1 min-w-0">
-              <div class="flex flex-wrap items-center gap-1.5 mb-1">
-                <span style="padding:2px 8px;font-size:10px;font-weight:800;border-radius:999px;${statusColor}">${esc(statusLabel)}</span>
-                ${item.condition ? `<span class="text-white/30 text-xs">${esc(item.condition)}</span>` : ''}
-              </div>
-              <p class="font-semibold text-sm truncate">${esc(item.title)}</p>
-              ${price ? `<p class="text-emerald-400 text-xs font-semibold mt-0.5">${price}</p>` : ''}
-              <p class="text-white/30 text-xs mt-1">${timeAgo(item.createdAt)}</p>
-            </div>
-            <div class="flex flex-col gap-2 flex-shrink-0">
-              <button onclick="hideMyPostsModal(); setTimeout(() => showMarketplaceDetail('${item._id}'), 200)"
-                      class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-medium transition">
-                View
-              </button>
-              <button onclick="hideMyPostsModal(); setTimeout(() => showEditMarketplaceModal('${item._id}'), 200)"
-                      class="px-3 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 rounded-xl text-xs font-medium transition">
-                ✏️ Edit
-              </button>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  }
-};
-
-
+// ─── CHANGE PASSWORD MODAL ────────────────────────────────────────────────────
 window.showChangePasswordModal = function() {
   if (document.getElementById('changePasswordModal')) return;
 
