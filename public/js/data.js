@@ -10771,6 +10771,13 @@ window.showAccountSettingsModal = function() {
               <span class="font-semibold text-sm">Privacy Policy</span>
             </button>
 
+            <!-- Help -->
+            <button onclick="window.open('https://www.milledgevilleconnect.com/help.html', '_blank')" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">❓</span>
+              <span class="font-semibold text-sm">Help</span>
+            </button>
+
             <!-- Change Password -->
             <button onclick="hideAccountSettingsModal(); setTimeout(showChangePasswordModal, 150)" 
                     class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
