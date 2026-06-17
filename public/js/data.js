@@ -2115,26 +2115,7 @@ function _renderCategoryBar(categories) {
       </button>`).join('')}`;
 }
 
-async function loadDirectoryAndOpen(businessId) {
-  console.log('🔗 loadDirectoryAndOpen called with:', businessId);   // ← ADD THIS LINE
-  // Make sure we're on the directory page
-  const content = document.getElementById('content');
-  if (content) {
-    await loadDirectoryPage(content);
-  } else {
-    navigate('directory');
-  }
-
-  // Give the directory a moment to render, then open the specific business
-  setTimeout(() => {
-    if (typeof showBusinessDetail === 'function') {
-      showBusinessDetail(businessId);
-    }
-  }, 650);
-}
-
-// Make sure it's globally available for the push handler
-window.loadDirectoryAndOpen = loadDirectoryAndOpen;
+// loadDirectoryAndOpen is defined above (polling-based version) and already exported to window.
 
 // ─── "Open now" badge helper ──────────────────────────────────────────────────
 function getOpenStatus(hoursStr) {
@@ -8392,7 +8373,6 @@ window.showBusinessDetail    = showBusinessDetail;
 window.hideBusinessModal     = hideBusinessModal;
 window.switchAdminTab        = switchAdminTab;
 window.renderDirectory       = renderDirectory;
-window.goToDirectoryPage   = goToDirectoryPage;
 window.getDirections = function(address) {
   if (!address) {
     showToast('No address available for this business', 'error');
