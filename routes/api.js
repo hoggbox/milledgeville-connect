@@ -1666,6 +1666,8 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
 
     lost.status = 'resolved';
+    lost.resolvedAt = new Date();
+    lost.autoDeleteAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     await lost.save();
 
     // Award reputation
@@ -1868,6 +1870,8 @@ router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
 
     item.status = 'sold';
+    item.soldAt = new Date();
+    item.autoDeleteAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     await item.save();
 
     // Award reputation
@@ -2012,6 +2016,8 @@ router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
     if (!lost) return res.status(404).json({ message: 'Not found' });
     if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     lost.status = 'resolved';
+    lost.resolvedAt = new Date();
+    lost.autoDeleteAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     await lost.save();
     res.json({ message: 'Marked as resolved', item: lost });
   } catch (err) {
@@ -2026,6 +2032,8 @@ router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
     if (!item) return res.status(404).json({ message: 'Not found' });
     if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     item.status = 'sold';
+    item.soldAt = new Date();
+    item.autoDeleteAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     await item.save();
     res.json({ message: 'Marked as sold', item });
   } catch (err) {
@@ -4890,6 +4898,25 @@ async function processRsvpReminders() {
 // Run every 15 minutes
 setInterval(processRsvpReminders, 15 * 60 * 1000);
 processRsvpReminders(); // run once on startup
+
+// ─── AUTO-DELETE EXPIRED SOLD/RESOLVED POSTS ──────────────────────────────
+async function processAutoDeleteExpiredPosts() {
+  try {
+    const now = new Date();
+    const [lostResult, marketResult] = await Promise.all([
+      LostItem.deleteMany({ autoDeleteAt: { $lte: now } }),
+      MarketplaceItem.deleteMany({ autoDeleteAt: { $lte: now } })
+    ]);
+    const total = (lostResult.deletedCount || 0) + (marketResult.deletedCount || 0);
+    if (total > 0) {
+      console.log(`[AutoDelete] Removed ${lostResult.deletedCount} resolved lost items and ${marketResult.deletedCount} sold marketplace items`);
+    }
+  } catch (err) {
+    console.error('[AutoDelete] Error:', err.message);
+  }
+}
+setInterval(processAutoDeleteExpiredPosts, 60 * 60 * 1000); // run every hour
+processAutoDeleteExpiredPosts(); // run once on startup
 
 // GET /api/admin/scheduled-notifications
 router.get('/admin/scheduled-notifications', authenticate, requireAdmin, async (req, res) => {
