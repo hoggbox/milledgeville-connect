@@ -1794,6 +1794,103 @@ router.post('/marketplace', authenticate, async (req, res) => {
   }
 });
 
+// ─── OWNER: MY MARKETPLACE POSTS ────────────────────────────────────────────
+router.get('/marketplace/mine', authenticate, async (req, res) => {
+  try {
+    const items = await MarketplaceItem.find({ seller: req.userId })
+      .sort({ createdAt: -1 })
+      .select('-images');
+    res.json({ items });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── PUBLIC: SOLD MARKETPLACE ITEMS ─────────────────────────────────────────
+router.get('/marketplace/sold', optionalAuth, async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip  = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      MarketplaceItem.find({ status: 'sold' })
+        .sort({ soldAt: -1 })
+        .skip(skip).limit(limit)
+        .select('-images')
+        .populate('seller', 'name'),
+      MarketplaceItem.countDocuments({ status: 'sold' })
+    ]);
+    res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: DELETE MARKETPLACE LISTING ──────────────────────────────────────
+router.delete('/marketplace/:id', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = user && (user.isAdmin || user.isModerator);
+    if (!isAdmin && item.seller.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+    await item.deleteOne();
+    res.json({ message: 'Listing deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: MY LOST & FOUND POSTS ───────────────────────────────────────────
+router.get('/lostitems/mine', authenticate, async (req, res) => {
+  try {
+    const items = await LostItem.find({ owner: req.userId })
+      .sort({ createdAt: -1 })
+      .select('-images');
+    res.json({ items });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── PUBLIC: RESOLVED/FOUND LOST ITEMS ──────────────────────────────────────
+router.get('/lostitems/resolved', optionalAuth, async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip  = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      LostItem.find({ status: 'resolved' })
+        .sort({ resolvedAt: -1 })
+        .skip(skip).limit(limit)
+        .select('-images')
+        .populate('owner', 'name'),
+      LostItem.countDocuments({ status: 'resolved' })
+    ]);
+    res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: DELETE LOST & FOUND ITEM ────────────────────────────────────────
+router.delete('/lostitems/:id', authenticate, async (req, res) => {
+  try {
+    const lost = await LostItem.findById(req.params.id);
+    if (!lost) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = user && (user.isAdmin || user.isModerator);
+    if (!isAdmin && lost.owner.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+    await lost.deleteOne();
+    res.json({ message: 'Item deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+
 // GET /api/marketplace/:id — fetch single marketplace item by ID
 router.get('/marketplace/:id', optionalAuth, async (req, res) => {
   try {
@@ -2044,102 +2141,6 @@ router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// ─── OWNER: MY MARKETPLACE POSTS ────────────────────────────────────────────
-router.get('/marketplace/mine', authenticate, async (req, res) => {
-  try {
-    const items = await MarketplaceItem.find({ seller: req.userId })
-      .sort({ createdAt: -1 })
-      .select('-images');
-    res.json({ items });
-  } catch (err) {
-    res.status(err.status || 500).json({ message: err.message });
-  }
-});
-
-// ─── PUBLIC: SOLD MARKETPLACE ITEMS ─────────────────────────────────────────
-router.get('/marketplace/sold', optionalAuth, async (req, res) => {
-  try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip  = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      MarketplaceItem.find({ status: 'sold' })
-        .sort({ soldAt: -1 })
-        .skip(skip).limit(limit)
-        .select('-images')
-        .populate('seller', 'name'),
-      MarketplaceItem.countDocuments({ status: 'sold' })
-    ]);
-    res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
-  } catch (err) {
-    res.status(err.status || 500).json({ message: err.message });
-  }
-});
-
-// ─── OWNER: DELETE MARKETPLACE LISTING ──────────────────────────────────────
-router.delete('/marketplace/:id', authenticate, async (req, res) => {
-  try {
-    const item = await MarketplaceItem.findById(req.params.id);
-    if (!item) return res.status(404).json({ message: 'Not found' });
-    const user = await User.findById(req.userId);
-    const isAdmin = user && (user.isAdmin || user.isModerator);
-    if (!isAdmin && item.seller.toString() !== req.userId)
-      return res.status(403).json({ message: 'Not authorized' });
-    await item.deleteOne();
-    res.json({ message: 'Listing deleted' });
-  } catch (err) {
-    res.status(err.status || 500).json({ message: err.message });
-  }
-});
-
-// ─── OWNER: MY LOST & FOUND POSTS ───────────────────────────────────────────
-router.get('/lostitems/mine', authenticate, async (req, res) => {
-  try {
-    const items = await LostItem.find({ owner: req.userId })
-      .sort({ createdAt: -1 })
-      .select('-images');
-    res.json({ items });
-  } catch (err) {
-    res.status(err.status || 500).json({ message: err.message });
-  }
-});
-
-// ─── PUBLIC: RESOLVED/FOUND LOST ITEMS ──────────────────────────────────────
-router.get('/lostitems/resolved', optionalAuth, async (req, res) => {
-  try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip  = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      LostItem.find({ status: 'resolved' })
-        .sort({ resolvedAt: -1 })
-        .skip(skip).limit(limit)
-        .select('-images')
-        .populate('owner', 'name'),
-      LostItem.countDocuments({ status: 'resolved' })
-    ]);
-    res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
-  } catch (err) {
-    res.status(err.status || 500).json({ message: err.message });
-  }
-});
-
-// ─── OWNER: DELETE LOST & FOUND ITEM ────────────────────────────────────────
-router.delete('/lostitems/:id', authenticate, async (req, res) => {
-  try {
-    const lost = await LostItem.findById(req.params.id);
-    if (!lost) return res.status(404).json({ message: 'Not found' });
-    const user = await User.findById(req.userId);
-    const isAdmin = user && (user.isAdmin || user.isModerator);
-    if (!isAdmin && lost.owner.toString() !== req.userId)
-      return res.status(403).json({ message: 'Not authorized' });
-    await lost.deleteOne();
-    res.json({ message: 'Item deleted' });
-  } catch (err) {
-    res.status(err.status || 500).json({ message: err.message });
   }
 });
 

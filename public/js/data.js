@@ -7741,10 +7741,26 @@ window.markLostResolved = async function(id) {
   try {
     await apiPost(`/lostitems/${id}/resolve`, {});
     showToast('✅ Marked as found/resolved!');
-    // Remove from my posts cache, add to resolved cache
-    _myLostItems = _myLostItems.map(i => i._id === id ? { ...i, status: 'resolved' } : i);
-    _allLostItems = _allLostItems.filter(i => i._id !== id);
-    renderLostItemsPage();
+
+    // Find item before mutating caches (String() handles ObjectId comparison)
+    const resolvedItem = _myLostItems.find(i => String(i._id) === String(id));
+
+    // Update my posts cache - keep it there but flagged resolved
+    _myLostItems = _myLostItems.map(i =>
+      String(i._id) === String(id) ? { ...i, status: 'resolved' } : i
+    );
+
+    // Remove from the main active feed
+    _allLostItems = _allLostItems.filter(i => String(i._id) !== String(id));
+
+    // Inject into resolved cache so tab shows it immediately without a fetch
+    if (resolvedItem) {
+      const entry = { ...resolvedItem, status: 'resolved', resolvedAt: new Date().toISOString() };
+      _resolvedLostItems = [entry, ..._resolvedLostItems.filter(i => String(i._id) !== String(id))];
+    }
+
+    // Navigate to Found/Resolved tab so user sees where it went
+    await window.setLostViewFilter('resolved');
   } catch (e) {
     showToast('Error marking resolved', 'error');
   }
@@ -7755,9 +7771,9 @@ window.deleteLostItem = async function(id) {
   try {
     await apiDelete(`/lostitems/${id}`);
     showToast('🗑️ Post deleted');
-    _myLostItems     = _myLostItems.filter(i => i._id !== id);
-    _allLostItems    = _allLostItems.filter(i => i._id !== id);
-    _resolvedLostItems = _resolvedLostItems.filter(i => i._id !== id);
+    _myLostItems       = _myLostItems.filter(i => String(i._id) !== String(id));
+    _allLostItems      = _allLostItems.filter(i => String(i._id) !== String(id));
+    _resolvedLostItems = _resolvedLostItems.filter(i => String(i._id) !== String(id));
     renderLostItemsPage();
   } catch (e) {
     showToast('Error deleting post', 'error');
@@ -8092,9 +8108,26 @@ window.markMarketplaceSold = async function(id) {
   try {
     await apiPost(`/marketplace/${id}/sold`, {});
     showToast('🏷️ Marked as sold!');
-    _myMarketplaceItems = _myMarketplaceItems.map(i => i._id === id ? { ...i, status: 'sold' } : i);
-    allMarketplaceItems = allMarketplaceItems.filter(i => i._id !== id);
-    renderMarketplacePage();
+
+    // Find item before mutating caches (String() handles ObjectId comparison)
+    const soldItem = _myMarketplaceItems.find(i => String(i._id) === String(id));
+
+    // Update my posts cache - keep it there but flagged sold
+    _myMarketplaceItems = _myMarketplaceItems.map(i =>
+      String(i._id) === String(id) ? { ...i, status: 'sold' } : i
+    );
+
+    // Remove from main available feed
+    allMarketplaceItems = allMarketplaceItems.filter(i => String(i._id) !== String(id));
+
+    // Inject into sold cache so tab shows it immediately without a fetch
+    if (soldItem) {
+      const entry = { ...soldItem, status: 'sold', soldAt: new Date().toISOString() };
+      _soldMarketplaceItems = [entry, ..._soldMarketplaceItems.filter(i => String(i._id) !== String(id))];
+    }
+
+    // Navigate to Sold tab so user sees where it went
+    await window.setMarketViewFilter('sold');
   } catch (e) {
     showToast('Error marking sold', 'error');
   }
@@ -8105,9 +8138,9 @@ window.deleteMarketplaceItem = async function(id) {
   try {
     await apiDelete(`/marketplace/${id}`);
     showToast('🗑️ Listing deleted');
-    _myMarketplaceItems   = _myMarketplaceItems.filter(i => i._id !== id);
-    allMarketplaceItems   = allMarketplaceItems.filter(i => i._id !== id);
-    _soldMarketplaceItems = _soldMarketplaceItems.filter(i => i._id !== id);
+    _myMarketplaceItems   = _myMarketplaceItems.filter(i => String(i._id) !== String(id));
+    allMarketplaceItems   = allMarketplaceItems.filter(i => String(i._id) !== String(id));
+    _soldMarketplaceItems = _soldMarketplaceItems.filter(i => String(i._id) !== String(id));
     renderMarketplacePage();
   } catch (e) {
     showToast('Error deleting listing', 'error');
