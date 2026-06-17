@@ -10829,6 +10829,13 @@ window.showAccountSettingsModal = function() {
               <span class="font-semibold text-sm">Change Password</span>
             </button>
 
+            <!-- My Posts -->
+            <button onclick="hideAccountSettingsModal(); setTimeout(showMyPostsModal, 150)" 
+                    class="w-full flex items-center gap-3 px-5 py-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition text-left">
+              <span class="text-xl">📋</span>
+              <span class="font-semibold text-sm">My Posts</span>
+            </button>
+
             <!-- Delete Account -->
             <div class="bg-red-500/10 border border-red-500/30 rounded-2xl overflow-hidden mt-4">
               <div class="px-5 py-4">
@@ -10857,7 +10864,207 @@ window.hideAccountSettingsModal = function() {
   if (modal) modal.remove();
 };
 
-// ─── CHANGE PASSWORD MODAL ────────────────────────────────────────────────────
+// ─── MY POSTS MODAL (Lost Items + Marketplace) ────────────────────────────────
+window.showMyPostsModal = async function() {
+  if (document.getElementById('myPostsModal')) return;
+  if (!currentUser) { showToast('Please log in to view your posts', 'error'); return; }
+
+  const html = `
+    <div id="myPostsModal" onclick="if(event.target.id==='myPostsModal') hideMyPostsModal()"
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[35000] p-0 sm:p-4">
+      <div onclick="event.stopPropagation()"
+           class="bg-[#0f172a] border border-white/10 w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col">
+
+        <!-- Header -->
+        <div class="sticky top-0 bg-[#0f172a]/95 backdrop-blur border-b border-white/10 px-6 py-4 rounded-t-3xl flex items-center justify-between flex-shrink-0">
+          <div class="w-10 h-1 bg-white/20 rounded-full absolute left-1/2 -translate-x-1/2 top-2 sm:hidden"></div>
+          <h2 class="text-lg font-bold flex items-center gap-2">📋 My Posts</h2>
+          <button onclick="hideMyPostsModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-white/10 flex-shrink-0">
+          <button id="myPostsTabLost" onclick="switchMyPostsTab('lost')"
+                  class="flex-1 py-3 text-sm font-semibold text-emerald-400 border-b-2 border-emerald-400 transition">
+            🔍 Lost &amp; Found
+          </button>
+          <button id="myPostsTabMarket" onclick="switchMyPostsTab('market')"
+                  class="flex-1 py-3 text-sm font-semibold text-white/40 border-b-2 border-transparent transition">
+            🛒 Marketplace
+          </button>
+        </div>
+
+        <!-- Filter row -->
+        <div class="px-4 py-3 border-b border-white/5 flex-shrink-0">
+          <!-- Lost filters -->
+          <div id="myPostsLostFilters" class="flex gap-2">
+            <select id="myPostsLostType" onchange="renderMyPosts()"
+                    class="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm text-white">
+              <option value="all">All Types</option>
+              <option value="lost">Lost</option>
+              <option value="found">Found</option>
+            </select>
+          </div>
+          <!-- Market filters -->
+          <div id="myPostsMarketFilters" class="hidden flex gap-2">
+            <select id="myPostsMarketStatus" onchange="renderMyPosts()"
+                    class="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm text-white">
+              <option value="all">All Statuses</option>
+              <option value="available">Available</option>
+              <option value="sold">Sold</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- List area -->
+        <div id="myPostsList" class="overflow-y-auto flex-1 p-4 space-y-3">
+          <div class="flex items-center justify-center py-16 text-white/30">
+            <div class="w-7 h-7 border-2 border-white/20 border-t-emerald-400 rounded-full animate-spin mr-3"></div>
+            Loading…
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._myPostsTab = 'lost';
+  window._myPostsLostCache = null;
+  window._myPostsMarketCache = null;
+  await loadMyPostsData();
+};
+
+window.hideMyPostsModal = function() {
+  const m = document.getElementById('myPostsModal');
+  if (m) m.remove();
+};
+
+window.switchMyPostsTab = function(tab) {
+  window._myPostsTab = tab;
+
+  const tabLost   = document.getElementById('myPostsTabLost');
+  const tabMarket = document.getElementById('myPostsTabMarket');
+  const filLost   = document.getElementById('myPostsLostFilters');
+  const filMarket = document.getElementById('myPostsMarketFilters');
+
+  if (tab === 'lost') {
+    tabLost.className   = 'flex-1 py-3 text-sm font-semibold text-emerald-400 border-b-2 border-emerald-400 transition';
+    tabMarket.className = 'flex-1 py-3 text-sm font-semibold text-white/40 border-b-2 border-transparent transition';
+    filLost.classList.remove('hidden');
+    filMarket.classList.add('hidden');
+  } else {
+    tabMarket.className = 'flex-1 py-3 text-sm font-semibold text-emerald-400 border-b-2 border-emerald-400 transition';
+    tabLost.className   = 'flex-1 py-3 text-sm font-semibold text-white/40 border-b-2 border-transparent transition';
+    filMarket.classList.remove('hidden');
+    filLost.classList.add('hidden');
+  }
+  renderMyPosts();
+};
+
+async function loadMyPostsData() {
+  try {
+    const [lostRes, marketRes] = await Promise.all([
+      apiGet('/lostitems?mine=true&limit=100'),
+      apiGet('/marketplace?mine=true&limit=100')
+    ]);
+    window._myPostsLostCache   = lostRes.items   || lostRes   || [];
+    window._myPostsMarketCache = marketRes.items || marketRes || [];
+  } catch(e) {
+    window._myPostsLostCache   = [];
+    window._myPostsMarketCache = [];
+  }
+  renderMyPosts();
+}
+
+window.renderMyPosts = function() {
+  const container = document.getElementById('myPostsList');
+  if (!container) return;
+
+  const tab = window._myPostsTab;
+
+  if (tab === 'lost') {
+    let items = window._myPostsLostCache || [];
+    const typeVal = (document.getElementById('myPostsLostType') || {}).value || 'all';
+    if (typeVal !== 'all') items = items.filter(i => i.type === typeVal);
+
+    if (!items.length) {
+      container.innerHTML = `<p class="text-white/30 text-center py-16 text-sm">No lost &amp; found posts yet.</p>`;
+      return;
+    }
+    container.innerHTML = items.map(item => {
+      const badge = item.type === 'lost'
+        ? `<span style="padding:2px 8px;font-size:10px;font-weight:800;border-radius:999px;background:rgba(239,68,68,0.2);color:#f87171;">LOST</span>`
+        : `<span style="padding:2px 8px;font-size:10px;font-weight:800;border-radius:999px;background:rgba(52,211,153,0.2);color:#34d399;">FOUND</span>`;
+      const resolved = item.status === 'resolved'
+        ? `<span style="padding:2px 8px;font-size:10px;font-weight:700;border-radius:999px;background:rgba(99,102,241,0.2);color:#a5b4fc;">RESOLVED</span>`
+        : '';
+      return `
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-1.5 mb-1">${badge}${resolved}</div>
+              <p class="font-semibold text-sm truncate">${esc(item.title)}</p>
+              ${item.location ? `<p class="text-white/40 text-xs mt-0.5">📍 ${esc(item.location)}</p>` : ''}
+              <p class="text-white/30 text-xs mt-1">${timeAgo(item.createdAt)}</p>
+            </div>
+            <div class="flex flex-col gap-2 flex-shrink-0">
+              <button onclick="hideMyPostsModal(); setTimeout(() => showLostDetail('${item._id}'), 200)"
+                      class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-medium transition">
+                View
+              </button>
+              <button onclick="hideMyPostsModal(); setTimeout(() => showEditLostItemModal('${item._id}'), 200)"
+                      class="px-3 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 rounded-xl text-xs font-medium transition">
+                ✏️ Edit
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+  } else {
+    let items = window._myPostsMarketCache || [];
+    const statusVal = (document.getElementById('myPostsMarketStatus') || {}).value || 'all';
+    if (statusVal !== 'all') items = items.filter(i => (i.status || 'available') === statusVal);
+
+    if (!items.length) {
+      container.innerHTML = `<p class="text-white/30 text-center py-16 text-sm">No marketplace listings yet.</p>`;
+      return;
+    }
+    container.innerHTML = items.map(item => {
+      const statusColor = item.status === 'sold'
+        ? 'background:rgba(99,102,241,0.2);color:#a5b4fc;'
+        : 'background:rgba(52,211,153,0.2);color:#34d399;';
+      const statusLabel = (item.status || 'available').toUpperCase();
+      const price = item.price != null ? `$${Number(item.price).toFixed(2)}` : '';
+      return `
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                <span style="padding:2px 8px;font-size:10px;font-weight:800;border-radius:999px;${statusColor}">${esc(statusLabel)}</span>
+                ${item.condition ? `<span class="text-white/30 text-xs">${esc(item.condition)}</span>` : ''}
+              </div>
+              <p class="font-semibold text-sm truncate">${esc(item.title)}</p>
+              ${price ? `<p class="text-emerald-400 text-xs font-semibold mt-0.5">${price}</p>` : ''}
+              <p class="text-white/30 text-xs mt-1">${timeAgo(item.createdAt)}</p>
+            </div>
+            <div class="flex flex-col gap-2 flex-shrink-0">
+              <button onclick="hideMyPostsModal(); setTimeout(() => showMarketplaceDetail('${item._id}'), 200)"
+                      class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-medium transition">
+                View
+              </button>
+              <button onclick="hideMyPostsModal(); setTimeout(() => showEditMarketplaceModal('${item._id}'), 200)"
+                      class="px-3 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 rounded-xl text-xs font-medium transition">
+                ✏️ Edit
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+};
+
+
 window.showChangePasswordModal = function() {
   if (document.getElementById('changePasswordModal')) return;
 

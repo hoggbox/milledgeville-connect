@@ -1509,14 +1509,19 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 8;
     const skip = (page - 1) * limit;
 
+    // ?mine=true → return only the authenticated user's posts (all statuses)
+    const query = (req.query.mine === 'true' && req.userId)
+      ? { owner: req.userId }
+      : {};
+
     const [items, total] = await Promise.all([
-      LostItem.find()
+      LostItem.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .select('-images')
         .populate('owner', 'name'),
-      LostItem.countDocuments()
+      LostItem.countDocuments(query)
     ]);
 
     res.json({
@@ -1689,14 +1694,19 @@ router.get('/marketplace', optionalAuth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 8;
     const skip = (page - 1) * limit;
 
+    // ?mine=true → return all of the authenticated user's listings (any status)
+    const query = (req.query.mine === 'true' && req.userId)
+      ? { seller: req.userId }
+      : { status: 'available' };
+
     const [items, total] = await Promise.all([
-      MarketplaceItem.find({ status: 'available' })
+      MarketplaceItem.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .select('-images')
         .populate('seller', 'name'),
-      MarketplaceItem.countDocuments({ status: 'available' })
+      MarketplaceItem.countDocuments(query)
     ]);
 
     res.json({
