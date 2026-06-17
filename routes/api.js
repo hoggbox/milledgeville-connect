@@ -954,88 +954,89 @@ function requireAdminOrModerator(req, res, next) {
 
 // Send push to a single user (supports both native FCM and web VAPID)
 async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
-  const subs = await PushSubscription.find({ user: userId });
-  if (!subs || subs.length === 0) {
-    console.log(`[Push] No subscription records for user ${userId}`);
+  const sub = await PushSubscription.findOne({ user: userId });
+  if (!sub) {
+    console.log(`[Push] No subscription record for user ${userId}`);
     return false;
   }
 
   const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
+  // Only use a real https:// URL as the notification image.
+  // data: URLs are blocked by browsers/FCM in push notifications.
   const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
 
-  let sent = false;
-
-  for (const sub of subs) {
-    // Native FCM token (Android / iOS)
-    if (sub.nativeToken) {
-      try {
-        const message = {
-          token: sub.nativeToken,
+  if (sub.nativeToken) {
+    try {
+      const message = {
+        token: sub.nativeToken,
+        notification: {
+          title,
+          body,
+          // ✅ FIX: Firebase Admin SDK uses "image", NOT "imageUrl"
+          ...(notifImage ? { image: notifImage } : {})
+        },
+        data: {
+          page: data.page || '',
+          id:   data.id   || '',
+          url:  data.url  || ''
+        },
+        android: {
+          priority: 'high',
           notification: {
-            title,
-            body,
+            sound:     'default',
+            channelId: 'default',
+            // ✅ FIX: "image" not "imageUrl" here too
             ...(notifImage ? { image: notifImage } : {})
-          },
-          data: {
-            page: data.page || '',
-            id:   data.id   || '',
-            url:  data.url  || ''
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              sound:     'default',
-              channelId: 'default',
-              ...(notifImage ? { image: notifImage } : {})
-            }
-          },
-          ...(notifImage ? {
-            apns: {
-              payload: { aps: { 'mutable-content': 1 } },
-              fcmOptions: { image: notifImage }
-            }
-          } : {})
-        };
-        await admin.messaging().send(message);
-        console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-        sent = true;
-      } catch (err) {
-        console.error(`[Push] FCM failed for ${userId}:`, err.message);
-        if (err.code === 'messaging/registration-token-not-registered') {
-          sub.nativeToken = null;
-          await sub.save();
-        }
+          }
+        },
+        // iOS support
+        ...(notifImage ? {
+          apns: {
+            payload: { aps: { 'mutable-content': 1 } },
+            fcmOptions: { image: notifImage }
+          }
+        } : {})
+      };
+      await admin.messaging().send(message);
+      console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+      return true;
+    } catch (err) {
+      console.error(`[Push] FCM failed for ${userId}:`, err.message);
+      if (err.code === 'messaging/registration-token-not-registered') {
+        sub.nativeToken = null;
+        await sub.save();
       }
-      continue;
-    }
-
-    // Web VAPID subscription
-    if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
-      try {
-        await webpush.sendNotification(
-          sub.subscription,
-          JSON.stringify({
-            title,
-            body,
-            data,
-            icon:  APP_ICON,
-            badge: APP_ICON,
-            ...(notifImage ? { image: notifImage } : {})
-          })
-        );
-        console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-        sent = true;
-      } catch (err) {
-        console.error(`[Push] Web push failed for ${userId}:`, err.message);
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          sub.subscription = null;
-          await sub.save();
-        }
-      }
+      return false;
     }
   }
 
-  return sent;
+  if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
+    try {
+      await webpush.sendNotification(
+        sub.subscription,
+        JSON.stringify({
+          title,
+          body,
+          data,
+          icon:  APP_ICON,
+          badge: APP_ICON,
+          // ✅ Only attach image when it's a real https:// URL
+          ...(notifImage ? { image: notifImage } : {})
+        })
+      );
+      console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+      return true;
+    } catch (err) {
+      console.error(`[Push] Web push failed for ${userId}:`, err.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        sub.subscription = null;
+        await sub.save();
+      }
+      return false;
+    }
+  }
+
+  return false;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -3844,29 +3845,37 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
       return res.status(409).json({ message: 'You already confirmed this alert', alreadyVoted: true });
     }
 
-    shoutout.stillThereVoters = shoutout.stillThereVoters || [];
-    shoutout.stillThereVoters.push(req.userId);
-    shoutout.lastBumpedAt = new Date(); // bump it to the top of the feed
+    const voteCount = voters.length + 1;
 
     // Every time votes hit a fresh multiple of the threshold, extend expiry by 2 hours
     let extended = false;
-    const voteCount = shoutout.stillThereVoters.length;
+    const updateFields = {
+      $push: { stillThereVoters: req.userId },
+      $set:  { lastBumpedAt: new Date() }
+    };
+
     if (voteCount % STILL_THERE_THRESHOLD === 0) {
       const base = shoutout.expiresAt && shoutout.expiresAt.getTime() > Date.now()
         ? shoutout.expiresAt.getTime()
         : Date.now();
-      shoutout.expiresAt = new Date(base + STILL_THERE_EXTENSION_MS);
+      updateFields.$set.expiresAt = new Date(base + STILL_THERE_EXTENSION_MS);
       extended = true;
     }
 
-    await shoutout.save();
+    // Use findByIdAndUpdate with $push so the field is written even if it wasn't
+    // defined in the Mongoose schema (strict mode would silently drop it on .save())
+    const updated = await Shoutout.findByIdAndUpdate(
+      req.params.id,
+      updateFields,
+      { new: true }
+    );
 
     // ── SSE: push updated count to every connected client ─────────────────────
     broadcastShoutoutSSE('still-there', {
       id: shoutout._id.toString(),
       stillThereCount: voteCount,
       extended,
-      expiresAt: shoutout.expiresAt
+      expiresAt: updated.expiresAt
     });
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -3875,7 +3884,7 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
       bumped: true,
       extended,
       threshold: STILL_THERE_THRESHOLD,
-      expiresAt: shoutout.expiresAt
+      expiresAt: updated.expiresAt
     });
   } catch (err) {
     console.error('Still-there error:', err);
