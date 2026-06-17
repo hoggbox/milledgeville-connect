@@ -35,6 +35,18 @@ function esc(str) {
     .replace(/'/g, '&#39;');
 }
 
+// ─── Avatar helper ────────────────────────────────────────────────────────────
+// Returns an <img> if the user has a photo, otherwise a letter-circle.
+// size: CSS pixel size (e.g. '30px'). bgColor used for letter fallback only.
+function avatarHtml(name, avatarUrl, size = '30px', radius = '50%', bgColor = '#059669') {
+  const letter = name ? name[0].toUpperCase() : '?';
+  const style = `width:${size};height:${size};border-radius:${radius};flex-shrink:0;object-fit:cover;display:block;`;
+  if (avatarUrl) {
+    return `<img src="${esc(avatarUrl)}" style="${style}" onerror="this.outerHTML='<div style=\\'${style}background:${bgColor};display:flex;align-items:center;justify-content:center;font-size:calc(${size} * 0.45);font-weight:800;color:#fff;\\'>${letter}</div>'" alt="">`;
+  }
+  return `<div style="${style}background:${bgColor};display:flex;align-items:center;justify-content:center;font-size:calc(${size} * 0.45);font-weight:800;color:#fff;">${letter}</div>`;
+}
+
 function sanitizeBroadcast(raw) {
   if (!raw) return '';
   let safe = esc(raw);
@@ -3272,7 +3284,8 @@ window.postShoutoutWithPhoto = async function () {
 }
 
 function renderShoutoutCard(s) {
-  const authorLetter = s.author ? s.author[0].toUpperCase() : '?';
+  const authorAvatar = s.authorId?.avatar || null;
+  const authorName   = s.author || s.authorId?.name || 'Anonymous';
   const likeCount = s.likes ? s.likes.length : 0;
   const comments = s.comments || [];
   const commentCount = comments.length;
@@ -3290,7 +3303,7 @@ function renderShoutoutCard(s) {
   <div class="sc-body">
     <div class="sc-header">
       <div class="sc-author">
-        <div class="sc-avatar">${authorLetter}</div>
+        ${avatarHtml(authorName, authorAvatar, '36px', '50%', '#059669')}
         <div>
           <div class="sc-name">${renderClickableUser(s.authorId ? { _id: s.authorId?._id || s.authorId, name: s.author || 'Anonymous' } : s.author)}</div>
           <div class="sc-time">${timeAgo(s.createdAt)}</div>
@@ -3351,7 +3364,7 @@ function renderShoutoutCard(s) {
     ${currentUser ? `
       <div style="display:flex;flex-direction:column;gap:6px;padding:8px 12px 10px;border-top:1px solid rgba(255,255,255,0.06);">
         <div style="display:flex;align-items:flex-start;gap:8px;">
-          <div style="width:30px;height:30px;background:#059669;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;margin-top:2px;">${currentUser.name[0].toUpperCase()}</div>
+          <div style="width:30px;height:30px;flex-shrink:0;margin-top:2px;">${avatarHtml(currentUser.name, currentUser.avatar, '30px', '50%', '#059669')}</div>
           <div style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 12px;transition:border-color 0.2s;"
                onfocus="this.style.borderColor='rgba(52,211,153,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
             <input id="commentinput-${s._id}" type="text" placeholder="Write a comment…"
@@ -3400,7 +3413,8 @@ function renderShoutoutCard(s) {
 }
 
 function renderCommentRow(c, shoutoutId) {
-  const cLetter = c.author ? c.author[0].toUpperCase() : '?';
+  const cAvatar = c.authorId?.avatar || null;
+  const cName   = c.author || c.authorId?.name || 'Anonymous';
   const replies = c.replies || [];
   const replyCount = replies.length;
   const userIsAdmin = isAdmin();
@@ -3410,10 +3424,11 @@ function renderCommentRow(c, shoutoutId) {
   if (replyCount > 0) {
     repliesHtml = `<div class="ml-9 mt-1 space-y-1">`;
     replies.forEach(r => {
-      const rLetter = r.author ? r.author[0].toUpperCase() : '?';
+      const rAvatar = r.authorId?.avatar || null;
+      const rName   = r.author || r.authorId?.name || 'Anonymous';
       repliesHtml += `
         <div class="flex items-start gap-2" id="reply-${r._id}">
-          <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
+          <div style="margin-top:2px;">${avatarHtml(rName, rAvatar, '24px', '8px', '#0d9488')}</div>
           <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-white/80">${renderClickableUser(r.authorId ? { _id: r.authorId?._id || r.authorId, name: r.author || 'Anonymous' } : r.author)}</span>
@@ -7541,63 +7556,58 @@ function renderLostItemsPage() {
   if (paginated.length === 0) {
     html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
   } else {
-    html = paginated.map(item => {
-      const isLost = item.type === 'lost';
-      const typeStyle = isLost
-        ? 'background:rgba(239,68,68,0.2);color:#fca5a5;border:1px solid rgba(239,68,68,0.35);'
-        : 'background:rgba(52,211,153,0.2);color:#6ee7b7;border:1px solid rgba(52,211,153,0.35);';
-      const accentBar = isLost
-        ? 'background:linear-gradient(90deg,#ef4444,#f97316);'
-        : 'background:linear-gradient(90deg,#10b981,#34d399);';
-
-      return `
-      <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')"
-           class="sc cursor-pointer" style="overflow:hidden;">
-        <!-- Accent bar -->
-        <div style="height:3px;${accentBar}"></div>
-
-        <div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px 12px;">
-          <!-- Thumbnail -->
-          <div style="position:relative;flex-shrink:0;">
-            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}"
-                 style="width:90px;height:90px;object-fit:cover;border-radius:14px;cursor:zoom-in;display:block;"
+    html = paginated.map(item => `
+      <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+        <div class="flex gap-4">
+          <div class="w-24 h-24 flex-shrink-0 relative">
+            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
+                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
                  loading="lazy" alt=""
                  onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:14px;align-items:center;justify-content:center;font-size:2.5rem;">🔎</div>
+            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🔎</div>
           </div>
-
-          <!-- Content -->
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
-              <span style="font-size:11px;font-weight:800;padding:2px 10px;border-radius:20px;${typeStyle}">${(item.type || '').toUpperCase()}</span>
-              ${item.isPet ? `<span style="font-size:12px;color:#fbbf24;font-weight:600;">🐾 Pet</span>` : ''}
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">
+                ${item.type.toUpperCase()}
+              </span>
+              ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
             </div>
-            <h3 style="margin:0;font-size:1rem;font-weight:700;line-height:1.3;color:#fff;">${esc(item.title)}</h3>
-            <p style="margin:5px 0 0;font-size:0.85rem;color:rgba(255,255,255,0.6);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(item.description)}</p>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:rgba(255,255,255,0.45);">
-              <span>📍 ${esc(item.location || 'Unknown')}</span>
+            
+            <h3 class="font-semibold text-lg mt-2">${esc(item.title)}</h3>
+            <p class="text-white/70 line-clamp-2">${esc(item.description)}</p>
+            
+            <div class="flex items-center gap-2 mt-4 text-xs text-white/50">
+              <span>📍 ${item.location || 'Unknown'}</span>
               <span>·</span>
               ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
               <span>·</span>
               <span>${timeAgo(item.createdAt)}</span>
             </div>
+
+            <!-- Card Actions -->
+            <div class="mt-3 flex justify-end gap-3">
+              ${currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id) ? `
+              <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')" 
+                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
+                ✏️ Edit
+              </button>` : ''}
+              <button onclick="event.stopImmediatePropagation(); shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
+                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+                🔗 Share
+              </button>
+              <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
+                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+                🚩 Report
+              </button>
+            </div>
           </div>
         </div>
-
-        <!-- Divider + Actions -->
-        <div class="sc-divider" style="margin:0;"></div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;padding:8px 14px 10px;">
-          ${currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id) ? `
-          <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')"
-                  class="sc-react" style="font-size:12px;font-weight:700;color:#38bdf8;">✏️ Edit</button>` : ''}
-          <button onclick="event.stopImmediatePropagation(); shareContent('lost','${esc(item.title)}','${esc(item.location || '')}')"
-                  class="sc-react" style="font-size:12px;">🔗 Share</button>
-          <button onclick="event.stopImmediatePropagation(); reportContent('lost','${item._id}','${esc(item.title)}')"
-                  class="sc-react" style="font-size:12px;color:rgba(239,68,68,0.7);">🚩 Report</button>
-        </div>
-      </div>`;
-    }).join('');
+      </div>
+    `).join('');
   }
 
   container.innerHTML = html;
@@ -7804,55 +7814,50 @@ async function renderMarketplacePage() {
   let html = '<div class="space-y-4">';
 
   pageItems.forEach(item => {
-    const conditionColor = {
-      'New': 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-      'Like New': 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
-      'Good': 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
-      'Fair': 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-      'Poor': 'bg-red-500/20 text-red-300 border border-red-500/30',
-    }[item.condition] || 'bg-white/10 text-white/60';
-
     html += `
-      <div onclick="showMarketplaceDetail('${item._id}')"
-           class="sc cursor-pointer" style="overflow:hidden;">
-        <div style="display:flex;gap:14px;align-items:flex-start;padding:16px 16px 12px;">
-          <!-- Thumbnail -->
-          <div style="position:relative;flex-shrink:0;">
-            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}"
-                 style="width:90px;height:90px;object-fit:cover;border-radius:14px;cursor:zoom-in;display:block;"
+      <div onclick="showMarketplaceDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
+        <div class="flex gap-4">
+          <div class="w-24 h-24 flex-shrink-0 relative">
+            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
+                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
                  loading="lazy" alt=""
                  onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}')"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:14px;align-items:center;justify-content:center;font-size:2.5rem;">🛒</div>
+            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🛒</div>
           </div>
-
-          <!-- Content -->
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-              <h3 style="margin:0;font-size:1rem;font-weight:700;line-height:1.3;color:#fff;">${esc(item.title)}</h3>
-              <span style="font-size:1.25rem;font-weight:800;color:#34d399;white-space:nowrap;flex-shrink:0;">$${item.price}</span>
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start">
+              <h3 class="font-semibold text-lg leading-tight pr-2">${esc(item.title)}</h3>
+              <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
             </div>
-            <p style="margin:5px 0 0;font-size:0.85rem;color:rgba(255,255,255,0.6);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(item.description || '')}</p>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap;">
-              <span class="${conditionColor}" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">${esc(item.condition)}</span>
-              <span style="font-size:11px;color:rgba(255,255,255,0.4);">·</span>
+            <p class="text-white/70 line-clamp-2 mt-1">${esc(item.description || '')}</p>
+            
+            <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
+              <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
+              <span>${timeAgo(item.createdAt)}</span>
+              <span class="text-white/40">•</span>
               ${renderClickableUser(item.seller)}
-              <span style="font-size:11px;color:rgba(255,255,255,0.4);">·</span>
-              <span style="font-size:11px;color:rgba(255,255,255,0.4);">${timeAgo(item.createdAt)}</span>
+            </div>
+
+            <!-- Card Actions -->
+            <div class="mt-3 flex justify-end gap-3">
+              ${currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id) ? `
+              <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
+                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
+                ✏️ Edit
+              </button>` : ''}
+              <button onclick="event.stopImmediatePropagation(); shareContent('market', '${esc(item.title)}', '$${item.price}')"
+                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+                🔗 Share
+              </button>
+              <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')"
+                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+                🚩 Report
+              </button>
             </div>
           </div>
-        </div>
-
-        <!-- Divider + Actions -->
-        <div class="sc-divider" style="margin:0;"></div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;padding:8px 14px 10px;">
-          ${currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id) ? `
-          <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
-                  class="sc-react" style="font-size:12px;font-weight:700;color:#38bdf8;">✏️ Edit</button>` : ''}
-          <button onclick="event.stopImmediatePropagation(); shareContent('market','${esc(item.title)}','$${item.price}')"
-                  class="sc-react" style="font-size:12px;">🔗 Share</button>
-          <button onclick="event.stopImmediatePropagation(); reportContent('market','${item._id}','${esc(item.title)}')"
-                  class="sc-react" style="font-size:12px;color:rgba(239,68,68,0.7);">🚩 Report</button>
         </div>
       </div>`;
   });
