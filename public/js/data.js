@@ -6595,7 +6595,7 @@ window.showLostItemDetail = async function(id) {
                       class="flex-1 bg-sky-600 hover:bg-sky-700 text-white py-4 rounded-3xl font-semibold">
                 ✏️ Edit Post
               </button>
-              <button onclick="markLostResolved()" 
+              <button onclick="markCurrentLostResolved()" 
                       class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-3xl font-semibold">
                 ✅ Mark as Resolved
               </button>` : ''}
@@ -6648,7 +6648,7 @@ async function renderLostComments(item) {
   container.innerHTML = html;
 }
 
-window.markLostResolved = async function() {
+window.markCurrentLostResolved = async function() {
   if (!currentLostItemId) return;
   if (!confirm('Mark this item as resolved?')) return;
   try {
@@ -7474,8 +7474,10 @@ window.markMarketSold = async function() {
   }
 };
 
-// In-memory cache for lost & found items (avoids re-fetching on every search/filter)
+// In-memory caches for lost & found
 let _allLostItems = [];
+let _myLostItems  = [];
+let _resolvedLostItems = [];
 
 async function loadLostFoundPage(content) {
   content.innerHTML = `
@@ -7488,17 +7490,26 @@ async function loadLostFoundPage(content) {
         </button>
       </div>
 
-      <!-- Search + Filters -->
-      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+      <!-- Search + Type Filter -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
         <input id="lostSearchInput" type="text" placeholder="Search lost & found items..." 
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
+        <select id="lostTypeFilter" onchange="filterAndRenderLostItems()"
+                class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 focus:bg-white/20 appearance-none">
+          <option value="all" class="bg-slate-900 text-white">All Items</option>
+          <option value="lost" class="bg-slate-900 text-white">Lost Only</option>
+          <option value="found" class="bg-slate-900 text-white">Found Only</option>
+        </select>
+      </div>
 
-<select id="lostTypeFilter" onchange="filterAndRenderLostItems()"
-        class="bg-white/10 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400 focus:bg-white/20 appearance-none">
-  <option value="all" class="bg-slate-900 text-white">All Items</option>
-  <option value="lost" class="bg-slate-900 text-white">Lost Only</option>
-  <option value="found" class="bg-slate-900 text-white">Found Only</option>
-</select>
+      <!-- View Filter Chips -->
+      <div class="flex gap-2 overflow-x-auto pb-3 mb-5 hide-scrollbar">
+        <button onclick="setLostViewFilter('all')" id="lostView-all"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white">All Posts</button>
+        <button onclick="setLostViewFilter('mine')" id="lostView-mine"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📋 My Posts</button>
+        <button onclick="setLostViewFilter('resolved')" id="lostView-resolved"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">✅ Found / Resolved</button>
       </div>
 
       <div id="lostItemsList" class="space-y-4">
@@ -7510,39 +7521,82 @@ async function loadLostFoundPage(content) {
   window.currentLostPage = 1;
   window.currentLostSearch = '';
   window.currentLostFilter = 'all';
+  window.currentLostViewFilter = 'all';
 
-  // Fetch fresh data every visit
+  // Fetch fresh data
   try {
-    const res = await apiGet('/lostitems?page=1&limit=30');
+    const res = await apiGet('/lostitems?page=1&limit=50');
     _allLostItems = res.items || [];
   } catch (e) {
     console.error('Lost & Found fetch failed', e);
   }
 
-  // Live search — no network call, just re-filter the cache
-  document.getElementById('lostSearchInput').addEventListener('input', debounce(() => {
-    window.currentLostSearch = document.getElementById('lostSearchInput').value.trim().toLowerCase();
-    window.currentLostPage = 1;
-    renderLostItemsPage();
-  }, 200));
+  // Live search
+  const searchInput = document.getElementById('lostSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(() => {
+      window.currentLostSearch = searchInput.value.trim().toLowerCase();
+      window.currentLostPage = 1;
+      renderLostItemsPage();
+    }, 200));
+  }
 
   renderLostItemsPage();
 }
+
+window.setLostViewFilter = async function(view) {
+  window.currentLostViewFilter = view;
+  window.currentLostPage = 1;
+
+  // Update chip styles
+  ['all','mine','resolved'].forEach(v => {
+    const btn = document.getElementById(`lostView-${v}`);
+    if (!btn) return;
+    btn.className = v === view
+      ? 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white'
+      : 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+  });
+
+  const container = document.getElementById('lostItemsList');
+
+  if (view === 'mine') {
+    if (!currentUser) { showToast('Sign in to see your posts', 'error'); return; }
+    if (container) container.innerHTML = `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`;
+    try {
+      const res = await apiGet('/lostitems/mine');
+      _myLostItems = res.items || [];
+    } catch (e) { _myLostItems = []; }
+  } else if (view === 'resolved') {
+    if (container) container.innerHTML = `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`;
+    try {
+      const res = await apiGet('/lostitems/resolved');
+      _resolvedLostItems = res.items || [];
+    } catch (e) { _resolvedLostItems = []; }
+  }
+
+  renderLostItemsPage();
+};
+
+
 
 function renderLostItemsPage() {
   const container = document.getElementById('lostItemsList');
   if (!container) return;
 
-  // Filter entirely in memory — no network request
-  let filtered = _allLostItems.filter(item => {
-    const matchesSearch = !window.currentLostSearch || 
+  const view = window.currentLostViewFilter || 'all';
+  let source;
+
+  if (view === 'mine')     source = _myLostItems;
+  else if (view === 'resolved') source = _resolvedLostItems;
+  else source = _allLostItems;
+
+  // Apply search + type filter (search/type filter only on 'all' and 'mine' views)
+  let filtered = source.filter(item => {
+    const matchesSearch = !window.currentLostSearch ||
       (item.title || '').toLowerCase().includes(window.currentLostSearch) ||
       (item.description || '').toLowerCase().includes(window.currentLostSearch);
-    
-    const matchesFilter = window.currentLostFilter === 'all' || 
-      item.type === window.currentLostFilter;
-    
-    return matchesSearch && matchesFilter;
+    const matchesType = (view === 'resolved') || window.currentLostFilter === 'all' || item.type === window.currentLostFilter;
+    return matchesSearch && matchesType;
   });
 
   // Client-side pagination
@@ -7552,16 +7606,49 @@ function renderLostItemsPage() {
   const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  const emptyMsg = view === 'mine'
+    ? `<p class="text-white/40 text-center py-16">You haven't posted anything yet.</p>`
+    : view === 'resolved'
+    ? `<p class="text-white/40 text-center py-16">No resolved items. Items auto-delete 10 days after being marked found.</p>`
+    : `<p class="text-white/40 text-center py-16">No items found.</p>`;
+
   let html = '';
   if (paginated.length === 0) {
-    html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
+    html = emptyMsg;
   } else {
     html = paginated.map(item => {
       const isOwner = currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id);
       const authorName = item.authorName || 'Anonymous';
       const ownerObj = typeof item.owner === 'object' ? item.owner : { _id: item.owner, name: authorName };
+      const isResolved = item.status === 'resolved';
+
+      // Manage bar for owner in "My Posts" view
+      const manageBar = (view === 'mine' && isOwner) ? `
+        <div style="display:flex;gap:8px;padding:10px 16px 12px;flex-wrap:wrap;">
+          ${!isResolved ? `
+          <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')"
+                  style="flex:1;min-width:80px;padding:8px 12px;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;">
+            ✏️ Edit
+          </button>
+          <button onclick="event.stopImmediatePropagation(); markLostResolved('${item._id}')"
+                  style="flex:1;min-width:80px;padding:8px 12px;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;">
+            ✅ Mark Found
+          </button>` : `
+          <span style="flex:1;text-align:center;padding:8px 12px;background:rgba(52,211,153,0.1);color:#34d399;border-radius:999px;font-size:12px;font-weight:700;">
+            ✅ Marked Found · Auto-deletes in 10 days
+          </span>`}
+          <button onclick="event.stopImmediatePropagation(); deleteLostItem('${item._id}')"
+                  style="padding:8px 14px;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;">
+            🗑️
+          </button>
+        </div>` : '';
+
+      const resolvedBadge = isResolved
+        ? `<span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;background:rgba(52,211,153,0.2);color:#34d399;">✅ FOUND</span>`
+        : '';
+
       return `
-      <div id="lost-${item._id}" class="sc" style="cursor:pointer;" onclick="showLostDetail('${item._id}')">
+      <div id="lost-${item._id}" class="sc" style="cursor:pointer;${isResolved ? 'opacity:0.75;' : ''}" onclick="showLostDetail('${item._id}')">
         <div class="sc-body">
           <div class="sc-header">
             <div class="sc-author">
@@ -7573,22 +7660,25 @@ function renderLostItemsPage() {
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               ${item.isPet ? `<span style="font-size:12px;color:#fbbf24;font-weight:700;">🐾 Pet</span>` : ''}
-              <span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;${item.type === 'lost' ? 'background:rgba(239,68,68,0.2);color:#f87171;' : 'background:rgba(52,211,153,0.2);color:#34d399;'}">${item.type.toUpperCase()}</span>
-              ${isOwner
+              ${resolvedBadge}
+              <span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;${item.type === 'lost' ? 'background:rgba(239,68,68,0.2);color:#f87171;' : 'background:rgba(52,211,153,0.2);color:#34d399;'}">${(item.type||'lost').toUpperCase()}</span>
+              ${(isOwner && view !== 'mine')
                 ? `<span class="sc-yours">Yours</span>`
-                : `<button onclick="event.stopImmediatePropagation(); reportContent('lost','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>`}
+                : (!isOwner ? `<button onclick="event.stopImmediatePropagation(); reportContent('lost','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>` : '')}
             </div>
           </div>
           ${item.location ? `<div class="sc-location">📍 ${esc(item.location)}</div>` : ''}
           <p class="sc-text" style="font-weight:600;font-size:15px;margin-bottom:4px;">${esc(item.title)}</p>
           ${item.description ? `<p class="sc-text" style="font-size:13px;opacity:0.7;margin-top:0;">${esc(item.description)}</p>` : ''}
         </div>
-        ${`<div onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')" style="padding:0 0 4px;cursor:zoom-in;">
+        <div onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')" style="padding:0 0 4px;cursor:zoom-in;">
           <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}"
                loading="lazy" alt=""
                style="width:100%;max-height:220px;object-fit:cover;border-radius:0;"
                onerror="this.parentElement.style.display='none'">
-        </div>`}
+        </div>
+        ${manageBar}
+        ${!manageBar ? `
         <div class="sc-divider"></div>
         <div class="sc-actions">
           <button onclick="event.stopImmediatePropagation(); showLostDetail('${item._id}')" class="sc-pill">
@@ -7603,7 +7693,7 @@ function renderLostItemsPage() {
               <span class="sc-react-icon">🔗</span>
             </button>
           </div>
-        </div>
+        </div>` : ''}
       </div>`;
     }).join('');
   }
@@ -7611,6 +7701,8 @@ function renderLostItemsPage() {
   container.innerHTML = html;
   renderLostPagination({ currentPage: page, totalPages, totalItems, hasPrev: page > 1, hasNext: page < totalPages });
 }
+
+
 
 function renderLostPagination(p) {
   const container = document.getElementById('lostPagination');
@@ -7644,6 +7736,40 @@ window.filterAndRenderLostItems = function() {
   renderLostItemsPage();
 };
 
+window.markLostResolved = async function(id) {
+  if (!confirm('Mark this item as found/resolved? It will be moved to the "Found / Resolved" area and auto-deleted after 10 days.')) return;
+  try {
+    await apiPost(`/lostitems/${id}/resolve`, {});
+    showToast('✅ Marked as found/resolved!');
+    // Remove from my posts cache, add to resolved cache
+    _myLostItems = _myLostItems.map(i => i._id === id ? { ...i, status: 'resolved' } : i);
+    _allLostItems = _allLostItems.filter(i => i._id !== id);
+    renderLostItemsPage();
+  } catch (e) {
+    showToast('Error marking resolved', 'error');
+  }
+};
+
+window.deleteLostItem = async function(id) {
+  if (!confirm('Delete this post permanently? This cannot be undone.')) return;
+  try {
+    await apiDelete(`/lostitems/${id}`);
+    showToast('🗑️ Post deleted');
+    _myLostItems     = _myLostItems.filter(i => i._id !== id);
+    _allLostItems    = _allLostItems.filter(i => i._id !== id);
+    _resolvedLostItems = _resolvedLostItems.filter(i => i._id !== id);
+    renderLostItemsPage();
+  } catch (e) {
+    showToast('Error deleting post', 'error');
+  }
+};
+
+
+
+// In-memory caches for marketplace
+let _myMarketplaceItems  = [];
+let _soldMarketplaceItems = [];
+
 async function loadMarketplacePage(content) {
 
   // Fix select dropdown visibility in dark mode
@@ -7651,7 +7777,7 @@ async function loadMarketplacePage(content) {
   style.textContent = `
     select {
       color: white !important;
-      background-color: #1e293b !important; /* slate-800 */
+      background-color: #1e293b !important;
     }
     select option {
       background-color: #1e293b;
@@ -7673,7 +7799,6 @@ async function loadMarketplacePage(content) {
       <div class="flex flex-col sm:flex-row gap-3 mb-4">
         <input id="marketSearchInput" type="text" placeholder="Search items..." 
                class="flex-1 bg-white/10 border border-white/20 rounded-3xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none focus:border-emerald-400">
-        
         <!-- Condition Filter -->
         <select id="marketConditionFilter" onchange="filterAndRenderMarketplace()"
         class="bg-slate-800 border border-white/30 rounded-3xl px-5 py-4 text-white focus:outline-none focus:border-emerald-400">
@@ -7683,6 +7808,16 @@ async function loadMarketplacePage(content) {
           <option value="used">Used</option>
           <option value="fair">Fair</option>
         </select>
+      </div>
+
+      <!-- View Filter Chips (My Posts / Sold) -->
+      <div class="flex gap-2 overflow-x-auto pb-2 mb-3 hide-scrollbar">
+        <button onclick="setMarketViewFilter('all')" id="mktView-all"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white">All Listings</button>
+        <button onclick="setMarketViewFilter('mine')" id="mktView-mine"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">📋 My Posts</button>
+        <button onclick="setMarketViewFilter('sold')" id="mktView-sold"
+                class="px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white">🏷️ Sold Items</button>
       </div>
 
       <!-- Category Filter Chips -->
@@ -7705,9 +7840,9 @@ async function loadMarketplacePage(content) {
       </div>
     </div>`;
 
-  // Always fetch fresh so new listings appear immediately
+  // Always fetch fresh
   try {
-    const res = await apiGet('/marketplace?limit=30');
+    const res = await apiGet('/marketplace?limit=50');
     allMarketplaceItems = res.items || res || [];
   } catch (e) {
     console.error(e);
@@ -7716,21 +7851,60 @@ async function loadMarketplacePage(content) {
   window.currentMarketSearch = '';
   window.currentMarketFilter = 'all';
   window.currentMarketCategoryFilter = 'all';
+  window.currentMarketViewFilter = 'all';
   marketplaceCurrentPage = 1;
 
   const searchInput = document.getElementById('marketSearchInput');
-  searchInput.addEventListener('input', debounce(() => {
-    window.currentMarketSearch = searchInput.value.trim().toLowerCase();
-    marketplaceCurrentPage = 1;
-    renderMarketplacePage();
-  }, 250));
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(() => {
+      window.currentMarketSearch = searchInput.value.trim().toLowerCase();
+      marketplaceCurrentPage = 1;
+      renderMarketplacePage();
+    }, 250));
+  }
 
   renderMarketplacePage();
 }
 
+window.setMarketViewFilter = async function(view) {
+  window.currentMarketViewFilter = view;
+  marketplaceCurrentPage = 1;
+
+  // Update chip styles
+  ['all','mine','sold'].forEach(v => {
+    const btn = document.getElementById(`mktView-${v}`);
+    if (!btn) return;
+    btn.className = v === view
+      ? 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white'
+      : 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
+  });
+
+  const container = document.getElementById('marketItemsList');
+
+  if (view === 'mine') {
+    if (!currentUser) { showToast('Sign in to see your listings', 'error'); return; }
+    if (container) container.innerHTML = `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`;
+    try {
+      const res = await apiGet('/marketplace/mine');
+      _myMarketplaceItems = res.items || [];
+    } catch (e) { _myMarketplaceItems = []; }
+  } else if (view === 'sold') {
+    if (container) container.innerHTML = `<div class="bg-white/5 rounded-3xl p-5 animate-pulse h-28"></div>`;
+    try {
+      const res = await apiGet('/marketplace/sold');
+      _soldMarketplaceItems = res.items || [];
+    } catch (e) { _soldMarketplaceItems = []; }
+  }
+
+  renderMarketplacePage();
+};
+
+
+
 // Set active category filter
 window.setMarketCategoryFilter = function(category) {
   window.currentMarketCategoryFilter = category;
+  marketplaceCurrentPage = 1;
 
   // Update active button styles
   document.querySelectorAll('[id^="cat-"]').forEach(btn => {
@@ -7744,7 +7918,7 @@ window.setMarketCategoryFilter = function(category) {
   renderMarketplacePage();
 };
 
-// Improved filter + render function (replaces old filterAndRenderMarketplace if it exists)
+// Improved filter + render function
 window.filterAndRenderMarketplace = function() {
   const conditionSelect = document.getElementById('marketConditionFilter');
   if (conditionSelect) window.currentMarketFilter = conditionSelect.value;
@@ -7752,29 +7926,21 @@ window.filterAndRenderMarketplace = function() {
   renderMarketplacePage();
 };
 
-window.setMarketCategoryFilter = function(category) {
-  window.currentMarketCategoryFilter = category;
-  marketplaceCurrentPage = 1;
 
-  // Update active button styles...
-  document.querySelectorAll('[id^="cat-"]').forEach(btn => {
-    if (btn.id === `cat-${category}` || (category === 'all' && btn.id === 'cat-all')) {
-      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-emerald-600 text-white';
-    } else {
-      btn.className = 'px-4 py-1.5 rounded-2xl text-sm font-medium whitespace-nowrap bg-white/10 hover:bg-white/20 text-white';
-    }
-  });
-
-  renderMarketplacePage();
-};
 
 async function renderMarketplacePage() {
   const container = document.getElementById('marketItemsList');
   if (!container) return;
 
-  let filtered = allMarketplaceItems || [];
+  const view = window.currentMarketViewFilter || 'all';
+  let source;
+  if (view === 'mine') source = _myMarketplaceItems;
+  else if (view === 'sold') source = _soldMarketplaceItems;
+  else source = allMarketplaceItems || [];
 
-  // Apply search filter
+  let filtered = source.slice();
+
+  // Apply search
   if (window.currentMarketSearch) {
     filtered = filtered.filter(item =>
       (item.title || '').toLowerCase().includes(window.currentMarketSearch) ||
@@ -7782,30 +7948,32 @@ async function renderMarketplacePage() {
     );
   }
 
-  // Apply condition filter
-  if (window.currentMarketFilter && window.currentMarketFilter !== 'all') {
+  // Apply condition filter (not on sold view)
+  if (view !== 'sold' && window.currentMarketFilter && window.currentMarketFilter !== 'all') {
     filtered = filtered.filter(item => item.condition === window.currentMarketFilter);
   }
 
-  // Apply category filter
-  if (window.currentMarketCategoryFilter && window.currentMarketCategoryFilter !== 'all') {
+  // Apply category filter (not on sold view)
+  if (view !== 'sold' && window.currentMarketCategoryFilter && window.currentMarketCategoryFilter !== 'all') {
     filtered = filtered.filter(item => item.category === window.currentMarketCategoryFilter);
   }
 
-  // Sort by most recent first
   filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
   currentMarketplaceItems = filtered;
 
+  const emptyMsg = view === 'mine'
+    ? `<p class="text-white/40 text-center py-20">You haven't listed anything yet.</p>`
+    : view === 'sold'
+    ? `<p class="text-white/40 text-center py-20">No sold items. Sold listings auto-delete after 10 days.</p>`
+    : `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+
   if (filtered.length === 0) {
-    container.innerHTML = `<p class="text-white/40 text-center py-20">No listings found.</p>`;
+    container.innerHTML = emptyMsg;
     return;
   }
 
-  // Pagination logic
   const totalPages = Math.ceil(filtered.length / MARKETPLACE_PAGE_SIZE);
   marketplaceCurrentPage = Math.min(marketplaceCurrentPage, totalPages);
-
   const start = (marketplaceCurrentPage - 1) * MARKETPLACE_PAGE_SIZE;
   const pageItems = filtered.slice(start, start + MARKETPLACE_PAGE_SIZE);
 
@@ -7815,8 +7983,35 @@ async function renderMarketplacePage() {
     const isSeller = currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id);
     const sellerName = item.sellerName || item.authorName || 'Anonymous';
     const sellerObj = typeof item.seller === 'object' ? item.seller : { _id: item.seller, name: sellerName };
+    const isSold = item.status === 'sold';
+
+    // Manage bar shown in "My Posts" view for the owner
+    const manageBar = (view === 'mine' && isSeller) ? `
+      <div style="display:flex;gap:8px;padding:10px 16px 12px;flex-wrap:wrap;">
+        ${!isSold ? `
+        <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
+                style="flex:1;min-width:80px;padding:8px 12px;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;">
+          ✏️ Edit
+        </button>
+        <button onclick="event.stopImmediatePropagation(); markMarketplaceSold('${item._id}')"
+                style="flex:1;min-width:80px;padding:8px 12px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;">
+          🏷️ Mark Sold
+        </button>` : `
+        <span style="flex:1;text-align:center;padding:8px 12px;background:rgba(251,191,36,0.1);color:#fbbf24;border-radius:999px;font-size:12px;font-weight:700;">
+          🏷️ Sold · Auto-deletes in 10 days
+        </span>`}
+        <button onclick="event.stopImmediatePropagation(); deleteMarketplaceItem('${item._id}')"
+                style="padding:8px 14px;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;">
+          🗑️
+        </button>
+      </div>` : '';
+
+    const soldBadge = isSold
+      ? `<span style="padding:3px 10px;font-size:11px;font-weight:800;border-radius:999px;background:rgba(251,191,36,0.2);color:#fbbf24;">🏷️ SOLD</span>`
+      : '';
+
     html += `
-      <div id="market-${item._id}" class="sc" style="cursor:pointer;" onclick="showMarketplaceDetail('${item._id}')">
+      <div id="market-${item._id}" class="sc" style="cursor:pointer;${isSold ? 'opacity:0.75;' : ''}" onclick="showMarketplaceDetail('${item._id}')">
         <div class="sc-body">
           <div class="sc-header">
             <div class="sc-author">
@@ -7827,10 +8022,11 @@ async function renderMarketplacePage() {
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
+              ${soldBadge}
               <span style="padding:3px 10px;font-size:11px;font-weight:700;border-radius:999px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);">${item.condition || 'used'}</span>
-              ${isSeller
+              ${(isSeller && view !== 'mine')
                 ? `<span class="sc-yours">Yours</span>`
-                : `<button onclick="event.stopImmediatePropagation(); reportContent('market','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>`}
+                : (!isSeller ? `<button onclick="event.stopImmediatePropagation(); reportContent('market','${item._id}','${esc(item.title)}')" class="sc-flag-btn" title="Report">🚩</button>` : '')}
             </div>
           </div>
           ${item.category ? `<div class="sc-location">🏷️ ${esc(item.category)}</div>` : ''}
@@ -7846,6 +8042,8 @@ async function renderMarketplacePage() {
                style="width:100%;max-height:220px;object-fit:cover;border-radius:0;"
                onerror="this.parentElement.style.display='none'">
         </div>
+        ${manageBar}
+        ${!manageBar ? `
         <div class="sc-divider"></div>
         <div class="sc-actions">
           <button onclick="event.stopImmediatePropagation(); showMarketplaceDetail('${item._id}')" class="sc-pill">
@@ -7860,13 +8058,12 @@ async function renderMarketplacePage() {
               <span class="sc-react-icon">🔗</span>
             </button>
           </div>
-        </div>
+        </div>` : ''}
       </div>`;
   });
 
   html += '</div>';
 
-  // Pagination controls
   if (totalPages > 1) {
     html += `
       <div class="flex items-center justify-between mt-6 px-1">
@@ -7875,11 +8072,9 @@ async function renderMarketplacePage() {
                 class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
           ← Previous
         </button>
-
         <div class="text-sm text-white/60">
           Page <span class="font-semibold text-white">${marketplaceCurrentPage}</span> of ${totalPages}
         </div>
-
         <button onclick="goToMarketplacePage(${marketplaceCurrentPage + 1})" 
                 ${marketplaceCurrentPage === totalPages ? 'disabled' : ''}
                 class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-medium disabled:opacity-40 transition">
@@ -7892,6 +8087,35 @@ async function renderMarketplacePage() {
   container.innerHTML = html;
 }
 
+window.markMarketplaceSold = async function(id) {
+  if (!confirm('Mark this item as sold? It will move to the Sold area and auto-delete after 10 days.')) return;
+  try {
+    await apiPost(`/marketplace/${id}/sold`, {});
+    showToast('🏷️ Marked as sold!');
+    _myMarketplaceItems = _myMarketplaceItems.map(i => i._id === id ? { ...i, status: 'sold' } : i);
+    allMarketplaceItems = allMarketplaceItems.filter(i => i._id !== id);
+    renderMarketplacePage();
+  } catch (e) {
+    showToast('Error marking sold', 'error');
+  }
+};
+
+window.deleteMarketplaceItem = async function(id) {
+  if (!confirm('Delete this listing permanently? This cannot be undone.')) return;
+  try {
+    await apiDelete(`/marketplace/${id}`);
+    showToast('🗑️ Listing deleted');
+    _myMarketplaceItems   = _myMarketplaceItems.filter(i => i._id !== id);
+    allMarketplaceItems   = allMarketplaceItems.filter(i => i._id !== id);
+    _soldMarketplaceItems = _soldMarketplaceItems.filter(i => i._id !== id);
+    renderMarketplacePage();
+  } catch (e) {
+    showToast('Error deleting listing', 'error');
+  }
+};
+
+
+
 function goToMarketplacePage(page) {
   const totalPages = Math.ceil(currentMarketplaceItems.length / MARKETPLACE_PAGE_SIZE);
   if (page < 1 || page > totalPages) return;
@@ -7901,38 +8125,6 @@ function goToMarketplacePage(page) {
 }
 
 window.goToMarketplacePage = goToMarketplacePage;
-
-function renderMarketPagination(p) {
-  const container = document.getElementById('marketPagination');
-  if (!p.totalPages || p.totalPages <= 1) {
-    container.innerHTML = '';
-    return;
-  }
-
-  let html = `
-    <button onclick="changeMarketPage(${Math.max(1, window.currentMarketPage-1)})" 
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasPrev ? 'opacity-40 pointer-events-none' : ''}">
-      ← Prev
-    </button>
-    <span class="px-6 py-3 text-white/70">Page ${p.currentPage} of ${p.totalPages}</span>
-    <button onclick="changeMarketPage(${Math.min(p.totalPages, window.currentMarketPage+1)})" 
-            class="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 ${!p.hasNext ? 'opacity-40 pointer-events-none' : ''}">
-      Next →
-    </button>`;
-
-  container.innerHTML = html;
-}
-
-window.changeMarketPage = function(page) {
-  window.currentMarketPage = page;
-  renderMarketplacePage();
-};
-
-window.filterAndRenderMarketplace = function() {
-  window.currentMarketFilter = document.getElementById('marketConditionFilter').value;
-  window.currentMarketPage = 1;
-  renderMarketplacePage();
-};
 
 // Simple debounce helper
 function debounce(func, delay) {

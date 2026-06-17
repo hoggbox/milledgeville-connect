@@ -50,6 +50,25 @@ const SpotlightAd = mongoose.models.SpotlightAd || mongoose.model('SpotlightAd',
 //   3. Drop this entire block above the `module.exports = router;` line
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── AUTO-DELETE: sold marketplace items & resolved lost items after 10 days ──
+// Runs once at startup, then every 6 hours
+async function purgeExpiredSoldAndResolved() {
+  try {
+    const cutoff = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    const [mktResult, lostResult] = await Promise.all([
+      MarketplaceItem.deleteMany({ status: 'sold',     soldAt:     { $lte: cutoff } }),
+      LostItem.deleteMany({        status: 'resolved',  resolvedAt: { $lte: cutoff } }),
+    ]);
+    if (mktResult.deletedCount || lostResult.deletedCount) {
+      console.log(`[purge] Deleted ${mktResult.deletedCount} sold marketplace + ${lostResult.deletedCount} resolved lost items`);
+    }
+  } catch (e) {
+    console.error('[purge] Auto-delete error:', e.message);
+  }
+}
+purgeExpiredSoldAndResolved();
+setInterval(purgeExpiredSoldAndResolved, 6 * 60 * 60 * 1000);
+
 // ─── SSE: REAL-TIME SHOUTOUT STREAM ───────────────────────────────────────────
 // Keeps track of every connected client listening on GET /api/shoutouts/stream
 const _sseShoutoutClients = new Set();
@@ -1509,13 +1528,13 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const [items, total] = await Promise.all([
-      LostItem.find()
+      LostItem.find({ $or: [{ status: { $exists: false } }, { status: { $nin: ['resolved'] } }] })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .select('-images')
         .populate('owner', 'name'),
-      LostItem.countDocuments()
+      LostItem.countDocuments({ $or: [{ status: { $exists: false } }, { status: { $nin: ['resolved'] } }] })
     ]);
 
     res.json({
@@ -1661,6 +1680,7 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
 
     lost.status = 'resolved';
     await lost.save();
+    await LostItem.collection.updateOne({ _id: lost._id }, { $set: { resolvedAt: new Date() } });
 
     // Award reputation
     const owner = await User.findById(req.userId);
@@ -1858,6 +1878,8 @@ router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
 
     item.status = 'sold';
     await item.save();
+    // Stamp soldAt outside strict-mode schema (safe even if field not in schema)
+    await MarketplaceItem.collection.updateOne({ _id: item._id }, { $set: { soldAt: new Date() } });
 
     // Award reputation
     const seller = await User.findById(req.userId);
@@ -2002,6 +2024,7 @@ router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
     if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     lost.status = 'resolved';
     await lost.save();
+    await LostItem.collection.updateOne({ _id: lost._id }, { $set: { resolvedAt: new Date() } });
     res.json({ message: 'Marked as resolved', item: lost });
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2016,10 +2039,107 @@ router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
     if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     item.status = 'sold';
     await item.save();
+    await MarketplaceItem.collection.updateOne({ _id: item._id }, { $set: { soldAt: new Date() } });
     res.json({ message: 'Marked as sold', item });
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: MY MARKETPLACE POSTS ────────────────────────────────────────────
+router.get('/marketplace/mine', authenticate, async (req, res) => {
+  try {
+    const items = await MarketplaceItem.find({ seller: req.userId })
+      .sort({ createdAt: -1 })
+      .select('-images');
+    res.json({ items });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── PUBLIC: SOLD MARKETPLACE ITEMS ─────────────────────────────────────────
+router.get('/marketplace/sold', optionalAuth, async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip  = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      MarketplaceItem.find({ status: 'sold' })
+        .sort({ soldAt: -1 })
+        .skip(skip).limit(limit)
+        .select('-images')
+        .populate('seller', 'name'),
+      MarketplaceItem.countDocuments({ status: 'sold' })
+    ]);
+    res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: DELETE MARKETPLACE LISTING ──────────────────────────────────────
+router.delete('/marketplace/:id', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = user && (user.isAdmin || user.isModerator);
+    if (!isAdmin && item.seller.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+    await item.deleteOne();
+    res.json({ message: 'Listing deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: MY LOST & FOUND POSTS ───────────────────────────────────────────
+router.get('/lostitems/mine', authenticate, async (req, res) => {
+  try {
+    const items = await LostItem.find({ owner: req.userId })
+      .sort({ createdAt: -1 })
+      .select('-images');
+    res.json({ items });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── PUBLIC: RESOLVED/FOUND LOST ITEMS ──────────────────────────────────────
+router.get('/lostitems/resolved', optionalAuth, async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip  = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      LostItem.find({ status: 'resolved' })
+        .sort({ resolvedAt: -1 })
+        .skip(skip).limit(limit)
+        .select('-images')
+        .populate('owner', 'name'),
+      LostItem.countDocuments({ status: 'resolved' })
+    ]);
+    res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ─── OWNER: DELETE LOST & FOUND ITEM ────────────────────────────────────────
+router.delete('/lostitems/:id', authenticate, async (req, res) => {
+  try {
+    const lost = await LostItem.findById(req.params.id);
+    if (!lost) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = user && (user.isAdmin || user.isModerator);
+    if (!isAdmin && lost.owner.toString() !== req.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+    await lost.deleteOne();
+    res.json({ message: 'Item deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
   }
 });
 
