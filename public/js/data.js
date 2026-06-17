@@ -92,7 +92,18 @@ window.checkForSketchyInput = function(text, type = 'comment') {
 
   // Obvious script / event handler / data URL injection attempts
   if (/<script|javascript:|on\w+\s*=|data:text\/html/i.test(t)) {
-    showToast('Please don\'t include scripts or code in comments.', 'error');
+    const xssJokes = [
+      'Nice try, hacker man 👀',
+      'lmaooo bro really tried to XSS a community app',
+      'Your \'hacking\' has been logged and nobody is impressed',
+      'Script kiddie detected 🚨',
+      'That\'s cute. Really.',
+      'Sir this is a Milledgeville traffic app',
+      'We\'ve notified the cyber police 👮',
+      'Error 1337: Skill issue detected',
+    ];
+    const joke = xssJokes[Math.floor(Math.random() * xssJokes.length)];
+    showToast(joke, 'error');
     return true;
   }
 
@@ -5794,6 +5805,16 @@ window.addOwnerEvent = async function() {
       document.getElementById('eventTitle').value = '';
       document.getElementById('eventDate').value = '';
       document.getElementById('eventDesc').value = '';
+      document.getElementById('eventLocation').value = '';
+
+      // ── Keep the events-page cache in sync so the new event shows up
+      // immediately when the user navigates there, without a full refetch.
+      if (window._allEvents) {
+        window._allEvents.push(res);
+      } else {
+        window._allEvents = [res];
+      }
+
       loadOwnerDashboard(document.getElementById('content'));
     }
   } catch (e) {
@@ -6928,7 +6949,12 @@ window.showMarketplaceDetail = async function(id) {
             </div>` : ''}
 
           <!-- Footer Buttons -->
-          <div class="p-6 border-t border-white/10 flex gap-3">
+          <div class="p-6 border-t border-white/10 flex gap-3 flex-wrap">
+            ${!isSeller && currentUser && item.seller ? `
+            <button onclick="showComposeMessageModal('${esc(String(item.seller._id || item.seller))}', '${esc(item.seller.name || 'Seller')}')" 
+                    class="flex-1 py-4 bg-sky-600 hover:bg-sky-500 text-white rounded-3xl font-semibold transition">
+              💬 Message Seller
+            </button>` : ''}
             <button onclick="shareContent('market', '${esc(item.title)}', '$${item.price}')" 
                     class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
               🔗 Share
@@ -8640,7 +8666,12 @@ window.showLostDetail = async function(id) {
       </div>` : ''}
 
     <!-- Footer -->
-    <div class="p-6 border-t border-white/10 flex gap-3">
+    <div class="p-6 border-t border-white/10 flex gap-3 flex-wrap">
+  ${!isOwner && currentUser && item.owner ? `
+  <button onclick="showComposeMessageModal('${esc(String(item.owner._id || item.owner))}', '${esc(item.owner.name || 'Poster')}')" 
+          class="flex-1 py-4 bg-sky-600 hover:bg-sky-500 text-white rounded-3xl font-semibold transition">
+    💬 Message Poster
+  </button>` : ''}
   <button onclick="shareContent('lost', '${esc(item.title)}')" 
           class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-3xl font-semibold transition">
     🔗 Share

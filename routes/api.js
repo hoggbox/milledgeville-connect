@@ -349,7 +349,7 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
 
     // ─── SANITIZE INPUT ─────────────────────────────────────────────────────
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { text, images, location } = clean;
     // ────────────────────────────────────────────────────────────────────────
 
@@ -1179,7 +1179,7 @@ router.get('/messages/conversation/:otherUserId', authenticate, async (req, res)
 
 router.post('/messages', authenticate, async (req, res) => {
   try {
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { receiverId, text } = clean;
     if (!receiverId || !text?.trim()) 
       return res.status(400).json({ message: 'Receiver and message text required' });
@@ -1492,7 +1492,7 @@ router.post('/lostitems', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, images, location, type, itemType, isPet, date } = clean;
 
     const item = await LostItem.create({
@@ -1588,7 +1588,7 @@ router.put('/lostitems/:id', authenticate, async (req, res) => {
     if (lost.owner.toString() !== req.userId)
       return res.status(403).json({ message: 'Not authorized' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, type, isPet, location, date, images } = clean;
 
     if (title)                              lost.title       = title.trim();
@@ -1672,7 +1672,7 @@ router.post('/marketplace', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, price, images, category, condition, homeNotifDetails } = clean;
 
     const item = await MarketplaceItem.create({
@@ -1786,7 +1786,7 @@ router.put('/marketplace/:id', authenticate, async (req, res) => {
     if (item.seller.toString() !== req.userId)
       return res.status(403).json({ message: 'Not authorized' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, price, category, condition, images } = clean;
 
     if (title)             item.title       = title.trim();
@@ -2362,7 +2362,7 @@ router.get('/business/:id/reviews', optionalAuth, async (req, res) => {
 
 router.post('/business/:id/reviews', authenticate, async (req, res) => {
   try {
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { rating, title, body } = clean;
     if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ message: 'Rating 1-5 required' });
@@ -2425,7 +2425,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     const shoutout = await Shoutout.findById(req.params.id);
     if (!shoutout) return res.status(404).json({ message: 'Not found' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
 
     // image may be a GIF URL (from Giphy picker) or a base64 data-URL (photo upload)
     const commentImage = (clean.image || req.body.image || '').trim() || undefined;
@@ -2469,7 +2469,7 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
     const comment  = shoutout.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const reply = { 
       text: (clean.text || '').trim(), 
       author: user.name, 
@@ -2612,7 +2612,7 @@ router.post('/news', authenticate, async (req, res) => {
     if (!isAdmin && !user.canPostNews)
       return res.status(403).json({ message: 'Not authorized to post news' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, summary, content, images } = clean;
 
     if (!title || !summary || !content)
@@ -2691,7 +2691,7 @@ router.post('/news/:id/comments', authenticate, async (req, res) => {
     const article = await News.findById(req.params.id);
     if (!article) return res.status(404).json({ message: 'Not found' });
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const commentImage = (clean.image || req.body.image || '').trim() || undefined;
     const comment = {
       text:     (clean.text || '').trim(),
@@ -2736,7 +2736,7 @@ router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, r
     if (!article) return res.status(404).json({ message: 'Not found' });
     const comment = article.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const reply = { text: (clean.text || '').trim(), author: user.name, authorId: user._id };
     if (!reply.text) return res.status(400).json({ message: 'Reply cannot be empty' });
     comment.replies.push(reply);
@@ -3333,7 +3333,7 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only verified business owners can post home listings' });
     }
 
-    const clean = sanitizeContent(req.body, { userId: req.userId, ip: req.ip || req.headers['x-forwarded-for'] });
+    const clean = sanitizeContent(req.body, { userId: req.userId });
     const { title, description, price, condition, address, sendNotify } = clean;
 
     if (!title?.trim()) return res.status(400).json({ message: 'Title is required' });
@@ -3913,8 +3913,7 @@ function sanitizeContent(fields = {}, meta = {}) {
 
         if (suspicious.some(p => decoded.includes(p))) {
           const userId = meta.userId || 'unknown';
-          const ip     = meta.ip     || 'unknown';
-          console.warn(`[SECURITY] XSS attempt blocked | user: ${userId} | ip: ${ip} | field: "${key}" | payload: ${val.substring(0, 300)}`);
+          console.warn(`[SECURITY] XSS attempt blocked | user: ${userId} | field: "${key}" | payload: ${val.substring(0, 300)}`);
           const xssJokes = [
             'Nice try, hacker man 👀',
             'lmaooo bro really tried to XSS a community app',
