@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join Closed Testing — Milledgeville Connect</title>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0f1e;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 20px 80px;
+    }
+
+    .container {
+      max-width: 620px;
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+      font-weight: 700;
+      font-size: 18px;
+      color: #34d399;
+      text-decoration: none;
+    }
+    .brand-dot { width: 10px; height: 10px; border-radius: 50%; background: #34d399; }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: #f1f5f9;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 15px;
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+
+    .info-box {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .info-box h3 {
+      color: #f1f5f9;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+    .info-box ul {
+      padding-left: 20px;
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .form-card {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 20px;
+      padding: 28px;
+    }
+    .form-card h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 6px;
+    }
+    .form-card .form-desc {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+
+    .field { margin-bottom: 18px; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    label .req { color: #f87171; margin-left: 2px; }
+
+    input, select, textarea {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font-size: 15px;
+      color: #e2e8f0;
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #334155; }
+    textarea { resize: vertical; min-height: 100px; }
+
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: #059669;
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .submit-btn:hover:not(:disabled) { background: #047857; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .status {
+      display: none;
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .status.success {
+      display: block;
+      background: #052e16;
+      border: 1px solid #166534;
+      color: #86efac;
+    }
+    .status.error {
+      display: block;
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+    }
+
+    .footer-note {
+      margin-top: 32px;
+      font-size: 13px;
+      color: #475569;
+      text-align: center;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Brand -->
+    <a href="https://www.milledgevilleconnect.com" class="brand">
+      <div class="brand-dot"></div>
+      Milledgeville Connect
+    </a>
+
+    <h1>Join Closed Testing</h1>
+    <p class="subtitle">
+      Help us test the app before we open it to everyone. Your feedback will directly shape the final version.
+    </p>
+
+    <!-- Why we need testers -->
+    <div class="info-box">
+      <h3>Why We Need Testers</h3>
+      <p style="color:#94a3b8; font-size:14px; line-height:1.6;">
+        We're getting ready to release Milledgeville Connect publicly. Before we do, we want real people 
+        using it on real phones to catch bugs, improve the experience, and make sure everything works smoothly 
+        for the whole community.
+      </p>
+    </div>
+
+    <!-- What you'll test -->
+    <div class="info-box">
+      <h3>What You'll Be Testing</h3>
+      <ul>
+        <li>Push notifications (traffic alerts, deals, events, messages)</li>
+        <li>Posting and interacting with Shoutouts, Marketplace &amp; Lost &amp; Found</li>
+        <li>Business features (if you're a local business owner)</li>
+        <li>Overall stability and performance on real devices</li>
+      </ul>
+    </div>
+
+    <!-- How to join -->
+    <div class="info-box">
+      <h3>How to Join</h3>
+      <ol style="color:#94a3b8; font-size:14px; line-height:1.7; padding-left:20px;">
+        <li>Fill out the form below with your Gmail address</li>
+        <li>I’ll manually add you to the closed test in Google Play (usually within 24–48 hours)</li>
+        <li>You’ll receive an email from Google Play with a link to join</li>
+        <li>Install the app and use it normally</li>
+        <li>Report any bugs or issues you find</li>
+      </ol>
+    </div>
+
+    <!-- How to find Gmail -->
+    <div class="info-box">
+      <h3>How to Find Your Gmail Address</h3>
+      <p style="color:#94a3b8; font-size:14px;">
+        Open the <strong>Gmail app</strong> → tap your profile picture in the top right. 
+        Your email address will be shown at the top. <strong>You must use a Gmail account</strong> to join Google Play closed testing.
+      </p>
+    </div>
+
+    <!-- Enrollment Form -->
+    <div class="form-card">
+      <h2>Enrollment Form</h2>
+      <p class="form-desc">Fill this out and I’ll add you to the closed test.</p>
+
+      <form id="enrollForm">
+        <div class="field">
+          <label>Your Name <span class="req">*</span></label>
+          <input type="text" id="fromName" placeholder="John Doe" required>
+        </div>
+
+        <div class="field">
+          <label>Your Gmail Address <span class="req">*</span></label>
+          <input type="email" id="fromEmail" placeholder="you@gmail.com" required>
+        </div>
+
+        <div class="field">
+          <label>Main Android Device <span class="req">*</span></label>
+          <select id="device" required>
+            <option value="">— Select your device —</option>
+            <option value="Samsung Galaxy">Samsung Galaxy</option>
+            <option value="Google Pixel">Google Pixel</option>
+            <option value="Motorola">Motorola</option>
+            <option value="OnePlus">OnePlus</option>
+            <option value="Other Android">Other Android device</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Anything else? (optional)</label>
+          <textarea id="notes" placeholder="Any specific devices you have, or areas you're happy to test..."></textarea>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          Submit Enrollment
+        </button>
+      </form>
+
+      <div class="status" id="statusMsg"></div>
+    </div>
+
+    <p class="footer-note">
+      After submitting, I’ll review and add you manually. You’ll get an email from Google Play when you're approved.
+    </p>
+
+  </div>
+
+  <script>
+    // === EMAILJS CONFIG (same as your help form) ===
+    const EMAILJS_PUBLIC_KEY  = '9xv5r_U4Medg1LdDk';
+    const EMAILJS_SERVICE_ID  = 'service_6zvqsgr';
+    const EMAILJS_TEMPLATE_ID = 'template_fcfyuba'; // ← You may want to create a new template for this
+
+    emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+    document.getElementById('enrollForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const btn    = document.getElementById('submitBtn');
+      const status = document.getElementById('statusMsg');
+
+      const name   = document.getElementById('fromName').value.trim();
+      const email  = document.getElementById('fromEmail').value.trim();
+      const device = document.getElementById('device').value;
+      const notes  = document.getElementById('notes').value.trim();
+
+      if (!name || !email || !device) {
+        status.className = 'status error';
+        status.textContent = 'Please fill in all required fields.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+      status.className = 'status';
+
+      try {
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          from_name:  name,
+          from_email: email,
+          device:     device,
+          notes:      notes || 'No additional notes',
+          sent_at:    new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
+        });
+
+        status.className = 'status success';
+        status.innerHTML = `✅ <strong>Enrollment received!</strong><br>Thank you, ${name}. I'll add you to the closed test and email you the link soon.`;
+        document.getElementById('enrollForm').reset();
+
+      } catch (err) {
+        console.error(err);
+        status.className = 'status error';
+        status.innerHTML = `❌ Something went wrong. Please email me directly at <a href="mailto:milledgevilleconnect@gmail.com" style="color:#fca5a5">milledgevilleconnect@gmail.com</a>`;
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Submit Enrollment';
+    });
+  </script>
+</body>
+</html>
