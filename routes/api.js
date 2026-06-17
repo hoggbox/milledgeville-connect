@@ -50,47 +50,6 @@ const SpotlightAd = mongoose.models.SpotlightAd || mongoose.model('SpotlightAd',
 //   3. Drop this entire block above the `module.exports = router;` line
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── SSE: REAL-TIME SHOUTOUT STREAM ───────────────────────────────────────────
-// Keeps track of every connected client listening on GET /api/shoutouts/stream
-const _sseShoutoutClients = new Set();
-
-/**
- * Push a JSON event to every connected SSE client on the shoutout stream.
- * @param {string} eventName  - SSE event name (e.g. 'new-shoutout', 'still-there')
- * @param {object} payload    - Serialisable object; sent as the `data:` field
- */
-function broadcastShoutoutSSE(eventName, payload) {
-  const line = `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
-  for (const res of _sseShoutoutClients) {
-    try { res.write(line); } catch (_) { _sseShoutoutClients.delete(res); }
-  }
-}
-
-// GET /api/shoutouts/stream  — SSE endpoint (no auth required so guests see live updates too)
-router.get('/shoutouts/stream', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering if present
-  res.flushHeaders();
-
-  // Send an initial heartbeat so the client knows it's connected
-  res.write(': connected\n\n');
-
-  // Keep-alive ping every 25 s (prevents proxies from closing idle connections)
-  const heartbeat = setInterval(() => {
-    try { res.write(': ping\n\n'); } catch (_) { /* client gone */ }
-  }, 25000);
-
-  _sseShoutoutClients.add(res);
-
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    _sseShoutoutClients.delete(res);
-  });
-});
-// ──────────────────────────────────────────────────────────────────────────────
-
 // ─── SPAM DETECTION CONSTANTS ─────────────────────────────────────────────────
 const SPAM_WINDOW_MS    = 5 * 60 * 1000; // 5-minute rolling window
 const SPAM_POST_LIMIT   = 5;             // 5 posts inside that window → muted
@@ -479,12 +438,6 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
       },
       { type: 'shoutout', imageUrl: shoutoutThumb }
     );
-
-    // ── SSE: push new shoutout to every connected client in real time ──────────
-    // Populate authorId so the client has the same shape as the GET /shoutouts response
-    const populated = await shoutout.populate('authorId', 'name avatar');
-    broadcastShoutoutSSE('new-shoutout', populated.toObject());
-    // ──────────────────────────────────────────────────────────────────────────
 
     res.json(shoutout);
   } catch (err) {
@@ -3861,15 +3814,6 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
     }
 
     await shoutout.save();
-
-    // ── SSE: push updated count to every connected client ─────────────────────
-    broadcastShoutoutSSE('still-there', {
-      id: shoutout._id.toString(),
-      stillThereCount: voteCount,
-      extended,
-      expiresAt: shoutout.expiresAt
-    });
-    // ──────────────────────────────────────────────────────────────────────────
 
     res.json({
       stillThereCount: voteCount,

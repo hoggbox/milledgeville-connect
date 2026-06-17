@@ -7541,63 +7541,58 @@ function renderLostItemsPage() {
   if (paginated.length === 0) {
     html = `<p class="text-white/40 text-center py-16">No items found.</p>`;
   } else {
-    html = paginated.map(item => {
-      const isLost = item.type === 'lost';
-      const typeStyle = isLost
-        ? 'background:rgba(239,68,68,0.2);color:#fca5a5;border:1px solid rgba(239,68,68,0.35);'
-        : 'background:rgba(52,211,153,0.2);color:#6ee7b7;border:1px solid rgba(52,211,153,0.35);';
-      const accentBar = isLost
-        ? 'background:linear-gradient(90deg,#ef4444,#f97316);'
-        : 'background:linear-gradient(90deg,#10b981,#34d399);';
-
-      return `
-      <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')"
-           class="sc cursor-pointer" style="overflow:hidden;">
-        <!-- Accent bar -->
-        <div style="height:3px;${accentBar}"></div>
-
-        <div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px 12px;">
-          <!-- Thumbnail -->
-          <div style="position:relative;flex-shrink:0;">
-            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}"
-                 style="width:90px;height:90px;object-fit:cover;border-radius:14px;cursor:zoom-in;display:block;"
+    html = paginated.map(item => `
+      <div id="lost-${item._id}" onclick="showLostDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
+        <div class="flex gap-4">
+          <div class="w-24 h-24 flex-shrink-0 relative">
+            <img src="https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}" 
+                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
                  loading="lazy" alt=""
                  onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}')"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:14px;align-items:center;justify-content:center;font-size:2.5rem;">🔎</div>
+            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🔎</div>
           </div>
-
-          <!-- Content -->
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
-              <span style="font-size:11px;font-weight:800;padding:2px 10px;border-radius:20px;${typeStyle}">${(item.type || '').toUpperCase()}</span>
-              ${item.isPet ? `<span style="font-size:12px;color:#fbbf24;font-weight:600;">🐾 Pet</span>` : ''}
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="px-3 py-1 text-xs font-bold rounded-full ${item.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">
+                ${item.type.toUpperCase()}
+              </span>
+              ${item.isPet ? `<span class="text-amber-400 text-sm">🐾 Lost Pet</span>` : ''}
             </div>
-            <h3 style="margin:0;font-size:1rem;font-weight:700;line-height:1.3;color:#fff;">${esc(item.title)}</h3>
-            <p style="margin:5px 0 0;font-size:0.85rem;color:rgba(255,255,255,0.6);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(item.description)}</p>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:rgba(255,255,255,0.45);">
-              <span>📍 ${esc(item.location || 'Unknown')}</span>
+            
+            <h3 class="font-semibold text-lg mt-2">${esc(item.title)}</h3>
+            <p class="text-white/70 line-clamp-2">${esc(item.description)}</p>
+            
+            <div class="flex items-center gap-2 mt-4 text-xs text-white/50">
+              <span>📍 ${item.location || 'Unknown'}</span>
               <span>·</span>
               ${renderClickableUser(item.owner, item.authorName || 'Anonymous')}
               <span>·</span>
               <span>${timeAgo(item.createdAt)}</span>
             </div>
+
+            <!-- Card Actions -->
+            <div class="mt-3 flex justify-end gap-3">
+              ${currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id) ? `
+              <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')" 
+                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
+                ✏️ Edit
+              </button>` : ''}
+              <button onclick="event.stopImmediatePropagation(); shareContent('lost', '${esc(item.title)}', '${esc(item.location || '')}')" 
+                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+                🔗 Share
+              </button>
+              <button onclick="event.stopImmediatePropagation(); reportContent('lost', '${item._id}', '${esc(item.title)}')" 
+                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+                🚩 Report
+              </button>
+            </div>
           </div>
         </div>
-
-        <!-- Divider + Actions -->
-        <div class="sc-divider" style="margin:0;"></div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;padding:8px 14px 10px;">
-          ${currentUser && item.owner && String(item.owner._id || item.owner) === String(currentUser._id) ? `
-          <button onclick="event.stopImmediatePropagation(); showEditLostItemModal('${item._id}')"
-                  class="sc-react" style="font-size:12px;font-weight:700;color:#38bdf8;">✏️ Edit</button>` : ''}
-          <button onclick="event.stopImmediatePropagation(); shareContent('lost','${esc(item.title)}','${esc(item.location || '')}')"
-                  class="sc-react" style="font-size:12px;">🔗 Share</button>
-          <button onclick="event.stopImmediatePropagation(); reportContent('lost','${item._id}','${esc(item.title)}')"
-                  class="sc-react" style="font-size:12px;color:rgba(239,68,68,0.7);">🚩 Report</button>
-        </div>
-      </div>`;
-    }).join('');
+      </div>
+    `).join('');
   }
 
   container.innerHTML = html;
@@ -7804,55 +7799,50 @@ async function renderMarketplacePage() {
   let html = '<div class="space-y-4">';
 
   pageItems.forEach(item => {
-    const conditionColor = {
-      'New': 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-      'Like New': 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
-      'Good': 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
-      'Fair': 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-      'Poor': 'bg-red-500/20 text-red-300 border border-red-500/30',
-    }[item.condition] || 'bg-white/10 text-white/60';
-
     html += `
-      <div onclick="showMarketplaceDetail('${item._id}')"
-           class="sc cursor-pointer" style="overflow:hidden;">
-        <div style="display:flex;gap:14px;align-items:flex-start;padding:16px 16px 12px;">
-          <!-- Thumbnail -->
-          <div style="position:relative;flex-shrink:0;">
-            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}"
-                 style="width:90px;height:90px;object-fit:cover;border-radius:14px;cursor:zoom-in;display:block;"
+      <div onclick="showMarketplaceDetail('${item._id}')" 
+           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition active:scale-[0.98]">
+        <div class="flex gap-4">
+          <div class="w-24 h-24 flex-shrink-0 relative">
+            <img src="https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}" 
+                 class="w-24 h-24 object-cover rounded-2xl cursor-zoom-in" 
                  loading="lazy" alt=""
                  onclick="openThumbViewer(event,'https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}')"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:14px;align-items:center;justify-content:center;font-size:2.5rem;">🛒</div>
+            <div class="w-24 h-24 bg-white/10 rounded-2xl items-center justify-center text-5xl hidden" style="display:none">🛒</div>
           </div>
-
-          <!-- Content -->
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-              <h3 style="margin:0;font-size:1rem;font-weight:700;line-height:1.3;color:#fff;">${esc(item.title)}</h3>
-              <span style="font-size:1.25rem;font-weight:800;color:#34d399;white-space:nowrap;flex-shrink:0;">$${item.price}</span>
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start">
+              <h3 class="font-semibold text-lg leading-tight pr-2">${esc(item.title)}</h3>
+              <p class="text-2xl font-bold text-emerald-400 whitespace-nowrap">$${item.price}</p>
             </div>
-            <p style="margin:5px 0 0;font-size:0.85rem;color:rgba(255,255,255,0.6);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(item.description || '')}</p>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap;">
-              <span class="${conditionColor}" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">${esc(item.condition)}</span>
-              <span style="font-size:11px;color:rgba(255,255,255,0.4);">·</span>
+            <p class="text-white/70 line-clamp-2 mt-1">${esc(item.description || '')}</p>
+            
+            <div class="flex items-center gap-2 mt-4 text-xs text-white/60">
+              <span class="px-3 py-1 bg-white/10 rounded-full">${item.condition}</span>
+              <span>${timeAgo(item.createdAt)}</span>
+              <span class="text-white/40">•</span>
               ${renderClickableUser(item.seller)}
-              <span style="font-size:11px;color:rgba(255,255,255,0.4);">·</span>
-              <span style="font-size:11px;color:rgba(255,255,255,0.4);">${timeAgo(item.createdAt)}</span>
+            </div>
+
+            <!-- Card Actions -->
+            <div class="mt-3 flex justify-end gap-3">
+              ${currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id) ? `
+              <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
+                      class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition font-semibold">
+                ✏️ Edit
+              </button>` : ''}
+              <button onclick="event.stopImmediatePropagation(); shareContent('market', '${esc(item.title)}', '$${item.price}')"
+                      class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
+                🔗 Share
+              </button>
+              <button onclick="event.stopImmediatePropagation(); reportContent('market', '${item._id}', '${esc(item.title)}')"
+                      class="text-xs text-red-400 hover:text-red-500 flex items-center gap-1 transition">
+                🚩 Report
+              </button>
             </div>
           </div>
-        </div>
-
-        <!-- Divider + Actions -->
-        <div class="sc-divider" style="margin:0;"></div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;padding:8px 14px 10px;">
-          ${currentUser && item.seller && String(item.seller._id || item.seller) === String(currentUser._id) ? `
-          <button onclick="event.stopImmediatePropagation(); showEditMarketplaceModal('${item._id}')"
-                  class="sc-react" style="font-size:12px;font-weight:700;color:#38bdf8;">✏️ Edit</button>` : ''}
-          <button onclick="event.stopImmediatePropagation(); shareContent('market','${esc(item.title)}','$${item.price}')"
-                  class="sc-react" style="font-size:12px;">🔗 Share</button>
-          <button onclick="event.stopImmediatePropagation(); reportContent('market','${item._id}','${esc(item.title)}')"
-                  class="sc-react" style="font-size:12px;color:rgba(239,68,68,0.7);">🚩 Report</button>
         </div>
       </div>`;
   });
