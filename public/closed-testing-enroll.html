@@ -191,17 +191,17 @@
       </ul>
     </div>
 
-    <!-- How to join -->
-    <div class="info-box">
-      <h3>How to Join</h3>
-      <ol style="color:#94a3b8; font-size:14px; line-height:1.7; padding-left:20px;">
-        <li>Fill out the form below with your Gmail address</li>
-        <li>I’ll manually add you to the closed test in Google Play (usually within 24–48 hours)</li>
-        <li>You’ll receive an email from Google Play with a link to join</li>
-        <li>Install the app and use it normally</li>
-        <li>Report any bugs or issues you find</li>
-      </ol>
-    </div>
+<!-- How to Join section -->
+<div class="info-box">
+  <h3>How to Join</h3>
+  <ol style="color:#94a3b8; font-size:14px; line-height:1.7; padding-left:20px;">
+    <li>Fill out the form below with your Gmail address</li>
+    <li>I’ll manually add you to the closed test in Google Play</li>
+    <li>You’ll receive the testing link from <strong>Google Play</strong> and/or directly from <strong>Milledgeville Connect</strong></li>
+    <li>Install the app using the link and start testing</li>
+    <li>Report any bugs or feedback you have</li>
+  </ol>
+</div>
 
     <!-- How to find Gmail -->
     <div class="info-box">
@@ -298,7 +298,12 @@
         });
 
         status.className = 'status success';
-        status.innerHTML = `✅ <strong>Enrollment received!</strong><br>Thank you, ${name}. I'll add you to the closed test and email you the link soon.`;
+        status.innerHTML = `
+  ✅ <strong>Enrollment received!</strong><br><br>
+  Thanks! I’ll add you to the closed test shortly.<br>
+  You will receive the testing link from <strong>Google Play</strong> and/or directly from <strong>Milledgeville Connect</strong>.<br>
+  Please check your spam folder if you don’t see it within 48 hours.
+`;
         document.getElementById('enrollForm').reset();
 
       } catch (err) {
