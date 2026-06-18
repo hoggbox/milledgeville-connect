@@ -2005,19 +2005,33 @@ async function loadPostNewsPage(content) {
   window._pendingNewsImages = [];
 }
 
-window.handleNewsImages = function (input) {
+window.handleNewsImages = async function (input) {
   const files = Array.from(input.files);
   if (!window._pendingNewsImages) window._pendingNewsImages = [];
+  window._isProcessingNewsImages = true;
 
-  files.forEach(file => {
-    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} is too large (max 5MB)`, 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = e => {
-      window._pendingNewsImages.push(e.target.result);
+  for (const file of files) {
+    if (file.size > 5 * 1024 * 1024) { showToast(`${file.name} is too large (max 5MB)`, 'error'); continue; }
+
+    try {
+      // FIX: same race condition found across Shoutouts/Marketplace — readAsDataURL
+      // is async and onload fires later. Previously not awaited, so submitting
+      // the article right after picking a photo could fire before
+      // window._pendingNewsImages was actually populated, posting with images: [].
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      window._pendingNewsImages.push(dataUrl);
       renderNewsImagePreviews();
-    };
-    reader.readAsDataURL(file);
-  });
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to process image', 'error');
+    }
+  }
+  window._isProcessingNewsImages = false;
   input.value = '';
 };
 
@@ -2045,6 +2059,11 @@ window.submitNewsArticle = async function () {
   const rteEl   = document.getElementById('newsRTE');
   const content = rteEl ? rteEl.innerHTML.trim() : '';
   if (!title || !summary || !content || content === '') { showToast('Title, summary, and content are required', 'error'); return; }
+
+  if (window._isProcessingNewsImages) {
+    showToast('Still processing your photos, one sec...', 'info');
+    return;
+  }
 
   const res = await apiPost('/news', {
     title,
@@ -5360,20 +5379,26 @@ window.handleBizPostImageSelect = async function(input) {
 
   try {
     const compressed = await compressImage(file, 1200, 0.80);
-    const reader = new FileReader();
-    reader.onload = e => {
-      _bizPostPendingImage = e.target.result;
-      const preview = document.getElementById('bizPostImagePreview');
-      const clearBtn = document.getElementById('bizPostImageClear');
-      if (preview) {
-        preview.innerHTML = `<img src="${_bizPostPendingImage}" class="w-full h-full object-cover rounded-2xl">`;
-        preview.classList.remove('border-dashed', 'border-white/20');
-        preview.classList.add('border-emerald-400/40');
-        preview.onclick = null; // disable re-pick tap on the preview image itself
-      }
-      if (clearBtn) clearBtn.classList.remove('hidden');
-    };
-    reader.readAsDataURL(compressed);
+    // FIX: same race condition found in Shoutouts/Marketplace/News — readAsDataURL
+    // is async, so awaiting it here guarantees _bizPostPendingImage is set
+    // before this function returns, instead of possibly still being null if
+    // the post button is tapped immediately after picking a photo.
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(compressed);
+    });
+    _bizPostPendingImage = dataUrl;
+    const preview = document.getElementById('bizPostImagePreview');
+    const clearBtn = document.getElementById('bizPostImageClear');
+    if (preview) {
+      preview.innerHTML = `<img src="${_bizPostPendingImage}" class="w-full h-full object-cover rounded-2xl">`;
+      preview.classList.remove('border-dashed', 'border-white/20');
+      preview.classList.add('border-emerald-400/40');
+      preview.onclick = null; // disable re-pick tap on the preview image itself
+    }
+    if (clearBtn) clearBtn.classList.remove('hidden');
   } catch (e) {
     showToast('Failed to process image', 'error');
   }
@@ -7227,16 +7252,31 @@ window.hideEditMarketModal = function() {
   window._editMarketImages = [];
 };
 
-window.handleEditMarketImages = function(input) {
+window.handleEditMarketImages = async function(input) {
   if (!window._editMarketImages) window._editMarketImages = [];
   const remaining = 6 - window._editMarketImages.length;
   if (remaining <= 0) { showToast('Maximum 6 photos allowed', 'error'); return; }
-  Array.from(input.files).slice(0, remaining).forEach(file => {
-    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = e => { window._editMarketImages.push(e.target.result); renderEditMarketImagePreviews(); };
-    reader.readAsDataURL(file);
-  });
+
+  window._isProcessingEditMarketImages = true;
+  for (const file of Array.from(input.files).slice(0, remaining)) {
+    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); continue; }
+    try {
+      // FIX: same race condition as the create-listing path — readAsDataURL
+      // is async, awaiting it guarantees the array is populated before save.
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      window._editMarketImages.push(dataUrl);
+      renderEditMarketImagePreviews();
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to process image', 'error');
+    }
+  }
+  window._isProcessingEditMarketImages = false;
 };
 
 function renderEditMarketImagePreviews() {
@@ -7261,6 +7301,11 @@ window.saveEditMarketplace = async function(id) {
   const category  = document.getElementById('editMarketCategory')?.value;
   const desc      = document.getElementById('editMarketDesc')?.value.trim();
   if (!title) { showToast('Title is required', 'error'); return; }
+
+  if (window._isProcessingEditMarketImages) {
+    showToast('Still processing your photos, one sec...', 'info');
+    return;
+  }
 
   const btn = document.getElementById('editMarketSaveBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -7401,16 +7446,31 @@ window.hideEditLostModal = function() {
   window._editLostImages = [];
 };
 
-window.handleEditLostImages = function(input) {
+window.handleEditLostImages = async function(input) {
   if (!window._editLostImages) window._editLostImages = [];
   const remaining = 6 - window._editLostImages.length;
   if (remaining <= 0) { showToast('Maximum 6 photos allowed', 'error'); return; }
-  Array.from(input.files).slice(0, remaining).forEach(file => {
-    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = e => { window._editLostImages.push(e.target.result); renderEditLostImagePreviews(); };
-    reader.readAsDataURL(file);
-  });
+
+  window._isProcessingEditLostImages = true;
+  for (const file of Array.from(input.files).slice(0, remaining)) {
+    if (file.size > 8 * 1024 * 1024) { showToast(`${file.name} is too large (max 8MB)`, 'error'); continue; }
+    try {
+      // FIX: same race condition as the other image upload paths — readAsDataURL
+      // is async, awaiting it guarantees the array is populated before save.
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      window._editLostImages.push(dataUrl);
+      renderEditLostImagePreviews();
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to process image', 'error');
+    }
+  }
+  window._isProcessingEditLostImages = false;
 };
 
 function renderEditLostImagePreviews() {
@@ -7432,6 +7492,11 @@ window.saveEditLostItem = async function(id) {
   const title       = document.getElementById('editLostTitle')?.value.trim();
   const description = document.getElementById('editLostDesc')?.value.trim();
   if (!title || !description) { showToast('Title and description are required', 'error'); return; }
+
+  if (window._isProcessingEditLostImages) {
+    showToast('Still processing your photos, one sec...', 'info');
+    return;
+  }
 
   const btn = document.getElementById('editLostSaveBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -10456,25 +10521,30 @@ window.handleOwnerLogoUpload = async function(input) {
     // Create a square logo (400x400)
     const squareLogo = await createSquareLogo(file, 400);
 
-    const reader = new FileReader();
-    reader.onload = e => {
-      pendingOwnerLogo = e.target.result;
+    // FIX: same race condition as the other image upload paths — readAsDataURL
+    // is async, awaiting it guarantees pendingOwnerLogo is set before this
+    // function returns, instead of possibly still being null at save time.
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(squareLogo);
+    });
+    pendingOwnerLogo = dataUrl;
 
-      // Update preview (square)
-      const preview = document.getElementById('ownerLogoPreview');
-      if (preview) {
-        preview.innerHTML = `
-          <img src="${pendingOwnerLogo}" 
-               class="w-full h-full object-cover rounded-2xl" 
-               style="aspect-ratio: 1 / 1;" 
-               alt="Logo Preview">`;
-      }
+    // Update preview (square)
+    const preview = document.getElementById('ownerLogoPreview');
+    if (preview) {
+      preview.innerHTML = `
+        <img src="${pendingOwnerLogo}" 
+             class="w-full h-full object-cover rounded-2xl" 
+             style="aspect-ratio: 1 / 1;" 
+             alt="Logo Preview">`;
+    }
 
-      // Show the save button now that a logo is staged
-      const saveBtn = document.getElementById('ownerLogoSaveBtn');
-      if (saveBtn) saveBtn.classList.remove('hidden');
-    };
-    reader.readAsDataURL(squareLogo);
+    // Show the save button now that a logo is staged
+    const saveBtn = document.getElementById('ownerLogoSaveBtn');
+    if (saveBtn) saveBtn.classList.remove('hidden');
 
   } catch (e) {
     console.error(e);
