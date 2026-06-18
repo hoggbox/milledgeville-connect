@@ -3293,10 +3293,12 @@ window.openShoutoutImageViewer = function (shoutoutId, startIndex) {
 
 // ─── PHOTO UPLOAD FOR SHOUTOUTS ───────────────────────────────────────────────
 let _pendingShoutoutImages = [];
+let _isProcessingShoutoutImages = false;
 
 window.handleShoutoutImages = async function (input) {
   const files = Array.from(input.files);
   if (!_pendingShoutoutImages) _pendingShoutoutImages = [];
+  _isProcessingShoutoutImages = true;
 
   for (let file of files) {
     if (file.size > 8 * 1024 * 1024) {
@@ -3307,16 +3309,28 @@ window.handleShoutoutImages = async function (input) {
     try {
       showToast('Compressing image...', 'success');
       const compressed = await compressImage(file, 1100, 0.72);
-      const reader = new FileReader();
-      reader.onload = e => {
-        _pendingShoutoutImages.push(e.target.result);
-        renderShoutoutImagePreviews();
-      };
-      reader.readAsDataURL(compressed);
+
+      // FIX: readAsDataURL is async and onload fires on a later event loop turn.
+      // Previously this wasn't awaited, so hitting "Post" right after selecting
+      // a photo could fire before _pendingShoutoutImages was actually populated,
+      // sending the shoutout with images: []. Wrapping in a Promise and awaiting
+      // it guarantees the array is filled before this function returns, and
+      // before the Post button becomes usable again.
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed);
+      });
+
+      _pendingShoutoutImages.push(dataUrl);
+      renderShoutoutImagePreviews();
     } catch (e) {
       console.error(e);
+      showToast('Failed to process image', 'error');
     }
   }
+  _isProcessingShoutoutImages = false;
   input.value = '';
 };
 
@@ -3340,6 +3354,11 @@ window.postShoutoutWithPhoto = async function () {
   if (!requireAuth('Sign in to post traffic alerts.')) return;
   const input = document.getElementById('shoutoutInput');
   if (!input || !input.value.trim()) return;
+
+  if (_isProcessingShoutoutImages) {
+    showToast('Still processing your photo, one sec...', 'info');
+    return;
+  }
 
   const res = await apiPost('/shoutouts', { 
     text: input.value.trim(),
@@ -6907,6 +6926,11 @@ window.postMarketplaceItem = async function() {
     return;
   }
 
+  if (window._isProcessingMarketImages) {
+    showToast('Still processing your photos, one sec...', 'info');
+    return;
+  }
+
   const btn = document.querySelector('#marketModal button[onclick="postMarketplaceItem()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
 
@@ -7503,31 +7527,46 @@ window.postMarketplaceComment = async function(itemId) {
   }
 };
 
-window.handleMarketImages = function(input) {
+window.handleMarketImages = async function(input) {
   const files = Array.from(input.files);
   if (!window._marketImages) window._marketImages = [];
+  window._isProcessingMarketImages = true;
 
   const remaining = 6 - window._marketImages.length; // limit to 6 photos
   if (remaining <= 0) {
     showToast('Maximum 6 photos allowed', 'error');
+    window._isProcessingMarketImages = false;
     return;
   }
 
   const toProcess = files.slice(0, remaining);
 
-  toProcess.forEach(file => {
+  for (const file of toProcess) {
     if (file.size > 8 * 1024 * 1024) {
       showToast(`${file.name} is too large (max 8MB)`, 'error');
-      return;
+      continue;
     }
 
-    const reader = new FileReader();
-    reader.onload = e => {
-      window._marketImages.push(e.target.result);
+    try {
+      // FIX: same race condition as the shoutout image bug — readAsDataURL is
+      // async and onload fires later. Previously not awaited, so hitting
+      // "Post Listing" right after picking a photo could fire before
+      // window._marketImages was actually populated, posting with images: [].
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      window._marketImages.push(dataUrl);
       renderMarketImagePreviews();
-    };
-    reader.readAsDataURL(file);
-  });
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to process image', 'error');
+    }
+  }
+  window._isProcessingMarketImages = false;
+  input.value = '';
 };
 
 function renderMarketImagePreviews() {
