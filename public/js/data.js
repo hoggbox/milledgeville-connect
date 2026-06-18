@@ -1174,45 +1174,60 @@ visibleItems.forEach(item => {
     const n = item.data;
     const newsThumb = n.images && n.images[0] ? n.images[0] : null;
     html += `
-      <div onclick="openNewsArticle('${n._id}')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-        ${newsThumb ? `<img src="${newsThumb}" class="w-20 h-20 object-cover rounded-2xl flex-shrink-0 self-start" loading="lazy" alt="" onerror="this.style.display='none'">` : ''}
-        <div class="flex-1 min-w-0">
-          <span class="text-xs bg-blue-500 px-3 py-1 rounded-full">📰 NEWS</span>
-          <h4 class="font-semibold text-lg mt-2">${esc(n.title)}</h4>
-          <p class="text-white/70 line-clamp-2">${esc(n.summary || '')}</p>
-          <div class="text-xs text-white/50 mt-3">${timeAgo(n.createdAt)}</div>
+      <div onclick="openNewsArticle('${n._id}')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(96,165,250,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
+        <div style="height:3px;background:linear-gradient(90deg,#3b82f6,#6366f1);"></div>
+        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
+          ${newsThumb ? `<img src="${newsThumb}" style="width:72px;height:72px;object-fit:cover;border-radius:12px;flex-shrink:0;" loading="lazy" alt="" onerror="this.style.display='none'">` : `<div style="width:48px;height:48px;background:rgba(59,130,246,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📰</div>`}
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#60a5fa;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);padding:2px 8px;border-radius:999px;">News</span>
+            <h4 style="font-weight:700;font-size:15px;line-height:1.35;margin:6px 0 4px;color:#fff;">${esc(n.title)}</h4>
+            <p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0 0 6px;">${esc(n.summary || '')}</p>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">${n.authorName || 'Staff'} · ${timeAgo(n.createdAt)}</div>
+          </div>
         </div>
       </div>`;
   } else if (item.type === 'event') {
     const e = item.data;
     html += `
-      <div onclick="navigate('events')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-        <div class="flex-1">
-          <span class="text-xs bg-amber-500 px-3 py-1 rounded-full">📅 EVENT</span>
-          <h4 class="font-semibold text-lg mt-2">${esc(e.title)}</h4>
-          <p class="text-white/70">${esc(e.description || '')}</p>
-          <div class="text-xs text-white/50 mt-3">${formatDate(e.date)}</div>
+      <div onclick="navigate('events')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(251,191,36,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
+        <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#f97316);"></div>
+        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
+          <div style="width:48px;height:48px;background:rgba(245,158,11,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📅</div>
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#fbbf24;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);padding:2px 8px;border-radius:999px;">Event</span>
+            <h4 style="font-weight:700;font-size:15px;line-height:1.35;margin:6px 0 4px;color:#fff;">${esc(e.title)}</h4>
+            ${e.description ? `<p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0 0 6px;">${esc(e.description)}</p>` : ''}
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">📅 ${formatDate(e.date)}</div>
+          </div>
         </div>
       </div>`;
   } else if (item.type === 'deal') {
     const d = item.data;
     html += `
-      <div onclick="navigate('deals')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-        <div class="flex-1">
-          <span class="text-xs bg-red-500 px-3 py-1 rounded-full">🔥 DEAL</span>
-          <h4 class="font-semibold text-lg mt-2">${esc(d.title)}</h4>
-          <p class="text-white/70">${esc(d.description || '')}</p>
-          <div class="text-xs text-white/50 mt-3">${timeAgo(d.createdAt)}</div>
+      <div onclick="navigate('deals')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
+        <div style="height:3px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
+        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
+          <div style="width:48px;height:48px;background:rgba(239,68,68,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🔥</div>
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);padding:2px 8px;border-radius:999px;">Deal</span>
+            <h4 style="font-weight:700;font-size:15px;line-height:1.35;margin:6px 0 4px;color:#fff;">${esc(d.title)}</h4>
+            ${d.description ? `<p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0 0 6px;">${esc(d.description)}</p>` : ''}
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">${d.business?.name ? `${esc(d.business.name)} · ` : ''}${timeAgo(d.createdAt)}</div>
+          </div>
         </div>
       </div>`;
   } else if (item.type === 'shoutout') {
     const s = item.data;
     html += `
-      <div onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-        <div class="flex-1">
-          <span class="text-xs bg-orange-500 px-3 py-1 rounded-full">🚦 TRAFFIC ALERT</span>
-          <h4 class="font-semibold text-lg mt-2 line-clamp-2">${esc(s.text)}</h4>
-          <div class="text-xs text-white/50 mt-3">by ${esc(s.author || s.authorName || 'Community')} · ${timeAgo(s.createdAt)}</div>
+      <div onclick="navigate('shoutouts')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(52,211,153,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
+        <div style="height:3px;background:linear-gradient(90deg,#10b981,#34d399);"></div>
+        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
+          <div style="width:48px;height:48px;background:rgba(16,185,129,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🚦</div>
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#34d399;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);padding:2px 8px;border-radius:999px;">Traffic Alert</span>
+            <h4 style="font-weight:600;font-size:14px;line-height:1.45;margin:6px 0 6px;color:rgba(255,255,255,0.9);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${esc(s.text)}</h4>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">by ${esc(s.author || s.authorName || 'Community')} · ${timeAgo(s.createdAt)}</div>
+          </div>
         </div>
       </div>`;
   }
@@ -1813,17 +1828,20 @@ async function loadNewsPage(content) {
     if (!container) return;
     container.innerHTML = articles.map(n => `
       <div onclick="openNewsArticle('${n._id}')"
-           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition flex gap-4">
-        ${n.images?.[0]
-          ? `<img src="${n.images[0]}" class="w-24 h-24 object-cover rounded-2xl flex-shrink-0" loading="lazy" alt="">`
-          : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">📰</div>`}
-        <div class="flex-1 min-w-0">
-          <p class="font-semibold leading-tight line-clamp-2">${esc(n.title)}</p>
-          <p class="text-white/60 text-sm mt-1 line-clamp-2">${esc(n.summary || '')}</p>
-          <div class="flex items-center gap-2 mt-3 text-xs text-white/40">
-            <span>${n.authorName || 'Staff'}</span>
-            <span>·</span>
-            <span>${timeAgo(n.createdAt)}</span>
+           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(96,165,250,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
+        <div style="height:3px;background:linear-gradient(90deg,#3b82f6,#6366f1);"></div>
+        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
+          ${n.images?.[0]
+            ? `<img src="${n.images[0]}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;flex-shrink:0;" loading="lazy" alt="">`
+            : `<div style="width:56px;height:56px;background:rgba(59,130,246,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">📰</div>`}
+          <div style="flex:1;min-width:0;">
+            <p style="font-weight:700;font-size:15px;line-height:1.35;color:#fff;margin:0 0 5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(n.title)}</p>
+            <p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0 0 8px;">${esc(n.summary || '')}</p>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.35);">
+              <span>${n.authorName || 'Staff'}</span>
+              <span>·</span>
+              <span>${timeAgo(n.createdAt)}</span>
+            </div>
           </div>
         </div>
       </div>`).join('');
@@ -4256,19 +4274,21 @@ function _renderDealsHTML(deals, container) {
   } else {
     html = filtered.map(deal => `
       <div onclick="showDealDetail('${deal._id}')" 
-           class="bg-white/10 hover:bg-white/15 rounded-3xl p-5 cursor-pointer transition">
-        <div class="flex justify-between items-start">
-          <div>
-            <h3 class="font-semibold text-lg">${deal.title}</h3>
-            <p class="text-white/70 line-clamp-2 mt-1">${deal.description || ''}</p>
+           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
+        <div style="height:3px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
+        <div style="padding:16px 18px;">
+          <div class="flex justify-between items-start gap-3">
+            <div class="flex-1 min-w-0">
+              <h3 style="font-weight:700;font-size:16px;line-height:1.35;color:#fff;margin:0 0 4px;">${deal.title}</h3>
+              <p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0;">${deal.description || ''}</p>
+            </div>
+            ${deal.business?.name ? `<span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);padding:2px 8px;border-radius:999px;flex-shrink:0;">${deal.business.name}</span>` : ''}
           </div>
-          ${deal.business?.name ? `<span class="text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full">${deal.business.name}</span>` : ''}
-        </div>
-        
-        <div class="flex items-center gap-3 mt-4 text-xs text-white/50">
-          ${deal.expires ? `<span>Expires ${formatDate(deal.expires)}</span>` : ''}
-          <span>·</span>
-          <span>Posted ${timeAgo(deal.createdAt)}</span>
+
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.4);margin-top:10px;">
+            ${deal.expires ? `<span>Expires ${formatDate(deal.expires)}</span><span>·</span>` : ''}
+            <span>Posted ${timeAgo(deal.createdAt)}</span>
+          </div>
         </div>
       </div>
     `).join('');
@@ -4479,10 +4499,6 @@ function renderEventCard(e, now) {
   const rsvpCount = e.rsvps ? e.rsvps.length : 0;
 
   // Gray out + Past badge for events that have already happened
-  const pastStyles = isPast 
-    ? 'opacity-60 grayscale-[0.3] border border-white/10' 
-    : 'border border-white/10 hover:border-emerald-500/30';
-
   const pastBadge = isPast 
     ? `<span class="text-[10px] bg-gray-500/30 text-gray-300 px-2 py-0.5 rounded-full">Past Event</span>` 
     : '';
@@ -4495,29 +4511,32 @@ function renderEventCard(e, now) {
 
   return `
     <div onclick="showEventDetail('${e._id}')" 
-         class="bg-white/10 ${pastStyles} rounded-3xl p-5 cursor-pointer transition">
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/20">${icon} ${label}</span>
-            ${pastBadge}
-          </div>
-          <h3 class="font-bold text-lg leading-snug">${e.title}</h3>
-          <p class="text-white/70 text-sm mt-1 line-clamp-2">${e.description || ''}</p>
-          
-          <div class="flex items-center gap-2 text-xs text-white/50 mt-3">
-            <span>📅 ${formatDate(e.date)}</span>
-            ${e.location ? `<span>· 📍 ${e.location}</span>` : ''}
+         style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);${isPast ? 'opacity:0.6;filter:grayscale(0.3);' : ''}" ${!isPast ? `onmouseover="this.style.borderColor='rgba(251,191,36,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'"` : ''}>
+      <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#f97316);"></div>
+      <div style="padding:16px 18px;">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#fbbf24;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);padding:2px 8px;border-radius:999px;">${icon} ${label}</span>
+              ${pastBadge}
+            </div>
+            <h3 style="font-weight:700;font-size:16px;line-height:1.35;color:#fff;margin:6px 0 4px;">${e.title}</h3>
+            <p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0;">${e.description || ''}</p>
+
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.4);margin-top:10px;">
+              <span>📅 ${formatDate(e.date)}</span>
+              ${e.location ? `<span>· 📍 ${e.location}</span>` : ''}
+            </div>
           </div>
         </div>
+
+        ${rsvpHTML}
+
+        ${rsvpCount > 0 ? `
+          <div style="font-size:11px;color:#34d399;margin-top:8px;display:flex;align-items:center;gap:4px;">
+            <span>🎟️</span> <span>${rsvpCount} going</span>
+          </div>` : ''}
       </div>
-      
-      ${rsvpHTML}
-      
-      ${rsvpCount > 0 ? `
-        <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
-          <span>🎟️</span> <span>${rsvpCount} going</span>
-        </div>` : ''}
     </div>`;
 }
 
