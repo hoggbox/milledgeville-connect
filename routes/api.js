@@ -3984,11 +3984,15 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
 
     const voteCount = voters.length + 1;
 
-    // Every time votes hit a fresh multiple of the threshold, extend expiry by 2 hours
+    // Every time votes hit a fresh multiple of the threshold, extend expiry by 2 hours.
+    // NOTE: lastBumpedAt is only touched when an extension actually happens — a single
+    // "Still There" tap should NOT bump an old post above newer ones in the feed.
+    // (Previously this was set on every vote, which caused old alerts to jump above
+    // brand-new posts in the sort order.)
     let extended = false;
     const updateFields = {
       $push: { stillThereVoters: req.userId },
-      $set:  { lastBumpedAt: new Date() }
+      $set:  {}
     };
 
     if (voteCount % STILL_THERE_THRESHOLD === 0) {
@@ -3996,8 +4000,11 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
         ? shoutout.expiresAt.getTime()
         : Date.now();
       updateFields.$set.expiresAt = new Date(base + STILL_THERE_EXTENSION_MS);
+      updateFields.$set.lastBumpedAt = new Date();
       extended = true;
     }
+
+    if (Object.keys(updateFields.$set).length === 0) delete updateFields.$set;
 
     // stillThereVoters is now declared on the Shoutout schema, so this
     // writes and persists normally without needing to bypass strict mode.
