@@ -3999,25 +3999,30 @@ router.post('/shoutouts/:id/still-there', authenticate, async (req, res) => {
       extended = true;
     }
 
-    // Use findByIdAndUpdate with $push so the field is written even if it wasn't
-    // defined in the Mongoose schema (strict mode would silently drop it on .save())
+    // stillThereVoters is now declared on the Shoutout schema, so this
+    // writes and persists normally without needing to bypass strict mode.
     const updated = await Shoutout.findByIdAndUpdate(
       req.params.id,
       updateFields,
       { new: true }
     );
 
+    // Use the count we actually got back from the database, not the
+    // pre-write estimate — if a write ever fails again, the response (and
+    // the button) should reflect that instead of falsely claiming success.
+    const savedCount = (updated.stillThereVoters || []).length;
+
     // ── SSE: push updated count to every connected client ─────────────────────
     broadcastShoutoutSSE('still-there', {
       id: shoutout._id.toString(),
-      stillThereCount: voteCount,
+      stillThereCount: savedCount,
       extended,
       expiresAt: updated.expiresAt
     });
     // ──────────────────────────────────────────────────────────────────────────
 
     res.json({
-      stillThereCount: voteCount,
+      stillThereCount: savedCount,
       bumped: true,
       extended,
       threshold: STILL_THERE_THRESHOLD,

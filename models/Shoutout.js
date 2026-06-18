@@ -41,6 +41,15 @@ const shoutoutSchema = new mongoose.Schema({
   autoHidden: { type: Boolean, default: false },
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── STILL THERE ───────────────────────────────────────────────────────────
+  stillThereVoters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── CLEAR / RESOLVED ─────────────────────────────────────────────────────
+  cleared:   { type: Boolean, default: false },
+  clearedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // ─────────────────────────────────────────────────────────────────────────
+
   expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
   createdAt: { type: Date, default: Date.now }
 });
