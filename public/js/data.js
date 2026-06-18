@@ -870,41 +870,43 @@ async function loadHomePage(content) {
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
       <!-- Today in Milledgeville (Compact) -->
-      <div style="background:linear-gradient(135deg,#065f46 0%,#0f766e 45%,#0e7490 100%);border-radius:24px;overflow:hidden;position:relative;margin-bottom:32px;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 2px 8px rgba(0,0,0,0.3);">
+      <div style="background:linear-gradient(135deg,#065f46 0%,#0f766e 45%,#0e7490 100%);border-radius:24px;position:relative;margin-bottom:32px;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 2px 8px rgba(0,0,0,0.3);">
         <!-- decorative dot grid -->
-        <div style="position:absolute;inset:0;opacity:0.07;background-image:radial-gradient(circle at 1px 1px, white 1px, transparent 0);background-size:22px 22px;pointer-events:none;"></div>
+        <div style="position:absolute;inset:0;opacity:0.07;background-image:radial-gradient(circle at 1px 1px, white 1px, transparent 0);background-size:22px 22px;pointer-events:none;border-radius:24px;"></div>
         <!-- top accent bar -->
-        <div style="height:4px;background:linear-gradient(90deg,#34d399,#22d3ee,#818cf8,#34d399);background-size:200% 100%;"></div>
+        <div style="height:4px;background:linear-gradient(90deg,#34d399,#22d3ee,#818cf8,#34d399);background-size:200% 100%;border-radius:24px 24px 0 0;"></div>
 
         <div style="padding:20px 20px 16px;position:relative;">
-          <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:12px;">
 
-            <!-- Left: Title + Date + Podcast -->
-            <div style="flex:1;min-width:0;display:flex;align-items:flex-start;gap:12px;">
-              <span style="font-size:28px;flex-shrink:0;margin-top:2px;">🌅</span>
-              <div style="min-width:0;">
-                <h1 style="font-size:21px;font-weight:800;color:#fff;margin:0;line-height:1.2;letter-spacing:-0.3px;">Today in Milledgeville</h1>
-                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;">
-                  <span style="color:rgba(167,243,208,0.9);font-size:12px;">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</span>
-                  <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')"
-                        style="display:inline-flex;align-items:center;gap:5px;background:#1DB954;color:#000;font-weight:900;font-size:11px;padding:3px 10px;border-radius:99px;cursor:pointer;box-shadow:0 2px 8px rgba(29,185,84,0.4);letter-spacing:0.3px;transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <span>🎙️</span><span>LISTEN</span>
-                  </span>
-                </div>
+          <!-- Row 1: Title + Date + Podcast -->
+          <div style="display:table;width:100%;margin-bottom:12px;">
+            <div style="display:table-cell;vertical-align:top;width:36px;">
+              <span style="font-size:28px;line-height:1;">🌅</span>
+            </div>
+            <div style="display:table-cell;vertical-align:top;padding-left:10px;">
+              <h1 style="font-size:21px;font-weight:800;color:#fff;margin:0;line-height:1.2;letter-spacing:-0.3px;">Today in Milledgeville</h1>
+              <div style="margin-top:6px;">
+                <span style="color:rgba(167,243,208,0.9);font-size:12px;margin-right:8px;">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</span>
+                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')"
+                      style="display:inline-flex;align-items:center;gap:5px;background:#1DB954;color:#000;font-weight:900;font-size:11px;padding:3px 10px;border-radius:99px;cursor:pointer;box-shadow:0 2px 8px rgba(29,185,84,0.4);letter-spacing:0.3px;">
+                  <span>🎙️</span><span>LISTEN</span>
+                </span>
               </div>
             </div>
+          </div>
 
-            <!-- Right: Weather widget (flex-shrink:0 so it never collapses, natural width from content) -->
-            <div id="weatherWidget" style="flex-shrink:0;background:rgba(255,255,255,0.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:10px 14px;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <div style="text-align:right;">
-                  <div style="font-size:28px;line-height:1;" id="weatherIcon">—</div>
-                  <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;margin-top:2px;" id="weatherTemp">—</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:11px;color:rgba(167,243,208,0.85);white-space:nowrap;" id="weatherDesc">Loading…</div>
-                  <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:4px;" id="weatherForecast"></div>
-                </div>
+          <!-- Row 2: Weather widget (full width block, no side-by-side) -->
+          <div id="weatherWidget" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:10px 14px;margin-bottom:12px;">
+            <div style="display:table;width:100%;">
+              <div style="display:table-cell;vertical-align:middle;width:44px;">
+                <div style="font-size:28px;line-height:1;" id="weatherIcon">—</div>
+              </div>
+              <div style="display:table-cell;vertical-align:middle;padding-left:8px;">
+                <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;" id="weatherTemp">—</div>
+              </div>
+              <div style="display:table-cell;vertical-align:middle;text-align:right;">
+                <div style="font-size:11px;color:rgba(167,243,208,0.85);" id="weatherDesc">Loading…</div>
+                <div style="margin-top:4px;" id="weatherForecast"></div>
               </div>
             </div>
           </div>
