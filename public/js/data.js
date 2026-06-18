@@ -870,56 +870,58 @@ async function loadHomePage(content) {
     <div class="max-w-2xl mx-auto px-2 pb-8">
 
       <!-- Today in Milledgeville (Compact) -->
-      <div class="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-5 md:p-6 mb-8 text-white overflow-hidden relative">
-        <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 80% 20%, white 1px, transparent 1px);background-size:24px 24px;"></div>
-        
-        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
-          
-          <!-- Left: Title + Date + Podcast -->
-          <div class="flex items-start gap-3 min-w-0">
-            <span class="text-3xl flex-shrink-0 mt-0.5">🌅</span>
-            <div class="min-w-0 flex-1">
-              <h1 class="text-[22px] font-bold leading-tight">Today in Milledgeville</h1>
-              
-              <div class="flex flex-wrap items-center gap-2 mt-1.5">
-                <p class="text-emerald-100 text-xs">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
-                
-                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')" 
-                      class="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] active:bg-[#169c46] text-black font-black px-3.5 py-1 rounded-2xl text-xs shadow-lg cursor-pointer transition-all active:scale-95">
-                  <span>🎙️</span>
-                  <span class="font-extrabold">LISTEN</span>
-                </span>
+      <div style="background:linear-gradient(135deg,#065f46 0%,#0f766e 45%,#0e7490 100%);border-radius:24px;overflow:hidden;position:relative;margin-bottom:32px;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 2px 8px rgba(0,0,0,0.3);">
+        <!-- decorative dot grid -->
+        <div style="position:absolute;inset:0;opacity:0.07;background-image:radial-gradient(circle at 1px 1px, white 1px, transparent 0);background-size:22px 22px;pointer-events:none;"></div>
+        <!-- top accent bar -->
+        <div style="height:4px;background:linear-gradient(90deg,#34d399,#22d3ee,#818cf8,#34d399);background-size:200% 100%;"></div>
+
+        <div style="padding:20px 20px 16px;position:relative;">
+          <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;margin-bottom:12px;">
+
+            <!-- Left: Title + Date + Podcast -->
+            <div style="display:flex;align-items:flex-start;gap:12px;min-width:0;">
+              <span style="font-size:28px;flex-shrink:0;margin-top:2px;">🌅</span>
+              <div style="min-width:0;flex:1;">
+                <h1 style="font-size:21px;font-weight:800;color:#fff;margin:0;line-height:1.2;letter-spacing:-0.3px;">Today in Milledgeville</h1>
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;">
+                  <span style="color:rgba(167,243,208,0.9);font-size:12px;">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</span>
+                  <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')"
+                        style="display:inline-flex;align-items:center;gap:5px;background:#1DB954;color:#000;font-weight:900;font-size:11px;padding:3px 10px;border-radius:99px;cursor:pointer;box-shadow:0 2px 8px rgba(29,185,84,0.4);letter-spacing:0.3px;transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <span>🎙️</span><span>LISTEN</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Weather widget -->
+            <div id="weatherWidget" style="background:rgba(255,255,255,0.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:10px 14px;min-width:110px;">
+              <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
+                <div style="text-align:right;">
+                  <div style="font-size:28px;line-height:1;" id="weatherIcon">—</div>
+                  <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;margin-top:2px;" id="weatherTemp">—</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:11px;color:rgba(167,243,208,0.85);white-space:nowrap;" id="weatherDesc">Loading…</div>
+                  <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:4px;" id="weatherForecast"></div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Right: Weather -->
-          <div id="weatherWidget" class="flex-shrink-0 bg-white/15 backdrop-blur rounded-2xl px-4 py-3 text-right self-start md:self-auto">
-            <div class="flex items-center justify-between md:justify-end gap-3">
-              <div>
-                <div class="text-3xl leading-none mb-0.5" id="weatherIcon">—</div>
-                <div class="text-2xl font-black leading-none" id="weatherTemp">—</div>
-              </div>
-              <div>
-                <div class="text-[11px] text-emerald-100" id="weatherDesc">Loading…</div>
-                <div class="flex justify-end gap-1 mt-1" id="weatherForecast"></div>
-              </div>
-            </div>
-          </div>
+          <!-- Ad Spot -->
+          <div id="todayDigest" class="w-full"></div>
         </div>
-
-        <!-- Ad Spot -->
-        <div id="todayDigest" class="w-full"></div>
       </div>
 
       <!-- Business Spotlight -->
       <div class="mb-8">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">⭐</span>
-            <h2 class="text-lg font-bold">Business Spotlight</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:32px;height:32px;background:linear-gradient(135deg,#f59e0b,#f97316);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(245,158,11,0.35);">⭐</div>
+            <h2 style="font-size:17px;font-weight:800;color:#fff;margin:0;letter-spacing:-0.2px;">Business Spotlight</h2>
           </div>
-          <button onclick="navigate('directory')" class="text-xs text-emerald-400 font-semibold flex items-center gap-1">See all directory →</button>
+          <button onclick="navigate('directory')" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size:12px;font-weight:700;padding:5px 12px;border-radius:99px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(52,211,153,0.2)'" onmouseout="this.style.background='rgba(52,211,153,0.1)'">See all →</button>
         </div>
         <div id="spotlightScroll" class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory">
           <!-- Populated by JS below -->
@@ -928,10 +930,10 @@ async function loadHomePage(content) {
 
       <!-- Hot Right Now -->
       <div class="mb-8">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">🔥</span>
-            <h2 class="text-lg font-bold">Hot Right Now</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:32px;height:32px;background:linear-gradient(135deg,#ef4444,#f97316);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(239,68,68,0.35);">🔥</div>
+            <h2 style="font-size:17px;font-weight:800;color:#fff;margin:0;letter-spacing:-0.2px;">Hot Right Now</h2>
           </div>
         </div>
 
@@ -955,13 +957,21 @@ async function loadHomePage(content) {
 
       <!-- Quick actions -->
       <div class="grid grid-cols-2 gap-3 mb-8">
-      <button onclick="navigate('shoutouts')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-      <span class="text-3xl">🚦</span>
-      <p class="font-semibold mt-3">Post Traffic Alert</p>
-      </button>
-        <button onclick="navigate('events')" class="bg-white/10 hover:bg-white/20 rounded-3xl p-6 text-left">
-          <span class="text-3xl">📅</span>
-          <p class="font-semibold mt-3">See Events</p>
+        <button onclick="navigate('shoutouts')" style="background:#1a2435;border:1px solid rgba(16,185,129,0.2);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s,transform 0.15s;box-shadow:0 4px 18px rgba(0,0,0,0.4);text-align:left;" onmouseover="this.style.borderColor='rgba(52,211,153,0.5)';this.style.boxShadow='0 8px 28px rgba(0,0,0,0.5)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(16,185,129,0.2)';this.style.boxShadow='0 4px 18px rgba(0,0,0,0.4)';this.style.transform='translateY(0)'">
+          <div style="height:3px;background:linear-gradient(90deg,#10b981,#34d399);"></div>
+          <div style="padding:16px 18px 18px;">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,rgba(16,185,129,0.25),rgba(52,211,153,0.15));border:1px solid rgba(52,211,153,0.25);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;">🚦</div>
+            <p style="font-weight:800;font-size:14px;color:#fff;margin:0;line-height:1.3;">Post Traffic<br>Alert</p>
+            <p style="font-size:11px;color:rgba(52,211,153,0.7);margin:4px 0 0;font-weight:600;">Tap to report →</p>
+          </div>
+        </button>
+        <button onclick="navigate('events')" style="background:#1a2435;border:1px solid rgba(245,158,11,0.2);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s,transform 0.15s;box-shadow:0 4px 18px rgba(0,0,0,0.4);text-align:left;" onmouseover="this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 8px 28px rgba(0,0,0,0.5)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(245,158,11,0.2)';this.style.boxShadow='0 4px 18px rgba(0,0,0,0.4)';this.style.transform='translateY(0)'">
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#f97316);"></div>
+          <div style="padding:16px 18px 18px;">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,rgba(245,158,11,0.25),rgba(249,115,22,0.15));border:1px solid rgba(251,191,36,0.25);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;">📅</div>
+            <p style="font-weight:800;font-size:14px;color:#fff;margin:0;line-height:1.3;">See<br>Events</p>
+            <p style="font-size:11px;color:rgba(251,191,36,0.7);margin:4px 0 0;font-weight:600;">Tap to browse →</p>
+          </div>
         </button>
       </div>
     </div>`;
@@ -1029,22 +1039,27 @@ function _renderSpotlight(businesses) {
   if (!sb.length) sb = [...businesses].slice(0, 8);
 
   spotEl.innerHTML = sb.map(b => {
+    const stars = b.avgRating ? '★'.repeat(Math.round(b.avgRating)) + '☆'.repeat(5 - Math.round(b.avgRating)) : '☆☆☆☆☆';
     return `
       <div onclick="showBusinessDetail('${b._id}')"
-           class="snap-center flex-shrink-0 w-56 bg-white/10 hover:bg-white/15 border border-white/10 rounded-3xl p-4 cursor-pointer transition relative">
-
-        <div class="flex items-center gap-3 mb-3">
-          ${b.logo
-            ? `<img src="${b.logo}" class="w-10 h-10 object-cover rounded-2xl flex-shrink-0" alt="">`
-            : `<div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold leading-tight text-white line-clamp-1">${b.name}</p>
-            <p class="text-xs text-white/50">${b.category?.name || ''}</p>
+           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s,transform 0.15s;box-shadow:0 4px 18px rgba(0,0,0,0.4);flex-shrink:0;width:200px;scroll-snap-align:center;"
+           onmouseover="this.style.borderColor='rgba(52,211,153,0.45)';this.style.boxShadow='0 8px 28px rgba(0,0,0,0.55)';this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 4px 18px rgba(0,0,0,0.4)';this.style.transform='translateY(0)'">
+        <div style="height:3px;background:linear-gradient(90deg,#10b981,#34d399);"></div>
+        <div style="padding:14px 14px 13px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            ${b.logo
+              ? `<img src="${b.logo}" style="width:42px;height:42px;object-fit:cover;border-radius:13px;flex-shrink:0;border:1px solid rgba(255,255,255,0.1);" alt="">`
+              : `<div style="width:42px;height:42px;background:linear-gradient(135deg,rgba(16,185,129,0.2),rgba(52,211,153,0.1));border:1px solid rgba(52,211,153,0.2);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${b.category?.icon || '🏪'}</div>`}
+            <div style="flex:1;min-width:0;">
+              <p style="font-weight:700;font-size:13px;line-height:1.3;color:#fff;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.name}</p>
+              <p style="font-size:11px;color:rgba(255,255,255,0.45);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.category?.name || ''}</p>
+            </div>
           </div>
-        </div>
-        <div class="flex items-center justify-between">
-          ${renderStars(b.avgRating || 0, b.ratings ? b.ratings.length : 0)}
-          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Trending</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+            <span style="color:#f59e0b;font-size:12px;letter-spacing:0.5px;">${stars}</span>
+            <span style="font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#34d399;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);padding:2px 8px;border-radius:999px;white-space:nowrap;">Trending</span>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -1274,28 +1289,34 @@ visibleItems.forEach(item => {
   const statsBar = document.getElementById('communityStatsBar');
   if (statsBar) {
     statsBar.innerHTML = `
-      <div class="bg-gradient-to-r from-white/5 to-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-4 text-center">Community at a Glance</p>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div onclick="navigate('directory')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl p-4 transition text-center">
-            <span class="text-2xl mb-1">📍</span>
-            <span class="text-xl font-black text-white group-hover:text-emerald-300 transition">${bizCount}</span>
-            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Businesses<br>in Directory</span>
+      <div style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,0.4);">
+        <div style="height:3px;background:linear-gradient(90deg,#10b981,#3b82f6,#f59e0b,#ef4444);"></div>
+        <div style="padding:18px 18px 16px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+            <div style="width:28px;height:28px;background:linear-gradient(135deg,rgba(99,102,241,0.4),rgba(139,92,246,0.3));border:1px solid rgba(139,92,246,0.3);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;">📊</div>
+            <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,0.45);margin:0;">Community at a Glance</p>
           </div>
-          <div onclick="navigate('deals')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 rounded-2xl p-4 transition text-center">
-            <span class="text-2xl mb-1">🔥</span>
-            <span class="text-xl font-black text-white group-hover:text-amber-300 transition">${activeDealsCount}</span>
-            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Active<br>Deals</span>
-          </div>
-          <div onclick="navigate('events')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/30 rounded-2xl p-4 transition text-center">
-            <span class="text-2xl mb-1">📅</span>
-            <span class="text-xl font-black text-white group-hover:text-blue-300 transition">${upcomingEvCount}</span>
-            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Upcoming<br>Events</span>
-          </div>
-          <div onclick="navigate('shoutouts')" class="cursor-pointer group flex flex-col items-center bg-white/5 hover:bg-red-500/10 border border-white/5 hover:border-red-500/30 rounded-2xl p-4 transition text-center">
-            <span class="text-2xl mb-1">🚦</span>
-            <span class="text-xl font-black text-white group-hover:text-red-300 transition">${shoutoutsTodayCount}</span>
-            <span class="text-[11px] text-white/50 mt-0.5 leading-tight">Traffic Alerts<br>Today</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" class="sm:grid-cols-4">
+            <div onclick="navigate('directory')" style="cursor:pointer;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:14px 10px;text-align:center;transition:background 0.2s,border-color 0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.14)';this.style.borderColor='rgba(52,211,153,0.4)'" onmouseout="this.style.background='rgba(16,185,129,0.07)';this.style.borderColor='rgba(16,185,129,0.15)'">
+              <span style="font-size:22px;display:block;margin-bottom:4px;">📍</span>
+              <span style="font-size:22px;font-weight:900;color:#34d399;display:block;line-height:1;">${bizCount}</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-top:4px;line-height:1.4;">Businesses<br>in Directory</span>
+            </div>
+            <div onclick="navigate('deals')" style="cursor:pointer;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:14px 10px;text-align:center;transition:background 0.2s,border-color 0.2s;" onmouseover="this.style.background='rgba(245,158,11,0.14)';this.style.borderColor='rgba(251,191,36,0.4)'" onmouseout="this.style.background='rgba(245,158,11,0.07)';this.style.borderColor='rgba(245,158,11,0.15)'">
+              <span style="font-size:22px;display:block;margin-bottom:4px;">🔥</span>
+              <span style="font-size:22px;font-weight:900;color:#fbbf24;display:block;line-height:1;">${activeDealsCount}</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-top:4px;line-height:1.4;">Active<br>Deals</span>
+            </div>
+            <div onclick="navigate('events')" style="cursor:pointer;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.15);border-radius:16px;padding:14px 10px;text-align:center;transition:background 0.2s,border-color 0.2s;" onmouseover="this.style.background='rgba(59,130,246,0.14)';this.style.borderColor='rgba(96,165,250,0.4)'" onmouseout="this.style.background='rgba(59,130,246,0.07)';this.style.borderColor='rgba(59,130,246,0.15)'">
+              <span style="font-size:22px;display:block;margin-bottom:4px;">📅</span>
+              <span style="font-size:22px;font-weight:900;color:#60a5fa;display:block;line-height:1;">${upcomingEvCount}</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-top:4px;line-height:1.4;">Upcoming<br>Events</span>
+            </div>
+            <div onclick="navigate('shoutouts')" style="cursor:pointer;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.15);border-radius:16px;padding:14px 10px;text-align:center;transition:background 0.2s,border-color 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.14)';this.style.borderColor='rgba(248,113,113,0.4)'" onmouseout="this.style.background='rgba(239,68,68,0.07)';this.style.borderColor='rgba(239,68,68,0.15)'">
+              <span style="font-size:22px;display:block;margin-bottom:4px;">🚦</span>
+              <span style="font-size:22px;font-weight:900;color:#f87171;display:block;line-height:1;">${shoutoutsTodayCount}</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-top:4px;line-height:1.4;">Traffic Alerts<br>Today</span>
+            </div>
           </div>
         </div>
       </div>`;
