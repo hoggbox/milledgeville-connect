@@ -10,6 +10,7 @@ router.use(sanitizeBody);      // Deep sanitization on every req.body
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 const webpush = require('web-push');
+const sharp   = require('sharp'); // ← needed to normalize non-JPEG images (e.g. AVIF from FB CDN) for push thumbs
 
 const User            = require('../models/User');
 const Business        = require('../models/Business');
@@ -4695,14 +4696,34 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     if (!shoutout?.images?.length) return res.status(404).send('Not found');
 
     const raw = shoutout.images[0];
-    const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+    const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) {
+      console.warn('[shoutout-thumb] Image format not recognized, first 50 chars:', raw.substring(0, 50));
+      return res.status(400).send('Invalid image format');
+    }
 
-    const [, mimeType, base64Data] = match;
-    const buffer = Buffer.from(base64Data, 'base64');
+    let [, mimeType, base64Data] = match;
+    if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+    const inputBuffer = Buffer.from(base64Data, 'base64');
+
+    // FCM/APNs notification images MUST be JPEG/PNG served over plain HTTPS.
+    // Facebook's CDN frequently serves AVIF (Chrome default) or other formats —
+    // those will 200 just fine in a browser but silently fail to render inside
+    // a push notification. Normalize everything to JPEG here so it always works.
+    let buffer = inputBuffer;
+    let outMime = mimeType;
+    if (mimeType !== 'image/jpeg') {
+      try {
+        buffer = await sharp(inputBuffer).jpeg({ quality: 85 }).toBuffer();
+        outMime = 'image/jpeg';
+      } catch (convErr) {
+        console.error('[shoutout-thumb] sharp conversion failed:', convErr.message);
+        buffer = inputBuffer; // fall back to raw bytes rather than hard error
+      }
+    }
 
     res.set({
-      'Content-Type':                   mimeType,
+      'Content-Type':                   outMime,
       'Cache-Control':                  'public, max-age=86400',
       'Content-Length':                 buffer.length,
       'Access-Control-Allow-Origin':    '*',
