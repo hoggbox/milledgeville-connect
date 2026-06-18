@@ -877,26 +877,12 @@ async function loadHomePage(content) {
         <div style="height:4px;background:linear-gradient(90deg,#34d399,#22d3ee,#818cf8,#34d399);background-size:200% 100%;"></div>
 
         <div style="padding:20px 20px 16px;position:relative;">
-          <div style="overflow:hidden;margin-bottom:12px;">
-
-            <!-- Right: Weather widget (floated right, fixed width, so it can never overlap the title) -->
-            <div id="weatherWidget" style="float:right;background:rgba(255,255,255,0.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:10px 14px;width:110px;margin-left:16px;position:relative;z-index:2;">
-              <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
-                <div style="text-align:right;">
-                  <div style="font-size:28px;line-height:1;" id="weatherIcon">—</div>
-                  <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;margin-top:2px;" id="weatherTemp">—</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:11px;color:rgba(167,243,208,0.85);white-space:nowrap;" id="weatherDesc">Loading…</div>
-                  <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:4px;" id="weatherForecast"></div>
-                </div>
-              </div>
-            </div>
+          <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:12px;">
 
             <!-- Left: Title + Date + Podcast -->
-            <div style="display:flex;align-items:flex-start;gap:12px;position:relative;z-index:2;">
+            <div style="flex:1;min-width:0;display:flex;align-items:flex-start;gap:12px;">
               <span style="font-size:28px;flex-shrink:0;margin-top:2px;">🌅</span>
-              <div style="min-width:0;flex:1;">
+              <div style="min-width:0;">
                 <h1 style="font-size:21px;font-weight:800;color:#fff;margin:0;line-height:1.2;letter-spacing:-0.3px;">Today in Milledgeville</h1>
                 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;">
                   <span style="color:rgba(167,243,208,0.9);font-size:12px;">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</span>
@@ -904,6 +890,20 @@ async function loadHomePage(content) {
                         style="display:inline-flex;align-items:center;gap:5px;background:#1DB954;color:#000;font-weight:900;font-size:11px;padding:3px 10px;border-radius:99px;cursor:pointer;box-shadow:0 2px 8px rgba(29,185,84,0.4);letter-spacing:0.3px;transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <span>🎙️</span><span>LISTEN</span>
                   </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Weather widget (flex-shrink:0 so it never collapses, natural width from content) -->
+            <div id="weatherWidget" style="flex-shrink:0;background:rgba(255,255,255,0.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:10px 14px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="text-align:right;">
+                  <div style="font-size:28px;line-height:1;" id="weatherIcon">—</div>
+                  <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;margin-top:2px;" id="weatherTemp">—</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:11px;color:rgba(167,243,208,0.85);white-space:nowrap;" id="weatherDesc">Loading…</div>
+                  <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:4px;" id="weatherForecast"></div>
                 </div>
               </div>
             </div>
