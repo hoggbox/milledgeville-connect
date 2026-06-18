@@ -3170,6 +3170,40 @@ async function loadShoutoutsPage(content) {
     if (countSpan) countSpan.textContent = stillThereCount;
   });
 
+  // New comment posted by someone else — update cache and re-render
+  _shoutoutSSE.addEventListener('new-comment', (e) => {
+    if (currentPage !== 'shoutouts') return;
+    const { shoutoutId, comment } = JSON.parse(e.data);
+    // Don't double-add our own comment (already added optimistically)
+    const myId = currentUser?._id || currentUser?.id || '';
+    if (myId && (comment.authorId?._id || comment.authorId)?.toString() === myId.toString()) return;
+    // Only update if this card is visible
+    const card = document.getElementById(`shoutout-${shoutoutId}`);
+    if (!card) return;
+    // Update cache
+    if (!window._commentDataCache[shoutoutId]) {
+      if (card.dataset.comments) {
+        try { window._commentDataCache[shoutoutId] = JSON.parse(card.dataset.comments); } catch(e) {}
+      }
+      if (!window._commentDataCache[shoutoutId]) window._commentDataCache[shoutoutId] = [];
+    }
+    // Avoid duplicate if somehow delivered twice
+    if (!window._commentDataCache[shoutoutId].some(c => c._id?.toString() === comment._id?.toString())) {
+      window._commentDataCache[shoutoutId].push(comment);
+    }
+    // Update comment count badge
+    const commentBtn = card.querySelector('.sc-reactions button:nth-child(2) span:last-child');
+    if (commentBtn) {
+      const prev = parseInt(commentBtn.textContent, 10) || 0;
+      commentBtn.textContent = window._commentDataCache[shoutoutId].length || (prev + 1);
+    }
+    // Re-render if section is open
+    const section = document.getElementById(`comment-section-${shoutoutId}`);
+    if (section && !section.classList.contains('hidden')) {
+      _renderCommentList(shoutoutId);
+    }
+  });
+
   _shoutoutSSE.onerror = () => {
     // Browser will auto-reconnect; nothing extra needed
   };
@@ -3415,6 +3449,7 @@ function renderShoutoutCard(s) {
 function renderCommentRow(c, shoutoutId) {
   const cAvatar = c.authorId?.avatar || null;
   const cName   = c.author || c.authorId?.name || 'Anonymous';
+  const cLetter = cName ? cName[0].toUpperCase() : '?';
   const replies = c.replies || [];
   const replyCount = replies.length;
   const userIsAdmin = isAdmin();
@@ -3641,19 +3676,27 @@ const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
         createdAt: res.createdAt || new Date().toISOString(),
       };
 
-      // Push into cache and re-render the comment list
-      if (!window._commentDataCache[shoutoutId]) window._commentDataCache[shoutoutId] = [];
+      // Seed cache from card data attribute if not already loaded
+      if (!window._commentDataCache[shoutoutId]) {
+        const card = document.getElementById(`shoutout-${shoutoutId}`);
+        if (card && card.dataset.comments) {
+          try { window._commentDataCache[shoutoutId] = JSON.parse(card.dataset.comments); } catch(e) {}
+        }
+        if (!window._commentDataCache[shoutoutId]) window._commentDataCache[shoutoutId] = [];
+      }
+      // Ensure sort state is initialized
+      if (!window._commentSortState[shoutoutId]) window._commentSortState[shoutoutId] = 'relevant';
       window._commentDataCache[shoutoutId].push(newComment);
       // Expand so the new comment is always visible
       const listEl = document.getElementById(`comment-list-${shoutoutId}`);
       if (listEl) listEl.dataset.expanded = '1';
       _renderCommentList(shoutoutId);
 
-      // Update the comment count badge on the toggle button
-      const countBadge = document.querySelector(`#shoutout-${shoutoutId} .sc-react span:last-child`);
-      if (countBadge) {
-        const prev = parseInt(countBadge.textContent, 10) || 0;
-        countBadge.textContent = prev + 1;
+      // Update the comment count badge — target the comment button specifically
+      const commentBtn = document.querySelector(`#shoutout-${shoutoutId} .sc-reactions button:nth-child(2) span:last-child`);
+      if (commentBtn) {
+        const prev = parseInt(commentBtn.textContent, 10) || 0;
+        commentBtn.textContent = prev + 1;
       }
 
       // Keep the comment section visible and scroll the new comment into view

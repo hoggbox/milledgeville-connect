@@ -2612,6 +2612,23 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
     shoutout.comments.push(comment);
     await shoutout.save();
 
+    const savedComment = shoutout.comments[shoutout.comments.length - 1];
+
+    // Broadcast new-comment SSE so other connected clients update instantly
+    broadcastShoutoutSSE('new-comment', {
+      shoutoutId: shoutout._id.toString(),
+      comment: {
+        _id:       savedComment._id,
+        author:    savedComment.author,
+        authorId:  savedComment.authorId,
+        text:      savedComment.text,
+        image:     savedComment.image || null,
+        likes:     savedComment.likes || [],
+        replies:   savedComment.replies || [],
+        createdAt: savedComment.createdAt,
+      }
+    });
+
     // Broadcast to everyone who enabled "Comments on Traffic Alerts"
     const commentText = (req.body.text || '').trim();
     broadcastPush(
@@ -2621,7 +2638,7 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
       { type: 'comment' }          // filter
     );
 
-    res.json(shoutout.comments[shoutout.comments.length - 1]);
+    res.json(savedComment);
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
