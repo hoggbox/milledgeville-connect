@@ -1189,10 +1189,10 @@ visibleItems.forEach(item => {
     const n = item.data;
     const newsThumb = n.images && n.images[0] ? n.images[0] : null;
     html += `
-      <div onclick="openNewsArticle('${n._id}')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(96,165,250,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
-        <div style="height:3px;background:linear-gradient(90deg,#3b82f6,#6366f1);"></div>
-        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
-          ${newsThumb ? `<img src="${newsThumb}" style="width:72px;height:72px;object-fit:cover;border-radius:12px;flex-shrink:0;" loading="lazy" alt="" onerror="this.style.display='none'">` : `<div style="width:48px;height:48px;background:rgba(59,130,246,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📰</div>`}
+      <div onclick="openNewsArticle('${n._id}')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:14px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 1px 8px rgba(0,0,0,0.28);" onmouseover="this.style.borderColor='rgba(96,165,250,0.4)';this.style.boxShadow='0 3px 14px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 1px 8px rgba(0,0,0,0.28)'">
+        <div style="height:2px;background:linear-gradient(90deg,#3b82f6,#6366f1);"></div>
+        <div style="display:flex;gap:10px;padding:10px 12px;align-items:flex-start;">
+          ${newsThumb ? `<img src="${newsThumb}" style="width:60px;height:60px;object-fit:cover;border-radius:10px;flex-shrink:0;" loading="lazy" alt="" onerror="this.style.display='none'">` : `<div style="width:40px;height:40px;background:rgba(59,130,246,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">📰</div>`}
           <div style="flex:1;min-width:0;">
             <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#60a5fa;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);padding:2px 8px;border-radius:999px;">News</span>
             <h4 style="font-weight:700;font-size:15px;line-height:1.35;margin:6px 0 4px;color:#fff;">${esc(n.title)}</h4>
@@ -1204,10 +1204,10 @@ visibleItems.forEach(item => {
   } else if (item.type === 'event') {
     const e = item.data;
     html += `
-      <div onclick="navigate('events')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(251,191,36,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
-        <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#f97316);"></div>
-        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
-          <div style="width:48px;height:48px;background:rgba(245,158,11,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📅</div>
+      <div onclick="navigate('events')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:14px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 1px 8px rgba(0,0,0,0.28);" onmouseover="this.style.borderColor='rgba(251,191,36,0.4)';this.style.boxShadow='0 3px 14px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 1px 8px rgba(0,0,0,0.28)'">
+        <div style="height:2px;background:linear-gradient(90deg,#f59e0b,#f97316);"></div>
+        <div style="display:flex;gap:10px;padding:10px 12px;align-items:flex-start;">
+          <div style="width:40px;height:40px;background:rgba(245,158,11,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">📅</div>
           <div style="flex:1;min-width:0;">
             <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#fbbf24;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);padding:2px 8px;border-radius:999px;">Event</span>
             <h4 style="font-weight:700;font-size:15px;line-height:1.35;margin:6px 0 4px;color:#fff;">${esc(e.title)}</h4>
@@ -1219,10 +1219,10 @@ visibleItems.forEach(item => {
   } else if (item.type === 'deal') {
     const d = item.data;
     html += `
-      <div onclick="navigate('deals')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
-        <div style="height:3px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
-        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
-          <div style="width:48px;height:48px;background:rgba(239,68,68,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🔥</div>
+      <div onclick="navigate('deals')" style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:14px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 1px 8px rgba(0,0,0,0.28);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 3px 14px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 1px 8px rgba(0,0,0,0.28)'">
+        <div style="height:2px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
+        <div style="display:flex;gap:10px;padding:10px 12px;align-items:flex-start;">
+          <div style="width:40px;height:40px;background:rgba(239,68,68,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🔥</div>
           <div style="flex:1;min-width:0;">
             <span style="font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);padding:2px 8px;border-radius:999px;">Deal</span>
             <h4 style="font-weight:700;font-size:15px;line-height:1.35;margin:6px 0 4px;color:#fff;">${esc(d.title)}</h4>
@@ -1849,12 +1849,12 @@ async function loadNewsPage(content) {
     if (!container) return;
     container.innerHTML = articles.map(n => `
       <div onclick="openNewsArticle('${n._id}')"
-           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(96,165,250,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
-        <div style="height:3px;background:linear-gradient(90deg,#3b82f6,#6366f1);"></div>
-        <div style="display:flex;gap:14px;padding:14px 16px;align-items:flex-start;">
+           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:14px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 1px 8px rgba(0,0,0,0.28);" onmouseover="this.style.borderColor='rgba(96,165,250,0.4)';this.style.boxShadow='0 3px 14px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 1px 8px rgba(0,0,0,0.28)'">
+        <div style="height:2px;background:linear-gradient(90deg,#3b82f6,#6366f1);"></div>
+        <div style="display:flex;gap:10px;padding:10px 12px;align-items:flex-start;">
           ${n.images?.[0]
-            ? `<img src="${n.images[0]}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;flex-shrink:0;" loading="lazy" alt="">`
-            : `<div style="width:56px;height:56px;background:rgba(59,130,246,0.12);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">📰</div>`}
+            ? `<img src="${n.images[0]}" style="width:68px;height:68px;object-fit:cover;border-radius:10px;flex-shrink:0;" loading="lazy" alt="">`
+            : `<div style="width:44px;height:44px;background:rgba(59,130,246,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📰</div>`}
           <div style="flex:1;min-width:0;">
             <p style="font-weight:700;font-size:15px;line-height:1.35;color:#fff;margin:0 0 5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(n.title)}</p>
             <p style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0 0 8px;">${esc(n.summary || '')}</p>
@@ -4295,9 +4295,9 @@ function _renderDealsHTML(deals, container) {
   } else {
     html = filtered.map(deal => `
       <div onclick="showDealDetail('${deal._id}')" 
-           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'">
-        <div style="height:3px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
-        <div style="padding:16px 18px;">
+           style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:14px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 1px 8px rgba(0,0,0,0.28);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 3px 14px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 1px 8px rgba(0,0,0,0.28)'">
+        <div style="height:2px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
+        <div style="padding:11px 14px;">
           <div class="flex justify-between items-start gap-3">
             <div class="flex-1 min-w-0">
               <h3 style="font-weight:700;font-size:16px;line-height:1.35;color:#fff;margin:0 0 4px;">${deal.title}</h3>
