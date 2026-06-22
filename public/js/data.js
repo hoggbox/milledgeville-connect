@@ -876,36 +876,38 @@ async function loadHomePage(content) {
         <!-- top accent bar -->
         <div style="height:4px;background:linear-gradient(90deg,#34d399,#22d3ee,#818cf8,#34d399);background-size:200% 100%;"></div>
 
-        <div style="padding:20px 20px 16px;position:relative;">
-          <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;margin-bottom:12px;">
+        <div style="padding:18px 18px 14px;position:relative;">
 
-            <!-- Left: Title + Date + Podcast -->
-            <div style="display:flex;align-items:flex-start;gap:12px;min-width:0;">
-              <span style="font-size:28px;flex-shrink:0;margin-top:2px;">🌅</span>
-              <div style="min-width:0;flex:1;">
-                <h1 style="font-size:21px;font-weight:800;color:#fff;margin:0;line-height:1.2;letter-spacing:-0.3px;">Today in Milledgeville</h1>
-                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;">
-                  <span style="color:rgba(167,243,208,0.9);font-size:12px;">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</span>
-                  <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')"
-                        style="display:inline-flex;align-items:center;gap:5px;background:#1DB954;color:#000;font-weight:900;font-size:11px;padding:3px 10px;border-radius:99px;cursor:pointer;box-shadow:0 2px 8px rgba(29,185,84,0.4);letter-spacing:0.3px;transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <span>🎙️</span><span>LISTEN</span>
-                  </span>
-                </div>
+          <!-- Row 1: Title + Date + Podcast — full width, never fights weather -->
+          <div style="display:flex;align-items:flex-start;gap:11px;margin-bottom:12px;">
+            <span style="font-size:26px;flex-shrink:0;margin-top:1px;">🌅</span>
+            <div style="min-width:0;flex:1;">
+              <h1 style="font-size:19px;font-weight:800;color:#fff;margin:0;line-height:1.2;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Today in Milledgeville</h1>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:5px;">
+                <span style="color:rgba(167,243,208,0.9);font-size:11.5px;">${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</span>
+                <span onclick="showToast('🎙️ Milledgeville Connect Podcast — coming soon!')"
+                      style="display:inline-flex;align-items:center;gap:4px;background:#1DB954;color:#000;font-weight:900;font-size:10.5px;padding:3px 9px;border-radius:99px;cursor:pointer;box-shadow:0 2px 8px rgba(29,185,84,0.4);letter-spacing:0.3px;flex-shrink:0;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                  <span>🎙️</span><span>LISTEN</span>
+                </span>
               </div>
             </div>
+          </div>
 
-            <!-- Right: Weather widget -->
-            <div id="weatherWidget" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:10px 14px;min-width:110px;">
-              <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
-                <div style="text-align:right;">
-                  <div style="font-size:28px;line-height:1;" id="weatherIcon">—</div>
-                  <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;margin-top:2px;" id="weatherTemp">—</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:11px;color:rgba(167,243,208,0.85);white-space:nowrap;" id="weatherDesc">Loading…</div>
-                  <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:4px;" id="weatherForecast"></div>
+          <!-- Row 2: Weather widget — full width horizontal strip, scales to any screen -->
+          <div id="weatherWidget" style="background:rgba(255,255,255,0.11);border:1px solid rgba(255,255,255,0.16);border-radius:16px;padding:10px 14px;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <!-- Current temp + icon -->
+              <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                <div style="font-size:30px;line-height:1;" id="weatherIcon">—</div>
+                <div>
+                  <div style="font-size:22px;font-weight:900;color:#fff;line-height:1;" id="weatherTemp">—°</div>
+                  <div style="font-size:10.5px;color:rgba(167,243,208,0.85);margin-top:2px;white-space:nowrap;" id="weatherDesc">Loading…</div>
                 </div>
               </div>
+              <!-- Divider -->
+              <div style="width:1px;align-self:stretch;background:rgba(255,255,255,0.15);flex-shrink:0;"></div>
+              <!-- Forecast pills — flex-wrap so they never overflow -->
+              <div style="display:flex;flex-wrap:wrap;gap:5px;flex:1;" id="weatherForecast"></div>
             </div>
           </div>
 
@@ -1008,10 +1010,10 @@ async function loadHomePage(content) {
           const fc = wmoCond(forecastCodes[i + 1] || 0);
           const high = Math.round(forecastTemps[i + 1] || 0);
           const dow = days[new Date(d + 'T12:00:00').getDay()];
-          return `<div class="bg-white/15 rounded-xl px-1.5 py-1 text-center" style="min-width:36px;">
-            <div class="text-[9px] text-emerald-100 font-semibold">${dow}</div>
-            <div class="text-sm leading-none my-0.5">${fc.icon}</div>
-            <div class="text-[10px] font-bold">${high}°</div>
+          return `<div style="background:rgba(255,255,255,0.14);border-radius:10px;padding:5px 8px;text-align:center;min-width:38px;">
+            <div style="font-size:9px;color:rgba(167,243,208,0.9);font-weight:700;letter-spacing:0.3px;">${dow}</div>
+            <div style="font-size:15px;line-height:1.1;margin:2px 0;">${fc.icon}</div>
+            <div style="font-size:10px;font-weight:800;color:#fff;">${high}°</div>
           </div>`;
         }).join('');
       }
