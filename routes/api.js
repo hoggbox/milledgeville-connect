@@ -5271,6 +5271,34 @@ router.get('/admin/fix-security-answers', authenticate, requireAdmin, async (req
   }
 });
 
+// TEMP DEBUG ROUTE — delete after use
+router.get('/_debug/image-prefixes', async (req, res) => {
+  try {
+    const shoutouts = await Shoutout.find({ images: { $exists: true, $ne: [] } })
+      .sort({ createdAt: -1 }).limit(5).select('images createdAt');
+    const lostitems = await LostItem.find({ images: { $exists: true, $ne: [] } })
+      .sort({ createdAt: -1 }).limit(5).select('images createdAt');
+    const market = await MarketplaceItem.find({ images: { $exists: true, $ne: [] } })
+      .sort({ createdAt: -1 }).limit(5).select('images createdAt');
+
+    const prefix = (doc, label) => ({
+      type: label,
+      id: doc._id,
+      createdAt: doc.createdAt,
+      firstImagePrefix: (doc.images?.[0] || '').substring(0, 60),
+      imageCount: doc.images?.length || 0
+    });
+
+    res.json({
+      shoutouts: shoutouts.map(d => prefix(d, 'shoutout')),
+      lostitems: lostitems.map(d => prefix(d, 'lostitem')),
+      marketplace: market.map(d => prefix(d, 'marketplace'))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
 //close
