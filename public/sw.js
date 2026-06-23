@@ -23,13 +23,14 @@ self.addEventListener('push', event => {
     // the `image` option (Chrome/Android-only feature) — see Mozilla bug 1580008.
     // So on Firefox the big preview photo silently doesn't render at all, with
     // no error. To make sure Firefox users still see *something* photo-related,
-    // use the post's photo as the small `icon` too, instead of the static app
-    // icon — but only when the payload didn't already explicitly request a
-    // specific icon. This does NOT touch the `image` field or its behavior on
-    // Chrome/Android, which keep showing the full-size preview as before.
-    if (!payload.icon) {
-      options.icon = payload.image;
-    }
+    // use the post's photo as the small `icon` instead of the static app icon.
+    // NOTE: the server (sendPushToUser) always sends a default icon (APP_ICON),
+    // so it's never falsy — checking `!payload.icon` here would never fire.
+    // The photo is strictly more useful than the generic app logo whenever one
+    // exists, so we override unconditionally. This does NOT touch the `image`
+    // field or its behavior on Chrome/Android, which keep showing both the
+    // small icon area and the full-size preview exactly as before.
+    options.icon = payload.image;
   }
 
   event.waitUntil(
