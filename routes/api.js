@@ -1025,7 +1025,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           await sub.save();
         }
       }
-      continue;
+      // no continue — fall through to also check web subscription below
     }
 
     // Web VAPID subscription
@@ -1042,7 +1042,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
             ...(notifImage ? { image: notifImage } : {})
           })
         );
-        console.log(`\u2705 Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
+        console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
         sent = true;
       } catch (err) {
         console.error(`[Push] Web push failed for ${userId}:`, err.message);
