@@ -2,6 +2,13 @@
 self.addEventListener('push', event => {
   const payload = event.data?.json() || {};
 
+  // ── TEMP DEBUG: remove after we find the issue ──────────────────────────
+  console.log('[SW DEBUG] raw payload:', JSON.stringify(payload));
+  console.log('[SW DEBUG] payload.image value:', payload.image);
+  console.log('[SW DEBUG] typeof payload.image:', typeof payload.image);
+  console.log('[SW DEBUG] starts with https?:', payload.image ? payload.image.startsWith('https://') : 'N/A - no image field');
+  // ──────────────────────────────────────────────────────────────────────
+
   const options = {
     body:  payload.body  || '',
     icon:  payload.icon  || '/icon-192.png',
@@ -18,6 +25,7 @@ self.addEventListener('push', event => {
   // silently drop the notification entirely on some devices.
   if (payload.image && payload.image.startsWith('https://')) {
     options.image = payload.image;
+    console.log('[SW DEBUG] options.image SET to:', options.image);
 
     // ── Firefox fallback: Firefox's Notifications API has never implemented
     // the `image` option (Chrome/Android-only feature) — see Mozilla bug 1580008.
@@ -31,7 +39,11 @@ self.addEventListener('push', event => {
     // field or its behavior on Chrome/Android, which keep showing both the
     // small icon area and the full-size preview exactly as before.
     options.icon = payload.image;
+  } else {
+    console.log('[SW DEBUG] image NOT set — condition failed');
   }
+
+  console.log('[SW DEBUG] final options:', JSON.stringify(options));
 
   event.waitUntil(
     self.registration.showNotification(payload.title || 'Milledgeville Connect', options)
