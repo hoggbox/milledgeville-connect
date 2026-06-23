@@ -18,6 +18,18 @@ self.addEventListener('push', event => {
   // silently drop the notification entirely on some devices.
   if (payload.image && payload.image.startsWith('https://')) {
     options.image = payload.image;
+
+    // ── Firefox fallback: Firefox's Notifications API has never implemented
+    // the `image` option (Chrome/Android-only feature) — see Mozilla bug 1580008.
+    // So on Firefox the big preview photo silently doesn't render at all, with
+    // no error. To make sure Firefox users still see *something* photo-related,
+    // use the post's photo as the small `icon` too, instead of the static app
+    // icon — but only when the payload didn't already explicitly request a
+    // specific icon. This does NOT touch the `image` field or its behavior on
+    // Chrome/Android, which keep showing the full-size preview as before.
+    if (!payload.icon) {
+      options.icon = payload.image;
+    }
   }
 
   event.waitUntil(
