@@ -5505,7 +5505,7 @@ async function createNotification(data) {
 // ─── GET /api/notifications ───────────────────────────────────────────────────
 router.get('/notifications', authenticate, async (req, res) => {
   try {
-    if (!req.user || !req.user._id) {
+    if (!req.userId) {
       return res.json({ notifications: [], unreadCount: 0 });
     }
 
@@ -5514,7 +5514,7 @@ router.get('/notifications', authenticate, async (req, res) => {
     const unreadOnly = req.query.unreadOnly === 'true';
 
     const filter = {
-      recipient: req.user._id,
+      recipient: req.userId,
       deleted: false,
     };
     if (before) filter.createdAt = { $lt: before };
@@ -5526,7 +5526,7 @@ router.get('/notifications', authenticate, async (req, res) => {
         .limit(limit)
         .lean(),
       NotificationFeed.countDocuments({
-        recipient: req.user._id,
+        recipient: req.userId,
         deleted: false,
         read: false,
       })
@@ -5550,7 +5550,7 @@ router.post('/notifications/read', authenticate, async (req, res) => {
 
     if (all) {
       await NotificationFeed.updateMany(
-        { recipient: req.user._id, read: false },
+        { recipient: req.userId, read: false },
         { $set: { read: true } }
       );
       return res.json({ ok: true });
@@ -5558,7 +5558,7 @@ router.post('/notifications/read', authenticate, async (req, res) => {
 
     if (id) {
       await NotificationFeed.updateOne(
-        { _id: id, recipient: req.user._id },
+        { _id: id, recipient: req.userId },
         { $set: { read: true } }
       );
       return res.json({ ok: true });
@@ -5577,7 +5577,7 @@ router.post('/notifications/read', authenticate, async (req, res) => {
 router.delete('/notifications/:id', authenticate, async (req, res) => {
   try {
     await NotificationFeed.updateOne(
-      { _id: req.params.id, recipient: req.user._id },
+      { _id: req.params.id, recipient: req.userId },
       { $set: { deleted: true } }
     );
     res.json({ ok: true });
@@ -5593,7 +5593,7 @@ router.delete('/notifications/:id', authenticate, async (req, res) => {
 router.delete('/notifications', authenticate, async (req, res) => {
   try {
     await NotificationFeed.updateMany(
-      { recipient: req.user._id },
+      { recipient: req.userId },
       { $set: { deleted: true } }
     );
     res.json({ ok: true });
@@ -5606,14 +5606,13 @@ router.delete('/notifications', authenticate, async (req, res) => {
 // ─── GET /api/notifications/unread-count ─────────────────────────────────────
 // Lightweight badge count poll (called every ~30s by the frontend).
 // ─────────────────────────────────────────────────────────────────────────────
-// ─── GET /api/notifications/unread-count ─────────────────────────────────────
 router.get('/notifications/unread-count', authenticate, async (req, res) => {
   try {
-    if (!req.user || !req.user._id) {
+    if (!req.userId) {
       return res.json({ count: 0 });
     }
     const count = await NotificationFeed.countDocuments({
-      recipient: req.user._id,
+      recipient: req.userId,
       deleted: false,
       read: false,
     });
