@@ -4451,15 +4451,45 @@ window.deleteShoutout = async function (shoutoutId) {
 };
 
 // ─── EDIT shoutout post (inline textarea swap) ────────────────────────────────
+window._shoutoutEditState = window._shoutoutEditState || {};
+
 window.startEditShoutout = function (shoutoutId) {
   const textEl = document.getElementById(`sc-text-${shoutoutId}`);
+  const imagesEl = document.querySelector(`#shoutout-${shoutoutId} .sc-images`);
   if (!textEl) return;
+
   const currentText = textEl.textContent;
-  textEl.dataset.originalHtml = textEl.outerHTML;
+
+  // Collect existing image URLs from the rendered card
+  const currentImages = imagesEl
+    ? Array.from(imagesEl.querySelectorAll('img')).map(img => img.src)
+    : [];
+
+  // Save originals for cancel
+  window._shoutoutEditState[shoutoutId] = {
+    textHtml:   textEl.outerHTML,
+    imagesHtml: imagesEl ? imagesEl.outerHTML : null,
+    images:     [...currentImages],
+  };
+
+  // Build image strip with remove buttons
+  const imagesEditHtml = currentImages.length ? `
+    <div id="sc-edit-images-${shoutoutId}" class="flex flex-wrap gap-2 mt-2">
+      ${currentImages.map((src, i) => `
+        <div style="position:relative;display:inline-block;" id="sc-edit-img-wrap-${shoutoutId}-${i}">
+          <img src="${esc(src)}" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,0.15);" alt="">
+          <button onclick="event.stopImmediatePropagation(); removeShoutoutEditImage('${shoutoutId}',${i})"
+                  style="position:absolute;top:-6px;right:-6px;background:#ef4444;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;cursor:pointer;color:#fff;padding:0;">✕</button>
+        </div>`).join('')}
+    </div>` : `<div id="sc-edit-images-${shoutoutId}"></div>`;
+
+  // Replace text element with edit UI; hide the images block separately
+  if (imagesEl) imagesEl.style.display = 'none';
   textEl.outerHTML = `
     <div id="sc-text-${shoutoutId}" class="sc-edit-box">
       <textarea id="sc-edit-input-${shoutoutId}" rows="2"
         class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm">${esc(currentText)}</textarea>
+      ${imagesEditHtml}
       <div class="flex justify-end gap-2 mt-2">
         <button onclick="event.stopImmediatePropagation(); cancelEditShoutout('${shoutoutId}')"
                 class="px-4 py-1.5 rounded-2xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition">Cancel</button>
@@ -4467,28 +4497,81 @@ window.startEditShoutout = function (shoutoutId) {
                 class="px-4 py-1.5 rounded-2xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition">Save</button>
       </div>
     </div>`;
-  window._shoutoutOriginalText = window._shoutoutOriginalText || {};
-  window._shoutoutOriginalText[shoutoutId] = currentText;
+  document.getElementById(`sc-edit-input-${shoutoutId}`)?.focus();
+};
+
+window.removeShoutoutEditImage = function (shoutoutId, index) {
+  const state = window._shoutoutEditState[shoutoutId];
+  if (!state) return;
+  state.images.splice(index, 1);
+  // Re-render the image strip
+  const strip = document.getElementById(`sc-edit-images-${shoutoutId}`);
+  if (!strip) return;
+  strip.innerHTML = state.images.map((src, i) => `
+    <div style="position:relative;display:inline-block;" id="sc-edit-img-wrap-${shoutoutId}-${i}">
+      <img src="${esc(src)}" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,0.15);" alt="">
+      <button onclick="event.stopImmediatePropagation(); removeShoutoutEditImage('${shoutoutId}',${i})"
+              style="position:absolute;top:-6px;right:-6px;background:#ef4444;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;cursor:pointer;color:#fff;padding:0;">✕</button>
+    </div>`).join('');
 };
 
 window.cancelEditShoutout = function (shoutoutId) {
-  loadShoutoutsPage(document.getElementById('content'));
+  const state = window._shoutoutEditState[shoutoutId];
+  const editBox = document.getElementById(`sc-text-${shoutoutId}`);
+  if (!editBox || !state) return;
+
+  // Restore original text element
+  editBox.outerHTML = state.textHtml;
+
+  // Restore images block visibility
+  const imagesEl = document.querySelector(`#shoutout-${shoutoutId} .sc-images`);
+  if (imagesEl) imagesEl.style.display = '';
+
+  delete window._shoutoutEditState[shoutoutId];
 };
 
 window.saveEditShoutout = async function (shoutoutId) {
   const input = document.getElementById(`sc-edit-input-${shoutoutId}`);
   if (!input) return;
   const newText = input.value.trim();
-  if (!newText) {
-    showToast('Traffic alert text cannot be empty', 'error');
+  const state = window._shoutoutEditState[shoutoutId] || {};
+  const newImages = state.images || [];
+
+  if (!newText && !newImages.length) {
+    showToast('Traffic alert needs text or at least one photo', 'error');
     return;
   }
-  const res = await apiPut(`/shoutouts/${shoutoutId}`, { text: newText });
-  if (res._id) {
-    showToast('✅ Traffic alert updated');
-    await loadShoutoutsPage(document.getElementById('content'));
-  } else {
-    showToast(res.message || 'Error updating traffic alert', 'error');
+
+  try {
+    const res = await apiPut(`/shoutouts/${shoutoutId}`, { text: newText, images: newImages });
+    if (res._id) {
+      // Update text in-place
+      const editBox = document.getElementById(`sc-text-${shoutoutId}`);
+      if (editBox) editBox.outerHTML = `<p class="sc-text" id="sc-text-${shoutoutId}">${esc(res.text || newText)}</p>`;
+
+      // Update images block in-place
+      const card = document.getElementById(`shoutout-${shoutoutId}`);
+      const imagesEl = card?.querySelector('.sc-images');
+      if (newImages.length) {
+        const newImagesHtml = `<div class="sc-images">${newImages.map((src, i) => `<img src="${esc(src)}" onclick="openShoutoutImageViewer('${shoutoutId}',${i})" loading="lazy" alt="">`).join('')}</div>`;
+        if (imagesEl) {
+          imagesEl.outerHTML = newImagesHtml;
+        } else {
+          // Insert images block after sc-body if it didn't exist before
+          const body = card?.querySelector('.sc-body');
+          if (body) body.insertAdjacentHTML('afterend', newImagesHtml);
+        }
+      } else if (imagesEl) {
+        imagesEl.remove();
+      }
+
+      delete window._shoutoutEditState[shoutoutId];
+      showToast('✅ Traffic alert updated');
+    } else {
+      showToast(res.message || 'Error updating traffic alert', 'error');
+    }
+  } catch (err) {
+    showToast('Error saving changes', 'error');
   }
 };
 
