@@ -424,7 +424,9 @@ router.post('/shoutouts', authenticate, async (req, res) => {
     const { text, images, location } = clean;
     // ────────────────────────────────────────────────────────────────────────
 
-    if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
+    if (!text?.trim() && !(Array.isArray(images) && images.length)) {
+      return res.status(400).json({ message: 'Text or at least one photo is required' });
+    }
 
 // ── Hard 45-second rate limit (existing) ──────────────────────────────────────
 // Exempt: admin accounts and the relay bot account
@@ -466,7 +468,7 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
         reporter: user._id,
         reportedUser: user._id,
         reason: `Auto-muted for spam: ${recentPosts.length + 1} posts within ${SPAM_WINDOW_MS / 60000} minutes`,
-        snapshotText: text.trim().substring(0, 200),
+        snapshotText: (text || '').trim().substring(0, 200),
         status: 'pending'
       });
 
@@ -479,8 +481,10 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
     // ── All checks passed — create the shoutout ────────────────────────────────
     const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
 
+    const safeText = (text || '').trim();
+
     const shoutout = await Shoutout.create({
-      text: text.trim(),
+      text: safeText,
       author: user.name,
       authorId: user._id,
       images: images || [],
@@ -500,9 +504,13 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
       ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
       : null;
 
+    const pushBody = safeText
+      ? (safeText.length > 80 ? safeText.substring(0, 77) + '...' : safeText)
+      : '📷 Shared a photo';
+
     broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
-      text.length > 80 ? text.substring(0, 77) + '...' : text,
+      pushBody,
       { 
         page: 'shoutouts', 
         id: shoutout._id.toString() 
@@ -522,7 +530,7 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
           actorAvatar: user.profilePhoto || null,
           type:        'new_shoutout',
           title:       `${user.name} posted a new Traffic Alert`,
-          body:        text.substring(0, 120),
+          body:        safeText ? safeText.substring(0, 120) : '📷 Shared a photo',
           linkPage:    'shoutouts',
           linkItemId:  shoutout._id.toString(),
         }));

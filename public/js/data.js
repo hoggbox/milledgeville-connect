@@ -3397,7 +3397,13 @@ window.removeShoutoutImage = function (index) {
 window.postShoutoutWithPhoto = async function () {
   if (!requireAuth('Sign in to post traffic alerts.')) return;
   const input = document.getElementById('shoutoutInput');
-  if (!input || !input.value.trim()) return;
+  const text = input ? input.value.trim() : '';
+  const hasImages = _pendingShoutoutImages && _pendingShoutoutImages.length > 0;
+
+  if (!text && !hasImages) {
+    showToast('Add some text or a photo first', 'info');
+    return;
+  }
 
   if (_isProcessingShoutoutImages) {
     showToast('Still processing your photo, one sec...', 'info');
@@ -3405,14 +3411,15 @@ window.postShoutoutWithPhoto = async function () {
   }
 
   const res = await apiPost('/shoutouts', { 
-    text: input.value.trim(),
+    text: text,
     images: _pendingShoutoutImages || []
   });
 
   if (res._id) {
     showToast('✅ Traffic Alert posted!');
     _pendingShoutoutImages = [];
-    input.value = '';
+    if (input) input.value = '';
+    renderShoutoutImagePreviews();
     loadPage('shoutouts');
   } else {
     showToast(res.message || 'Error posting traffic alert', 'error');
