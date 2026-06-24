@@ -1026,29 +1026,30 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
     // Native FCM token (Android / iOS) — preferred, higher delivery rate + image support
     if (sub.nativeToken) {
       try {
-        // ── data-only payload (no top-level `notification` block) ──────────────
-        // Including `notification` makes Android's OS-level FCM receiver
-        // auto-display the alert WITHOUT running any app/JS code. Since sw.js's
-        // `push` listener also calls showNotification() for every push it
-        // receives, having both meant every native send rendered twice (once
-        // from native auto-display, once from sw.js). Sending data-only puts
-        // sw.js back in sole control of display, for both web and native.
         const message = {
           token: sub.nativeToken,
+          notification: {
+            title,
+            body,
+            ...(notifImage ? { image: notifImage } : {})
+          },
           data: {
-            title: title || '',
-            body:  body  || '',
-            page:  data.page  || '',
-            id:    data.id    || '',
-            url:   data.url   || '',
-            image: notifImage || ''
+            page: data.page || '',
+            id:   data.id   || '',
+            url:  data.url  || ''
           },
           android: {
-            priority: 'high'
+            priority: 'high',
+            notification: {
+              sound:     'default',
+              channelId: 'default',
+              ...(notifImage ? { image: notifImage } : {})
+            }
           },
           ...(notifImage ? {
             apns: {
-              payload: { aps: { 'content-available': 1 } }
+              payload: { aps: { 'mutable-content': 1 } },
+              fcmOptions: { image: notifImage }
             }
           } : {})
         };
