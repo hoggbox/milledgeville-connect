@@ -510,6 +510,25 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
       { type: 'shoutout', imageUrl: shoutoutThumb }
     );
 
+    // ── In-app feed notification: fan out to all users ────────────────────────
+    {
+      const allUserIds = await User.find({}, '_id').lean();
+      const feedDocs = allUserIds
+        .filter(u => u._id.toString() !== req.userId)
+        .map(u => ({
+          recipient:   u._id,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'new_shoutout',
+          title:       `${user.name} posted a new Traffic Alert`,
+          body:        text.substring(0, 120),
+          linkPage:    'shoutouts',
+          linkItemId:  shoutout._id.toString(),
+        }));
+      createNotification(feedDocs);
+    }
+
     // ── SSE: push new shoutout to every connected client in real time ──────────
     // Populate authorId so the client has the same shape as the GET /shoutouts response
     const populated = await shoutout.populate('authorId', 'name avatar');
@@ -1450,6 +1469,25 @@ broadcastPush(
   { type: 'lost', imageUrl: lostItemThumb }
 );
 
+    // ── In-app feed notification fan-out ──────────────────────────────────────
+    {
+      const _lfUserIds = await User.find({}, '_id').lean();
+      const _lfFeedDocs = _lfUserIds
+        .filter(u => u._id.toString() !== req.userId)
+        .map(u => ({
+          recipient:   u._id,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'new_lost',
+          title:       isPet ? `🐾 ${user.name} posted a lost pet` : `🔎 ${user.name} posted a Lost & Found item`,
+          body:        title.substring(0, 120),
+          linkPage:    'lostfound',
+          linkItemId:  item._id.toString(),
+        }));
+      createNotification(_lfFeedDocs);
+    }
+
     res.json(item);
   } catch (err) {
     const statusCode = err.status || 500;
@@ -1659,6 +1697,23 @@ router.post('/marketplace', authenticate, async (req, res) => {
         { page: 'marketplace', id: item._id.toString() },
         { type: 'marketplace', subCategory: category, imageUrl: marketplaceThumb }
       );
+
+      // ── In-app feed notification fan-out ──────────────────────────────────
+      const _mpUserIds = await User.find({}, '_id').lean();
+      const _mpFeedDocs = _mpUserIds
+        .filter(u => u._id.toString() !== req.userId)
+        .map(u => ({
+          recipient:   u._id,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'new_marketplace',
+          title:       notifTitle,
+          body:        notifBody.substring(0, 120),
+          linkPage:    'marketplace',
+          linkItemId:  item._id.toString(),
+        }));
+      createNotification(_mpFeedDocs);
     }
 
     res.json(item);
@@ -2738,6 +2793,25 @@ router.post('/news', authenticate, async (req, res) => {
       { type: 'news', imageUrl: newsThumb }
     );
 
+    // ── In-app feed notification fan-out ──────────────────────────────────────
+    {
+      const _newsUserIds = await User.find({}, '_id').lean();
+      const _newsFeedDocs = _newsUserIds
+        .filter(u => u._id.toString() !== req.userId)
+        .map(u => ({
+          recipient:   u._id,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'new_news',
+          title:       `📰 Breaking News: ${title}`,
+          body:        summary.substring(0, 120),
+          linkPage:    'news',
+          linkItemId:  article._id.toString(),
+        }));
+      createNotification(_newsFeedDocs);
+    }
+
     res.json(article);
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2807,9 +2881,9 @@ router.post('/news/:id/comments', authenticate, async (req, res) => {
     const savedNewsComment = article.comments[article.comments.length - 1];
 
     // In-app notification to article author (if not self)
-    if (article.authorId && article.authorId.toString() !== req.userId) {
+    if (article.author && article.author.toString() !== req.userId) {
       createNotification({
-        recipient:   article.authorId,
+        recipient:   article.author,
         actor:       user._id,
         actorName:   user.name,
         actorAvatar: user.profilePhoto || null,
@@ -3348,6 +3422,25 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       );
     }
 
+    // ── In-app feed notification fan-out (always, regardless of push credits) ─
+    {
+      const _dealUserIds = await User.find({}, '_id').lean();
+      const _dealFeedDocs = _dealUserIds
+        .filter(u => u._id.toString() !== req.userId)
+        .map(u => ({
+          recipient:   u._id,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'new_deal',
+          title:       `🔥 New Deal from ${user.verifiedBusiness?.name || user.name}`,
+          body:        title.substring(0, 120),
+          linkPage:    'deals',
+          linkItemId:  deal._id.toString(),
+        }));
+      createNotification(_dealFeedDocs);
+    }
+
     const updatedUser = await User.findById(req.userId).select('notificationCredits');
     res.json({ ...deal.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
   } catch (err) {
@@ -3405,6 +3498,25 @@ router.post('/owner/events', authenticate, async (req, res) => {
         },
         { type: 'event' }
       );
+    }
+
+    // ── In-app feed notification fan-out (always, regardless of push credits) ─
+    {
+      const _evtUserIds = await User.find({}, '_id').lean();
+      const _evtFeedDocs = _evtUserIds
+        .filter(u => u._id.toString() !== req.userId)
+        .map(u => ({
+          recipient:   u._id,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'new_event',
+          title:       `📅 New Event: ${title}`,
+          body:        (location ? `${location} · ` : '') + (description || '').substring(0, 80),
+          linkPage:    'events',
+          linkItemId:  event._id.toString(),
+        }));
+      createNotification(_evtFeedDocs);
     }
 
     const updatedUser = await User.findById(req.userId).select('notificationCredits');
