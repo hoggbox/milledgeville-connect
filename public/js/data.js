@@ -1496,7 +1496,12 @@ function renderNewsCommentRow(c, articleId) {
   const cName   = c.author || c.authorId?.name || 'Anonymous';
   const replies  = c.replies || [];
   const userIsAdmin = isAdmin();
-  const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
+  const myId = currentUser?._id || currentUser?.id || '';
+  const cAuthorId = (c.authorId && c.authorId._id) ? c.authorId._id : c.authorId;
+  const isCommentAuthor = currentUser && cAuthorId && String(cAuthorId) === String(myId);
+  const cEditedTag = c.edited
+    ? `<span style="color:rgba(255,255,255,0.3);font-size:10px;" title="${c.editedAt ? new Date(c.editedAt).toLocaleString() : ''}">· edited</span>`
+    : '';
 
   let repliesHtml = '';
   if (replies.length) {
@@ -1504,15 +1509,26 @@ function renderNewsCommentRow(c, articleId) {
     replies.forEach(r => {
       const rAvatar = r.authorId?.avatar || r.authorId?.profilePhoto || null;
       const rName   = r.author || r.authorId?.name || 'Anonymous';
+      const rAuthorId = (r.authorId && r.authorId._id) ? r.authorId._id : r.authorId;
+      const isReplyAuthor = currentUser && rAuthorId && String(rAuthorId) === String(myId);
+      const rEditedTag = r.edited
+        ? `<span style="color:rgba(255,255,255,0.3);font-size:10px;" title="${r.editedAt ? new Date(r.editedAt).toLocaleString() : ''}">· edited</span>`
+        : '';
       repliesHtml += `
         <div class="flex items-start gap-2" id="news-reply-${r._id}">
           <div style="width:24px;height:24px;flex-shrink:0;">${avatarHtml(rName, rAvatar, '24px', '8px', '#0d9488')}</div>
           <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-white/80">${esc(rName)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
+              ${rEditedTag}
+              ${isReplyAuthor || userIsAdmin ? `
+                <button onclick="startEditNewsReply('${articleId}','${c._id}','${r._id}')"
+                        class="text-[10px] text-white/40 hover:text-emerald-400 transition ml-1">edit</button>
+                <button onclick="deleteNewsReply('${articleId}','${c._id}','${r._id}')"
+                        class="text-[10px] text-red-400/50 hover:text-red-400 transition">✕ delete</button>` : ''}
             </div>
-            <p class="text-sm text-white/75">${r.text}</p>
+            <p class="text-sm text-white/75" id="news-reply-text-${r._id}">${esc(r.text)}</p>
           </div>
         </div>`;
     });
@@ -1528,11 +1544,14 @@ function renderNewsCommentRow(c, articleId) {
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-white/80">${esc(cName)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
+              ${cEditedTag}
               ${isCommentAuthor || userIsAdmin ? `
+                <button onclick="startEditNewsComment('${articleId}','${c._id}')"
+                        class="text-[10px] text-white/40 hover:text-emerald-400 transition ml-1">edit</button>
                 <button onclick="deleteNewsComment('${articleId}','${c._id}')"
-                        class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
+                        class="text-[10px] text-red-400/50 hover:text-red-400 transition">✕ delete</button>` : ''}
             </div>
-            ${c.text ? `<p class="text-sm text-white/80 mt-0.5">${esc(c.text)}</p>` : ''}
+            ${c.text ? `<p class="text-sm text-white/80 mt-0.5" id="news-comment-text-${c._id}">${esc(c.text)}</p>` : ''}
             ${c.image ? `
               <img src="${c.image}" alt="comment image"
                    onclick="openCommentImageLightbox('${c.image}')"
@@ -1553,7 +1572,7 @@ function renderNewsCommentRow(c, articleId) {
               <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-1.5">
                 <input id="news-replyinput-${c._id}" type="text"
                   class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
-                  placeholder="Reply to ${esc(c.author)}…"
+                  placeholder="Reply to ${esc(c.author || 'Anonymous')}…"
                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewsReply('${articleId}','${c._id}');}">
                 <button onclick="submitNewsReply('${articleId}','${c._id}')"
                         class="text-emerald-400 hover:text-emerald-300 transition text-xs font-semibold">Post</button>
@@ -1718,6 +1737,131 @@ window.submitNewsReply = async function(articleId, commentId) {
     _renderNewsCommentList(articleId);
   } else {
     showToast(res.message || 'Error posting reply', 'error');
+  }
+};
+
+// ── News comment / reply edit & delete-reply ─────────────────────────────────
+
+window.deleteNewsReply = async function(articleId, commentId, replyId) {
+  if (!confirm('Delete this reply?')) return;
+  const res = await apiDelete(`/news/${articleId}/comments/${commentId}/replies/${replyId}`);
+  if (res.message === 'Deleted') {
+    const cache = window._newsCommentDataCache[articleId] || [];
+    const comment = cache.find(c => c._id === commentId);
+    if (comment) comment.replies = (comment.replies || []).filter(r => r._id !== replyId);
+    _renderNewsCommentList(articleId);
+  } else {
+    showToast(res.message || 'Error deleting reply', 'error');
+  }
+};
+
+window.startEditNewsComment = function(articleId, commentId) {
+  const textEl = document.getElementById(`news-comment-text-${commentId}`);
+  if (!textEl) return;
+  const current = textEl.textContent || '';
+  textEl.outerHTML = `
+    <div id="news-comment-edit-wrap-${commentId}" class="mt-1">
+      <textarea id="news-comment-edit-input-${commentId}"
+                class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm text-white resize-none focus:outline-none"
+                rows="2">${esc(current)}</textarea>
+      <div class="flex gap-2 mt-1">
+        <button onclick="saveEditNewsComment('${articleId}','${commentId}')"
+                class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg transition">Save</button>
+        <button onclick="cancelEditNewsComment('${articleId}','${commentId}')"
+                class="text-xs text-white/40 hover:text-white/70 transition">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById(`news-comment-edit-input-${commentId}`)?.focus();
+};
+
+window.cancelEditNewsComment = function(articleId, commentId) {
+  const cache = window._newsCommentDataCache[articleId] || [];
+  const comment = cache.find(c => c._id === commentId);
+  const wrap = document.getElementById(`news-comment-edit-wrap-${commentId}`);
+  if (wrap && comment) {
+    wrap.outerHTML = `<p class="text-sm text-white/80 mt-0.5" id="news-comment-text-${commentId}">${esc(comment.text || '')}</p>`;
+  }
+};
+
+window.saveEditNewsComment = async function(articleId, commentId) {
+  const input = document.getElementById(`news-comment-edit-input-${commentId}`);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) { showToast('Comment cannot be empty', 'error'); return; }
+  if (checkForSketchyInput(text, 'comment')) return;
+
+  try {
+    const res = await apiPut(`/news/${articleId}/comments/${commentId}`, { text });
+    if (res._id || res.text !== undefined) {
+      const cache = window._newsCommentDataCache[articleId] || [];
+      const comment = cache.find(c => c._id === commentId);
+      if (comment) {
+        comment.text    = res.text    ?? text;
+        comment.edited  = true;
+        comment.editedAt = res.editedAt || new Date().toISOString();
+      }
+      _renderNewsCommentList(articleId);
+    } else {
+      showToast(res.message || 'Error saving edit', 'error');
+    }
+  } catch (err) {
+    showToast('Error saving edit', 'error');
+  }
+};
+
+window.startEditNewsReply = function(articleId, commentId, replyId) {
+  const textEl = document.getElementById(`news-reply-text-${replyId}`);
+  if (!textEl) return;
+  const current = textEl.textContent || '';
+  textEl.outerHTML = `
+    <div id="news-reply-edit-wrap-${replyId}" class="mt-0.5">
+      <textarea id="news-reply-edit-input-${replyId}"
+                class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white resize-none focus:outline-none"
+                rows="2">${esc(current)}</textarea>
+      <div class="flex gap-2 mt-1">
+        <button onclick="saveEditNewsReply('${articleId}','${commentId}','${replyId}')"
+                class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg transition">Save</button>
+        <button onclick="cancelEditNewsReply('${articleId}','${commentId}','${replyId}')"
+                class="text-xs text-white/40 hover:text-white/70 transition">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById(`news-reply-edit-input-${replyId}`)?.focus();
+};
+
+window.cancelEditNewsReply = function(articleId, commentId, replyId) {
+  const cache = window._newsCommentDataCache[articleId] || [];
+  const comment = cache.find(c => c._id === commentId);
+  const reply = (comment?.replies || []).find(r => r._id === replyId);
+  const wrap = document.getElementById(`news-reply-edit-wrap-${replyId}`);
+  if (wrap && reply) {
+    wrap.outerHTML = `<p class="text-sm text-white/75" id="news-reply-text-${replyId}">${esc(reply.text || '')}</p>`;
+  }
+};
+
+window.saveEditNewsReply = async function(articleId, commentId, replyId) {
+  const input = document.getElementById(`news-reply-edit-input-${replyId}`);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) { showToast('Reply cannot be empty', 'error'); return; }
+  if (checkForSketchyInput(text, 'reply')) return;
+
+  try {
+    const res = await apiPut(`/news/${articleId}/comments/${commentId}/replies/${replyId}`, { text });
+    if (res._id || res.text !== undefined) {
+      const cache = window._newsCommentDataCache[articleId] || [];
+      const comment = cache.find(c => c._id === commentId);
+      const reply = (comment?.replies || []).find(r => r._id === replyId);
+      if (reply) {
+        reply.text     = res.text    ?? text;
+        reply.edited   = true;
+        reply.editedAt = res.editedAt || new Date().toISOString();
+      }
+      _renderNewsCommentList(articleId);
+    } else {
+      showToast(res.message || 'Error saving edit', 'error');
+    }
+  } catch (err) {
+    showToast('Error saving edit', 'error');
   }
 };
 
@@ -3440,16 +3584,20 @@ window.postShoutoutWithPhoto = async function () {
 }
 
 function renderShoutoutCard(s) {
-  const authorAvatar = s.authorId?.avatar || null;
+  const authorAvatar = s.authorId?.avatar || s.authorId?.profilePhoto || null;
   const authorName   = s.author || s.authorId?.name || 'Anonymous';
   const likeCount = s.likes ? s.likes.length : 0;
   const comments = s.comments || [];
   const commentCount = comments.length;
-  const isAuthor = currentUser && (s.authorId === currentUser._id || s.authorId === currentUser.id);
-  const stillThereVoters = s.stillThereVoters || [];
+  const sAuthorId = (s.authorId && s.authorId._id) ? s.authorId._id : s.authorId;
   const myId = currentUser?._id || currentUser?.id || '';
+  const isAuthor = currentUser && sAuthorId && String(sAuthorId) === String(myId);
+  const stillThereVoters = s.stillThereVoters || [];
   const hasVotedStillThere = stillThereVoters.some(v => (v?._id || v)?.toString() === myId?.toString());
   const hasLiked = (s.likes || []).some(v => (v?._id || v)?.toString() === myId?.toString());
+  const editedTag = s.edited
+    ? `<span style="color:rgba(255,255,255,0.35);font-size:11px;margin-left:4px;" title="${s.editedAt ? new Date(s.editedAt).toLocaleString() : ''}">· Edited</span>`
+    : '';
   const locationTag = s.location?.label
     ? `<div class="sc-location">\u{1F4CD} ${esc(s.location.label)}</div>`
     : '';
@@ -3462,15 +3610,18 @@ function renderShoutoutCard(s) {
         ${avatarHtml(authorName, authorAvatar, '36px', '50%', '#059669')}
         <div>
           <div class="sc-name">${renderClickableUser(s.authorId ? { _id: s.authorId?._id || s.authorId, name: s.author || 'Anonymous' } : s.author)}</div>
-          <div class="sc-time">${timeAgo(s.createdAt)}</div>
+          <div class="sc-time">${timeAgo(s.createdAt)}${editedTag}</div>
         </div>
       </div>
       ${isAuthor
-        ? `<span class="sc-yours">Yours</span>`
+        ? `<div style="display:flex;align-items:center;gap:6px;">
+             <button onclick="event.stopImmediatePropagation(); startEditShoutout('${s._id}')" class="sc-flag-btn" title="Edit">\u270F\uFE0F</button>
+             <button onclick="event.stopImmediatePropagation(); deleteShoutout('${s._id}')" class="sc-flag-btn" title="Delete">\uD83D\uDDD1\uFE0F</button>
+           </div>`
         : `<button onclick="event.stopImmediatePropagation(); reportContent('shoutout','${s._id}','${esc(s.text||'').substring(0,80)}...')" class="sc-flag-btn" title="Report">\u{1F6A9}</button>`}
     </div>
     ${locationTag}
-    <p class="sc-text">${esc(s.text)}</p>
+    <p class="sc-text" id="sc-text-${s._id}">${esc(s.text)}</p>
   </div>
   ${s.images && s.images.length ? `
     <div class="sc-images">
@@ -3574,7 +3725,12 @@ function renderCommentRow(c, shoutoutId) {
   const replies = c.replies || [];
   const replyCount = replies.length;
   const userIsAdmin = isAdmin();
-  const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
+  const myId = currentUser?._id || currentUser?.id || '';
+  const cAuthorId = (c.authorId && c.authorId._id) ? c.authorId._id : c.authorId;
+  const isCommentAuthor = currentUser && cAuthorId && String(cAuthorId) === String(myId);
+  const cEditedTag = c.edited
+    ? `<span style="color:rgba(255,255,255,0.3);font-size:10px;" title="${c.editedAt ? new Date(c.editedAt).toLocaleString() : ''}">· edited</span>`
+    : '';
 
   let repliesHtml = '';
   if (replyCount > 0) {
@@ -3582,15 +3738,26 @@ function renderCommentRow(c, shoutoutId) {
     replies.forEach(r => {
       const rAvatar = r.authorId?.avatar || r.authorId?.profilePhoto || null;
       const rName   = r.author || r.authorId?.name || 'Anonymous';
+      const rAuthorId = (r.authorId && r.authorId._id) ? r.authorId._id : r.authorId;
+      const isReplyAuthor = currentUser && rAuthorId && String(rAuthorId) === String(myId);
+      const rEditedTag = r.edited
+        ? `<span style="color:rgba(255,255,255,0.3);font-size:10px;" title="${r.editedAt ? new Date(r.editedAt).toLocaleString() : ''}">· edited</span>`
+        : '';
       repliesHtml += `
         <div class="flex items-start gap-2" id="reply-${r._id}">
           <div style="margin-top:2px;">${avatarHtml(rName, rAvatar, '24px', '8px', '#0d9488')}</div>
           <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-white/80">${renderClickableUser(r.authorId ? { _id: r.authorId?._id || r.authorId, name: r.author || 'Anonymous' } : r.author)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
+              ${rEditedTag}
+              ${isReplyAuthor || userIsAdmin ? `
+                <button onclick="startEditReply('${shoutoutId}','${c._id}','${r._id}')"
+                        class="text-[10px] text-white/40 hover:text-emerald-400 transition ml-1">edit</button>
+                <button onclick="deleteReply('${shoutoutId}','${c._id}','${r._id}')"
+                        class="text-[10px] text-red-400/50 hover:text-red-400 transition">✕ delete</button>` : ''}
             </div>
-            <p class="text-sm text-white/75">${r.text}</p>
+            <p class="text-sm text-white/75" id="reply-text-${r._id}">${esc(r.text)}</p>
           </div>
         </div>`;
     });
@@ -3606,11 +3773,14 @@ function renderCommentRow(c, shoutoutId) {
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-white/80">${renderClickableUser(c.authorId ? { _id: c.authorId?._id || c.authorId, name: c.author || 'Anonymous' } : c.author)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
+              ${cEditedTag}
               ${isCommentAuthor || userIsAdmin ? `
+                <button onclick="startEditComment('${shoutoutId}','${c._id}')"
+                        class="text-[10px] text-white/40 hover:text-emerald-400 transition ml-1">edit</button>
                 <button onclick="deleteComment('${shoutoutId}','${c._id}')" 
-                        class="text-[10px] text-red-400/50 hover:text-red-400 transition ml-1">✕ delete</button>` : ''}
+                        class="text-[10px] text-red-400/50 hover:text-red-400 transition">✕ delete</button>` : ''}
             </div>
-            ${c.text ? `<p class="text-sm text-white/80 mt-0.5">${c.text}</p>` : ''}
+            ${c.text ? `<p class="text-sm text-white/80 mt-0.5" id="comment-text-${c._id}">${esc(c.text)}</p>` : ''}
             ${c.image ? `
               <img src="${c.image}" alt="comment image"
                    onclick="openCommentImageLightbox('${c.image}')"
@@ -3631,7 +3801,7 @@ function renderCommentRow(c, shoutoutId) {
               <div class="flex-1 flex items-center gap-2 bg-white/10 border border-white/20 rounded-2xl px-3 py-1.5">
                 <input id="replyinput-${c._id}" type="text"
                   class="flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none text-sm"
-                  placeholder="Reply to ${c.author}…"
+                  placeholder="Reply to ${esc(c.author || 'Anonymous')}…"
                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitReply('${shoutoutId}','${c._id}');}">
                 <button onclick="submitReply('${shoutoutId}','${c._id}')" 
                         class="text-emerald-400 hover:text-emerald-300 transition text-xs font-semibold">Post</button>
@@ -4173,6 +4343,102 @@ window.deleteComment = async function (shoutoutId, commentId) {
   }
 };
 
+// ─── EDIT comment (inline swap, mirrors startEditShoutout) ────────────────────
+window.startEditComment = function (shoutoutId, commentId) {
+  const textEl = document.getElementById(`comment-text-${commentId}`);
+  if (!textEl) return;
+  const currentText = textEl.textContent;
+  textEl.outerHTML = `
+    <div id="comment-text-${commentId}" class="mt-0.5">
+      <textarea id="comment-edit-input-${commentId}" rows="2"
+        class="w-full bg-white/10 border border-white/20 rounded-xl p-2 text-white text-sm resize-none focus:outline-none focus:border-emerald-400">${esc(currentText)}</textarea>
+      <div class="flex justify-end gap-2 mt-1">
+        <button onclick="event.stopImmediatePropagation(); _renderCommentList('${shoutoutId}')"
+                class="text-[10px] text-white/50 hover:text-white transition">Cancel</button>
+        <button onclick="event.stopImmediatePropagation(); saveEditComment('${shoutoutId}','${commentId}')"
+                class="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold transition">Save</button>
+      </div>
+    </div>`;
+};
+
+window.saveEditComment = async function (shoutoutId, commentId) {
+  const input = document.getElementById(`comment-edit-input-${commentId}`);
+  if (!input) return;
+  const newText = input.value.trim();
+  const res = await apiPut(`/shoutouts/${shoutoutId}/comments/${commentId}`, { text: newText });
+  if (res._id) {
+    const cache = window._commentDataCache[shoutoutId] || [];
+    const comment = cache.find(c => c._id === commentId);
+    if (comment) {
+      comment.text = res.text;
+      comment.edited = true;
+      comment.editedAt = res.editedAt;
+    }
+    _renderCommentList(shoutoutId);
+  } else {
+    showToast(res.message || 'Error updating comment', 'error');
+  }
+};
+
+// ─── DELETE / EDIT reply ────────────────────────────────────────────────────
+window.deleteReply = async function (shoutoutId, commentId, replyId) {
+  if (!confirm('Delete this reply?')) return;
+  const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`);
+  if (res.message === 'Deleted') {
+    const cache = window._commentDataCache[shoutoutId] || [];
+    const comment = cache.find(c => c._id === commentId);
+    if (comment && comment.replies) {
+      comment.replies = comment.replies.filter(r => r._id !== replyId);
+    }
+    _renderCommentList(shoutoutId);
+  } else {
+    showToast(res.message || 'Error deleting reply', 'error');
+  }
+};
+
+window.startEditReply = function (shoutoutId, commentId, replyId) {
+  const textEl = document.getElementById(`reply-text-${replyId}`);
+  if (!textEl) return;
+  const currentText = textEl.textContent;
+  textEl.outerHTML = `
+    <div id="reply-text-${replyId}">
+      <textarea id="reply-edit-input-${replyId}" rows="2"
+        class="w-full bg-white/10 border border-white/20 rounded-xl p-2 text-white text-sm resize-none focus:outline-none focus:border-emerald-400">${esc(currentText)}</textarea>
+      <div class="flex justify-end gap-2 mt-1">
+        <button onclick="event.stopImmediatePropagation(); _renderCommentList('${shoutoutId}')"
+                class="text-[10px] text-white/50 hover:text-white transition">Cancel</button>
+        <button onclick="event.stopImmediatePropagation(); saveEditReply('${shoutoutId}','${commentId}','${replyId}')"
+                class="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold transition">Save</button>
+      </div>
+    </div>`;
+};
+
+window.saveEditReply = async function (shoutoutId, commentId, replyId) {
+  const input = document.getElementById(`reply-edit-input-${replyId}`);
+  if (!input) return;
+  const newText = input.value.trim();
+  if (!newText) {
+    showToast('Reply cannot be empty', 'error');
+    return;
+  }
+  const res = await apiPut(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`, { text: newText });
+  if (res._id) {
+    const cache = window._commentDataCache[shoutoutId] || [];
+    const comment = cache.find(c => c._id === commentId);
+    if (comment && comment.replies) {
+      const reply = comment.replies.find(r => r._id === replyId);
+      if (reply) {
+        reply.text = res.text;
+        reply.edited = true;
+        reply.editedAt = res.editedAt;
+      }
+    }
+    _renderCommentList(shoutoutId);
+  } else {
+    showToast(res.message || 'Error updating reply', 'error');
+  }
+};
+
 window.deleteShoutout = async function (shoutoutId) {
   if (!confirm('Delete this traffic alert?')) return;
   const res = await apiDelete(`/shoutouts/${shoutoutId}`);
@@ -4181,6 +4447,48 @@ window.deleteShoutout = async function (shoutoutId) {
     await loadShoutoutsPage(document.getElementById('content'));
   } else {
     showToast(res.message || 'Error', 'error');
+  }
+};
+
+// ─── EDIT shoutout post (inline textarea swap) ────────────────────────────────
+window.startEditShoutout = function (shoutoutId) {
+  const textEl = document.getElementById(`sc-text-${shoutoutId}`);
+  if (!textEl) return;
+  const currentText = textEl.textContent;
+  textEl.dataset.originalHtml = textEl.outerHTML;
+  textEl.outerHTML = `
+    <div id="sc-text-${shoutoutId}" class="sc-edit-box">
+      <textarea id="sc-edit-input-${shoutoutId}" rows="2"
+        class="w-full bg-white/10 border border-white/20 rounded-2xl p-3 text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 resize-none text-sm">${esc(currentText)}</textarea>
+      <div class="flex justify-end gap-2 mt-2">
+        <button onclick="event.stopImmediatePropagation(); cancelEditShoutout('${shoutoutId}')"
+                class="px-4 py-1.5 rounded-2xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white/70 transition">Cancel</button>
+        <button onclick="event.stopImmediatePropagation(); saveEditShoutout('${shoutoutId}')"
+                class="px-4 py-1.5 rounded-2xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition">Save</button>
+      </div>
+    </div>`;
+  window._shoutoutOriginalText = window._shoutoutOriginalText || {};
+  window._shoutoutOriginalText[shoutoutId] = currentText;
+};
+
+window.cancelEditShoutout = function (shoutoutId) {
+  loadShoutoutsPage(document.getElementById('content'));
+};
+
+window.saveEditShoutout = async function (shoutoutId) {
+  const input = document.getElementById(`sc-edit-input-${shoutoutId}`);
+  if (!input) return;
+  const newText = input.value.trim();
+  if (!newText) {
+    showToast('Traffic alert text cannot be empty', 'error');
+    return;
+  }
+  const res = await apiPut(`/shoutouts/${shoutoutId}`, { text: newText });
+  if (res._id) {
+    showToast('✅ Traffic alert updated');
+    await loadShoutoutsPage(document.getElementById('content'));
+  } else {
+    showToast(res.message || 'Error updating traffic alert', 'error');
   }
 };
 

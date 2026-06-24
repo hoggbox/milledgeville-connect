@@ -2084,6 +2084,40 @@ router.delete('/shoutouts/:id', authenticate, async (req, res) => {
   }
 });
 
+router.put('/shoutouts/:id', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const isAuthor = shoutout.authorId && shoutout.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const { text, images } = clean;
+    const newText = (text !== undefined) ? text.trim() : shoutout.text;
+    const newImages = (images !== undefined) ? images : shoutout.images;
+
+    if (!newText && !(Array.isArray(newImages) && newImages.length)) {
+      return res.status(400).json({ message: 'Text or at least one photo is required' });
+    }
+
+    shoutout.text = newText;
+    shoutout.images = newImages;
+    shoutout.edited = true;
+    shoutout.editedAt = new Date();
+    await shoutout.save();
+
+    const populated = await shoutout.populate('authorId', 'name avatar profilePhoto');
+    broadcastShoutoutSSE('edit-shoutout', populated.toObject());
+
+    res.json(populated);
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
 router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.id);
@@ -2097,6 +2131,46 @@ router.delete('/shoutouts/:id/comments/:commentId', authenticate, async (req, re
     comment.deleteOne();
     await shoutout.save();
     res.json({ message: 'Deleted' });
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+router.put('/shoutouts/:id/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const comment = shoutout.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const newText = (clean.text !== undefined) ? clean.text.trim() : comment.text;
+
+    if (!newText && !comment.image) {
+      return res.status(400).json({ message: 'Comment must have text or an image' });
+    }
+
+    comment.text = newText;
+    comment.edited = true;
+    comment.editedAt = new Date();
+    await shoutout.save();
+
+    broadcastShoutoutSSE('edit-comment', {
+      shoutoutId: shoutout._id.toString(),
+      comment: {
+        _id: comment._id,
+        text: comment.text,
+        edited: comment.edited,
+        editedAt: comment.editedAt,
+      }
+    });
+
+    res.json(comment);
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
@@ -2743,6 +2817,35 @@ router.delete('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticat
   }
 });
 
+router.put('/shoutouts/:id/comments/:commentId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const shoutout = await Shoutout.findById(req.params.id);
+    if (!shoutout) return res.status(404).json({ message: 'Not found' });
+    const user    = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const comment = shoutout.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const reply   = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+    const isAuthor= reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const newText = (clean.text || '').trim();
+    if (!newText) return res.status(400).json({ message: 'Reply cannot be empty' });
+
+    reply.text = newText;
+    reply.edited = true;
+    reply.editedAt = new Date();
+    await shoutout.save();
+
+    res.json(reply);
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
 // ─── EVENTS (Paginated) ────────────────────────────────────────────────────
 router.get('/events', optionalAuth, async (req, res) => {
   try {
@@ -2904,11 +3007,14 @@ router.put('/news/:id', authenticate, async (req, res) => {
     if (!article) return res.status(404).json({ message: 'Not found' });
     const isAuthor = article.author.toString() === req.userId;
     if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
-    const { title, summary, content, images } = req.body;
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const { title, summary, content, images } = clean;
     article.title   = title   || article.title;
     article.summary = summary || article.summary;
     article.content = content || article.content;
     if (images !== undefined) article.images = images;
+    article.edited = true;
+    article.editedAt = new Date();
     await article.save();
     res.json(article);
   } catch (err) {
@@ -2997,6 +3103,35 @@ router.delete('/news/:id/comments/:commentId', authenticate, async (req, res) =>
   }
 });
 
+router.put('/news/:id/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const user    = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    const comment = article.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const newText = (clean.text !== undefined) ? clean.text.trim() : comment.text;
+
+    if (!newText && !comment.image) {
+      return res.status(400).json({ message: 'Comment must have text or an image' });
+    }
+
+    comment.text = newText;
+    comment.edited = true;
+    comment.editedAt = new Date();
+    await article.save();
+
+    res.json(comment);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
 router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, res) => {
   try {
     const user    = await User.findById(req.userId);
@@ -3050,6 +3185,54 @@ router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, r
     }
 
     res.json(savedReply);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.delete('/news/:id/comments/:commentId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const user    = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    const comment = article.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const reply   = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+    const isAuthor = reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+    reply.deleteOne();
+    await article.save();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.put('/news/:id/comments/:commentId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const user    = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const article = await News.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Not found' });
+    const comment = article.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const reply   = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+    const isAuthor = reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const newText = (clean.text || '').trim();
+    if (!newText) return res.status(400).json({ message: 'Reply cannot be empty' });
+
+    reply.text = newText;
+    reply.edited = true;
+    reply.editedAt = new Date();
+    await article.save();
+
+    res.json(reply);
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message });
   }
