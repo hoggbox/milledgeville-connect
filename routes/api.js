@@ -5509,12 +5509,13 @@ router.get('/notifications', authenticate, async (req, res) => {
       return res.json({ notifications: [], unreadCount: 0 });
     }
 
+    const uid = new mongoose.Types.ObjectId(req.userId);
     const limit  = Math.min(parseInt(req.query.limit) || 30, 100);
     const before = req.query.before ? new Date(req.query.before) : null;
     const unreadOnly = req.query.unreadOnly === 'true';
 
     const filter = {
-      recipient: req.userId,
+      recipient: uid,
       deleted: false,
     };
     if (before) filter.createdAt = { $lt: before };
@@ -5526,7 +5527,7 @@ router.get('/notifications', authenticate, async (req, res) => {
         .limit(limit)
         .lean(),
       NotificationFeed.countDocuments({
-        recipient: req.userId,
+        recipient: uid,
         deleted: false,
         read: false,
       })
@@ -5547,10 +5548,11 @@ router.get('/notifications', authenticate, async (req, res) => {
 router.post('/notifications/read', authenticate, async (req, res) => {
   try {
     const { id, all } = req.body;
+    const uid = new mongoose.Types.ObjectId(req.userId);
 
     if (all) {
       await NotificationFeed.updateMany(
-        { recipient: req.userId, read: false },
+        { recipient: uid, read: false },
         { $set: { read: true } }
       );
       return res.json({ ok: true });
@@ -5558,7 +5560,7 @@ router.post('/notifications/read', authenticate, async (req, res) => {
 
     if (id) {
       await NotificationFeed.updateOne(
-        { _id: id, recipient: req.userId },
+        { _id: id, recipient: uid },
         { $set: { read: true } }
       );
       return res.json({ ok: true });
@@ -5576,8 +5578,9 @@ router.post('/notifications/read', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/notifications/:id', authenticate, async (req, res) => {
   try {
+    const uid = new mongoose.Types.ObjectId(req.userId);
     await NotificationFeed.updateOne(
-      { _id: req.params.id, recipient: req.userId },
+      { _id: req.params.id, recipient: uid },
       { $set: { deleted: true } }
     );
     res.json({ ok: true });
@@ -5592,8 +5595,9 @@ router.delete('/notifications/:id', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/notifications', authenticate, async (req, res) => {
   try {
+    const uid = new mongoose.Types.ObjectId(req.userId);
     await NotificationFeed.updateMany(
-      { recipient: req.userId },
+      { recipient: uid },
       { $set: { deleted: true } }
     );
     res.json({ ok: true });
@@ -5611,8 +5615,9 @@ router.get('/notifications/unread-count', authenticate, async (req, res) => {
     if (!req.userId) {
       return res.json({ count: 0 });
     }
+    const uid = new mongoose.Types.ObjectId(req.userId);
     const count = await NotificationFeed.countDocuments({
-      recipient: req.userId,
+      recipient: uid,
       deleted: false,
       read: false,
     });
