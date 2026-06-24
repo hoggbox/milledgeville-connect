@@ -683,14 +683,26 @@ function _setBadge(count) {
 
 async function updateMessageBadge() {
   if (typeof currentUser === 'undefined' || !currentUser?._id) return;
+
   try {
     const inbox = await apiGet('/messages/inbox');
-    const unreadCount = inbox.filter(m =>
+
+    // Defensive check
+    if (!inbox || !Array.isArray(inbox)) {
+      console.warn('[Badge] Unexpected inbox response (not an array):', inbox);
+      _setBadge(0);
+      return;
+    }
+
+    const unreadCount = inbox.filter(m => 
       !m.read && String(m.receiver?._id || m.receiver) === String(currentUser._id)
     ).length;
+
     _setBadge(unreadCount);
+
   } catch (e) {
-    console.error('❌ [Badge] API error:', e);
+    console.warn('❌ [Badge] API error:', e.message || e);
+    _setBadge(0);
   }
 }
 
