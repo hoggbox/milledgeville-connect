@@ -136,6 +136,9 @@ function _togglePanel(origin) {
   _loadNotifications();
 }
 
+// Expose for the nav.js bridge (called by the bell buttons rendered in renderNav)
+window._notificationFeedToggle = _togglePanel;
+
 // ─── Build panel DOM ──────────────────────────────────────────────────────────
 function _openPanel(origin) {
   const panel = document.createElement('div');
@@ -445,7 +448,7 @@ function _injectStyles() {
       position: fixed;
       z-index: 99999;
       background: #0f172a;
-      border: 1px solid rgba(255,255,255,0.1);
+      border: 1px border solid rgba(255,255,255,0.1);
       border-radius: 20px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.6);
       display: flex;
