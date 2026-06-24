@@ -31,6 +31,7 @@ const Message         = require('../models/Message');   // ← NEW MESSAGING MOD
 const Report          = require('../models/Report');
 const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO POSTS
 const ScheduledNotification = require('../models/ScheduledNotification');
+const NotificationFeed      = require('../models/NotificationFeed');
 
 // \u2500\u2500\u2500 Inline model: SpotlightAd (singleton \u2014 only one doc ever exists) \u2500\u2500\u2500\u2500\u2500\u2500
 const spotlightAdSchema = new mongoose.Schema({
@@ -1647,6 +1648,18 @@ router.post('/lostitems/:id/comments', authenticate, async (req, res) => {
           }
         );
       }
+      // Always create in-app feed notification regardless of push prefs
+      createNotification({
+        recipient:   lost.owner,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'comment',
+        title:       `${user.name} commented on your Lost & Found post`,
+        body:        commentText.substring(0, 120),
+        linkPage:    'lostfound',
+        linkItemId:  lost._id.toString(),
+      });
     }
     res.json(lost.comments[lost.comments.length - 1]);
   } catch (err) {
@@ -1943,6 +1956,18 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
           }
         );
       }
+      // Always create in-app feed notification regardless of push prefs
+      createNotification({
+        recipient:   item.seller,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'comment',
+        title:       `${user.name} commented on your Marketplace listing`,
+        body:        commentText.substring(0, 120),
+        linkPage:    'marketplace',
+        linkItemId:  item._id.toString(),
+      });
     }
     res.json(item.comments[item.comments.length - 1]);
   } catch (err) {
@@ -2648,6 +2673,22 @@ router.post('/shoutouts/:id/comments', authenticate, async (req, res) => {
       { type: 'comment' }          // filter
     );
 
+    // In-app notification to post author (if not self)
+    if (shoutout.userId && shoutout.userId.toString() !== req.userId) {
+      createNotification({
+        recipient:   shoutout.userId,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'comment',
+        title:       `${user.name} commented on your Traffic Alert`,
+        body:        commentText.substring(0, 120),
+        linkPage:    'shoutouts',
+        linkItemId:  shoutout._id.toString(),
+        linkAnchor:  `comment-${savedComment._id}`,
+      });
+    }
+
     res.json(savedComment);
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2683,6 +2724,19 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
           { page: 'shoutouts', id: req.params.id, url: `/shoutouts/${req.params.id}` }
         );
       }
+      // Always create in-app feed notification
+      createNotification({
+        recipient:   comment.authorId,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'reply',
+        title:       `${user.name} replied to your comment`,
+        body:        (req.body.text || '').trim().substring(0, 120),
+        linkPage:    'shoutouts',
+        linkItemId:  req.params.id,
+        linkAnchor:  `comment-${req.params.commentId}`,
+      });
     }
 
     res.json(comment.replies[comment.replies.length - 1]);
@@ -2899,7 +2953,25 @@ router.post('/news/:id/comments', authenticate, async (req, res) => {
 
     article.comments.push(comment);
     await article.save();
-    res.json(article.comments[article.comments.length - 1]);
+    const savedNewsComment = article.comments[article.comments.length - 1];
+
+    // In-app notification to article author (if not self)
+    if (article.authorId && article.authorId.toString() !== req.userId) {
+      createNotification({
+        recipient:   article.authorId,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'comment',
+        title:       `${user.name} commented on your news article`,
+        body:        (comment.text || '').substring(0, 120),
+        linkPage:    'news',
+        linkItemId:  article._id.toString(),
+        linkAnchor:  `comment-${savedNewsComment._id}`,
+      });
+    }
+
+    res.json(savedNewsComment);
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message });
   }
@@ -5243,6 +5315,223 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
     res.status(statusCode).json({ message: err.message });
   }
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NOTIFICATION FEED ROUTES
+// Drop this entire block into api.js (above module.exports = router)
+//
+// Call createNotification() from anywhere in api.js to fan out a notification.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── HELPER: create one or many notification docs ────────────────────────────
+// Usage:
+//   await createNotification({ recipient, actor, type, title, body, linkPage, linkItemId, linkAnchor, actorAvatar, actorName })
+//   await createNotification([{ ... }, { ... }])   // bulk
+//
+// Always fire-and-forget (don't await in hot paths) or wrap in try/catch.
+// ─────────────────────────────────────────────────────────────────────────────
+async function createNotification(data) {
+  try {
+    if (Array.isArray(data)) {
+      if (!data.length) return;
+      await NotificationFeed.insertMany(data, { ordered: false });
+    } else {
+      await NotificationFeed.create(data);
+    }
+  } catch (err) {
+    // Never crash the caller — just log
+    console.error('[NotificationFeed] createNotification error:', err.message);
+  }
+}
+
+// Make it importable/usable across this file
+// (since everything is in one big api.js file, we just declare it above)
+
+// ─── GET /api/notifications ───────────────────────────────────────────────────
+// Returns the current user's notification feed.
+// Query params:
+//   ?limit=30   (default 30, max 100)
+//   ?before=ISO_DATE  (for cursor-based pagination, load older)
+//   ?unreadOnly=true
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/notifications', authenticate, async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit) || 30, 100);
+    const before = req.query.before ? new Date(req.query.before) : null;
+    const unreadOnly = req.query.unreadOnly === 'true';
+
+    const filter = {
+      recipient: req.user._id,
+      deleted: false,
+    };
+    if (before) filter.createdAt = { $lt: before };
+    if (unreadOnly) filter.read = false;
+
+    const [notifications, unreadCount] = await Promise.all([
+      NotificationFeed.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+      NotificationFeed.countDocuments({
+        recipient: req.user._id,
+        deleted: false,
+        read: false,
+      })
+    ]);
+
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    console.error('GET /notifications error:', err);
+    res.status(500).json({ message: 'Failed to load notifications' });
+  }
+});
+
+// ─── POST /api/notifications/read ────────────────────────────────────────────
+// Mark one or all notifications as read.
+// Body: { id: 'abc' }  → mark single
+//       { all: true }  → mark all
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/notifications/read', authenticate, async (req, res) => {
+  try {
+    const { id, all } = req.body;
+
+    if (all) {
+      await NotificationFeed.updateMany(
+        { recipient: req.user._id, read: false },
+        { $set: { read: true } }
+      );
+      return res.json({ ok: true });
+    }
+
+    if (id) {
+      await NotificationFeed.updateOne(
+        { _id: id, recipient: req.user._id },
+        { $set: { read: true } }
+      );
+      return res.json({ ok: true });
+    }
+
+    res.status(400).json({ message: 'Provide id or all:true' });
+  } catch (err) {
+    console.error('POST /notifications/read error:', err);
+    res.status(500).json({ message: 'Failed to mark as read' });
+  }
+});
+
+// ─── DELETE /api/notifications/:id ───────────────────────────────────────────
+// Soft-delete a single notification (user dismisses it).
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/notifications/:id', authenticate, async (req, res) => {
+  try {
+    await NotificationFeed.updateOne(
+      { _id: req.params.id, recipient: req.user._id },
+      { $set: { deleted: true } }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /notifications/:id error:', err);
+    res.status(500).json({ message: 'Failed to delete notification' });
+  }
+});
+
+// ─── DELETE /api/notifications ───────────────────────────────────────────────
+// Clear ALL notifications for the current user.
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/notifications', authenticate, async (req, res) => {
+  try {
+    await NotificationFeed.updateMany(
+      { recipient: req.user._id },
+      { $set: { deleted: true } }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /notifications error:', err);
+    res.status(500).json({ message: 'Failed to clear notifications' });
+  }
+});
+
+// ─── GET /api/notifications/unread-count ─────────────────────────────────────
+// Lightweight badge count poll (called every ~30s by the frontend).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/notifications/unread-count', authenticate, async (req, res) => {
+  try {
+    const count = await NotificationFeed.countDocuments({
+      recipient: req.user._id,
+      deleted: false,
+      read: false,
+    });
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ count: 0 });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOW TO FIRE NOTIFICATIONS FROM EXISTING ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
+// Below are copy-paste examples. Drop them into the relevant route handlers.
+//
+// ── Example 1: Someone comments on a shoutout ────────────────────────────────
+//
+//   // (inside your POST /shoutouts/:id/comments handler, after saving the comment)
+//   if (shoutout.authorId && shoutout.authorId.toString() !== req.user._id.toString()) {
+//     await createNotification({
+//       recipient:   shoutout.authorId,
+//       actor:       req.user._id,
+//       actorName:   req.user.name,
+//       actorAvatar: req.user.avatar || null,
+//       type:        'comment',
+//       title:       `${req.user.name} commented on your traffic alert`,
+//       body:        commentText.substring(0, 120),
+//       linkPage:    'shoutouts',
+//       linkItemId:  shoutout._id.toString(),
+//       linkAnchor:  `comment-${newComment._id}`,
+//     });
+//   }
+//
+// ── Example 2: New event posted — fan out to all users ───────────────────────
+//
+//   // (inside POST /events, after saving the event)
+//   const allUserIds = await User.find({
+//     'notificationPreferences.events': true
+//   }).distinct('_id');
+//
+//   const docs = allUserIds
+//     .filter(uid => uid.toString() !== req.user._id.toString())
+//     .map(uid => ({
+//       recipient:   uid,
+//       actor:       req.user._id,
+//       actorName:   req.user.name,
+//       actorAvatar: req.user.avatar || null,
+//       type:        'new_event',
+//       title:       'New event in Milledgeville',
+//       body:        event.title,
+//       linkPage:    'events',
+//       linkItemId:  event._id.toString(),
+//     }));
+//   await createNotification(docs);
+//
+// ── Example 3: Someone replies to your comment ────────────────────────────────
+//
+//   // (inside your reply handler, after saving the reply)
+//   if (originalComment.authorId.toString() !== req.user._id.toString()) {
+//     await createNotification({
+//       recipient:   originalComment.authorId,
+//       actor:       req.user._id,
+//       actorName:   req.user.name,
+//       actorAvatar: req.user.avatar || null,
+//       type:        'reply',
+//       title:       `${req.user.name} replied to your comment`,
+//       body:        replyText.substring(0, 120),
+//       linkPage:    'shoutouts',       // or 'marketplace', 'lostfound', etc.
+//       linkItemId:  parentPost._id.toString(),
+//       linkAnchor:  `comment-${newReply._id}`,
+//     });
+//   }
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// END NOTIFICATION FEED ROUTES
+// ═════════════════════════════════════════════════════════════════════════════
 
 // \u2500\u2500\u2500 TRAFFIC ALERTS AD ROUTES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // Same singleton pattern as Spotlight Ad above, but shown at top of Traffic Alerts page

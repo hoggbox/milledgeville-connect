@@ -24,8 +24,25 @@ function renderNav() {
   if (isOwner) navPages.push({ id: 'owner-dashboard', icon: '🏪', label: 'My Biz' });
   if (canNews) navPages.push({ id: 'post-news',      icon: '📰', label: 'Post News' });
 
-  // Desktop sidebar nav
+  // ── Desktop sidebar nav ──────────────────────────────────────────────────────
   let desktopHTML = '';
+
+  // 🔔 Notification bell — desktop (only for logged-in users)
+  if (currentUser) {
+    desktopHTML += `
+      <button onclick="window._nfTogglePanel('desktop')"
+              id="nf-bell-desktop"
+              class="nf-bell-btn flex items-center gap-3 w-full text-left px-6 py-4 rounded-3xl hover:bg-white/10 transition text-white relative">
+        <span class="text-3xl relative" style="display:inline-block;">
+          🔔
+          <span id="nf-badge-desktop"
+                class="nf-bell-badge hidden absolute bg-red-500 text-white font-bold flex items-center justify-center rounded-full shadow-md"
+                style="top:-4px;right:-6px;min-width:18px;height:18px;font-size:10px;"></span>
+        </span>
+        <span class="font-medium">Notifications</span>
+      </button>`;
+  }
+
   navPages.forEach(page => {
     let badge = '';
     if (page.id === 'messages') {
@@ -39,10 +56,11 @@ function renderNav() {
         ${badge}
       </button>`;
   });
+
   const desktopNavEl = document.getElementById('desktop-nav');
   if (desktopNavEl) desktopNavEl.innerHTML = desktopHTML;
 
-  // Desktop sidebar bottom user area
+  // ── Desktop sidebar bottom user area ─────────────────────────────────────────
   const sidebarUserArea = document.getElementById('sidebar-user-area');
   if (sidebarUserArea) {
     if (currentUser) {
@@ -63,8 +81,7 @@ function renderNav() {
     }
   }
 
-  // Mobile bottom nav — horizontally scrollable / swipeable strip
-  // Inject scrollbar-hiding styles once
+  // ── Mobile bottom nav — horizontally scrollable / swipeable strip ────────────
   if (!document.getElementById('mobile-nav-style')) {
     const style = document.createElement('style');
     style.id = 'mobile-nav-style';
@@ -78,11 +95,11 @@ function renderNav() {
         overflow-y: hidden;
         scroll-snap-type: x mandatory;
         -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;        /* Firefox */
-        -ms-overflow-style: none;     /* IE/Edge */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         padding: 0 8px;
       }
-      #mobile-nav-scroll::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+      #mobile-nav-scroll::-webkit-scrollbar { display: none; }
       #mobile-nav-scroll .nav-btn {
         flex: 0 0 auto;
         display: flex;
@@ -108,7 +125,22 @@ function renderNav() {
     document.head.appendChild(style);
   }
 
+  // 🔔 Notification bell first in mobile nav (logged-in only)
   let mobileHTML = '<div id="mobile-nav-scroll">';
+
+  if (currentUser) {
+    mobileHTML += `
+      <button onclick="window._nfTogglePanel('mobile')" id="nf-bell-mobile" class="nf-bell-btn nav-btn">
+        <span class="nav-icon" style="position:relative;display:inline-block;">
+          🔔
+          <span id="nf-badge-mobile"
+                class="nf-bell-badge hidden"
+                style="position:absolute;top:-4px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:999px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.4);"></span>
+        </span>
+        <span class="nav-label">Alerts</span>
+      </button>`;
+  }
+
   navPages.forEach(page => {
     let badge = '';
     if (page.id === 'messages') {
@@ -126,7 +158,7 @@ function renderNav() {
   const mobileNavEl = document.getElementById('mobile-nav');
   if (mobileNavEl) mobileNavEl.innerHTML = mobileHTML;
 
-  // Mobile topbar user area
+  // ── Mobile topbar user area ──────────────────────────────────────────────────
   const topbarUserArea = document.getElementById('topbar-user-area');
   if (topbarUserArea) {
     if (currentUser) {
@@ -146,12 +178,28 @@ function renderNav() {
     }
   }
 
-  // Safe badge update
+  // ── Safe badge updates ───────────────────────────────────────────────────────
   setTimeout(() => {
+    // Message badge
     if (typeof updateMessageBadge === 'function') {
       updateMessageBadge();
+    }
+    // Notification feed — init or re-attach after nav rebuild
+    if (typeof initNotificationFeed === 'function') {
+      initNotificationFeed();
+    } else if (typeof window._nfUpdateBadge === 'function') {
+      window._nfUpdateBadge();
     }
   }, 300);
 }
 
 window.navigate = loadPage; // defined in data.js
+
+// ─── Panel toggle — called by bell buttons in both nav contexts ───────────────
+// This thin wrapper lives in nav.js so it's available immediately after the
+// nav renders, even if notificationFeed.js loads slightly later.
+window._nfTogglePanel = function(origin) {
+  if (typeof window._notificationFeedToggle === 'function') {
+    window._notificationFeedToggle(origin);
+  }
+};

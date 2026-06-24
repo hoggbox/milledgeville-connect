@@ -740,6 +740,9 @@ async function loadPage(page) {
       </div>
     </div>`;
 
+  // ── Init notification bell on every navigation (safe to call multiple times) ─
+  if (typeof initNotificationFeed === 'function') initNotificationFeed();
+
   if (page === 'messages')        { await loadMessagesPage(content); return; }
   if (page === 'admin')           { await loadAdminPage(content);        return; }
   if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
