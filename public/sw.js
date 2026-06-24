@@ -2,48 +2,39 @@
 self.addEventListener('push', event => {
   const payload = event.data?.json() || {};
 
-  // ── TEMP DEBUG: remove after we find the issue ──────────────────────────
-  console.log('[SW DEBUG] raw payload:', JSON.stringify(payload));
-  console.log('[SW DEBUG] payload.image value:', payload.image);
-  console.log('[SW DEBUG] typeof payload.image:', typeof payload.image);
-  console.log('[SW DEBUG] starts with https?:', payload.image ? payload.image.startsWith('https://') : 'N/A - no image field');
-  // ──────────────────────────────────────────────────────────────────────
-
   const options = {
     body:  payload.body  || '',
     icon:  payload.icon  || '/icon-192.png',
     badge: payload.badge || '/icon-192.png',
     // ── Keep the full data object so notificationclick can read page + id ──
     data:  payload.data  || {},
-    tag:   payload.tag   || 'default',
+    // ⚠️ WARNING: do NOT use a static tag like 'default' here.
+    // A shared tag causes every new notification to silently replace the previous
+    // one in the browser's notification slot, which can drop images and collapse
+    // unrelated alerts into a single entry. Use a unique tag per notification so
+    // each one shows independently. Fallback to timestamp if no id is available.
+    tag:   payload.data?.id || payload.data?.page && `${payload.data.page}-${Date.now()}` || `notif-${Date.now()}`,
     // Stay visible until the user taps (improves visibility on mobile)
     requireInteraction: true
   };
 
-  // ✅ FIX: only set image when it's a real https:// URL.
+  // ✅ Only set image when it's a real https:// URL.
   // Passing a data: base64 string or undefined here causes Chrome Android to
   // silently drop the notification entirely on some devices.
   if (payload.image && payload.image.startsWith('https://')) {
     options.image = payload.image;
-    console.log('[SW DEBUG] options.image SET to:', options.image);
 
     // ── Firefox fallback: Firefox's Notifications API has never implemented
     // the `image` option (Chrome/Android-only feature) — see Mozilla bug 1580008.
     // So on Firefox the big preview photo silently doesn't render at all, with
     // no error. To make sure Firefox users still see *something* photo-related,
     // use the post's photo as the small `icon` instead of the static app icon.
-    // NOTE: the server (sendPushToUser) always sends a default icon (APP_ICON),
-    // so it's never falsy — checking `!payload.icon` here would never fire.
     // The photo is strictly more useful than the generic app logo whenever one
     // exists, so we override unconditionally. This does NOT touch the `image`
     // field or its behavior on Chrome/Android, which keep showing both the
     // small icon area and the full-size preview exactly as before.
     options.icon = payload.image;
-  } else {
-    console.log('[SW DEBUG] image NOT set — condition failed');
   }
-
-  console.log('[SW DEBUG] final options:', JSON.stringify(options));
 
   event.waitUntil(
     self.registration.showNotification(payload.title || 'Milledgeville Connect', options)
