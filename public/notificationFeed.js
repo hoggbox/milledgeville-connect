@@ -25,11 +25,13 @@ let _nfInitDone    = false;
 // Call once after login / page ready. Safe to call multiple times.
 window.initNotificationFeed = function () {
   if (!currentUser) return;
-  if (_nfInitDone) return;
-  _nfInitDone = true;
 
   _injectStyles();
-  _injectBellIcons();   // adds bells to desktop + mobile nav
+  _injectBellIcons();   // always safe — idempotent (checks element IDs internally)
+
+  if (_nfInitDone) return;   // only start polling once
+  _nfInitDone = true;
+
   _startPolling();
   _fetchBadgeCount();   // immediate first count
 };
@@ -93,7 +95,8 @@ function _injectBellIcons() {
   }
 
   // ── Mobile bottom nav ──────────────────────────────────────────────────────
-  const mobileScroll = document.getElementById('mobile-nav-scroll');
+  const mobileScroll = document.getElementById('mobile-nav')
+    || document.getElementById('mobile-nav-scroll');
   if (mobileScroll && !document.getElementById('nf-bell-mobile')) {
     const btn = document.createElement('button');
     btn.id = 'nf-bell-mobile';
@@ -448,7 +451,7 @@ function _injectStyles() {
       position: fixed;
       z-index: 99999;
       background: #0f172a;
-      border: 1px border solid rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.6);
       display: flex;
