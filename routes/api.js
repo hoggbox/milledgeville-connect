@@ -1074,10 +1074,13 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           JSON.stringify({
             title,
             body,
-            data,
             icon:  APP_ICON,
             badge: APP_ICON,
-            ...(notifImage ? { image: notifImage } : {})
+            image: notifImage || undefined,
+            data: {
+              ...data,
+              image: notifImage || undefined,
+            },
           })
         );
         console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
