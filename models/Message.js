@@ -5,11 +5,15 @@ const messageSchema = new mongoose.Schema({
   receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   text: { type: String, required: true, trim: true },
   read: { type: Boolean, default: false },
+  deletedBySender:   { type: Boolean, default: false },
+  deletedByReceiver: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 
 // Index for fast inbox/sent queries
 messageSchema.index({ receiver: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
+// Index for conversation thread queries
+messageSchema.index({ sender: 1, receiver: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);

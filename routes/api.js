@@ -1391,9 +1391,29 @@ router.post('/business/:id/follow', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     const idx = user.following.indexOf(req.params.id);
-    if (idx === -1) user.following.push(req.params.id);
+    const isNowFollowing = idx === -1;
+    if (isNowFollowing) user.following.push(req.params.id);
     else user.following.splice(idx, 1);
     await user.save();
+
+    // Notify the business owner when someone new follows (not on unfollow)
+    if (isNowFollowing) {
+      const business = await Business.findById(req.params.id).select('name owner');
+      if (business && business.owner && business.owner.toString() !== req.userId) {
+        createNotification({
+          recipient:   business.owner,
+          actor:       user._id,
+          actorName:   user.name,
+          actorAvatar: user.profilePhoto || null,
+          type:        'follow',
+          title:       `${user.name} is now following ${business.name}`,
+          body:        '',
+          linkPage:    'directory',
+          linkItemId:  req.params.id,
+        });
+      }
+    }
+
     res.json({ following: user.following });
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2006,6 +2026,24 @@ router.post('/shoutouts/:id/like', authenticate, async (req, res) => {
           sourceId: shoutout._id
         });
         await author.save();
+      }
+    }
+
+    // In-app notification to post author on new like (not on unlike, not self-like)
+    if (wasNewLike && shoutout.authorId && shoutout.authorId.toString() !== req.userId) {
+      const liker = await User.findById(req.userId).select('name profilePhoto');
+      if (liker) {
+        createNotification({
+          recipient:   shoutout.authorId,
+          actor:       liker._id,
+          actorName:   liker.name,
+          actorAvatar: liker.profilePhoto || null,
+          type:        'like',
+          title:       `${liker.name} liked your Traffic Alert`,
+          body:        shoutout.text.substring(0, 120),
+          linkPage:    'shoutouts',
+          linkItemId:  shoutout._id.toString(),
+        });
       }
     }
 
@@ -2932,7 +2970,25 @@ router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, r
     if (!reply.text) return res.status(400).json({ message: 'Reply cannot be empty' });
     comment.replies.push(reply);
     await article.save();
-    res.json(comment.replies[comment.replies.length - 1]);
+    const savedReply = comment.replies[comment.replies.length - 1];
+
+    // In-app notification to comment author (if not self)
+    if (comment.authorId && comment.authorId.toString() !== req.userId) {
+      createNotification({
+        recipient:   comment.authorId,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'reply',
+        title:       `${user.name} replied to your comment`,
+        body:        reply.text.substring(0, 120),
+        linkPage:    'news',
+        linkItemId:  article._id.toString(),
+        linkAnchor:  `comment-${req.params.commentId}`,
+      });
+    }
+
+    res.json(savedReply);
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message });
   }
@@ -3894,6 +3950,134 @@ router.post('/admin/users/:id/ip-ban', authenticate, requireAdmin, async (req, r
   }
 });
 
+// ─── GET /api/messages/inbox ─────────────────────────────────────────────────
+// Returns the latest message per conversation where the current user is receiver.
+// Each entry is the most recent message in that thread, populated with sender info.
+router.get('/messages/inbox', authenticate, async (req, res) => {
+  try {
+    // Get IDs of all users who have sent this user a message
+    const senderIds = await Message.distinct('sender', { receiver: req.userId, deletedByReceiver: { $ne: true } });
+
+    // For each sender, grab the latest message in the thread
+    const threads = await Promise.all(senderIds.map(async senderId => {
+      return Message.findOne({
+        $or: [
+          { sender: senderId, receiver: req.userId },
+          { sender: req.userId, receiver: senderId }
+        ],
+        $and: [{ deletedByReceiver: { $ne: true } }]
+      })
+        .sort({ createdAt: -1 })
+        .populate('sender', 'name profilePhoto')
+        .populate('receiver', 'name profilePhoto')
+        .lean();
+    }));
+
+    // Sort threads by most recent first
+    threads.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(threads.filter(Boolean));
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── GET /api/messages/outbox ─────────────────────────────────────────────────
+// Returns the latest message per conversation where the current user is sender.
+router.get('/messages/outbox', authenticate, async (req, res) => {
+  try {
+    const receiverIds = await Message.distinct('receiver', { sender: req.userId, deletedBySender: { $ne: true } });
+
+    const threads = await Promise.all(receiverIds.map(async receiverId => {
+      return Message.findOne({
+        $or: [
+          { sender: req.userId, receiver: receiverId },
+          { sender: receiverId, receiver: req.userId }
+        ],
+        $and: [{ deletedBySender: { $ne: true } }]
+      })
+        .sort({ createdAt: -1 })
+        .populate('sender', 'name profilePhoto')
+        .populate('receiver', 'name profilePhoto')
+        .lean();
+    }));
+
+    threads.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(threads.filter(Boolean));
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── GET /api/messages/conversation/:otherId ──────────────────────────────────
+// Returns all messages in a thread between current user and otherId, oldest first.
+router.get('/messages/conversation/:otherId', authenticate, async (req, res) => {
+  try {
+    const messages = await Message.find({
+      $or: [
+        { sender: req.userId,        receiver: req.params.otherId },
+        { sender: req.params.otherId, receiver: req.userId }
+      ]
+    })
+      .sort({ createdAt: 1 })
+      .populate('sender',   'name profilePhoto')
+      .populate('receiver', 'name profilePhoto')
+      .lean();
+
+    res.json(messages);
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── POST /api/messages/mark-as-read ─────────────────────────────────────────
+// Marks all messages from otherId to current user as read.
+router.post('/messages/mark-as-read', authenticate, async (req, res) => {
+  try {
+    const { otherId } = req.body;
+    if (!otherId) return res.status(400).json({ message: 'otherId required' });
+
+    await Message.updateMany(
+      { sender: otherId, receiver: req.userId, read: false },
+      { $set: { read: true } }
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── DELETE /api/messages/conversation/:otherId ───────────────────────────────
+// Soft-deletes the thread from the current user's view only.
+router.delete('/messages/conversation/:otherId', authenticate, async (req, res) => {
+  try {
+    const { otherId } = req.params;
+
+    // Mark messages sent to current user as deleted by receiver
+    await Message.updateMany(
+      { sender: otherId, receiver: req.userId },
+      { $set: { deletedByReceiver: true } }
+    );
+    // Mark messages sent by current user as deleted by sender
+    await Message.updateMany(
+      { sender: req.userId, receiver: otherId },
+      { $set: { deletedBySender: true } }
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── GET /api/messages/unread-count ──────────────────────────────────────────
 router.get('/messages/unread-count', authenticate, async (req, res) => {
   try {
     const count = await Message.countDocuments({ receiver: req.userId, read: false });
