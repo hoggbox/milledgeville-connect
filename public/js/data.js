@@ -531,8 +531,15 @@ function renderClickableUser(userData, fallbackName = 'Anonymous') {
     displayName = userData.name || userData.authorName || userData.author || fallbackName;
     reputation = userData.reputation || 0;
     email = userData.email || '';
-  } else if (typeof userData === 'string' && userData.length > 10) {
-    userId = userData;
+  } else if (typeof userData === 'string') {
+    // A 24-char hex string is a MongoDB ObjectId — treat it as a clickable user link.
+    // Anything else (e.g. "Jay") is just a plain display name with no linkable ID.
+    const isObjectId = /^[a-f0-9]{24}$/i.test(userData);
+    if (isObjectId) {
+      userId = userData;
+    } else {
+      displayName = userData || fallbackName;
+    }
   }
 
   if (!userId) return displayName;
@@ -1377,11 +1384,9 @@ window.openNewsArticle = async function (articleId) {
           <p class="text-emerald-400 font-medium text-sm mb-6">${esc(article.summary)}</p>
 
           <div class="flex items-center gap-3 mb-6 pb-6 border-b border-white/10">
-            <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-              ${(article.authorName || 'S')[0].toUpperCase()}
-            </div>
+            <div style="width:36px;height:36px;flex-shrink:0;">${avatarHtml(article.authorName || 'Staff', article.author?.avatar || article.author?.profilePhoto || null, '36px', '16px', '#059669')}</div>
             <div>
-              <p class="text-sm font-semibold">${article.authorName || 'Staff'}</p>
+              <p class="text-sm font-semibold">${esc(article.authorName || 'Staff')}</p>
               <p class="text-xs text-white/40">${formatDateTime(article.createdAt)}</p>
             </div>
           </div>
@@ -1487,7 +1492,8 @@ if (!window._newsCommentImages)    window._newsCommentImages    = {};
 const NEWS_COMMENT_PREVIEW = 3;
 
 function renderNewsCommentRow(c, articleId) {
-  const cLetter = c.author ? c.author[0].toUpperCase() : '?';
+  const cAvatar = c.authorId?.avatar || c.authorId?.profilePhoto || null;
+  const cName   = c.author || c.authorId?.name || 'Anonymous';
   const replies  = c.replies || [];
   const userIsAdmin = isAdmin();
   const isCommentAuthor = currentUser && (c.authorId === currentUser._id || c.authorId === currentUser.id);
@@ -1496,13 +1502,14 @@ function renderNewsCommentRow(c, articleId) {
   if (replies.length) {
     repliesHtml = `<div class="ml-9 mt-1 space-y-1">`;
     replies.forEach(r => {
-      const rLetter = r.author ? r.author[0].toUpperCase() : '?';
+      const rAvatar = r.authorId?.avatar || r.authorId?.profilePhoto || null;
+      const rName   = r.author || r.authorId?.name || 'Anonymous';
       repliesHtml += `
         <div class="flex items-start gap-2" id="news-reply-${r._id}">
-          <div class="w-6 h-6 bg-teal-600 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">${rLetter}</div>
+          <div style="width:24px;height:24px;flex-shrink:0;">${avatarHtml(rName, rAvatar, '24px', '8px', '#0d9488')}</div>
           <div class="flex-1 bg-white/5 rounded-2xl px-3 py-1.5">
             <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-white/80">${r.author}</span>
+              <span class="text-xs font-semibold text-white/80">${esc(rName)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(r.createdAt)}</span>
             </div>
             <p class="text-sm text-white/75">${r.text}</p>
@@ -1515,11 +1522,11 @@ function renderNewsCommentRow(c, articleId) {
   return `
     <div class="comment-block" id="news-comment-${c._id}">
       <div class="flex items-start gap-2">
-        <div class="w-7 h-7 bg-slate-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${cLetter}</div>
+        <div style="width:28px;height:28px;flex-shrink:0;">${avatarHtml(cName, cAvatar, '28px', '12px', '#475569')}</div>
         <div class="flex-1 min-w-0">
           <div class="bg-white/5 rounded-2xl px-3 py-2 inline-block max-w-full">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-xs font-semibold text-white/80">${c.author}</span>
+              <span class="text-xs font-semibold text-white/80">${esc(cName)}</span>
               <span class="text-[10px] text-white/30">${timeAgo(c.createdAt)}</span>
               ${isCommentAuthor || userIsAdmin ? `
                 <button onclick="deleteNewsComment('${articleId}','${c._id}')"
@@ -1700,7 +1707,13 @@ window.submitNewsReply = async function(articleId, commentId) {
     const comment = cache.find(c => c._id === commentId);
     if (comment) {
       comment.replies = comment.replies || [];
-      comment.replies.push({ _id: res._id, author: res.author || currentUser?.name, text, createdAt: new Date().toISOString() });
+      comment.replies.push({
+        _id: res._id,
+        author: res.author || currentUser?.name,
+        authorId: res.authorId || currentUser?._id || currentUser?.id,
+        text,
+        createdAt: new Date().toISOString()
+      });
     }
     _renderNewsCommentList(articleId);
   } else {
@@ -3556,9 +3569,8 @@ function renderShoutoutCard(s) {
 }
 
 function renderCommentRow(c, shoutoutId) {
-  const cAvatar = c.authorId?.avatar || null;
+  const cAvatar = c.authorId?.avatar || c.authorId?.profilePhoto || null;
   const cName   = c.author || c.authorId?.name || 'Anonymous';
-  const cLetter = cName ? cName[0].toUpperCase() : '?';
   const replies = c.replies || [];
   const replyCount = replies.length;
   const userIsAdmin = isAdmin();
@@ -3568,7 +3580,7 @@ function renderCommentRow(c, shoutoutId) {
   if (replyCount > 0) {
     repliesHtml = `<div class="ml-9 mt-1 space-y-1">`;
     replies.forEach(r => {
-      const rAvatar = r.authorId?.avatar || null;
+      const rAvatar = r.authorId?.avatar || r.authorId?.profilePhoto || null;
       const rName   = r.author || r.authorId?.name || 'Anonymous';
       repliesHtml += `
         <div class="flex items-start gap-2" id="reply-${r._id}">
@@ -3588,7 +3600,7 @@ function renderCommentRow(c, shoutoutId) {
   return `
     <div class="comment-block" id="comment-${c._id}">
       <div class="flex items-start gap-2">
-        <div class="w-7 h-7 bg-slate-600 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0">${cLetter}</div>
+        <div style="width:28px;height:28px;flex-shrink:0;">${avatarHtml(cName, cAvatar, '28px', '12px', '#475569')}</div>
         <div class="flex-1 min-w-0">
           <div class="bg-white/5 rounded-2xl px-3 py-2 inline-block max-w-full">
             <div class="flex items-center gap-2 flex-wrap">
@@ -4127,7 +4139,13 @@ window.submitReply = async function (shoutoutId, commentId) {
     const comment = cache.find(c => c._id === commentId);
     if (comment) {
       comment.replies = comment.replies || [];
-      comment.replies.push({ _id: res._id, author: res.author || currentUser?.name, text, createdAt: new Date().toISOString() });
+      comment.replies.push({
+        _id: res._id,
+        author: res.author || currentUser?.name,
+        authorId: res.authorId || currentUser?._id || currentUser?.id,
+        text,
+        createdAt: new Date().toISOString()
+      });
     }
     _renderCommentList(shoutoutId);
   } else {
@@ -7874,7 +7892,7 @@ function renderLostItemsPage() {
         <div class="sc-body">
           <div class="sc-header">
             <div class="sc-author">
-              ${avatarHtml(authorName, null, '36px', '50%', '#059669')}
+              ${avatarHtml(authorName, ownerObj?.avatar || ownerObj?.profilePhoto || null, '36px', '50%', '#059669')}
               <div>
                 <div class="sc-name">${renderClickableUser(ownerObj, authorName)}</div>
                 <div class="sc-time">${timeAgo(item.createdAt)}</div>
@@ -8253,7 +8271,7 @@ async function renderMarketplacePage() {
         <div class="sc-body">
           <div class="sc-header">
             <div class="sc-author">
-              ${avatarHtml(sellerName, null, '36px', '50%', '#059669')}
+              ${avatarHtml(sellerName, sellerObj?.avatar || sellerObj?.profilePhoto || null, '36px', '50%', '#059669')}
               <div>
                 <div class="sc-name">${renderClickableUser(sellerObj, sellerName)}</div>
                 <div class="sc-time">${timeAgo(item.createdAt)}</div>

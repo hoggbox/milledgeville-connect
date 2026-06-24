@@ -1375,7 +1375,9 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
         .sort({ cleared: 1, lastBumpedAt: -1, createdAt: -1 })  // active+bumped first, cleared at bottom
         .skip(skip)
         .limit(limit)
-        .populate('authorId', 'name avatar'),
+        .populate('authorId', 'name avatar profilePhoto')
+        .populate('comments.authorId', 'name avatar profilePhoto')
+        .populate('comments.replies.authorId', 'name avatar profilePhoto'),
       Shoutout.countDocuments()
     ]);
 
@@ -1442,7 +1444,7 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
         .skip(skip)
         .limit(limit)
         .select('-images')
-        .populate('owner', 'name'),
+        .populate('owner', 'name avatar profilePhoto'),
       LostItem.countDocuments({ $or: [{ status: { $exists: false } }, { status: { $nin: ['resolved'] } }] })
     ]);
 
@@ -1654,7 +1656,7 @@ router.get('/marketplace', optionalAuth, async (req, res) => {
         .skip(skip)
         .limit(limit)
         .select('-images')
-        .populate('seller', 'name'),
+        .populate('seller', 'name avatar profilePhoto'),
       MarketplaceItem.countDocuments({ status: 'available' })
     ]);
 
@@ -1774,7 +1776,7 @@ router.get('/marketplace/sold', optionalAuth, async (req, res) => {
         .sort({ soldAt: -1 })
         .skip(skip).limit(limit)
         .select('-images')
-        .populate('seller', 'name'),
+        .populate('seller', 'name avatar profilePhoto'),
       MarketplaceItem.countDocuments({ status: 'sold' })
     ]);
     res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
@@ -1822,7 +1824,7 @@ router.get('/lostitems/resolved', optionalAuth, async (req, res) => {
         .sort({ resolvedAt: -1 })
         .skip(skip).limit(limit)
         .select('-images')
-        .populate('owner', 'name'),
+        .populate('owner', 'name avatar profilePhoto'),
       LostItem.countDocuments({ status: 'resolved' })
     ]);
     res.json({ items, pagination: { currentPage: page, totalPages: Math.ceil(total / limit), totalItems: total } });
@@ -2808,7 +2810,11 @@ router.get('/deals', optionalAuth, async (req, res) => {
 
 router.get('/news', optionalAuth, async (req, res) => {
   try {
-    const news = await News.find().sort({ createdAt: -1 });
+    const news = await News.find()
+      .sort({ createdAt: -1 })
+      .populate('author', 'name avatar profilePhoto')
+      .populate('comments.authorId', 'name avatar profilePhoto')
+      .populate('comments.replies.authorId', 'name avatar profilePhoto');
     res.json(news);
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2818,7 +2824,10 @@ router.get('/news', optionalAuth, async (req, res) => {
 
 router.get('/news/:id', optionalAuth, async (req, res) => {
   try {
-    const article = await News.findById(req.params.id);
+    const article = await News.findById(req.params.id)
+      .populate('author', 'name avatar profilePhoto')
+      .populate('comments.authorId', 'name avatar profilePhoto')
+      .populate('comments.replies.authorId', 'name avatar profilePhoto');
     if (!article) return res.status(404).json({ message: 'Not found' });
     res.json(article);
   } catch (err) {
