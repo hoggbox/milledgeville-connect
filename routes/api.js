@@ -5354,6 +5354,7 @@ async function createNotification(data) {
 //   ?before=ISO_DATE  (for cursor-based pagination, load older)
 //   ?unreadOnly=true
 // ─────────────────────────────────────────────────────────────────────────────
+// ─── GET /api/notifications ───────────────────────────────────────────────────
 router.get('/notifications', authenticate, async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit) || 30, 100);
