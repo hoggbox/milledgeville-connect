@@ -1186,77 +1186,11 @@ async function broadcastPush(title, body, data = {}, options = {}) {
     console.error('broadcastPush error:', err);
   }
 }
-// ─────────────────────────────────────────────────────────────────────────────
-// NEW: MESSAGING SYSTEM ROUTES
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/messages/inbox', authenticate, async (req, res) => {
-  try {
-    const messages = await Message.find({ receiver: req.userId })
-      .populate('sender', 'name avatar')
-      .populate('receiver', 'name avatar')  // ← FIXED: needed for conversation grouping
-      .sort({ createdAt: -1 });
-    res.json(messages);
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// GET /api/messages/outbox — messages sent BY the current user
-router.get('/messages/outbox', authenticate, async (req, res) => {
-  try {
-    const messages = await Message.find({ sender: req.userId })
-      .populate('sender', 'name')
-      .populate('receiver', 'name')
-      .sort({ createdAt: -1 });
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load outbox' });
-  }
-});
-
-// NEW: Mark conversation as read (used by badge clearing)
-router.post('/messages/mark-as-read', authenticate, async (req, res) => {
-  try {
-    const { otherId } = req.body;
-    if (!otherId) return res.status(400).json({ message: 'otherId required' });
-
-    await Message.updateMany(
-      {
-        receiver: req.userId,
-        sender: otherId,
-        read: false
-      },
-      { $set: { read: true } }
-    );
-
-    res.json({ message: 'Conversation marked as read' });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-router.get('/messages/conversation/:otherUserId', authenticate, async (req, res) => {
-  try {
-    const { otherUserId } = req.params;
-    const messages = await Message.find({
-      $or: [
-        { sender: req.userId, receiver: otherUserId },
-        { sender: otherUserId, receiver: req.userId }
-      ]
-    }).populate('sender', 'name avatar').sort({ createdAt: 1 });
-    res.json(messages);
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
 router.post('/messages', authenticate, async (req, res) => {
   try {
     const clean = sanitizeContent(req.body, { userId: req.userId });
     const { receiverId, text } = clean;
+
     if (!receiverId || !text?.trim()) 
       return res.status(400).json({ message: 'Receiver and message text required' });
 
@@ -1274,6 +1208,21 @@ router.post('/messages', authenticate, async (req, res) => {
       text: text.trim()
     });
 
+    // === IN-APP NOTIFICATION (this was missing) ===
+    if (receiverId.toString() !== req.userId.toString()) {
+      await createNotification({
+        recipient:   receiverId,
+        actor:       req.userId,
+        actorName:   sender.name,
+        actorAvatar: sender.avatar || null,
+        type:        'message',
+        title:       `${sender.name} sent you a message`,
+        body:        text.substring(0, 120) + (text.length > 120 ? '...' : ''),
+        linkPage:    'messages',
+        linkItemId:  req.userId.toString(),   // sender ID — used to open the conversation
+      });
+    }
+
     // Check receiver's messages preference before sending push
     const receiverUser = await User.findById(receiverId).select('notificationPreferences');
     if (!receiverUser || receiverUser.notificationPreferences?.messages !== false) {
@@ -1286,104 +1235,6 @@ router.post('/messages', authenticate, async (req, res) => {
     }
 
     res.json(message);
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-router.patch('/messages/:id/read', authenticate, async (req, res) => {
-  try {
-    const msg = await Message.findByIdAndUpdate(req.params.id, { read: true }, { new: true });
-    if (!msg) return res.status(404).json({ message: 'Message not found' });
-    res.json(msg);
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-router.delete('/messages/:id', authenticate, async (req, res) => {
-  try {
-    const msg = await Message.findById(req.params.id);
-    if (!msg) return res.status(404).json({ message: 'Message not found' });
-    if (msg.sender.toString() !== req.userId && msg.receiver.toString() !== req.userId) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-    await msg.deleteOne();
-    res.json({ message: 'Message deleted' });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// DELETE /api/messages/conversation/:otherId
-// Deletes all messages between the current user and another user
-router.delete('/messages/conversation/:otherId', authenticate, async (req, res) => {
-  try {
-    const myId    = req.userId;
-    const otherId = req.params.otherId;
-    const result  = await Message.deleteMany({
-      $or: [
-        { sender: myId,    receiver: otherId },
-        { sender: otherId, receiver: myId    }
-      ]
-    });
-    res.json({ deleted: result.deletedCount });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// DELETE /api/messages/inbox
-// Clears all messages received by the current user
-router.delete('/messages/inbox', authenticate, async (req, res) => {
-  try {
-    const result = await Message.deleteMany({ receiver: req.userId });
-    res.json({ deleted: result.deletedCount });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// DELETE /api/messages/outbox
-// Clears all messages sent by the current user
-router.delete('/messages/outbox', authenticate, async (req, res) => {
-  try {
-    const result = await Message.deleteMany({ sender: req.userId });
-    res.json({ deleted: result.deletedCount });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-router.post('/users/:id/block', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    const targetId = req.params.id;
-    const idx = user.blockedUsers.indexOf(targetId);
-    if (idx === -1) {
-      user.blockedUsers.push(targetId);
-    } else {
-      user.blockedUsers.splice(idx, 1);
-    }
-    await user.save();
-    res.json({ blocked: idx === -1 });
-  } catch (err) {
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-router.get('/users/:id', optionalAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).select('-password -email -blockedUsers');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
