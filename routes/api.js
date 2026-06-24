@@ -40,6 +40,16 @@ const spotlightAdSchema = new mongoose.Schema({
   updatedAt:    { type: Date, default: Date.now }
 });
 const SpotlightAd = mongoose.models.SpotlightAd || mongoose.model('SpotlightAd', spotlightAdSchema);
+
+// ─── Inline model: TrafficAd (singleton — only one doc ever exists) ─────────
+// Same pattern as SpotlightAd above, but shown at the top of the Traffic Alerts page
+const trafficAdSchema = new mongoose.Schema({
+  image:        { type: String, required: true },
+  businessName: { type: String, default: '' },
+  link:         { type: String, default: '' },
+  updatedAt:    { type: Date, default: Date.now }
+});
+const TrafficAd = mongoose.models.TrafficAd || mongoose.model('TrafficAd', trafficAdSchema);
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
 //
@@ -5229,6 +5239,50 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
     res.json({ message: 'Spotlight ad removed' });
   } catch (err) {
     console.error('DELETE spotlight-ad error:', err);
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// \u2500\u2500\u2500 TRAFFIC ALERTS AD ROUTES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Same singleton pattern as Spotlight Ad above, but shown at top of Traffic Alerts page
+
+// GET /api/admin/traffic-ad  \u2014 public (traffic alerts page reads it)
+router.get('/admin/traffic-ad', async (req, res) => {
+  try {
+    const ad = await TrafficAd.findOne().sort({ updatedAt: -1 });
+    if (!ad) return res.json(null);
+    res.json({ image: ad.image, businessName: ad.businessName, link: ad.link });
+  } catch (err) {
+    console.error('GET traffic-ad error:', err);
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// POST /api/admin/traffic-ad  \u2014 admin only, saves/replaces current ad
+router.post('/admin/traffic-ad', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { image, businessName = '', link = '' } = req.body;
+    if (!image) return res.status(400).json({ message: 'image is required' });
+    // Keep only one doc \u2014 replace any existing
+    await TrafficAd.deleteMany({});
+    const ad = await TrafficAd.create({ image, businessName, link, updatedAt: new Date() });
+    res.json({ message: 'Traffic ad saved', id: ad._id });
+  } catch (err) {
+    console.error('POST traffic-ad error:', err);
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// DELETE /api/admin/traffic-ad  \u2014 admin only
+router.delete('/admin/traffic-ad', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await TrafficAd.deleteMany({});
+    res.json({ message: 'Traffic ad removed' });
+  } catch (err) {
+    console.error('DELETE traffic-ad error:', err);
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
   }

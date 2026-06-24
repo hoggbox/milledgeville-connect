@@ -3089,12 +3089,32 @@ async function loadShoutoutsPage(content) {
   let shoutoutsPage = 1;
   const PAGE_SIZE = 8;
 
+  // Traffic Alerts Ad Spotlight — fetched once per page load
+  let trafficAdData = null;
+  try { trafficAdData = await apiGet('/admin/traffic-ad'); } catch(e) {}
+
+  const trafficAdHTML = trafficAdData && trafficAdData.image
+    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer mb-6"
+            style="height:72px;"
+            onclick="${trafficAdData.link ? `window.open('${trafficAdData.link}','_blank')` : ''}">
+         <div class="absolute top-1.5 left-1.5 z-10">
+           <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
+         </div>
+         <img src="${trafficAdData.image}" alt="${trafficAdData.businessName || 'Sponsored'}"
+              class="w-full h-full object-cover" style="display:block;">
+         ${trafficAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
+           <p class="text-white text-[11px] font-semibold leading-tight truncate">${trafficAdData.businessName}</p>
+         </div>` : ''}
+       </div>`
+    : '';
+
   const renderPage = async (page = 1) => {
     shoutoutsPage = page;
 
     // Show loading state
     content.innerHTML = `
       <div class="max-w-2xl mx-auto px-2 pb-10">
+        ${trafficAdHTML}
         <div class="flex justify-between items-center mb-6">
           <div>
             <h1 class="text-3xl md:text-4xl font-bold">🚦 Community Traffic Alerts</h1>
@@ -6017,7 +6037,8 @@ async function loadAdminPage(content) {
           {id:5, label:'Broadcast', icon:'📢'},
           {id:6, label:'Analytics', icon:'📈'},
           {id:7, label:'Reports',   icon:'🚩'},
-          {id:8, label:'Ad Spotlight', icon:'📣'}
+          {id:8, label:'Ad Spotlight', icon:'📣'},
+          {id:9, label:'Traffic Ad', icon:'🚦'}
         ].map(tab => `
           <button onclick="switchAdminTab(${tab.id})" id="mobileTab${tab.id}"
                   class="admin-tab whitespace-nowrap flex items-center gap-2 px-5 py-3 rounded-3xl text-sm font-semibold flex-shrink-0 transition-all
@@ -6047,6 +6068,7 @@ async function loadAdminPage(content) {
             <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📈 Analytics</button>
             <button onclick="switchAdminTab(7)" id="adminTab7" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🚩 Reports</button>
             <button onclick="switchAdminTab(8)" id="adminTab8" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📣 Ad Spotlight</button>
+            <button onclick="switchAdminTab(9)" id="adminTab9" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🚦 Traffic Ad</button>
           </nav>
         </div>
 
@@ -6254,6 +6276,7 @@ try {
     else if (tab === 6) await renderAdminAnalytics();
     else if (tab === 7) await renderAdminReports();   // ← NEW REPORTS TAB
     else if (tab === 8) await renderAdminAdSpotlight(); // ← AD SPOTLIGHT
+    else if (tab === 9) await renderAdminTrafficAd();    // ← TRAFFIC ALERTS AD
   } catch (err) {
     console.error(err);
     container.innerHTML = `
@@ -9477,6 +9500,17 @@ async function renderAdminBusinesses() {
   const container = document.getElementById('adminMainContent');
   const data = await apiGet('/directory');
 
+  // Cache full list + categories for client-side search/filter
+  window._adminAllBusinesses = data.businesses || [];
+  window._adminBizCategories = data.categories || [];
+  window._adminBizSearchTerm = '';
+  window._adminBizCategoryFilter = '';
+
+  let categoryFilterOptions = `<option value="" class="bg-[#1a2332] text-white">All Categories</option>`;
+  categoryFilterOptions += window._adminBizCategories.map(cat => `
+    <option value="${cat._id}" class="bg-[#1a2332] text-white">${cat.icon} ${cat.name}</option>
+  `).join('');
+
   container.innerHTML = `
     <div class="space-y-4">
       <!-- Add Business Button -->
@@ -9486,29 +9520,81 @@ async function renderAdminBusinesses() {
       </button>
 
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
-        <h3 class="font-bold text-base mb-4">All Businesses (${data.businesses.length})</h3>
-        <div class="space-y-3 max-h-[65vh] overflow-auto pr-1" id="businessList">
-          ${data.businesses.map(b => `
-            <div class="flex items-center justify-between bg-white/5 rounded-2xl p-3 gap-3">
-              <div class="flex items-center gap-3 min-w-0">
-                ${b.logo
-                  ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0">`
-                  : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
-                <div class="min-w-0">
-                  <div class="font-semibold text-sm truncate">${b.name}</div>
-                  <div class="text-xs text-white/50 truncate">${b.address || 'No address'}</div>
-                </div>
-              </div>
-              <div class="flex gap-2 flex-shrink-0">
-                <button onclick="editBusiness('${b._id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-xl">Edit</button>
-                <button onclick="deleteBusiness('${b._id}')" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded-xl">Del</button>
-              </div>
-            </div>
-          `).join('')}
+        <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <h3 class="font-bold text-base">All Businesses (<span id="bizCountLabel">${data.businesses.length}</span>)</h3>
         </div>
+
+        <!-- Search & Filter Bar -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <div class="relative flex-1">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">🔍</span>
+            <input id="bizSearchInput" type="text" placeholder="Search by name, address, phone, or email…"
+                   oninput="filterAdminBusinesses()"
+                   class="w-full bg-white/10 border border-white/20 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-400">
+          </div>
+          <select id="bizCategoryFilter" onchange="filterAdminBusinesses()"
+                  class="bg-[#1a2332] border border-white/20 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-400 appearance-none sm:w-56">
+            ${categoryFilterOptions}
+          </select>
+        </div>
+
+        <div class="space-y-3 max-h-[65vh] overflow-auto pr-1" id="businessList">
+          ${data.businesses.map(b => renderAdminBusinessRow(b)).join('')}
+        </div>
+        <p id="bizNoResults" class="hidden text-center text-white/40 text-sm py-10">No businesses match your search.</p>
       </div>
     </div>`;
 }
+
+function renderAdminBusinessRow(b) {
+  return `
+    <div class="flex items-center justify-between bg-white/5 rounded-2xl p-3 gap-3" data-biz-row="${b._id}">
+      <div class="flex items-center gap-3 min-w-0">
+        ${b.logo
+          ? `<img src="${b.logo}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0">`
+          : `<div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">${b.category?.icon || '🏪'}</div>`}
+        <div class="min-w-0">
+          <div class="font-semibold text-sm truncate">${b.name}</div>
+          <div class="text-xs text-white/50 truncate">${b.address || 'No address'}</div>
+        </div>
+      </div>
+      <div class="flex gap-2 flex-shrink-0">
+        <button onclick="editBusiness('${b._id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-xl">Edit</button>
+        <button onclick="deleteBusiness('${b._id}')" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded-xl">Del</button>
+      </div>
+    </div>
+  `;
+}
+
+window.filterAdminBusinesses = function() {
+  const term = (document.getElementById('bizSearchInput')?.value || '').trim().toLowerCase();
+  const categoryId = document.getElementById('bizCategoryFilter')?.value || '';
+  const all = window._adminAllBusinesses || [];
+
+  const filtered = all.filter(b => {
+    const matchesCategory = !categoryId || (b.category?._id === categoryId || b.category === categoryId);
+    if (!matchesCategory) return false;
+    if (!term) return true;
+    const haystack = [b.name, b.address, b.phone, b.email].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(term);
+  });
+
+  const listEl = document.getElementById('businessList');
+  const noResultsEl = document.getElementById('bizNoResults');
+  const countEl = document.getElementById('bizCountLabel');
+
+  if (countEl) countEl.textContent = filtered.length;
+
+  if (!filtered.length) {
+    listEl.innerHTML = '';
+    listEl.classList.add('hidden');
+    noResultsEl.classList.remove('hidden');
+  } else {
+    listEl.classList.remove('hidden');
+    noResultsEl.classList.add('hidden');
+    listEl.innerHTML = filtered.map(b => renderAdminBusinessRow(b)).join('');
+  }
+};
 
 window.showAddBusinessModal = async function() {
   if (!window._dirCategories || window._dirCategories.length === 0) {
@@ -10237,6 +10323,165 @@ window.clearSpotlightAd = async function() {
     await apiDelete('/admin/spotlight-ad');
     showToast('Ad removed', 'success');
     await renderAdminAdSpotlight();
+  } catch(err) {
+    showToast(err.message || 'Failed to remove ad', 'error');
+  }
+};
+
+// ─── TRAFFIC ALERTS AD ADMIN PANEL ───────────────────────────────────────────
+async function renderAdminTrafficAd() {
+  const container = document.getElementById('adminMainContent');
+  container.innerHTML = `<div class="flex items-center justify-center py-16"><div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div></div>`;
+
+  let current = null;
+  try { current = await apiGet('/admin/traffic-ad'); } catch(e) {}
+
+  const hasAd = current && current.image;
+
+  container.innerHTML = `
+    <div class="space-y-6 max-w-2xl mx-auto">
+      <div class="flex items-center gap-3">
+        <div class="text-3xl">🚦</div>
+        <div>
+          <h2 class="text-2xl font-bold">Traffic Alerts Ad</h2>
+          <p class="text-white/50 text-sm">Paid business banner shown full-width at the top of the Traffic Alerts page.</p>
+        </div>
+      </div>
+
+      <!-- CURRENT AD PREVIEW -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Current Ad</h3>
+        ${hasAd ? `
+          <div class="relative rounded-2xl overflow-hidden mb-4" style="aspect-ratio:4/1;">
+            <img src="${current.image}" alt="Current ad" class="w-full h-full object-cover"/>
+            ${current.businessName ? `
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
+              <p class="text-white text-sm font-bold truncate">${current.businessName}</p>
+              ${current.link ? `<p class="text-white/60 text-xs truncate">${current.link}</p>` : ''}
+            </div>` : ''}
+            <div class="absolute top-2 right-2 bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">LIVE</div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="bg-white/5 rounded-xl p-3">
+              <div class="text-white/40 text-xs mb-1">Business Name</div>
+              <div class="font-semibold truncate">${current.businessName || '—'}</div>
+            </div>
+            <div class="bg-white/5 rounded-xl p-3">
+              <div class="text-white/40 text-xs mb-1">Click Link</div>
+              <div class="font-semibold truncate text-emerald-400">${current.link || 'None'}</div>
+            </div>
+          </div>
+          <button onclick="clearTrafficAd()" class="mt-4 w-full py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/30 transition-all">
+            🗑️ Remove Current Ad
+          </button>
+        ` : `
+          <div class="flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/20 rounded-2xl text-center gap-2">
+            <div class="text-4xl">📭</div>
+            <p class="text-white/50 font-semibold">No Ad Running</p>
+            <p class="text-white/30 text-xs">Upload a banner below to activate the ad</p>
+          </div>
+        `}
+      </div>
+
+      <!-- UPLOAD NEW AD -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Upload New Ad</h3>
+
+        <div class="space-y-4">
+          <!-- Image upload -->
+          <div>
+            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Banner Image <span class="text-amber-400">*</span></label>
+            <div id="trafficAdDropZone" onclick="document.getElementById('trafficAdImageInput').click()"
+              class="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-400/50 hover:bg-emerald-400/5 transition-all group">
+              <input type="file" id="trafficAdImageInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewTrafficAdImage(event)"/>
+              <div id="trafficAdPreviewWrap" class="hidden mb-3">
+                <img id="trafficAdPreviewImg" class="w-full rounded-xl bg-black" style="object-fit:contain;max-height:120px;"/>
+              </div>
+              <div id="trafficAdDropLabel" class="space-y-1">
+                <div class="text-3xl">🖼️</div>
+                <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
+        <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">800 × 200 px</strong> (4:1) · Max 2 MB</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Business name -->
+          <div>
+            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Business Name</label>
+            <input id="trafficAdBusinessName" type="text" placeholder="e.g. Miller's BBQ" maxlength="50"
+              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
+          </div>
+
+          <!-- Click link -->
+          <div>
+            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Click-Through Link <span class="text-white/30">(optional)</span></label>
+            <input id="trafficAdLink" type="url" placeholder="https://yourbusiness.com"
+              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
+          </div>
+
+          <button onclick="uploadTrafficAd()" id="trafficAdUploadBtn"
+            class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white transition-all flex items-center justify-center gap-2">
+            <span>🚦</span> Save & Activate Traffic Ad
+          </button>
+        </div>
+      </div>
+
+      <!-- SIZE GUIDE -->
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
+        <p class="font-bold mb-1">📐 Image Size Guide</p>
+        <p class="text-amber-200/70">Upload at <strong>800 × 200 px</strong> (4:1 ratio) for a perfect fit. The ad fills the strip edge-to-edge with no black bars — keep important text and logos centered so nothing gets clipped on narrower screens.</p>
+      </div>
+    </div>`;
+}
+
+window.previewTrafficAdImage = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2 MB', 'error'); event.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('trafficAdPreviewImg');
+    const wrap = document.getElementById('trafficAdPreviewWrap');
+    const label = document.getElementById('trafficAdDropLabel');
+    img.src = e.target.result;
+    wrap.classList.remove('hidden');
+    label.querySelector('p:first-of-type').textContent = file.name;
+    label.querySelector('p:last-of-type').textContent = `${(file.size/1024).toFixed(0)} KB`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.uploadTrafficAd = async function() {
+  const fileInput = document.getElementById('trafficAdImageInput');
+  const businessName = document.getElementById('trafficAdBusinessName').value.trim();
+  const link = document.getElementById('trafficAdLink').value.trim();
+  const btn = document.getElementById('trafficAdUploadBtn');
+
+  if (!fileInput.files[0]) { showToast('Please choose a banner image first', 'error'); return; }
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    btn.disabled = true;
+    btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Uploading…';
+    try {
+      await apiPost('/admin/traffic-ad', { image: e.target.result, businessName, link });
+      showToast('Traffic Ad updated! 🚦', 'success');
+      await renderAdminTrafficAd();
+    } catch(err) {
+      showToast(err.message || 'Upload failed', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚦</span> Save & Activate Traffic Ad';
+    }
+  };
+  reader.readAsDataURL(fileInput.files[0]);
+};
+
+window.clearTrafficAd = async function() {
+  if (!confirm('Remove the current traffic alerts ad?')) return;
+  try {
+    await apiDelete('/admin/traffic-ad');
+    showToast('Ad removed', 'success');
+    await renderAdminTrafficAd();
   } catch(err) {
     showToast(err.message || 'Failed to remove ad', 'error');
   }
