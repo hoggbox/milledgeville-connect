@@ -10400,7 +10400,7 @@ async function renderAdminTrafficAd() {
               <div id="trafficAdDropLabel" class="space-y-1">
                 <div class="text-3xl">🖼️</div>
                 <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
-        <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">800 × 200 px</strong> (4:1) · Max 2 MB</p>
+        <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">1200 × 130 px</strong> (~9:1) · Max 2 MB</p>
               </div>
             </div>
           </div>
@@ -10429,7 +10429,7 @@ async function renderAdminTrafficAd() {
       <!-- SIZE GUIDE -->
       <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
         <p class="font-bold mb-1">📐 Image Size Guide</p>
-        <p class="text-amber-200/70">Upload at <strong>800 × 200 px</strong> (4:1 ratio) for a perfect fit. The ad fills the strip edge-to-edge with no black bars — keep important text and logos centered so nothing gets clipped on narrower screens.</p>
+        <p class="text-amber-200/70">Upload at <strong>1200 × 130 px</strong> (~9:1 ratio) for a perfect fit on the Traffic Alerts banner. The ad fills the strip edge-to-edge with no black bars — keep important text and logos centered so nothing gets clipped on narrower screens.</p>
       </div>
     </div>`;
 }
