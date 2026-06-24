@@ -1023,7 +1023,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   let sent = false;
 
   for (const sub of subs) {
-    // Native FCM token (Android / iOS)
+    // Native FCM token (Android / iOS) — preferred, higher delivery rate + image support
     if (sub.nativeToken) {
       try {
         const message = {
@@ -1056,17 +1056,18 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         await admin.messaging().send(message);
         console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
         sent = true;
+        continue; // FCM succeeded — skip web push for this sub to avoid duplicate
       } catch (err) {
         console.error(`[Push] FCM failed for ${userId}:`, err.message);
         if (err.code === 'messaging/registration-token-not-registered') {
           sub.nativeToken = null;
           await sub.save();
         }
+        // FCM failed — fall through to web push as fallback
       }
-      // no continue — fall through to also check web subscription below
     }
 
-    // Web VAPID subscription
+    // Web VAPID subscription (fallback when no FCM token or FCM failed)
     if (sub.subscription?.endpoint && process.env.VAPID_PUBLIC_KEY) {
       try {
         await webpush.sendNotification(
@@ -5171,6 +5172,11 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     if (!shoutout?.images?.length) return res.status(404).send('Not found');
 
     const raw = shoutout.images[0];
+
+    if (/^https?:\/\//i.test(raw)) {
+      return res.redirect(302, raw);
+    }
+
     const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
     if (!match) {
       console.warn('[shoutout-thumb] Image format not recognized, first 50 chars:', raw.substring(0, 50));
@@ -5268,6 +5274,11 @@ router.get('/news-thumb/:id', async (req, res) => {
     if (!article?.images?.length) return res.status(404).send('Not found');
 
     const raw = article.images[0];
+
+    if (/^https?:\/\//i.test(raw)) {
+      return res.redirect(302, raw);
+    }
+
     const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) return res.status(400).send('Invalid image format');
 
@@ -5540,6 +5551,10 @@ router.get('/scheduled-notification-thumb/:id', async (req, res) => {
   try {
     const notif = await ScheduledNotification.findById(req.params.id).select('image');
     if (!notif?.image) return res.status(404).send('Not found');
+
+    if (/^https?:\/\//i.test(notif.image)) {
+      return res.redirect(302, notif.image);
+    }
 
     const match = notif.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!match) return res.status(400).send('Invalid image format');
