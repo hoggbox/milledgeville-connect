@@ -2683,6 +2683,28 @@ router.post('/shoutouts/:id/comments/:commentId/replies', authenticate, async (r
       });
     }
 
+    // Also notify the post author when a reply lands on their shoutout —
+    // previously only the comment author was notified, so replies on a post
+    // never showed up for the post owner unless they also wrote that comment.
+    if (
+      shoutout.userId &&
+      shoutout.userId.toString() !== req.userId &&
+      (!comment.authorId || shoutout.userId.toString() !== comment.authorId.toString())
+    ) {
+      createNotification({
+        recipient:   shoutout.userId,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'reply',
+        title:       `${user.name} replied to a comment on your Traffic Alert`,
+        body:        (req.body.text || '').trim().substring(0, 120),
+        linkPage:    'shoutouts',
+        linkItemId:  req.params.id,
+        linkAnchor:  `comment-${req.params.commentId}`,
+      });
+    }
+
     res.json(comment.replies[comment.replies.length - 1]);
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2981,6 +3003,28 @@ router.post('/news/:id/comments/:commentId/replies', authenticate, async (req, r
         actorAvatar: user.profilePhoto || null,
         type:        'reply',
         title:       `${user.name} replied to your comment`,
+        body:        reply.text.substring(0, 120),
+        linkPage:    'news',
+        linkItemId:  article._id.toString(),
+        linkAnchor:  `comment-${req.params.commentId}`,
+      });
+    }
+
+    // Also notify the article author when a reply lands on their news post —
+    // previously only the comment author was notified, so replies never
+    // showed up for the article owner unless they also wrote that comment.
+    if (
+      article.author &&
+      article.author.toString() !== req.userId &&
+      (!comment.authorId || article.author.toString() !== comment.authorId.toString())
+    ) {
+      createNotification({
+        recipient:   article.author,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || null,
+        type:        'reply',
+        title:       `${user.name} replied to a comment on your news article`,
         body:        reply.text.substring(0, 120),
         linkPage:    'news',
         linkItemId:  article._id.toString(),
@@ -5479,15 +5523,28 @@ router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res
 // ─────────────────────────────────────────────────────────────────────────────
 async function createNotification(data) {
   try {
+    const docs = Array.isArray(data) ? data : [data];
+    if (!docs.length) return;
+
+    // Normalize every doc so a missing/odd field can never cause a silent
+    // validation failure or a query mismatch later in GET /notifications.
+    const normalized = docs.map(d => ({
+      ...d,
+      recipient: d.recipient ? new mongoose.Types.ObjectId(d.recipient.toString()) : d.recipient,
+      read:      d.read    ?? false,
+      deleted:   d.deleted ?? false,
+    }));
+
     if (Array.isArray(data)) {
-      if (!data.length) return;
-      await NotificationFeed.insertMany(data, { ordered: false });
+      await NotificationFeed.insertMany(normalized, { ordered: false });
     } else {
-      await NotificationFeed.create(data);
+      await NotificationFeed.create(normalized[0]);
     }
   } catch (err) {
-    // Never crash the caller — just log
-    console.error('[NotificationFeed] createNotification error:', err.message);
+    // Log loudly with the actual payload type so a schema/enum rejection
+    // (e.g. type: 'reply' not in an enum) is never silently swallowed again.
+    const type = Array.isArray(data) ? data.map(d => d.type).join(',') : data?.type;
+    console.error(`[NotificationFeed] createNotification FAILED (type=${type}):`, err.message, err.errors || '');
   }
 }
 
@@ -5516,10 +5573,10 @@ router.get('/notifications', authenticate, async (req, res) => {
 
     const filter = {
       recipient: uid,
-      deleted: false,
+      deleted: { $ne: true },   // matches false AND missing/undefined — never silently excludes a doc
     };
     if (before) filter.createdAt = { $lt: before };
-    if (unreadOnly) filter.read = false;
+    if (unreadOnly) filter.read = { $ne: true };
 
     const [notifications, unreadCount] = await Promise.all([
       NotificationFeed.find(filter)
@@ -5528,8 +5585,8 @@ router.get('/notifications', authenticate, async (req, res) => {
         .lean(),
       NotificationFeed.countDocuments({
         recipient: uid,
-        deleted: false,
-        read: false,
+        deleted: { $ne: true },
+        read: { $ne: true },
       })
     ]);
 
@@ -5618,8 +5675,8 @@ router.get('/notifications/unread-count', authenticate, async (req, res) => {
     const uid = new mongoose.Types.ObjectId(req.userId);
     const count = await NotificationFeed.countDocuments({
       recipient: uid,
-      deleted: false,
-      read: false,
+      deleted: { $ne: true },
+      read: { $ne: true },
     });
     res.json({ count });
   } catch (err) {
