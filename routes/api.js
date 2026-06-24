@@ -5355,8 +5355,13 @@ async function createNotification(data) {
 //   ?unreadOnly=true
 // ─────────────────────────────────────────────────────────────────────────────
 // ─── GET /api/notifications ───────────────────────────────────────────────────
+// ─── GET /api/notifications ───────────────────────────────────────────────────
 router.get('/notifications', authenticate, async (req, res) => {
   try {
+    if (!req.user || !req.user._id) {
+      return res.json({ notifications: [], unreadCount: 0 });
+    }
+
     const limit  = Math.min(parseInt(req.query.limit) || 30, 100);
     const before = req.query.before ? new Date(req.query.before) : null;
     const unreadOnly = req.query.unreadOnly === 'true';
@@ -5383,7 +5388,7 @@ router.get('/notifications', authenticate, async (req, res) => {
     res.json({ notifications, unreadCount });
   } catch (err) {
     console.error('GET /notifications error:', err);
-    res.status(500).json({ message: 'Failed to load notifications' });
+    res.status(500).json({ notifications: [], unreadCount: 0 });
   }
 });
 
@@ -5454,8 +5459,12 @@ router.delete('/notifications', authenticate, async (req, res) => {
 // ─── GET /api/notifications/unread-count ─────────────────────────────────────
 // Lightweight badge count poll (called every ~30s by the frontend).
 // ─────────────────────────────────────────────────────────────────────────────
+// ─── GET /api/notifications/unread-count ─────────────────────────────────────
 router.get('/notifications/unread-count', authenticate, async (req, res) => {
   try {
+    if (!req.user || !req.user._id) {
+      return res.json({ count: 0 });
+    }
     const count = await NotificationFeed.countDocuments({
       recipient: req.user._id,
       deleted: false,
@@ -5463,6 +5472,7 @@ router.get('/notifications/unread-count', authenticate, async (req, res) => {
     });
     res.json({ count });
   } catch (err) {
+    console.error('GET /notifications/unread-count error:', err);
     res.status(500).json({ count: 0 });
   }
 });
