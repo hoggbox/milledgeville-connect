@@ -305,6 +305,24 @@ window.submitRating = async function (businessId, score) {
 };
 
 
+// ─── Reusable scroll-to-card + green highlight, same behavior as the ─────────
+// traffic alert (shoutout) notification: find the card, scroll it into view,
+// flash it emerald-green. Retries up to 6 times (every 450ms) in case the
+// list is still rendering when this first fires.
+window.scrollAndHighlightPost = function(elId, attempt = 1) {
+  const el = document.getElementById(elId);
+
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400', 'transition-all');
+    setTimeout(() => {
+      el.classList.remove('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400');
+    }, 2800);
+  } else if (attempt < 6) {
+    setTimeout(() => window.scrollAndHighlightPost(elId, attempt + 1), 450);
+  }
+};
+
 // ─── HANDLE PUSH NOTIFICATION DEEP LINK (ALL TYPES) ─────────────────────────
 window.handlePushNotificationClick = async function(data) {
   if (!data?.page) {
@@ -316,45 +334,35 @@ window.handlePushNotificationClick = async function(data) {
 
 if (page === 'shoutouts' || page === 'shoutout') {
   navigate('shoutouts');
-
-  if (id) {
-    const tryScrollAndHighlight = (attempt = 1) => {
-      const el = document.getElementById(`shoutout-${id}`);
-
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        // Green highlight
-        el.classList.add('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400', 'transition-all');
-
-        setTimeout(() => {
-          el.classList.remove('!bg-emerald-500/30', 'ring-2', 'ring-emerald-400');
-        }, 2800);
-      } 
-      else if (attempt < 6) {
-        // Retry up to 6 times (every 450ms)
-        setTimeout(() => tryScrollAndHighlight(attempt + 1), 450);
-      }
-    };
-
-    setTimeout(() => tryScrollAndHighlight(), 600);
-  }
+  if (id) setTimeout(() => window.scrollAndHighlightPost(`shoutout-${id}`), 600);
 }
   else if (page === 'marketplace' || page === 'market') {
     await navigate('marketplace');
-    if (id) showMarketplaceDetail(id);
+    if (id) {
+      setTimeout(() => window.scrollAndHighlightPost(`market-${id}`), 600);
+      showMarketplaceDetail(id);
+    }
   } 
   else if (page === 'lostfound' || page === 'lost') {
     await navigate('lostfound');
-    if (id) showLostDetail(id);
+    if (id) {
+      setTimeout(() => window.scrollAndHighlightPost(`lost-${id}`), 600);
+      showLostDetail(id);
+    }
   } 
   else if (page === 'events' || page === 'event') {
     await navigate('events');
-    if (id) setTimeout(() => showEventDetail(id), 300);
+    if (id) {
+      setTimeout(() => window.scrollAndHighlightPost(`event-${id}`), 600);
+      setTimeout(() => showEventDetail(id), 300);
+    }
   } 
   else if (page === 'deals' || page === 'deal') {
     await navigate('deals');
-    if (id) setTimeout(() => showDealDetail(id), 300);
+    if (id) {
+      setTimeout(() => window.scrollAndHighlightPost(`deal-${id}`), 600);
+      setTimeout(() => showDealDetail(id), 300);
+    }
   } 
   else if (page === 'news') {
     await navigate('news');
@@ -4773,7 +4781,7 @@ function _renderDealsHTML(deals, container) {
     html = `<p class="text-white/40 text-center py-16">No ${window.currentDealsFilter === 'active' ? 'active ' : ''}deals found right now.</p>`;
   } else {
     html = filtered.map(deal => `
-      <div onclick="showDealDetail('${deal._id}')" 
+      <div id="deal-${deal._id}" onclick="showDealDetail('${deal._id}')" 
            style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:14px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 1px 8px rgba(0,0,0,0.28);" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.boxShadow='0 3px 14px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 1px 8px rgba(0,0,0,0.28)'">
         <div style="height:2px;background:linear-gradient(90deg,#ef4444,#f97316);"></div>
         <div style="padding:11px 14px;">
@@ -5010,7 +5018,7 @@ function renderEventCard(e, now) {
     </button>` : '';
 
   return `
-    <div onclick="showEventDetail('${e._id}')" 
+    <div id="event-${e._id}" onclick="showEventDetail('${e._id}')" 
          style="background:#1a2435;border:1px solid rgba(255,255,255,0.09);border-radius:20px;overflow:hidden;cursor:pointer;transition:box-shadow 0.2s,border-color 0.2s;box-shadow:0 2px 12px rgba(0,0,0,0.35);${isPast ? 'opacity:0.6;filter:grayscale(0.3);' : ''}" ${!isPast ? `onmouseover="this.style.borderColor='rgba(251,191,36,0.4)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.35)'"` : ''}>
       <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#f97316);"></div>
       <div style="padding:16px 18px;">
