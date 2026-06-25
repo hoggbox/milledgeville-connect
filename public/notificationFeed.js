@@ -52,11 +52,7 @@ function _startPolling() {
 async function _fetchBadgeCount() {
   if (!currentUser) return;
   try {
-    const res = await fetch('/api/notifications/unread-count', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    });
-    if (!res.ok) return;
-    const { count } = await res.json();
+    const { count } = await apiGet('/notifications/unread-count');
     _nfUnread = count || 0;
     _updateBadge(_nfUnread);
   } catch (_) { /* silent */ }
@@ -203,14 +199,10 @@ async function _loadNotifications() {
   const loadMore = document.getElementById('nf-load-more');
 
   try {
-    let url = '/api/notifications?limit=30';
+    let url = '/notifications?limit=30';
     if (_nfCursor) url += `&before=${encodeURIComponent(_nfCursor)}`;
 
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    });
-    if (!res.ok) throw new Error('fetch failed');
-    const { notifications, unreadCount } = await res.json();
+    const { notifications, unreadCount } = await apiGet(url);
 
     _nfUnread = unreadCount;
     _updateBadge(_nfUnread);
@@ -345,27 +337,13 @@ async function _handleItemClick(id, page, itemId, anchor) {
 // ─── Mark read / dismiss ──────────────────────────────────────────────────────
 async function _markRead(id) {
   try {
-    await fetch('/api/notifications/read', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ id })
-    });
+    await apiPost('/notifications/read', { id });
   } catch (_) {}
 }
 
 async function _markAllRead() {
   try {
-    await fetch('/api/notifications/read', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ all: true })
-    });
+    await apiPost('/notifications/read', { all: true });
     _nfItems.forEach(n => n.read = true);
     _nfUnread = 0;
     _updateBadge(0);
@@ -379,10 +357,7 @@ async function _markAllRead() {
 
 async function _dismissItem(id) {
   try {
-    await fetch(`/api/notifications/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    });
+    await apiDelete(`/notifications/${id}`);
     _nfItems = _nfItems.filter(n => n._id !== id);
     const list = document.getElementById('nf-list');
     if (list) _renderList(list);
@@ -392,10 +367,7 @@ async function _dismissItem(id) {
 async function _clearAll() {
   if (!confirm('Clear all notifications?')) return;
   try {
-    await fetch('/api/notifications', {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    });
+    await apiDelete('/notifications');
     _nfItems   = [];
     _nfUnread  = 0;
     _updateBadge(0);
