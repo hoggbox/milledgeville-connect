@@ -508,7 +508,9 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
       ? (safeText.length > 80 ? safeText.substring(0, 77) + '...' : safeText)
       : '📷 Shared a photo';
 
-    broadcastPush(
+    // Delay push 3s so the DB write is fully committed before FCM fetches the thumb URL.
+    // Without this, FCM can hit /api/shoutout-thumb/:id before Mongo returns the doc → no image.
+    setTimeout(() => broadcastPush(
       `🚗 New Traffic Alert from ${user.name}`,
       pushBody,
       { 
@@ -516,7 +518,7 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
         id: shoutout._id.toString() 
       },
       { type: 'shoutout', imageUrl: shoutoutThumb }
-    );
+    ), 3000);
 
     // ── In-app feed notification: fan out to all users ────────────────────────
     {
@@ -1492,7 +1494,7 @@ const lostItemThumb = (item.images && item.images.length > 0)
   ? `https://www.milledgevilleconnect.com/api/lostitem-thumb/${item._id}`
   : null;
 
-broadcastPush(
+setTimeout(() => broadcastPush(
   isPet ? '🐾 New Lost Pet!' : '🔎 New Lost & Found Item',
   `${user.name} posted: ${title}`,
   { 
@@ -1501,7 +1503,7 @@ broadcastPush(
     url: `/lostfound/${item._id}`
   },
   { type: 'lost', imageUrl: lostItemThumb }
-);
+), 3000);
 
     // ── In-app feed notification fan-out ──────────────────────────────────────
     {
@@ -1725,12 +1727,12 @@ router.post('/marketplace', authenticate, async (req, res) => {
         ? `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}`
         : null;
 
-      broadcastPush(
+      setTimeout(() => broadcastPush(
         notifTitle,
         notifBody,
         { page: 'marketplace', id: item._id.toString() },
         { type: 'marketplace', subCategory: category, imageUrl: marketplaceThumb }
-      );
+      ), 3000);
 
       // ── In-app feed notification fan-out ──────────────────────────────────
       const _mpUserIds = await User.find({}, '_id').lean();
@@ -2970,12 +2972,12 @@ router.post('/news', authenticate, async (req, res) => {
       ? `https://www.milledgevilleconnect.com/api/news-thumb/${article._id}`
       : null;
 
-    broadcastPush(
+    setTimeout(() => broadcastPush(
       `📰 Breaking News: ${title}`,
       summary.length > 80 ? summary.substring(0, 77) + '...' : summary,
       { page: 'news', id: article._id.toString(), url: `/news/${article._id}` },
       { type: 'news', imageUrl: newsThumb }
-    );
+    ), 3000);
 
     // ── In-app feed notification fan-out ──────────────────────────────────────
     {
@@ -5169,7 +5171,7 @@ router.get('/business-post-thumb/:postId', async (req, res) => {
 router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
   try {
     const shoutout = await Shoutout.findById(req.params.shoutoutId).select('images');
-    if (!shoutout?.images?.length) return res.status(404).send('Not found');
+    if (!shoutout?.images?.length) return res.status(404).set('Cache-Control', 'no-store').send('Not found');
 
     const raw = shoutout.images[0];
 
@@ -5180,7 +5182,7 @@ router.get('/shoutout-thumb/:shoutoutId', async (req, res) => {
     const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
     if (!match) {
       console.warn('[shoutout-thumb] Image format not recognized, first 50 chars:', raw.substring(0, 50));
-      return res.status(400).send('Invalid image format');
+      return res.status(400).set('Cache-Control', 'no-store').send('Invalid image format');
     }
 
     let [, mimeType, base64Data] = match;
@@ -5271,7 +5273,7 @@ router.get('/marketplace-thumb/:id', async (req, res) => {
 router.get('/news-thumb/:id', async (req, res) => {
   try {
     const article = await News.findById(req.params.id).select('images');
-    if (!article?.images?.length) return res.status(404).send('Not found');
+    if (!article?.images?.length) return res.status(404).set('Cache-Control', 'no-store').send('Not found');
 
     const raw = article.images[0];
 
@@ -5280,7 +5282,7 @@ router.get('/news-thumb/:id', async (req, res) => {
     }
 
     const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) return res.status(400).send('Invalid image format');
+    if (!match) return res.status(400).set('Cache-Control', 'no-store').send('Invalid image format');
 
     const [, mimeType, base64Data] = match;
     const buffer = Buffer.from(base64Data, 'base64');
