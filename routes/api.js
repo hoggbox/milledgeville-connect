@@ -479,7 +479,10 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
     }
 
     // ── All checks passed — create the shoutout ────────────────────────────────
-    const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
+    // TTL AUTO-DELETE TEMPORARILY DISABLED — was: now + 8 * 60 * 60 * 1000
+    // To re-enable the 8-hour auto-delete, swap the line below back to:
+    //   const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
+    const expiresAt = new Date(now + 10 * 365 * 24 * 60 * 60 * 1000);
 
     const safeText = (text || '').trim();
 
