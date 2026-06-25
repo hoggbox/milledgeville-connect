@@ -34,23 +34,27 @@ const ScheduledNotification = require('../models/ScheduledNotification');
 const NotificationFeed      = require('../models/NotificationFeed');
 
 // \u2500\u2500\u2500 Inline model: SpotlightAd (singleton \u2014 only one doc ever exists) \u2500\u2500\u2500\u2500\u2500\u2500
-const spotlightAdSchema = new mongoose.Schema({
+// ─── HOME CAROUSEL ADS (multiple, rotating) ───────────────────────────────
+const homeCarouselAdSchema = new mongoose.Schema({
   image:        { type: String, required: true },
   businessName: { type: String, default: '' },
   link:         { type: String, default: '' },
-  updatedAt:    { type: Date, default: Date.now }
+  active:       { type: Boolean, default: true },
+  order:        { type: Number, default: 0 },
+  createdAt:    { type: Date, default: Date.now }
 });
-const SpotlightAd = mongoose.models.SpotlightAd || mongoose.model('SpotlightAd', spotlightAdSchema);
+const HomeCarouselAd = mongoose.models.HomeCarouselAd || mongoose.model('HomeCarouselAd', homeCarouselAdSchema);
 
-// ─── Inline model: TrafficAd (singleton — only one doc ever exists) ─────────
-// Same pattern as SpotlightAd above, but shown at the top of the Traffic Alerts page
-const trafficAdSchema = new mongoose.Schema({
+// ─── TRAFFIC ALERTS CAROUSEL ADS (multiple, rotating) ─────────────────────
+const trafficCarouselAdSchema = new mongoose.Schema({
   image:        { type: String, required: true },
   businessName: { type: String, default: '' },
   link:         { type: String, default: '' },
-  updatedAt:    { type: Date, default: Date.now }
+  active:       { type: Boolean, default: true },
+  order:        { type: Number, default: 0 },
+  createdAt:    { type: Date, default: Date.now }
 });
-const TrafficAd = mongoose.models.TrafficAd || mongoose.model('TrafficAd', trafficAdSchema);
+const TrafficCarouselAd = mongoose.models.TrafficCarouselAd || mongoose.model('TrafficCarouselAd', trafficCarouselAdSchema);
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
 //
@@ -6070,6 +6074,48 @@ router.get('/_debug/image-prefixes', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HOME CAROUSEL ADS (rotating every 2 hours)
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get('/admin/home-carousel-ads', async (req, res) => {
+  const ads = await HomeCarouselAd.find({ active: true }).sort({ order: 1, createdAt: -1 });
+  res.json(ads);
+});
+
+router.post('/admin/home-carousel-ads', authenticate, requireAdmin, async (req, res) => {
+  const { image, businessName = '', link = '' } = req.body;
+  if (!image) return res.status(400).json({ message: 'image is required' });
+  const ad = await HomeCarouselAd.create({ image, businessName, link });
+  res.json(ad);
+});
+
+router.delete('/admin/home-carousel-ads/:id', authenticate, requireAdmin, async (req, res) => {
+  await HomeCarouselAd.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TRAFFIC ALERTS CAROUSEL ADS (rotating every 2 hours)
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get('/admin/traffic-carousel-ads', async (req, res) => {
+  const ads = await TrafficCarouselAd.find({ active: true }).sort({ order: 1, createdAt: -1 });
+  res.json(ads);
+});
+
+router.post('/admin/traffic-carousel-ads', authenticate, requireAdmin, async (req, res) => {
+  const { image, businessName = '', link = '' } = req.body;
+  if (!image) return res.status(400).json({ message: 'image is required' });
+  const ad = await TrafficCarouselAd.create({ image, businessName, link });
+  res.json(ad);
+});
+
+router.delete('/admin/traffic-carousel-ads/:id', authenticate, requireAdmin, async (req, res) => {
+  await TrafficCarouselAd.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Deleted' });
 });
 
 module.exports = router;

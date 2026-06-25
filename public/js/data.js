@@ -57,6 +57,15 @@ function sanitizeBroadcast(raw) {
   return safe;
 }
 
+// ─── Rotating Carousel Helper (every 2 hours) ───────────────────────────────
+function getRotatingAd(ads) {
+  if (!ads || ads.length === 0) return null;
+  // Rotate every 2 hours based on current time
+  const hours = Math.floor(Date.now() / (2 * 60 * 60 * 1000));
+  const index = hours % ads.length;
+  return ads[index];
+}
+
 // ─── Rich-text HTML sanitizer (for news article viewer) ──────────────────────
 // Allows a safe subset of formatting tags from the RTE; strips everything else.
 function sanitizeNewsHtml(html) {
@@ -1116,31 +1125,44 @@ const dealsData  = dealsRes.deals || [];
 const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   // Ad Spotlight — full-width strip, same height as weather widget
-  let spotlightAdData = null;
-  try { spotlightAdData = await apiGet('/admin/spotlight-ad'); } catch(e) {}
+  // ─── HOME PAGE ROTATING CAROUSEL ───────────────────────────────────────────
+  async function renderHomeCarousel() {
+    const container = document.getElementById('todayDigest');
+    if (!container) return;
 
-  const digestHTML = spotlightAdData && spotlightAdData.image
-    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer"
-            style="height:72px;"
-            onclick="${spotlightAdData.link ? `window.open('${spotlightAdData.link}','_blank')` : ''}">
-         <div class="absolute top-1.5 left-1.5 z-10">
-           <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
-         </div>
-         <img src="${spotlightAdData.image}" alt="${spotlightAdData.businessName || 'Sponsored'}"
-              class="w-full h-full object-cover" style="display:block;">
-         ${spotlightAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
-           <p class="text-white text-[11px] font-semibold leading-tight truncate">${spotlightAdData.businessName}</p>
-         </div>` : ''}
-       </div>`
-    : `<div class="w-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex items-center justify-center gap-3" style="height:72px;">
-         <span class="text-xl">📣</span>
-         <div class="text-center">
-           <p class="text-[10px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
-           <p class="text-[9px] text-white/25 mt-0.5">Your business here — contact admin</p>
-         </div>
-       </div>`;
+    try {
+      const ads = await apiGet('/admin/home-carousel-ads');
+      if (!ads || ads.length === 0) {
+        container.innerHTML = `<div class="w-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex items-center justify-center gap-3" style="height:72px;">
+          <span class="text-xl">📣</span>
+          <div class="text-center">
+            <p class="text-[10px] text-white/40 font-semibold uppercase tracking-wide">Ad Spotlight</p>
+            <p class="text-[9px] text-white/25 mt-0.5">Your business here — contact admin</p>
+          </div>
+        </div>`;
+        return;
+      }
 
-  document.getElementById('todayDigest').innerHTML = digestHTML;
+      const currentAd = getRotatingAd(ads);
+
+      container.innerHTML = `
+        <div class="relative w-full overflow-hidden rounded-2xl cursor-pointer" style="height:72px;"
+             onclick="${currentAd.link ? `window.open('${currentAd.link}','_blank')` : ''}">
+          <div class="absolute top-1.5 left-1.5 z-10">
+            <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
+          </div>
+          <img src="${currentAd.image}" alt="${currentAd.businessName || 'Sponsored'}" class="w-full h-full object-cover" style="display:block;">
+          ${currentAd.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
+            <p class="text-white text-[11px] font-semibold leading-tight truncate">${currentAd.businessName}</p>
+          </div>` : ''}
+          ${ads.length > 1 ? `<div class="absolute top-3 right-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">Rotates every 2h</div>` : ''}
+        </div>`;
+    } catch (e) {
+      console.warn('Home carousel error:', e);
+    }
+  }
+
+  renderHomeCarousel();
 
   // Spotlight — rendered by _renderSpotlight() called above after directory data loads
 
@@ -3257,24 +3279,37 @@ async function loadShoutoutsPage(content) {
   let shoutoutsPage = 1;
   const PAGE_SIZE = 8;
 
-  // Traffic Alerts Ad Spotlight — fetched once per page load
-  let trafficAdData = null;
-  try { trafficAdData = await apiGet('/admin/traffic-ad'); } catch(e) {}
+    // ─── TRAFFIC ALERTS ROTATING CAROUSEL ──────────────────────────────────────
+  // ─── TRAFFIC ALERTS ROTATING CAROUSEL ──────────────────────────────────────
+  async function renderTrafficCarousel() {
+    const container = document.getElementById('trafficAdContainer');
+    if (!container) return;
 
-  const trafficAdHTML = trafficAdData && trafficAdData.image
-    ? `<div class="relative w-full overflow-hidden rounded-2xl cursor-pointer mb-6"
-            style="height:72px;"
-            onclick="${trafficAdData.link ? `window.open('${trafficAdData.link}','_blank')` : ''}">
-         <div class="absolute top-1.5 left-1.5 z-10">
-           <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
-         </div>
-         <img src="${trafficAdData.image}" alt="${trafficAdData.businessName || 'Sponsored'}"
-              class="w-full h-full object-cover" style="display:block;">
-         ${trafficAdData.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
-           <p class="text-white text-[11px] font-semibold leading-tight truncate">${trafficAdData.businessName}</p>
-         </div>` : ''}
-       </div>`
-    : '';
+    try {
+      const ads = await apiGet('/admin/traffic-carousel-ads');
+      if (!ads || ads.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const currentAd = getRotatingAd(ads);
+
+      container.innerHTML = `
+        <div class="relative w-full overflow-hidden rounded-2xl cursor-pointer mb-6" style="height:72px;"
+             onclick="${currentAd.link ? `window.open('${currentAd.link}','_blank')` : ''}">
+          <div class="absolute top-1.5 left-1.5 z-10">
+            <span class="text-[8px] uppercase tracking-widest font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded-full">Ad</span>
+          </div>
+          <img src="${currentAd.image}" alt="${currentAd.businessName || 'Sponsored'}" class="w-full h-full object-cover" style="display:block;">
+          ${currentAd.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
+            <p class="text-white text-[11px] font-semibold leading-tight truncate">${currentAd.businessName}</p>
+          </div>` : ''}
+          ${ads.length > 1 ? `<div class="absolute top-3 right-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">Rotates every 2h</div>` : ''}
+        </div>`;
+    } catch (e) {
+      console.warn('Traffic carousel error:', e);
+    }
+  }
 
   const renderPage = async (page = 1) => {
     shoutoutsPage = page;
@@ -3282,7 +3317,8 @@ async function loadShoutoutsPage(content) {
     // Show loading state
     content.innerHTML = `
       <div class="max-w-2xl mx-auto px-2 pb-10">
-        ${trafficAdHTML}
+        <div id="trafficAdContainer"></div>
+        
         <div class="flex justify-between items-center mb-6">
           <div>
             <h1 class="text-3xl md:text-4xl font-bold">🚦 Community Traffic Alerts</h1>
@@ -3383,6 +3419,7 @@ async function loadShoutoutsPage(content) {
 
   // Initial render
   await renderPage(1);
+  renderTrafficCarousel();
 
   // ── SSE: subscribe to real-time updates ─────────────────────────────────────
   // Close any leftover connection first (e.g. fast back-navigation)
