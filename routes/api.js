@@ -5826,18 +5826,12 @@ router.post('/notifications/read', authenticate, async (req, res) => {
     const uid = new mongoose.Types.ObjectId(req.userId);
 
     if (all) {
-      await NotificationFeed.updateMany(
-        { recipient: uid, read: false },
-        { $set: { read: true } }
-      );
+      await NotificationFeed.markAllRead(uid);
       return res.json({ ok: true });
     }
 
     if (id) {
-      await NotificationFeed.updateOne(
-        { _id: id, recipient: uid },
-        { $set: { read: true } }
-      );
+      await NotificationFeed.markRead({ _id: id, recipient: uid });
       return res.json({ ok: true });
     }
 
@@ -5854,10 +5848,7 @@ router.post('/notifications/read', authenticate, async (req, res) => {
 router.delete('/notifications/:id', authenticate, async (req, res) => {
   try {
     const uid = new mongoose.Types.ObjectId(req.userId);
-    await NotificationFeed.updateOne(
-      { _id: req.params.id, recipient: uid },
-      { $set: { deleted: true } }
-    );
+    await NotificationFeed.markDeleted({ _id: req.params.id, recipient: uid });
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /notifications/:id error:', err);
@@ -5871,10 +5862,7 @@ router.delete('/notifications/:id', authenticate, async (req, res) => {
 router.delete('/notifications', authenticate, async (req, res) => {
   try {
     const uid = new mongoose.Types.ObjectId(req.userId);
-    await NotificationFeed.updateMany(
-      { recipient: uid },
-      { $set: { deleted: true } }
-    );
+    await NotificationFeed.markAllDeleted(uid);
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /notifications error:', err);
