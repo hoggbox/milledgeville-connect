@@ -1420,6 +1420,63 @@ router.get('/shoutouts', optionalAuth, async (req, res) => {
     res.status(statusCode).json({ message: err.message });
   }
 });
+// GET /api/shoutouts/:id/page — used by notification deep-links.
+// Tells the client which page (under the current sort) a specific shoutout
+// falls on right now, so the feed can be loaded to the right page before
+// scrolling to / highlighting the card — instead of always assuming page 1.
+router.get('/shoutouts/:id/page', optionalAuth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 8;
+    const target = await Shoutout.findById(req.params.id).select('cleared lastBumpedAt createdAt');
+    if (!target) {
+      return res.status(404).json({ message: 'Shoutout not found (it may have been deleted or expired)' });
+    }
+
+    // Mirrors the exact sort used by GET /shoutouts:
+    //   cleared(asc) → lastBumpedAt(desc) → createdAt(desc)
+    // Count how many shoutouts rank strictly ahead of this one under that order.
+    const isCleared = !!target.cleared;
+    const bumpedAt = target.lastBumpedAt || target.createdAt;
+
+    let rankAhead;
+    if (!isCleared) {
+      // Active shoutouts rank ahead of this one if: still active AND
+      // (bumped more recently, OR bumped at the same time but created more recently).
+      rankAhead = await Shoutout.countDocuments({
+        cleared: { $ne: true },
+        $or: [
+          { lastBumpedAt: { $gt: bumpedAt } },
+          { lastBumpedAt: bumpedAt, createdAt: { $gt: target.createdAt } }
+        ]
+      });
+    } else {
+      // This shoutout is cleared, so it's already past every active one.
+      // Among cleared shoutouts, count those bumped/created more recently.
+      const activeCount = await Shoutout.countDocuments({ cleared: { $ne: true } });
+      const clearedAhead = await Shoutout.countDocuments({
+        cleared: true,
+        $or: [
+          { lastBumpedAt: { $gt: bumpedAt } },
+          { lastBumpedAt: bumpedAt, createdAt: { $gt: target.createdAt } }
+        ]
+      });
+      rankAhead = activeCount + clearedAhead;
+    }
+
+    const total = await Shoutout.countDocuments();
+    const page = Math.floor(rankAhead / limit) + 1;
+
+    res.json({
+      page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total
+    });
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
 // Follow business
 router.post('/business/:id/follow', authenticate, async (req, res) => {
   try {

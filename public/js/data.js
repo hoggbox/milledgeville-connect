@@ -342,8 +342,24 @@ window.handlePushNotificationClick = async function(data) {
   const { page, id } = data;
 
 if (page === 'shoutouts' || page === 'shoutout') {
-  navigate('shoutouts');
-  if (id) setTimeout(() => window.scrollAndHighlightPost(`shoutout-${id}`), 600);
+  if (id) {
+    // Find which page this shoutout currently falls on (it may have been
+    // bumped/pushed past page 1 by newer activity) so the feed loads
+    // straight to the right page before we try to scroll/highlight it.
+    let startPage = 1;
+    try {
+      const pageInfo = await apiGet(`/shoutouts/${id}/page?limit=8`);
+      if (pageInfo && pageInfo.page) startPage = pageInfo.page;
+    } catch (e) {
+      // 404 (deleted/expired) or network hiccup — fall back to page 1;
+      // the retrying scrollAndHighlightPost below will just no-op if it's gone.
+      console.warn('Could not resolve shoutout page, defaulting to page 1:', e);
+    }
+    navigate('shoutouts', { startPage });
+    setTimeout(() => window.scrollAndHighlightPost(`shoutout-${id}`), 600);
+  } else {
+    navigate('shoutouts');
+  }
 }
   else if (page === 'marketplace' || page === 'market') {
     await navigate('marketplace');
@@ -734,7 +750,7 @@ async function markConversationAsRead(otherId) {
 // markMessagesAsRead is defined below (near the messages system) to avoid duplication
 
 // ─── Page Router ──────────────────────────────────────────────────────────────
-async function loadPage(page) {
+async function loadPage(page, opts) {
   currentPage = page;
   const content = document.getElementById('content');
 
@@ -772,7 +788,7 @@ async function loadPage(page) {
   if (page === 'owner-dashboard') { await loadOwnerDashboard(content);   return; }
   if (page === 'home')            { await loadHomePage(content);          return; }
   if (page === 'directory')       { await loadDirectoryPage(content);     return; }
-  if (page === 'shoutouts')       { await loadShoutoutsPage(content);     return; }
+  if (page === 'shoutouts')       { await loadShoutoutsPage(content, opts?.startPage);     return; }
   if (page === 'lostfound')       { await loadLostFoundPage(content);     return; }   // ← NEW
   if (page === 'marketplace')     { await loadMarketplacePage(content);   return; }   // ← NEW
   if (page === 'events')          { await loadEventsPage(content);           return; }
@@ -3276,7 +3292,7 @@ function startVerificationPoll() {}
 
 
 // ─── SHOUTOUTS — PAGINATED + PHOTO UPLOAD ───────────────────────────────────
-async function loadShoutoutsPage(content) {
+async function loadShoutoutsPage(content, startPage = 1) {
   let shoutoutsPage = 1;
   const PAGE_SIZE = 8;
 
@@ -3364,6 +3380,11 @@ async function loadShoutoutsPage(content) {
         <div id="shoutoutPagination" class="flex justify-center items-center gap-3 mt-8"></div>
       </div>`;
 
+    // content.innerHTML above just wiped #trafficAdContainer (it's recreated
+    // empty every time renderPage runs, e.g. on every pagination click) —
+    // re-fill it now so the ad doesn't disappear after the first page change.
+    renderTrafficCarousel();
+
     try {
       const res = await apiGet(`/shoutouts?page=${page}&limit=${PAGE_SIZE}`);
       const { shoutouts = [], pagination = {} } = res;
@@ -3418,9 +3439,10 @@ async function loadShoutoutsPage(content) {
   // Make pagination buttons work globally
   window._loadShoutoutPage = (page) => renderPage(page);
 
-  // Initial render
-  await renderPage(1);
-  renderTrafficCarousel();
+  // Initial render — starts on startPage (1 by default, or the page a
+  // notification deep-link resolved to) so the target card is on-screen
+  // before we try to scroll to / highlight it.
+  await renderPage(Math.max(1, startPage || 1));
 
   // ── SSE: subscribe to real-time updates ─────────────────────────────────────
   // Close any leftover connection first (e.g. fast back-navigation)
