@@ -33,20 +33,17 @@ const BusinessPost    = require('../models/BusinessPost'); // ← BUSINESS PHOTO
 const ScheduledNotification = require('../models/ScheduledNotification');
 const NotificationFeed      = require('../models/NotificationFeed');
 
-// \u2500\u2500\u2500 Inline model: SpotlightAd (singleton \u2014 only one doc ever exists) \u2500\u2500\u2500\u2500\u2500\u2500
-// ─── HOME CAROUSEL ADS (multiple, rotating) ───────────────────────────────
-const homeCarouselAdSchema = new mongoose.Schema({
-  image:        { type: String, required: true },
-  businessName: { type: String, default: '' },
-  link:         { type: String, default: '' },
-  active:       { type: Boolean, default: true },
-  order:        { type: Number, default: 0 },
-  createdAt:    { type: Date, default: Date.now }
-});
-const HomeCarouselAd = mongoose.models.HomeCarouselAd || mongoose.model('HomeCarouselAd', homeCarouselAdSchema);
+// ─── UNIFIED CAROUSEL ADS (Home + Traffic Alerts, multiple, rotating) ─────
+// Single collection for both ad zones. `zone` determines where the ad shows:
+//   'home'    → main app page ad carousel
+//   'traffic' → traffic alerts / shouts page ad carousel
+// Each zone rotates through up to MAX_CAROUSEL_ADS_PER_ZONE (5) active ads,
+// switching every CAROUSEL_ROTATION_MS (2 hours) in sync for every visitor.
+const MAX_CAROUSEL_ADS_PER_ZONE = 5;
+const CAROUSEL_ROTATION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-// ─── TRAFFIC ALERTS CAROUSEL ADS (multiple, rotating) ─────────────────────
-const trafficCarouselAdSchema = new mongoose.Schema({
+const carouselAdSchema = new mongoose.Schema({
+  zone:         { type: String, enum: ['home', 'traffic'], required: true, index: true },
   image:        { type: String, required: true },
   businessName: { type: String, default: '' },
   link:         { type: String, default: '' },
@@ -54,7 +51,21 @@ const trafficCarouselAdSchema = new mongoose.Schema({
   order:        { type: Number, default: 0 },
   createdAt:    { type: Date, default: Date.now }
 });
-const TrafficCarouselAd = mongoose.models.TrafficCarouselAd || mongoose.model('TrafficCarouselAd', trafficCarouselAdSchema);
+const CarouselAd = mongoose.models.CarouselAd || mongoose.model('CarouselAd', carouselAdSchema);
+
+/**
+ * Deterministically picks which ad in a zone should be showing right now.
+ * Synced across all clients: based purely on the server clock, so every
+ * visitor sees the same ad during the same 2-hour slot. Wraps automatically
+ * based on however many active ads exist (1\u20135) \u2014 if fewer than 5 are
+ * uploaded, it just rotates through whatever is there.
+ */
+function pickCurrentCarouselAd(ads) {
+  if (!ads || ads.length === 0) return null;
+  const slot = Math.floor(Date.now() / CAROUSEL_ROTATION_MS);
+  const index = slot % ads.length;
+  return ads[index];
+}
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODERATION ROUTES  — paste this block into api.js
 //
@@ -5691,51 +5702,7 @@ router.delete('/admin/scheduled-notifications/:id', authenticate, requireAdmin, 
 
 // ←←← MUST BE AT THE VERY BOTTOM ←←←
 
-// \u2500\u2500\u2500 SPOTLIGHT AD ROUTES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-// GET /api/admin/spotlight-ad  \u2014 public (home screen reads it)
-router.get('/admin/spotlight-ad', async (req, res) => {
-  try {
-    const ad = await SpotlightAd.findOne().sort({ updatedAt: -1 });
-    if (!ad) return res.json(null);
-    res.json({ image: ad.image, businessName: ad.businessName, link: ad.link });
-  } catch (err) {
-    console.error('GET spotlight-ad error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// POST /api/admin/spotlight-ad  \u2014 admin only, saves/replaces current ad
-router.post('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { image, businessName = '', link = '' } = req.body;
-    if (!image) return res.status(400).json({ message: 'image is required' });
-    // Keep only one doc \u2014 replace any existing
-    await SpotlightAd.deleteMany({});
-    const ad = await SpotlightAd.create({ image, businessName, link, updatedAt: new Date() });
-    res.json({ message: 'Spotlight ad saved', id: ad._id });
-  } catch (err) {
-    console.error('POST spotlight-ad error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// DELETE /api/admin/spotlight-ad  \u2014 admin only
-router.delete('/admin/spotlight-ad', authenticate, requireAdmin, async (req, res) => {
-  try {
-    await SpotlightAd.deleteMany({});
-    res.json({ message: 'Spotlight ad removed' });
-  } catch (err) {
-    console.error('DELETE spotlight-ad error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// NOTIFICATION FEED ROUTES
 // Drop this entire block into api.js (above module.exports = router)
 //
 // Call createNotification() from anywhere in api.js to fan out a notification.
@@ -5967,51 +5934,7 @@ router.get('/notifications/unread-count', authenticate, async (req, res) => {
 // END NOTIFICATION FEED ROUTES
 // ═════════════════════════════════════════════════════════════════════════════
 
-// \u2500\u2500\u2500 TRAFFIC ALERTS AD ROUTES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-// Same singleton pattern as Spotlight Ad above, but shown at top of Traffic Alerts page
 
-// GET /api/admin/traffic-ad  \u2014 public (traffic alerts page reads it)
-router.get('/admin/traffic-ad', async (req, res) => {
-  try {
-    const ad = await TrafficAd.findOne().sort({ updatedAt: -1 });
-    if (!ad) return res.json(null);
-    res.json({ image: ad.image, businessName: ad.businessName, link: ad.link });
-  } catch (err) {
-    console.error('GET traffic-ad error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// POST /api/admin/traffic-ad  \u2014 admin only, saves/replaces current ad
-router.post('/admin/traffic-ad', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { image, businessName = '', link = '' } = req.body;
-    if (!image) return res.status(400).json({ message: 'image is required' });
-    // Keep only one doc \u2014 replace any existing
-    await TrafficAd.deleteMany({});
-    const ad = await TrafficAd.create({ image, businessName, link, updatedAt: new Date() });
-    res.json({ message: 'Traffic ad saved', id: ad._id });
-  } catch (err) {
-    console.error('POST traffic-ad error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// DELETE /api/admin/traffic-ad  \u2014 admin only
-router.delete('/admin/traffic-ad', authenticate, requireAdmin, async (req, res) => {
-  try {
-    await TrafficAd.deleteMany({});
-    res.json({ message: 'Traffic ad removed' });
-  } catch (err) {
-    console.error('DELETE traffic-ad error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
-
-// ─── ONE-TIME MIGRATION: hash any plain-text securityAnswer values ─────────────
 // GET /api/admin/fix-security-answers
 // Requires an authenticated admin (same as your other /admin routes).
 // Run once, confirm the response counts look right, then delete this route.
@@ -6077,45 +6000,140 @@ router.get('/_debug/image-prefixes', async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// HOME CAROUSEL ADS (rotating every 2 hours)
+// UNIFIED CAROUSEL ADS — Home page + Traffic Alerts page
+// Rotates through up to 5 active ads per zone, switching every 2 hours,
+// in sync for every visitor. Admin panel manages both zones from one place.
+// Zone is passed as a URL param: 'home' or 'traffic'.
 // ═════════════════════════════════════════════════════════════════════════════
 
-router.get('/admin/home-carousel-ads', async (req, res) => {
-  const ads = await HomeCarouselAd.find({ active: true }).sort({ order: 1, createdAt: -1 });
-  res.json(ads);
+function isValidZone(zone) {
+  return zone === 'home' || zone === 'traffic';
+}
+
+// GET /api/admin/carousel-ads/:zone
+// Admin panel list view — ALL ads for a zone (active + inactive), ordered.
+router.get('/admin/carousel-ads/:zone', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { zone } = req.params;
+    if (!isValidZone(zone)) return res.status(400).json({ message: 'zone must be "home" or "traffic"' });
+    const ads = await CarouselAd.find({ zone }).sort({ order: 1, createdAt: -1 });
+    res.json(ads);
+  } catch (err) {
+    console.error('GET carousel-ads error:', err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
 });
 
-router.post('/admin/home-carousel-ads', authenticate, requireAdmin, async (req, res) => {
-  const { image, businessName = '', link = '' } = req.body;
-  if (!image) return res.status(400).json({ message: 'image is required' });
-  const ad = await HomeCarouselAd.create({ image, businessName, link });
-  res.json(ad);
+// GET /api/admin/carousel-ads  — Admin panel "combined" view, both zones at once.
+router.get('/admin/carousel-ads', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const ads = await CarouselAd.find({}).sort({ zone: 1, order: 1, createdAt: -1 });
+    res.json({
+      home: ads.filter(a => a.zone === 'home'),
+      traffic: ads.filter(a => a.zone === 'traffic'),
+      maxPerZone: MAX_CAROUSEL_ADS_PER_ZONE
+    });
+  } catch (err) {
+    console.error('GET carousel-ads (combined) error:', err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
 });
 
-router.delete('/admin/home-carousel-ads/:id', authenticate, requireAdmin, async (req, res) => {
-  await HomeCarouselAd.findByIdAndDelete(req.params.id);
-  res.json({ message: 'Deleted' });
+// GET /api/carousel-ads/:zone/current  — PUBLIC. Returns the single ad that
+// should be displayed right now in that zone (the app calls this directly).
+// Falls back gracefully: rotates through however many active ads exist (1\u20135);
+// returns null if none are uploaded yet.
+router.get('/carousel-ads/:zone/current', async (req, res) => {
+  try {
+    const { zone } = req.params;
+    if (!isValidZone(zone)) return res.status(400).json({ message: 'zone must be "home" or "traffic"' });
+    const ads = await CarouselAd.find({ zone, active: true }).sort({ order: 1, createdAt: 1 });
+    const current = pickCurrentCarouselAd(ads);
+    if (!current) return res.json(null);
+    res.json({
+      id: current._id,
+      image: current.image,
+      businessName: current.businessName,
+      link: current.link,
+      rotationMs: CAROUSEL_ROTATION_MS,
+      totalActive: ads.length
+    });
+  } catch (err) {
+    console.error('GET carousel-ads current error:', err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// TRAFFIC ALERTS CAROUSEL ADS (rotating every 2 hours)
-// ═════════════════════════════════════════════════════════════════════════════
+// POST /api/admin/carousel-ads/:zone  — admin only, add a new ad to a zone.
+// Enforces the 5-ad cap per zone.
+router.post('/admin/carousel-ads/:zone', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { zone } = req.params;
+    if (!isValidZone(zone)) return res.status(400).json({ message: 'zone must be "home" or "traffic"' });
+    const { image, businessName = '', link = '', order = 0, active = true } = req.body;
+    if (!image) return res.status(400).json({ message: 'image is required' });
 
-router.get('/admin/traffic-carousel-ads', async (req, res) => {
-  const ads = await TrafficCarouselAd.find({ active: true }).sort({ order: 1, createdAt: -1 });
-  res.json(ads);
+    const existingCount = await CarouselAd.countDocuments({ zone });
+    if (existingCount >= MAX_CAROUSEL_ADS_PER_ZONE) {
+      return res.status(400).json({
+        message: `Maximum of ${MAX_CAROUSEL_ADS_PER_ZONE} ads allowed for the "${zone}" carousel. Delete one before adding another.`
+      });
+    }
+
+    const ad = await CarouselAd.create({ zone, image, businessName, link, order, active });
+    res.json(ad);
+  } catch (err) {
+    console.error('POST carousel-ads error:', err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
 });
 
-router.post('/admin/traffic-carousel-ads', authenticate, requireAdmin, async (req, res) => {
-  const { image, businessName = '', link = '' } = req.body;
-  if (!image) return res.status(400).json({ message: 'image is required' });
-  const ad = await TrafficCarouselAd.create({ image, businessName, link });
-  res.json(ad);
+// PUT /api/admin/carousel-ads/:id  — admin only, edit an existing ad
+// (image, businessName, link, order, active, or even move it to the other zone).
+router.put('/admin/carousel-ads/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { image, businessName, link, order, active, zone } = req.body;
+    const update = {};
+    if (image !== undefined) update.image = image;
+    if (businessName !== undefined) update.businessName = businessName;
+    if (link !== undefined) update.link = link;
+    if (order !== undefined) update.order = order;
+    if (active !== undefined) update.active = active;
+
+    if (zone !== undefined) {
+      if (!isValidZone(zone)) return res.status(400).json({ message: 'zone must be "home" or "traffic"' });
+      const current = await CarouselAd.findById(req.params.id);
+      if (!current) return res.status(404).json({ message: 'Ad not found' });
+      if (current.zone !== zone) {
+        const destCount = await CarouselAd.countDocuments({ zone });
+        if (destCount >= MAX_CAROUSEL_ADS_PER_ZONE) {
+          return res.status(400).json({
+            message: `Maximum of ${MAX_CAROUSEL_ADS_PER_ZONE} ads allowed for the "${zone}" carousel.`
+          });
+        }
+      }
+      update.zone = zone;
+    }
+
+    const ad = await CarouselAd.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!ad) return res.status(404).json({ message: 'Ad not found' });
+    res.json(ad);
+  } catch (err) {
+    console.error('PUT carousel-ads error:', err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
 });
 
-router.delete('/admin/traffic-carousel-ads/:id', authenticate, requireAdmin, async (req, res) => {
-  await TrafficCarouselAd.findByIdAndDelete(req.params.id);
-  res.json({ message: 'Deleted' });
+// DELETE /api/admin/carousel-ads/:id  — admin only
+router.delete('/admin/carousel-ads/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const ad = await CarouselAd.findByIdAndDelete(req.params.id);
+    if (!ad) return res.status(404).json({ message: 'Ad not found' });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error('DELETE carousel-ads error:', err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
 });
 
 module.exports = router;

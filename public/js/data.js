@@ -1126,13 +1126,16 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
 
   // Ad Spotlight — full-width strip, same height as weather widget
   // ─── HOME PAGE ROTATING CAROUSEL ───────────────────────────────────────────
+  // Pulls the currently-active ad from the server (synced rotation — every
+  // visitor sees the same ad in the same 2-hour slot). Rotates through
+  // whatever has been uploaded (1–5 ads); falls back to a placeholder if none.
   async function renderHomeCarousel() {
     const container = document.getElementById('todayDigest');
     if (!container) return;
 
     try {
-      const ads = await apiGet('/admin/home-carousel-ads');
-      if (!ads || ads.length === 0) {
+      const currentAd = await apiGet('/carousel-ads/home/current');
+      if (!currentAd) {
         container.innerHTML = `<div class="w-full bg-white/5 border border-dashed border-white/20 rounded-2xl flex items-center justify-center gap-3" style="height:72px;">
           <span class="text-xl">📣</span>
           <div class="text-center">
@@ -1142,8 +1145,6 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
         </div>`;
         return;
       }
-
-      const currentAd = getRotatingAd(ads);
 
       container.innerHTML = `
         <div class="relative w-full overflow-hidden rounded-2xl cursor-pointer" style="height:72px;"
@@ -1155,7 +1156,7 @@ const shoutoutsData = shoutoutsRes.shoutouts || [];
           ${currentAd.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
             <p class="text-white text-[11px] font-semibold leading-tight truncate">${currentAd.businessName}</p>
           </div>` : ''}
-          ${ads.length > 1 ? `<div class="absolute top-3 right-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">Rotates every 2h</div>` : ''}
+          ${currentAd.totalActive > 1 ? `<div class="absolute top-3 right-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">Rotates every 2h</div>` : ''}
         </div>`;
     } catch (e) {
       console.warn('Home carousel error:', e);
@@ -3280,19 +3281,19 @@ async function loadShoutoutsPage(content) {
   const PAGE_SIZE = 8;
 
     // ─── TRAFFIC ALERTS ROTATING CAROUSEL ──────────────────────────────────────
-  // ─── TRAFFIC ALERTS ROTATING CAROUSEL ──────────────────────────────────────
+  // Pulls the currently-active ad from the server (synced rotation — every
+  // visitor sees the same ad in the same 2-hour slot). Rotates through
+  // whatever has been uploaded (1–5 ads); renders nothing if none are set.
   async function renderTrafficCarousel() {
     const container = document.getElementById('trafficAdContainer');
     if (!container) return;
 
     try {
-      const ads = await apiGet('/admin/traffic-carousel-ads');
-      if (!ads || ads.length === 0) {
+      const currentAd = await apiGet('/carousel-ads/traffic/current');
+      if (!currentAd) {
         container.innerHTML = '';
         return;
       }
-
-      const currentAd = getRotatingAd(ads);
 
       container.innerHTML = `
         <div class="relative w-full overflow-hidden rounded-2xl cursor-pointer mb-6" style="height:72px;"
@@ -3304,7 +3305,7 @@ async function loadShoutoutsPage(content) {
           ${currentAd.businessName ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-4 rounded-b-2xl">
             <p class="text-white text-[11px] font-semibold leading-tight truncate">${currentAd.businessName}</p>
           </div>` : ''}
-          ${ads.length > 1 ? `<div class="absolute top-3 right-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">Rotates every 2h</div>` : ''}
+          ${currentAd.totalActive > 1 ? `<div class="absolute top-3 right-3 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">Rotates every 2h</div>` : ''}
         </div>`;
     } catch (e) {
       console.warn('Traffic carousel error:', e);
@@ -6501,8 +6502,7 @@ async function loadAdminPage(content) {
           {id:5, label:'Broadcast', icon:'📢'},
           {id:6, label:'Analytics', icon:'📈'},
           {id:7, label:'Reports',   icon:'🚩'},
-          {id:8, label:'Ad Spotlight', icon:'📣'},
-          {id:9, label:'Traffic Ad', icon:'🚦'}
+          {id:8, label:'Ad Carousels', icon:'📣'}
         ].map(tab => `
           <button onclick="switchAdminTab(${tab.id})" id="mobileTab${tab.id}"
                   class="admin-tab whitespace-nowrap flex items-center gap-2 px-5 py-3 rounded-3xl text-sm font-semibold flex-shrink-0 transition-all
@@ -6531,8 +6531,7 @@ async function loadAdminPage(content) {
             <button onclick="switchAdminTab(5)" id="adminTab5" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📢 Broadcast</button>
             <button onclick="switchAdminTab(6)" id="adminTab6" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📈 Analytics</button>
             <button onclick="switchAdminTab(7)" id="adminTab7" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🚩 Reports</button>
-            <button onclick="switchAdminTab(8)" id="adminTab8" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📣 Ad Spotlight</button>
-            <button onclick="switchAdminTab(9)" id="adminTab9" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">🚦 Traffic Ad</button>
+            <button onclick="switchAdminTab(8)" id="adminTab8" class="admin-tab w-full text-left px-5 py-3.5 rounded-2xl flex items-center gap-3 font-semibold hover:bg-white/10">📣 Ad Carousels</button>
           </nav>
         </div>
 
@@ -6739,8 +6738,7 @@ try {
     } else if (tab === 5) await renderAdminBroadcast();
     else if (tab === 6) await renderAdminAnalytics();
     else if (tab === 7) await renderAdminReports();   // ← NEW REPORTS TAB
-    else if (tab === 8) await renderAdminAdSpotlight(); // ← AD SPOTLIGHT
-    else if (tab === 9) await renderAdminTrafficAd();    // ← TRAFFIC ALERTS AD
+    else if (tab === 8) await renderAdminAdCarousels();  // ← AD CAROUSELS (Home + Traffic, combined)
   } catch (err) {
     console.error(err);
     container.innerHTML = `
@@ -10633,280 +10631,161 @@ async function renderAdminAnalytics() {
     </div>`;
 }
 
-// ─── AD SPOTLIGHT ADMIN PANEL ────────────────────────────────────────────────
-async function renderAdminAdSpotlight() {
-  const container = document.getElementById('adminMainContent');
-  container.innerHTML = `<div class="flex items-center justify-center py-16"><div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div></div>`;
-
-  let current = null;
-  try { current = await apiGet('/admin/spotlight-ad'); } catch(e) {}
-
-  const hasAd = current && current.image;
-
-  container.innerHTML = `
-    <div class="space-y-6 max-w-2xl mx-auto">
-      <div class="flex items-center gap-3">
-        <div class="text-3xl">📣</div>
-        <div>
-          <h2 class="text-2xl font-bold">Ad Spotlight</h2>
-          <p class="text-white/50 text-sm">Paid business banner shown full-width on the home screen below the weather widget.</p>
-        </div>
-      </div>
-
-      <!-- CURRENT AD PREVIEW -->
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Current Spotlight</h3>
-        ${hasAd ? `
-          <div class="relative rounded-2xl overflow-hidden mb-4" style="aspect-ratio:4/1;">
-            <img src="${current.image}" alt="Current ad" class="w-full h-full object-cover"/>
-            ${current.businessName ? `
-            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
-              <p class="text-white text-sm font-bold truncate">${current.businessName}</p>
-              ${current.link ? `<p class="text-white/60 text-xs truncate">${current.link}</p>` : ''}
-            </div>` : ''}
-            <div class="absolute top-2 right-2 bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">LIVE</div>
-          </div>
-          <div class="grid grid-cols-2 gap-3 text-sm">
-            <div class="bg-white/5 rounded-xl p-3">
-              <div class="text-white/40 text-xs mb-1">Business Name</div>
-              <div class="font-semibold truncate">${current.businessName || '—'}</div>
-            </div>
-            <div class="bg-white/5 rounded-xl p-3">
-              <div class="text-white/40 text-xs mb-1">Click Link</div>
-              <div class="font-semibold truncate text-emerald-400">${current.link || 'None'}</div>
-            </div>
-          </div>
-          <button onclick="clearSpotlightAd()" class="mt-4 w-full py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/30 transition-all">
-            🗑️ Remove Current Ad
-          </button>
-        ` : `
-          <div class="flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/20 rounded-2xl text-center gap-2">
-            <div class="text-4xl">📭</div>
-            <p class="text-white/50 font-semibold">No Ad Running</p>
-            <p class="text-white/30 text-xs">Upload a banner below to activate the spotlight</p>
-          </div>
-        `}
-      </div>
-
-      <!-- UPLOAD NEW AD -->
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Upload New Ad</h3>
-
-        <div class="space-y-4">
-          <!-- Image upload -->
-          <div>
-            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Banner Image <span class="text-amber-400">*</span></label>
-            <div id="adDropZone" onclick="document.getElementById('adImageInput').click()"
-              class="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-400/50 hover:bg-emerald-400/5 transition-all group">
-              <input type="file" id="adImageInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewAdImage(event)"/>
-              <div id="adPreviewWrap" class="hidden mb-3">
-                <img id="adPreviewImg" class="w-full rounded-xl bg-black" style="object-fit:contain;max-height:120px;"/>
-              </div>
-              <div id="adDropLabel" class="space-y-1">
-                <div class="text-3xl">🖼️</div>
-                <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
-        <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">800 × 200 px</strong> (4:1) · Max 2 MB</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Business name -->
-          <div>
-            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Business Name</label>
-            <input id="adBusinessName" type="text" placeholder="e.g. Miller's BBQ" maxlength="50"
-              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
-          </div>
-
-          <!-- Click link -->
-          <div>
-            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Click-Through Link <span class="text-white/30">(optional)</span></label>
-            <input id="adLink" type="url" placeholder="https://yourbusiness.com"
-              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
-          </div>
-
-          <button onclick="uploadSpotlightAd()" id="adUploadBtn"
-            class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white transition-all flex items-center justify-center gap-2">
-            <span>📣</span> Save & Activate Spotlight Ad
-          </button>
-        </div>
-      </div>
-
-      <!-- SIZE GUIDE -->
-      <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
-        <p class="font-bold mb-1">📐 Image Size Guide</p>
-        <p class="text-amber-200/70">Upload at <strong>800 × 200 px</strong> (4:1 ratio) for a perfect fit. The ad fills the strip edge-to-edge with no black bars — keep important text and logos centered so nothing gets clipped on narrower screens.</p>
-      </div>
-    </div>`;
-}
-
-window.previewAdImage = function(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2 MB', 'error'); event.target.value = ''; return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = document.getElementById('adPreviewImg');
-    const wrap = document.getElementById('adPreviewWrap');
-    const label = document.getElementById('adDropLabel');
-    img.src = e.target.result;
-    wrap.classList.remove('hidden');
-    label.querySelector('p:first-of-type').textContent = file.name;
-    label.querySelector('p:last-of-type').textContent = `${(file.size/1024).toFixed(0)} KB`;
-  };
-  reader.readAsDataURL(file);
-};
-
-window.uploadSpotlightAd = async function() {
-  const fileInput = document.getElementById('adImageInput');
-  const businessName = document.getElementById('adBusinessName').value.trim();
-  const link = document.getElementById('adLink').value.trim();
-  const btn = document.getElementById('adUploadBtn');
-
-  if (!fileInput.files[0]) { showToast('Please choose a banner image first', 'error'); return; }
-
-  const reader = new FileReader();
-  reader.onload = async e => {
-    btn.disabled = true;
-    btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Uploading…';
-    try {
-      await apiPost('/admin/spotlight-ad', { image: e.target.result, businessName, link });
-      showToast('Ad Spotlight updated! 📣', 'success');
-      await renderAdminAdSpotlight();
-    } catch(err) {
-      showToast(err.message || 'Upload failed', 'error');
-      btn.disabled = false;
-      btn.innerHTML = '<span>📣</span> Save & Activate Spotlight Ad';
-    }
-  };
-  reader.readAsDataURL(fileInput.files[0]);
-};
-
-window.clearSpotlightAd = async function() {
-  if (!confirm('Remove the current spotlight ad?')) return;
-  try {
-    await apiDelete('/admin/spotlight-ad');
-    showToast('Ad removed', 'success');
-    await renderAdminAdSpotlight();
-  } catch(err) {
-    showToast(err.message || 'Failed to remove ad', 'error');
+// ─── AD CAROUSELS ADMIN PANEL (Home + Traffic, combined) ────────────────────
+// Each zone supports up to 5 rotating ads, switching every 2 hours in sync
+// for every visitor. If fewer than 5 are uploaded, the rotation just cycles
+// through whatever exists.
+const AD_ZONE_META = {
+  home: {
+    label: 'Home Page',
+    icon: '📣',
+    description: 'Shown full-width on the home screen below the weather widget.',
+    aspectHint: '800 × 200 px (4:1)'
+  },
+  traffic: {
+    label: 'Traffic Alerts',
+    icon: '🚦',
+    description: 'Shown full-width at the top of the Traffic Alerts page.',
+    aspectHint: '1200 × 130 px (~9:1)'
   }
 };
 
-// ─── TRAFFIC ALERTS AD ADMIN PANEL ───────────────────────────────────────────
-async function renderAdminTrafficAd() {
+async function renderAdminAdCarousels() {
   const container = document.getElementById('adminMainContent');
   container.innerHTML = `<div class="flex items-center justify-center py-16"><div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div></div>`;
 
-  let current = null;
-  try { current = await apiGet('/admin/traffic-ad'); } catch(e) {}
-
-  const hasAd = current && current.image;
+  let combined = { home: [], traffic: [], maxPerZone: 5 };
+  try { combined = await apiGet('/admin/carousel-ads'); } catch (e) {}
 
   container.innerHTML = `
-    <div class="space-y-6 max-w-2xl mx-auto">
+    <div class="space-y-8 max-w-4xl mx-auto">
       <div class="flex items-center gap-3">
-        <div class="text-3xl">🚦</div>
+        <div class="text-3xl">📣</div>
         <div>
-          <h2 class="text-2xl font-bold">Traffic Alerts Ad</h2>
-          <p class="text-white/50 text-sm">Paid business banner shown full-width at the top of the Traffic Alerts page.</p>
+          <h2 class="text-2xl font-bold">Ad Carousels</h2>
+          <p class="text-white/50 text-sm">Manage rotating banner ads for the Home page and Traffic Alerts page — up to ${combined.maxPerZone || 5} ads per spot, each rotating every 2 hours.</p>
         </div>
       </div>
 
-      <!-- CURRENT AD PREVIEW -->
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Current Ad</h3>
-        ${hasAd ? `
-          <div class="relative rounded-2xl overflow-hidden mb-4" style="aspect-ratio:4/1;">
-            <img src="${current.image}" alt="Current ad" class="w-full h-full object-cover"/>
-            ${current.businessName ? `
-            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
-              <p class="text-white text-sm font-bold truncate">${current.businessName}</p>
-              ${current.link ? `<p class="text-white/60 text-xs truncate">${current.link}</p>` : ''}
-            </div>` : ''}
-            <div class="absolute top-2 right-2 bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">LIVE</div>
-          </div>
-          <div class="grid grid-cols-2 gap-3 text-sm">
-            <div class="bg-white/5 rounded-xl p-3">
-              <div class="text-white/40 text-xs mb-1">Business Name</div>
-              <div class="font-semibold truncate">${current.businessName || '—'}</div>
-            </div>
-            <div class="bg-white/5 rounded-xl p-3">
-              <div class="text-white/40 text-xs mb-1">Click Link</div>
-              <div class="font-semibold truncate text-emerald-400">${current.link || 'None'}</div>
-            </div>
-          </div>
-          <button onclick="clearTrafficAd()" class="mt-4 w-full py-3 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/30 transition-all">
-            🗑️ Remove Current Ad
-          </button>
-        ` : `
-          <div class="flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/20 rounded-2xl text-center gap-2">
-            <div class="text-4xl">📭</div>
-            <p class="text-white/50 font-semibold">No Ad Running</p>
-            <p class="text-white/30 text-xs">Upload a banner below to activate the ad</p>
-          </div>
-        `}
-      </div>
-
-      <!-- UPLOAD NEW AD -->
-      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Upload New Ad</h3>
-
-        <div class="space-y-4">
-          <!-- Image upload -->
-          <div>
-            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Banner Image <span class="text-amber-400">*</span></label>
-            <div id="trafficAdDropZone" onclick="document.getElementById('trafficAdImageInput').click()"
-              class="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-400/50 hover:bg-emerald-400/5 transition-all group">
-              <input type="file" id="trafficAdImageInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewTrafficAdImage(event)"/>
-              <div id="trafficAdPreviewWrap" class="hidden mb-3">
-                <img id="trafficAdPreviewImg" class="w-full rounded-xl bg-black" style="object-fit:contain;max-height:120px;"/>
-              </div>
-              <div id="trafficAdDropLabel" class="space-y-1">
-                <div class="text-3xl">🖼️</div>
-                <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
-        <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">1200 × 130 px</strong> (~9:1) · Max 2 MB</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Business name -->
-          <div>
-            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Business Name</label>
-            <input id="trafficAdBusinessName" type="text" placeholder="e.g. Miller's BBQ" maxlength="50"
-              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
-          </div>
-
-          <!-- Click link -->
-          <div>
-            <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Click-Through Link <span class="text-white/30">(optional)</span></label>
-            <input id="trafficAdLink" type="url" placeholder="https://yourbusiness.com"
-              class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
-          </div>
-
-          <button onclick="uploadTrafficAd()" id="trafficAdUploadBtn"
-            class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white transition-all flex items-center justify-center gap-2">
-            <span>🚦</span> Save & Activate Traffic Ad
-          </button>
-        </div>
-      </div>
-
-      <!-- SIZE GUIDE -->
-      <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
-        <p class="font-bold mb-1">📐 Image Size Guide</p>
-        <p class="text-amber-200/70">Upload at <strong>1200 × 130 px</strong> (~9:1 ratio) for a perfect fit on the Traffic Alerts banner. The ad fills the strip edge-to-edge with no black bars — keep important text and logos centered so nothing gets clipped on narrower screens.</p>
-      </div>
+      ${Object.keys(AD_ZONE_META).map(zone => renderAdZoneSection(zone, combined[zone] || [], combined.maxPerZone || 5)).join('<div class="border-t border-white/10"></div>')}
     </div>`;
 }
 
-window.previewTrafficAdImage = function(event) {
+function renderAdZoneSection(zone, ads, maxPerZone) {
+  const meta = AD_ZONE_META[zone];
+  const sorted = [...ads].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const atCapacity = sorted.length >= maxPerZone;
+
+  return `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-3">
+          <div class="text-2xl">${meta.icon}</div>
+          <div>
+            <h3 class="text-lg font-bold">${meta.label}</h3>
+            <p class="text-white/40 text-xs">${meta.description}</p>
+          </div>
+        </div>
+        <div class="text-xs font-semibold px-3 py-1.5 rounded-full ${atCapacity ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-white/60'}">
+          ${sorted.length} / ${maxPerZone} ads
+        </div>
+      </div>
+
+      <!-- CURRENT ADS GRID -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        ${sorted.map(ad => `
+          <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-4 ${ad.active ? '' : 'opacity-50'}">
+            <div class="relative rounded-xl overflow-hidden mb-3" style="aspect-ratio:4/1;">
+              <img src="${ad.image}" alt="${esc(ad.businessName || 'Ad')}" class="w-full h-full object-cover"/>
+              ${ad.businessName ? `
+              <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
+                <p class="text-white text-xs font-bold truncate">${esc(ad.businessName)}</p>
+              </div>` : ''}
+              ${!ad.active ? `<div class="absolute top-1.5 right-1.5 bg-white/20 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Paused</div>` : ''}
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-xs text-white/40 truncate">${ad.link ? esc(ad.link) : 'No link'}</p>
+              </div>
+              <div class="flex items-center gap-1.5 flex-shrink-0">
+                <button onclick="toggleCarouselAdActive('${ad._id}', ${!ad.active}, '${zone}')"
+                  class="text-xs px-2.5 py-1.5 rounded-lg font-semibold ${ad.active ? 'bg-white/10 hover:bg-white/20 text-white/70' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400'}">
+                  ${ad.active ? 'Pause' : 'Activate'}
+                </button>
+                <button onclick="deleteCarouselAd('${ad._id}', '${zone}')"
+                  class="text-xs px-2.5 py-1.5 rounded-lg font-semibold bg-red-500/20 hover:bg-red-500/30 text-red-400">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+
+        ${sorted.length === 0 ? `
+          <div class="sm:col-span-2 flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/20 rounded-2xl text-center gap-2">
+            <div class="text-4xl">📭</div>
+            <p class="text-white/50 font-semibold">No ads yet for ${meta.label}</p>
+            <p class="text-white/30 text-xs">Upload a banner below to start the rotation</p>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- UPLOAD NEW AD (hidden once at capacity) -->
+      ${atCapacity ? `
+        <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 text-sm text-amber-200">
+          Maximum of ${maxPerZone} ads reached for ${meta.label}. Remove one above to add another.
+        </div>
+      ` : `
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+          <h4 class="font-bold text-sm uppercase tracking-widest text-white/50 mb-4">Upload New Ad</h4>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Banner Image <span class="text-amber-400">*</span></label>
+              <div id="adDropZone-${zone}" onclick="document.getElementById('adImageInput-${zone}').click()"
+                class="border-2 border-dashed border-white/20 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-400/50 hover:bg-emerald-400/5 transition-all group">
+                <input type="file" id="adImageInput-${zone}" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewCarouselAdImage(event, '${zone}')"/>
+                <div id="adPreviewWrap-${zone}" class="hidden mb-3">
+                  <img id="adPreviewImg-${zone}" class="w-full rounded-xl bg-black" style="object-fit:contain;max-height:120px;"/>
+                </div>
+                <div id="adDropLabel-${zone}" class="space-y-1">
+                  <div class="text-3xl">🖼️</div>
+                  <p class="font-semibold text-white/70 group-hover:text-white transition-colors">Click to choose image</p>
+                  <p class="text-xs text-white/30">JPG, PNG or WebP · Recommended: <strong class="text-amber-300">${meta.aspectHint}</strong> · Max 2 MB</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Business Name</label>
+              <input id="adBusinessName-${zone}" type="text" placeholder="e.g. Miller's BBQ" maxlength="50"
+                class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
+            </div>
+
+            <div>
+              <label class="block text-xs text-white/50 mb-2 font-semibold uppercase tracking-wide">Click-Through Link <span class="text-white/30">(optional)</span></label>
+              <input id="adLink-${zone}" type="url" placeholder="https://yourbusiness.com"
+                class="w-full bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50"/>
+            </div>
+
+            <button onclick="uploadCarouselAd('${zone}')" id="adUploadBtn-${zone}"
+              class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white transition-all flex items-center justify-center gap-2">
+              <span>${meta.icon}</span> Add to ${meta.label} Carousel
+            </button>
+          </div>
+        </div>
+      `}
+    </div>`;
+}
+
+window.previewCarouselAdImage = function(event, zone) {
   const file = event.target.files[0];
   if (!file) return;
   if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2 MB', 'error'); event.target.value = ''; return; }
   const reader = new FileReader();
   reader.onload = e => {
-    const img = document.getElementById('trafficAdPreviewImg');
-    const wrap = document.getElementById('trafficAdPreviewWrap');
-    const label = document.getElementById('trafficAdDropLabel');
+    const img = document.getElementById(`adPreviewImg-${zone}`);
+    const wrap = document.getElementById(`adPreviewWrap-${zone}`);
+    const label = document.getElementById(`adDropLabel-${zone}`);
     img.src = e.target.result;
     wrap.classList.remove('hidden');
     label.querySelector('p:first-of-type').textContent = file.name;
@@ -10915,11 +10794,12 @@ window.previewTrafficAdImage = function(event) {
   reader.readAsDataURL(file);
 };
 
-window.uploadTrafficAd = async function() {
-  const fileInput = document.getElementById('trafficAdImageInput');
-  const businessName = document.getElementById('trafficAdBusinessName').value.trim();
-  const link = document.getElementById('trafficAdLink').value.trim();
-  const btn = document.getElementById('trafficAdUploadBtn');
+window.uploadCarouselAd = async function(zone) {
+  const fileInput = document.getElementById(`adImageInput-${zone}`);
+  const businessName = document.getElementById(`adBusinessName-${zone}`).value.trim();
+  const link = document.getElementById(`adLink-${zone}`).value.trim();
+  const btn = document.getElementById(`adUploadBtn-${zone}`);
+  const meta = AD_ZONE_META[zone];
 
   if (!fileInput.files[0]) { showToast('Please choose a banner image first', 'error'); return; }
 
@@ -10928,25 +10808,41 @@ window.uploadTrafficAd = async function() {
     btn.disabled = true;
     btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Uploading…';
     try {
-      await apiPost('/admin/traffic-ad', { image: e.target.result, businessName, link });
-      showToast('Traffic Ad updated! 🚦', 'success');
-      await renderAdminTrafficAd();
-    } catch(err) {
+      const res = await apiPost(`/admin/carousel-ads/${zone}`, { image: e.target.result, businessName, link });
+      if (res && res.message && /maximum/i.test(res.message)) {
+        showToast(res.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = `<span>${meta.icon}</span> Add to ${meta.label} Carousel`;
+        return;
+      }
+      showToast(`${meta.label} ad added! ${meta.icon}`, 'success');
+      await renderAdminAdCarousels();
+    } catch (err) {
       showToast(err.message || 'Upload failed', 'error');
       btn.disabled = false;
-      btn.innerHTML = '<span>🚦</span> Save & Activate Traffic Ad';
+      btn.innerHTML = `<span>${meta.icon}</span> Add to ${meta.label} Carousel`;
     }
   };
   reader.readAsDataURL(fileInput.files[0]);
 };
 
-window.clearTrafficAd = async function() {
-  if (!confirm('Remove the current traffic alerts ad?')) return;
+window.toggleCarouselAdActive = async function(adId, nextActive, zone) {
   try {
-    await apiDelete('/admin/traffic-ad');
+    await apiPut(`/admin/carousel-ads/${adId}`, { active: nextActive });
+    showToast(nextActive ? 'Ad activated' : 'Ad paused', 'success');
+    await renderAdminAdCarousels();
+  } catch (err) {
+    showToast(err.message || 'Failed to update ad', 'error');
+  }
+};
+
+window.deleteCarouselAd = async function(adId, zone) {
+  if (!confirm('Remove this ad from the carousel?')) return;
+  try {
+    await apiDelete(`/admin/carousel-ads/${adId}`);
     showToast('Ad removed', 'success');
-    await renderAdminTrafficAd();
-  } catch(err) {
+    await renderAdminAdCarousels();
+  } catch (err) {
     showToast(err.message || 'Failed to remove ad', 'error');
   }
 };
