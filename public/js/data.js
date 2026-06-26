@@ -9370,6 +9370,8 @@ window.loadResourcesPage     = loadResourcesPage;
 window.loadPage              = loadPage;
 window.postShoutout          = postShoutoutWithPhoto;
 window.navigate              = loadPage;
+window.startHeartbeat        = startHeartbeat;
+window.stopHeartbeat         = stopHeartbeat;
 window.filterDirectory       = filterDirectory;
 window.filterByCategory      = filterByCategory;
 window.showBusinessDetail    = showBusinessDetail;
@@ -10610,16 +10612,37 @@ window.deleteBusiness = async function(businessId) {
   }
 };
 
+// ─── HEARTBEAT / ONLINE PRESENCE ─────────────────────────────────────────────
+// Pings the server every 60s while a logged-in user has the app open.
+// Server stamps lastSeen on the User doc so admins can see who's active.
+let _heartbeatInterval = null;
+
+function startHeartbeat() {
+  if (_heartbeatInterval) return; // already running
+  if (!localStorage.getItem('token')) return;
+  // Fire immediately on start, then every 60s
+  apiPost('/ping', {}).catch(() => {});
+  _heartbeatInterval = setInterval(() => {
+    if (!localStorage.getItem('token')) { stopHeartbeat(); return; }
+    apiPost('/ping', {}).catch(() => {});
+  }, 60 * 1000);
+}
+
+function stopHeartbeat() {
+  if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+}
+
 async function renderAdminAnalytics() {
   const container = document.getElementById('adminMainContent');
   container.innerHTML = `<div class="flex items-center justify-center py-16"><div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div></div>`;
 
-  let stats = {}, logs = [];
+  let stats = {}, logs = [], onlineData = { onlineNow: [], onlineToday: [] };
   try { stats = await apiGet('/admin/stats') || {}; } catch(e) {}
   try {
     const logRes = await apiGet('/admin/notification-logs?limit=10');
     logs = logRes?.logs || [];
   } catch(e) {}
+  try { onlineData = await apiGet('/admin/online-users') || onlineData; } catch(e) {}
 
   const ps = stats.pushStats || {};
   const subs = stats.pushSubs || {};
@@ -10628,10 +10651,69 @@ async function renderAdminAnalytics() {
 
   const recentBroadcasts = (stats.recentBroadcasts || logs).slice(0, 10);
 
+  const onlineNow   = onlineData.onlineNow   || [];
+  const onlineToday = onlineData.onlineToday || [];
+
+  // Build avatar bubbles for "online now" list (up to 12 shown)
+  const nowAvatars = onlineNow.slice(0, 12).map(u =>
+    `<div title="${esc(u.username)}" style="flex-shrink:0;">${avatarHtml(u.username, u.avatar, '32px', '50%', '#059669')}</div>`
+  ).join('');
+
+  // Build "online today" rows
+  const todayRows = onlineToday.slice(0, 50).map(u => {
+    const ago = (() => {
+      const diff = Date.now() - new Date(u.lastSeen).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 2)  return '<span class="text-emerald-400 font-semibold">● now</span>';
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      return `${h}h ago`;
+    })();
+    return `<div class="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
+      ${avatarHtml(u.username, u.avatar, '26px', '50%', '#0891b2')}
+      <span class="flex-1 text-sm font-medium truncate">${esc(u.username)}</span>
+      <span class="text-white/40 text-xs shrink-0">${ago}</span>
+    </div>`;
+  }).join('') || `<p class="text-white/40 text-sm text-center py-4">No activity recorded yet today.</p>`;
+
   container.innerHTML = `
     <div class="space-y-6">
 
-      <!-- ── Row 1: Core user metrics ── -->
+      <!-- ── Online Users ── -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        <!-- Online Now -->
+        <div class="bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-xl rounded-3xl p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+            <span class="font-bold text-emerald-300">Online Now</span>
+            <span class="ml-auto text-3xl font-bold text-emerald-300">${onlineNow.length}</span>
+          </div>
+          ${onlineNow.length === 0
+            ? `<p class="text-white/40 text-sm">Nobody active right now.</p>`
+            : `<div class="flex flex-wrap gap-1.5 mt-1">${nowAvatars}</div>
+               ${onlineNow.length > 12 ? `<p class="text-white/30 text-xs mt-2">+${onlineNow.length - 12} more</p>` : ''}
+               <div class="mt-3 space-y-0 max-h-48 overflow-y-auto pr-1">
+                 ${onlineNow.map(u => `<div class="flex items-center gap-2 py-1 text-sm">
+                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0"></span>
+                   <span class="truncate">${esc(u.username)}</span>
+                 </div>`).join('')}
+               </div>`
+          }
+        </div>
+
+        <!-- Online Today -->
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-xl">📅</span>
+            <span class="font-bold">Online Today</span>
+            <span class="ml-auto text-3xl font-bold">${onlineToday.length}</span>
+          </div>
+          <div class="max-h-52 overflow-y-auto pr-1">
+            ${todayRows}
+          </div>
+        </div>
+      </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex flex-col gap-1">
           <div class="text-2xl">👥</div>
@@ -11514,6 +11596,7 @@ window.confirmAccountDeletion = async function() {
     showToast('Your account has been permanently deleted.', 'success');
 
     setTimeout(() => {
+      stopHeartbeat();
       localStorage.removeItem('token');
       currentUser = null;
       window.location.reload();

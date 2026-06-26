@@ -3767,6 +3767,37 @@ router.delete('/owner/business/photos/:index', authenticate, async (req, res) =>
 });
 
 // ─── ADMIN STATS ENDPOINT (Fixed + More Robust) ─────────────────────────────
+// ─── HEARTBEAT PING ──────────────────────────────────────────────────────────
+// Client calls this every 60 s while the app is open.
+// Sets lastSeen on the user so we can show who's currently online.
+router.post('/ping', authenticate, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.userId, { lastSeen: new Date() });
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── ONLINE USERS LIST (admin) ───────────────────────────────────────────────
+// Returns users seen in the last 2 min ("now") and since midnight ("today").
+router.get('/admin/online-users', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const now       = new Date();
+    const twoMinAgo = new Date(now - 2 * 60 * 1000);
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+
+    const [onlineNow, onlineToday] = await Promise.all([
+      User.find({ lastSeen: { $gte: twoMinAgo } }, 'username avatar lastSeen').lean(),
+      User.find({ lastSeen: { $gte: todayStart } }, 'username avatar lastSeen').sort({ lastSeen: -1 }).lean(),
+    ]);
+
+    res.json({ onlineNow, onlineToday });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
   try {
     const todayStart = new Date(new Date().setHours(0,0,0,0));
@@ -3793,6 +3824,9 @@ router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
       webSubs,
       // Notification logs last 7 days
       recentPushLogs,
+      // Online presence counts
+      onlineNowCount,
+      onlineTodayCount,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ createdAt: { $gte: todayStart } }),
@@ -3815,6 +3849,9 @@ router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
       PushSubscription.countDocuments({ 'subscription.endpoint': { $exists: true } }),
       // Last 7 days of push logs
       PushLog.find({ sentAt: { $gte: weekAgo } }).sort({ sentAt: -1 }).limit(50).lean(),
+      // Online presence
+      User.countDocuments({ lastSeen: { $gte: new Date(Date.now() - 2 * 60 * 1000) } }),
+      User.countDocuments({ lastSeen: { $gte: todayStart } }),
     ]);
 
     // Aggregate push log totals
@@ -3858,6 +3895,9 @@ router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
           ? ((pushTotals.opens / pushTotals.sent) * 100).toFixed(1) + '%'
           : '0%',
       },
+      // Online presence
+      onlineNow:   onlineNowCount,
+      onlineToday: onlineTodayCount,
       // Recent broadcast list (newest first)
       recentBroadcasts: recentPushLogs.slice(0, 10).map(l => ({
         id:        l._id,
