@@ -339,6 +339,11 @@ window.handlePushNotificationClick = async function(data) {
     return;
   }
 
+  // ── Open/click tracking — fire-and-forget, never blocks navigation ──
+  if (data.id) {
+    apiPost('/analytics/notification-opened', { notifId: data.id }).catch(() => {});
+  }
+
   const { page, id } = data;
 
 if (page === 'shoutouts' || page === 'shoutout') {
@@ -10607,62 +10612,153 @@ window.deleteBusiness = async function(businessId) {
 
 async function renderAdminAnalytics() {
   const container = document.getElementById('adminMainContent');
-  
-  let stats = {};
+  container.innerHTML = `<div class="flex items-center justify-center py-16"><div class="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div></div>`;
+
+  let stats = {}, logs = [];
+  try { stats = await apiGet('/admin/stats') || {}; } catch(e) {}
   try {
-    stats = await apiGet('/admin/stats') || {};
-  } catch (e) {
-    // Stats endpoint may not be implemented yet — show zeros
-  }
+    const logRes = await apiGet('/admin/notification-logs?limit=10');
+    logs = logRes?.logs || [];
+  } catch(e) {}
+
+  const ps = stats.pushStats || {};
+  const subs = stats.pushSubs || {};
+  const fmt = n => (n == null ? '—' : Number(n).toLocaleString());
+  const pct = (a, b) => b ? (a/b*100).toFixed(1)+'%' : '—';
+
+  const recentBroadcasts = (stats.recentBroadcasts || logs).slice(0, 10);
 
   container.innerHTML = `
     <div class="space-y-6">
+
+      <!-- ── Row 1: Core user metrics ── -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
-          <div class="text-4xl mb-2">👥</div>
-          <div class="text-4xl font-bold">${stats.totalUsers || 0}</div>
-          <div class="text-white/60 text-sm mt-1">Total Users</div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex flex-col gap-1">
+          <div class="text-2xl">👥</div>
+          <div class="text-3xl font-bold">${fmt(stats.totalUsers)}</div>
+          <div class="text-white/50 text-xs">Total Users</div>
+          <div class="text-emerald-400 text-xs mt-1">
+            +${fmt(stats.newUsersToday)} today &nbsp;·&nbsp; +${fmt(stats.newUsersThisWeek)} wk &nbsp;·&nbsp; +${fmt(stats.newUsersThisMonth)} mo
+          </div>
         </div>
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
-          <div class="text-4xl mb-2">🚦</div>
-          <div class="text-4xl font-bold">${stats.activeShoutouts || 0}</div>
-          <div class="text-white/60 text-sm mt-1">Active traffic alerts</div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex flex-col gap-1">
+          <div class="text-2xl">🔔</div>
+          <div class="text-3xl font-bold">${fmt(subs.total)}</div>
+          <div class="text-white/50 text-xs">Push Subscribers</div>
+          <div class="text-white/40 text-xs mt-1">
+            📱 ${fmt(subs.native)} native &nbsp;·&nbsp; 🌐 ${fmt(subs.web)} web
+          </div>
         </div>
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
-          <div class="text-4xl mb-2">🛒</div>
-          <div class="text-4xl font-bold">${stats.marketplaceItems || 0}</div>
-          <div class="text-white/60 text-sm mt-1">Marketplace</div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex flex-col gap-1">
+          <div class="text-2xl">🚦</div>
+          <div class="text-3xl font-bold">${fmt(stats.activeShoutouts)}</div>
+          <div class="text-white/50 text-xs">Active Traffic Alerts</div>
+          <div class="text-white/40 text-xs mt-1">+${fmt(stats.shoutoutsToday)} today</div>
         </div>
-        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center">
-          <div class="text-4xl mb-2">⭐</div>
-          <div class="text-4xl font-bold">${stats.totalReputation || 0}</div>
-          <div class="text-white/60 text-sm mt-1">Reputation Points</div>
+        <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex flex-col gap-1">
+          <div class="text-2xl">⚠️</div>
+          <div class="text-3xl font-bold">${fmt(stats.pendingReports)}</div>
+          <div class="text-white/50 text-xs">Pending Reports</div>
+          <div class="text-white/40 text-xs mt-1">needs review</div>
         </div>
       </div>
 
+      <!-- ── Row 2: Push stats (7-day) ── -->
       <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-        <h3 class="font-bold mb-4">Today's Activity</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-white/5 rounded-2xl p-4">
-            <div class="text-emerald-400 text-xl">🚦 Traffic Alerts</div>
-            <div class="text-3xl font-bold mt-1">${stats.shoutoutsToday || 0}</div>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-lg">📣 Push Notifications — Last 7 Days</h3>
+          <span class="text-white/40 text-xs">${fmt(ps.broadcasts)} broadcasts</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div class="bg-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-bold">${fmt(ps.sent)}</div>
+            <div class="text-white/50 text-xs mt-1">Total Sent</div>
           </div>
-          <div class="bg-white/5 rounded-2xl p-4">
-            <div class="text-amber-400 text-xl">🛒 Marketplace</div>
-            <div class="text-3xl font-bold mt-1">${stats.marketplaceToday || 0}</div>
+          <div class="bg-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-bold text-emerald-400">${fmt(ps.fcm)}</div>
+            <div class="text-white/50 text-xs mt-1">📱 FCM</div>
           </div>
-          <div class="bg-white/5 rounded-2xl p-4">
-            <div class="text-sky-400 text-xl">🔎 Lost & Found</div>
-            <div class="text-3xl font-bold mt-1">${stats.lostFoundToday || 0}</div>
+          <div class="bg-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-bold text-sky-400">${fmt(ps.web)}</div>
+            <div class="text-white/50 text-xs mt-1">🌐 Web Push</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-bold text-red-400">${fmt(ps.failed)}</div>
+            <div class="text-white/50 text-xs mt-1">❌ Failed</div>
+          </div>
+          <div class="bg-amber-500/20 border border-amber-500/30 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-bold text-amber-300">${pct(ps.opens, ps.sent)}</div>
+            <div class="text-white/50 text-xs mt-1">Open Rate (${fmt(ps.opens)} opens)</div>
           </div>
         </div>
       </div>
 
-      ${Object.keys(stats).length === 0 ? `
-      <div class="text-center py-12 border border-dashed border-white/20 rounded-3xl">
-        <p class="text-white/50">Backend <code>/admin/stats</code> route not implemented yet.</p>
-        <p class="text-xs text-white/30 mt-2">Add it in your api.js to see real numbers.</p>
-      </div>` : ''}
+      <!-- ── Row 3: Content activity today ── -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold mb-4">📊 Activity Today</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-emerald-400 text-lg font-semibold">${fmt(stats.shoutoutsToday)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Traffic Alerts</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-amber-400 text-lg font-semibold">${fmt(stats.marketplaceToday)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Marketplace</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-sky-400 text-lg font-semibold">${fmt(stats.lostFoundToday)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Lost &amp; Found</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-purple-400 text-lg font-semibold">${fmt(stats.totalMessages)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Messages (total)</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-rose-400 text-lg font-semibold">${fmt(stats.activeDeals)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Active Deals</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-teal-400 text-lg font-semibold">${fmt(stats.activeEvents)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Active Events</div>
+          </div>
+          <div class="bg-white/5 rounded-2xl p-4">
+            <div class="text-orange-400 text-lg font-semibold">${fmt(stats.totalReputation)}</div>
+            <div class="text-white/50 text-xs mt-0.5">Reputation Points</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Row 4: Recent broadcast log ── -->
+      <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+        <h3 class="font-bold mb-4">📬 Recent Broadcasts</h3>
+        ${recentBroadcasts.length === 0 ? `
+          <p class="text-white/40 text-sm text-center py-6">No broadcasts yet.</p>
+        ` : `
+          <div class="space-y-2">
+            ${recentBroadcasts.map(b => {
+              const total = (b.fcmSent||0) + (b.webSent||0);
+              const openPct = total ? ((b.opens||0)/total*100).toFixed(1) : '—';
+              const d = b.sentAt ? new Date(b.sentAt).toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—';
+              return `<div class="bg-white/5 rounded-2xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium text-sm truncate">${esc(b.title||'Untitled')}</div>
+                  <div class="text-white/40 text-xs truncate">${esc(b.body||'')}</div>
+                </div>
+                <div class="flex gap-4 text-xs shrink-0">
+                  <span class="text-white/50">${d}</span>
+                  <span class="text-emerald-400">📱 ${b.fcmSent||0}</span>
+                  <span class="text-sky-400">🌐 ${b.webSent||0}</span>
+                  <span class="text-red-400">❌ ${b.failed||0}</span>
+                  <span class="text-amber-300">👁 ${b.opens||0} (${openPct}%)</span>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        `}
+      </div>
+
     </div>`;
 }
 

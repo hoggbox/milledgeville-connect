@@ -53,6 +53,24 @@ const carouselAdSchema = new mongoose.Schema({
 });
 const CarouselAd = mongoose.models.CarouselAd || mongoose.model('CarouselAd', carouselAdSchema);
 
+// ─── PUSH NOTIFICATION LOG ─────────────────────────────────────────────────────
+// Written by broadcastPush() on every broadcast so the admin panel can show
+// delivery stats and open-rates per notification.
+const pushLogSchema = new mongoose.Schema({
+  title:      { type: String, required: true },
+  body:       { type: String, default: '' },
+  notifType:  { type: String, default: 'general' },   // event/deal/shoutout/etc.
+  notifId:    { type: String, default: '' },           // content _id passed in data
+  sentAt:     { type: Date,   default: Date.now, index: true },
+  // delivery counts filled in after the loop completes
+  fcmSent:    { type: Number, default: 0 },
+  webSent:    { type: Number, default: 0 },
+  failed:     { type: Number, default: 0 },
+  // opens tracked via POST /api/analytics/notification-opened
+  opens:      { type: Number, default: 0 },
+});
+const PushLog = mongoose.models.PushLog || mongoose.model('PushLog', pushLogSchema);
+
 /**
  * Deterministically picks which ad in a zone should be showing right now.
  * Synced across all clients: based purely on the server clock, so every
@@ -1040,7 +1058,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
   const APP_ICON   = 'https://www.milledgevilleconnect.com/icon-192.png';
   const notifImage = (imageUrl && imageUrl.startsWith('https://')) ? imageUrl : null;
 
-  let sent = false;
+  const counts = { fcm: 0, web: 0, failed: 0 };
 
   for (const sub of subs) {
     // Native FCM token (Android / iOS) — preferred, higher delivery rate + image support
@@ -1075,7 +1093,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
         };
         await admin.messaging().send(message);
         console.log(`✅ Native push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-        sent = true;
+        counts.fcm++;
         continue; // FCM succeeded — skip web push for this sub to avoid duplicate
       } catch (err) {
         console.error(`[Push] FCM failed for ${userId}:`, err.message);
@@ -1083,6 +1101,7 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           sub.nativeToken = null;
           await sub.save();
         }
+        counts.failed++;
         // FCM failed — fall through to web push as fallback
       }
     }
@@ -1105,18 +1124,19 @@ async function sendPushToUser(userId, title, body, data = {}, imageUrl = null) {
           })
         );
         console.log(`✅ Web push sent to ${userId}${notifImage ? ' (with image)' : ''}`);
-        sent = true;
+        counts.web++;
       } catch (err) {
         console.error(`[Push] Web push failed for ${userId}:`, err.message);
         if (err.statusCode === 410 || err.statusCode === 404) {
           sub.subscription = null;
           await sub.save();
         }
+        counts.failed++;
       }
     }
   }
 
-  return sent;
+  return counts;
 }
 
 // ─── UNIFIED BROADCAST (Native FCM + Web VAPID) ─────────────────────────────
@@ -1151,6 +1171,7 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
   console.log(`📢 [Broadcast] "${title}" | type: ${type || 'general'} | sub: ${subCategory || 'n/a'}`);
 
+  let totalFcm = 0, totalWeb = 0, totalFail = 0;
   try {
     const users = await User.find({
       $or: [
@@ -1171,7 +1192,8 @@ async function broadcastPush(title, body, data = {}, options = {}) {
 
       if (!type) {
         // No type passed = send to everyone (old/safe behavior)
-        await sendPushToUser(user._id, title, body, data, imageUrl);
+        const c = await sendPushToUser(user._id, title, body, data, imageUrl);
+        if (c && typeof c === 'object') { totalFcm += c.fcm||0; totalWeb += c.web||0; totalFail += c.failed||0; }
         continue;
       }
 
@@ -1230,9 +1252,26 @@ async function broadcastPush(title, body, data = {}, options = {}) {
       }
 
       if (shouldSend) {
-        await sendPushToUser(user._id, title, body, data, imageUrl);
+        const c = await sendPushToUser(user._id, title, body, data, imageUrl);
+        if (c && typeof c === 'object') {
+          totalFcm  += c.fcm    || 0;
+          totalWeb  += c.web    || 0;
+          totalFail += c.failed || 0;
+        }
       }
     }
+
+    // ── Write delivery log (non-blocking) ────────────────────────────────────
+    PushLog.create({
+      title,
+      body,
+      notifType: type || 'general',
+      notifId:   data.id || '',
+      fcmSent:   totalFcm,
+      webSent:   totalWeb,
+      failed:    totalFail,
+    }).catch(e => console.error('[PushLog] write error:', e.message));
+
   } catch (err) {
     console.error('broadcastPush error:', err);
   }
@@ -3730,47 +3769,105 @@ router.delete('/owner/business/photos/:index', authenticate, async (req, res) =>
 // ─── ADMIN STATS ENDPOINT (Fixed + More Robust) ─────────────────────────────
 router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
   try {
+    const todayStart = new Date(new Date().setHours(0,0,0,0));
+    const weekAgo    = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
+    const monthAgo   = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
     const [
       totalUsers,
+      newUsersToday,
+      newUsersWeek,
+      newUsersMonth,
       activeShoutouts,
       marketplaceItems,
       totalReputation,
       shoutoutsToday,
       marketplaceToday,
-      lostFoundToday
+      lostFoundToday,
+      pendingReports,
+      activeDeals,
+      activeEvents,
+      totalMessages,
+      // Push sub counts
+      nativeSubs,
+      webSubs,
+      // Notification logs last 7 days
+      recentPushLogs,
     ] = await Promise.all([
       User.countDocuments(),
-      
-      Shoutout.countDocuments({ 
-        createdAt: { $gte: new Date(Date.now() - 8 * 60 * 60 * 1000) } 
-      }),
-      
+      User.countDocuments({ createdAt: { $gte: todayStart } }),
+      User.countDocuments({ createdAt: { $gte: weekAgo } }),
+      User.countDocuments({ createdAt: { $gte: monthAgo } }),
+      Shoutout.countDocuments({ createdAt: { $gte: new Date(Date.now() - 8 * 60 * 60 * 1000) } }),
       MarketplaceItem.countDocuments({ status: 'available' }),
-      
-      User.aggregate([{ $group: { _id: null, total: { $sum: "$reputation" } } }])
+      User.aggregate([{ $group: { _id: null, total: { $sum: '$reputation' } } }])
         .then(r => (r[0] && r[0].total) || 0),
-      
-      Shoutout.countDocuments({ 
-        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } 
-      }),
-      
-      MarketplaceItem.countDocuments({ 
-        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } 
-      }),
-      
-      LostItem.countDocuments({ 
-        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } 
-      })
+      Shoutout.countDocuments({ createdAt: { $gte: todayStart } }),
+      MarketplaceItem.countDocuments({ createdAt: { $gte: todayStart } }),
+      LostItem.countDocuments({ createdAt: { $gte: todayStart } }),
+      Report.countDocuments({ status: 'pending' }),
+      Deal.countDocuments({ $or: [{ expires: null }, { expires: { $gte: new Date() } }] }),
+      Event.countDocuments({ date: { $gte: new Date() } }),
+      Message.countDocuments(),
+      // Native (FCM) subscriptions — doc has a nativeToken
+      PushSubscription.countDocuments({ nativeToken: { $exists: true, $ne: null } }),
+      // Web VAPID subscriptions — doc has a subscription.endpoint
+      PushSubscription.countDocuments({ 'subscription.endpoint': { $exists: true } }),
+      // Last 7 days of push logs
+      PushLog.find({ sentAt: { $gte: weekAgo } }).sort({ sentAt: -1 }).limit(50).lean(),
     ]);
 
+    // Aggregate push log totals
+    const pushTotals = recentPushLogs.reduce((acc, log) => {
+      acc.sent    += (log.fcmSent || 0) + (log.webSent || 0);
+      acc.fcm     += log.fcmSent  || 0;
+      acc.web     += log.webSent  || 0;
+      acc.failed  += log.failed   || 0;
+      acc.opens   += log.opens    || 0;
+      acc.broadcasts++;
+      return acc;
+    }, { sent: 0, fcm: 0, web: 0, failed: 0, opens: 0, broadcasts: 0 });
+
     res.json({
+      // Users
       totalUsers,
+      newUsersToday,
+      newUsersWeek,
+      newUsersMonth,
+      // Content
       activeShoutouts,
       marketplaceItems,
       totalReputation,
       shoutoutsToday,
       marketplaceToday,
-      lostFoundToday
+      lostFoundToday,
+      pendingReports,
+      activeDeals,
+      activeEvents,
+      totalMessages,
+      // Push subscriptions
+      pushSubs: {
+        native: nativeSubs,
+        web:    webSubs,
+        total:  nativeSubs + webSubs,
+      },
+      // Push delivery (last 7 days)
+      pushStats: {
+        ...pushTotals,
+        openRate: pushTotals.sent > 0
+          ? ((pushTotals.opens / pushTotals.sent) * 100).toFixed(1) + '%'
+          : '0%',
+      },
+      // Recent broadcast list (newest first)
+      recentBroadcasts: recentPushLogs.slice(0, 10).map(l => ({
+        id:        l._id,
+        title:     l.title,
+        type:      l.notifType,
+        sentAt:    l.sentAt,
+        delivered: (l.fcmSent || 0) + (l.webSent || 0),
+        failed:    l.failed || 0,
+        opens:     l.opens  || 0,
+      })),
     });
   } catch (err) {
     console.error('Stats error:', err);
@@ -3778,6 +3875,40 @@ router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+
+// GET /api/admin/notification-logs  — paginated broadcast history
+router.get('/admin/notification-logs', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page  || '1',  10));
+    const limit = Math.min(50, parseInt(req.query.limit || '20', 10));
+    const [logs, total] = await Promise.all([
+      PushLog.find().sort({ sentAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      PushLog.countDocuments(),
+    ]);
+    res.json({ logs, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/analytics/notification-opened  — fired by client on tap/click
+// Body: { notifId }  (the content _id stored in PushLog.notifId)
+router.post('/analytics/notification-opened', async (req, res) => {
+  try {
+    const { notifId } = req.body || {};
+    if (notifId) {
+      await PushLog.findOneAndUpdate(
+        { notifId: String(notifId) },
+        { $inc: { opens: 1 } },
+        { sort: { sentAt: -1 } }   // update the most recent matching log
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    // Never block the user's navigation for analytics
+    res.json({ ok: false });
+  }
+});
 router.get('/owner/deals', authenticate, async (req, res) => {
   try {
     const deals = await Deal.find({ owner: req.userId }).sort({ createdAt: -1 });
