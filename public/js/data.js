@@ -5082,7 +5082,10 @@ function renderEventCard(e, now) {
     <button onclick="toggleRSVP('${e._id}'); event.stopImmediatePropagation()" 
             class="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2 rounded-2xl text-sm font-semibold transition">
       ${e.rsvps && e.rsvps.includes(currentUser._id) ? '✅ Going' : '🎟️ RSVP'}
-    </button>` : '';
+    </button>
+    <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:5px;text-align:center;display:flex;align-items:center;justify-content:center;gap:3px;">
+      🔔 <span>RSVP to get a reminder notification 1 day before this event</span>
+    </div>` : '';
 
   return `
     <div id="event-${e._id}" onclick="showEventDetail('${e._id}')" 
@@ -9494,6 +9497,8 @@ window.showEventDetail = async function(eventId) {
             
             ${rsvpCount > 0 ? `
               <div class="text-xs text-gray-500">This event has ${rsvpCount} people going</div>` : ''}
+            ${currentUser && !isPast ? `
+              <div class="text-xs text-gray-400 mt-2 flex items-center gap-1">🔔 RSVP and we'll send you a reminder notification 1 day before this event.</div>` : ''}
           </div>
         </div>
 

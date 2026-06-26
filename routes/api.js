@@ -3473,35 +3473,12 @@ function computeVerificationConfidence(user, business, { ownerName, phone, addre
   return { score: Math.min(score, 100), signals };
 }
 
-// ─── PIN store (in-memory; swap for Redis/DB in production) ───────────────────
-// Key: `${userId}:${businessId}`  Value: { pin, expiresAt }
-const _verifyPins = new Map();
-
-// Generate a 6-digit PIN and store it for 15 minutes
-function generateVerifyPin(userId, businessId) {
-  const pin = String(Math.floor(100000 + Math.random() * 900000));
-  const key = `${userId}:${businessId}`;
-  _verifyPins.set(key, { pin, expiresAt: Date.now() + 15 * 60 * 1000 });
-  return pin;
-}
-
-function checkVerifyPin(userId, businessId, submittedPin) {
-  const key = `${userId}:${businessId}`;
-  const entry = _verifyPins.get(key);
-  if (!entry) return false;
-  if (Date.now() > entry.expiresAt) { _verifyPins.delete(key); return false; }
-  if (entry.pin !== String(submittedPin).trim()) return false;
-  _verifyPins.delete(key); // single-use
-  return true;
-}
-
 // ─── CLAIM — STEP 1: SUBMIT + AUTO-VERIFY ────────────────────────────────────
 //   POST /api/claim/:businessId
 //
-//   Returns one of three outcomes:
+//   Returns one of two outcomes:
 //     { status: 'approved', autoApproved: true }          ← confidence ≥ 70, instant grant
-//     { status: 'pending',  needsPin: true }              ← confidence < 40, PIN required
-//     { status: 'pending',  fastTrack: true, score }      ← 40–69, queued for quick review
+//     { status: 'pending',  fastTrack: true, score }      ← < 70, queued for admin review
 router.post('/claim/:businessId', authenticate, async (req, res) => {
   try {
     const business = await Business.findById(req.params.businessId);
@@ -3541,17 +3518,15 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
       await claim.save();
       await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
 
-      // Grant 5 free starter credits as a one-time registration gift
       await User.findByIdAndUpdate(req.userId, {
-        verifiedBusiness: business._id,
-        notificationCredits: 5
+        verifiedBusiness: business._id
       });
 
       // Send a personal welcome push to the new owner
       sendPushToUser(
         req.userId,
-        '🎉 Business Verified! You have 5 free credits',
-        `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+        '🎉 Welcome to Milledgeville Connect!',
+        `Thank you for being a local business, ${business.name}! Your business has been verified and your dashboard is ready. We're glad to have you as part of the community!`,
         { page: 'home' }
       );
 
@@ -3560,52 +3535,22 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
         autoApproved: true,
         score,
         signals,
-        notificationCredits: 5,
-        message: "✅ Verified automatically! Your business dashboard is ready. We've gifted you 5 free notification credits to get started!"
+        message: '✅ Verified automatically! Your business dashboard is ready.'
       });
     }
 
-    // ── PIN REQUIRED (score < 40) ─────────────────────────────────────────
-    if (score < 40) {
-      const pin = generateVerifyPin(req.userId, req.params.businessId);
-
-      // If Twilio is configured, send the PIN via SMS — otherwise log it
-      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM) {
-        try {
-          const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-          await twilio.messages.create({
-            body: `Your Milledgeville Connect business verification code is: ${pin}. It expires in 15 minutes.`,
-            from: process.env.TWILIO_FROM,
-            to: normalizePhone(phone).replace(/^(\d{3})(\d{3})(\d{4})$/, '+1$1$2$3')
-          });
-        } catch (smsErr) {
-          console.warn('[Verify] SMS failed — PIN logged:', pin, smsErr.message);
-        }
-      } else {
-        // Dev/no-SMS fallback: log to server console so you can test
-        console.log(`[Verify] PIN for ${req.userId} / ${req.params.businessId}: ${pin}`);
-      }
-
-      return res.json({
-        status: 'pending',
-        needsPin: true,
-        score,
-        signals,
-        message: 'A 6-digit verification code has been sent to the phone number you provided. Enter it below to complete your claim.'
-      });
-    }
-
-    // ── FAST-TRACK REVIEW (40–69) ─────────────────────────────────────────
-    // Good enough to be legit but not auto-approvable — surfaces first in admin queue
-    claim.fastTrack = true;
+    // ── PENDING ADMIN REVIEW (score < 70) ────────────────────────────────
+    claim.fastTrack = score >= 40;
     await claim.save();
 
     return res.json({
       status: 'pending',
-      fastTrack: true,
+      fastTrack: score >= 40,
       score,
       signals,
-      message: 'Your claim looks good! It\'s been flagged for fast-track review and you\'ll hear back very shortly.'
+      message: score >= 40
+        ? "Your claim looks good! It's been flagged for fast-track review and you'll hear back very shortly."
+        : 'Your claim has been submitted. An admin will review and approve or deny it shortly.'
     });
 
   } catch (err) {
@@ -3615,68 +3560,6 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
   }
 });
 
-// ─── CLAIM — STEP 2: CONFIRM PIN ─────────────────────────────────────────────
-//   POST /api/claim/:businessId/verify-pin
-//   Body: { pin: '123456', isRestaurant: bool }
-// ─── IMPROVED CLAIM VERIFICATION (Auto-approve on PIN success) ───────────────
-router.post('/claim/:businessId/verify-pin', authenticate, async (req, res) => {
-  try {
-    const { pin, isRestaurant } = req.body;
-    if (!pin) return res.status(400).json({ message: 'PIN is required' });
-
-    if (!checkVerifyPin(req.userId, req.params.businessId, pin)) {
-      return res.status(400).json({ message: 'Incorrect or expired PIN.' });
-    }
-
-    const business = await Business.findById(req.params.businessId);
-    if (!business) return res.status(404).json({ message: 'Business not found' });
-    if (business.owner) return res.status(400).json({ message: 'Already claimed.' });
-
-    // Auto-approve on successful PIN
-    await ClaimRequest.findOneAndUpdate(
-      { business: req.params.businessId, user: req.userId, status: 'pending' },
-      { 
-        status: 'approved', 
-        confidenceScore: 95,
-        signals: [{ label: 'Phone PIN verified', points: 95, passed: true }]
-      },
-      { sort: { createdAt: -1 } }
-    );
-
-    await Business.findByIdAndUpdate(business._id, { 
-      owner: req.userId, 
-      isRestaurant: !!isRestaurant 
-    });
-
-    // Grant 5 free starter credits as a one-time registration gift
-    await User.findByIdAndUpdate(req.userId, {
-      verifiedBusiness: business._id,
-      notificationCredits: 5
-    });
-
-    // Log to admin for audit
-    console.log(`✅ AUTO-APPROVED CLAIM (PIN): ${business.name} by user ${req.userId}`);
-
-    // Send a personal welcome push to the new owner
-    sendPushToUser(
-      req.userId,
-      '🎉 Business Verified! You have 5 free credits',
-      `Welcome to Milledgeville Connect, ${business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
-      { page: 'home' }
-    );
-
-    res.json({
-      status: 'approved',
-      pinVerified: true,
-      notificationCredits: 5,
-      message: "✅ Business successfully verified and claimed! We've gifted you 5 free notification credits to get started!"
-    });
-  } catch (err) {
-    console.error('PIN verify error:', err);
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ message: err.message });
-  }
-});
 
 // ─── CLAIM STATUS ─────────────────────────────────────────────────────────────
 router.get('/claim/status/:businessId', authenticate, async (req, res) => {
@@ -4337,16 +4220,13 @@ if (decision === 'approved') {
   if (user) {
     user.verifiedBusiness = claim.business._id;
 
-    // Always grant 5 free starter credits as a one-time registration gift
-    user.notificationCredits = 5;
-
     await user.save();
 
     // Send a personal welcome push to the newly verified owner
     sendPushToUser(
       user._id.toString(),
-      '🎉 Business Verified! You have 5 free credits',
-      `Welcome to Milledgeville Connect, ${claim.business.name}! As a thank-you for joining, we've gifted you 5 free notification credits. Use them to promote deals, events, or special offers to the community. Once they run out, upgrade to Business Pro ($29.99/mo) to keep reaching your customers!`,
+      '🎉 Welcome to Milledgeville Connect!',
+      `Thank you for being a local business, ${claim.business.name}! Your business has been verified and your dashboard is ready. We're glad to have you as part of the community!`,
       { page: 'home' }
     );
   }
