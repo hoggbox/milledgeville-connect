@@ -7544,6 +7544,7 @@ window.postMarketplaceItem = async function() {
 
 // ─── IMPROVED MARKETPLACE DETAIL MODAL ───────────────────────────────────────
 window.showMarketplaceDetail = async function(id) {
+  currentMarketItemId = id;
   try {
     // Always fetch full item by ID — list cache has images stripped
     let item = await apiGet(`/marketplace/${id}`);
@@ -8163,10 +8164,22 @@ window.removeMarketImage = function(index) {
 };
 
 window.markMarketSold = async function() {
-  if (confirm('Mark this item as sold?')) {
+  if (!currentMarketItemId) { showToast('Error: item not found', 'error'); return; }
+  if (!confirm('Mark this item as sold?')) return;
+  try {
     await apiPost(`/marketplace/${currentMarketItemId}/sold`, {});
+    showToast('🏷️ Marked as sold!');
+
+    // Remove from main available feed so it disappears from "All" immediately
+    allMarketplaceItems = (allMarketplaceItems || []).filter(i => String(i._id) !== String(currentMarketItemId));
+    _myMarketplaceItems = (_myMarketplaceItems || []).map(i =>
+      String(i._id) === String(currentMarketItemId) ? { ...i, status: 'sold' } : i
+    );
+
     hideMarketDetailModal();
     loadPage('marketplace');
+  } catch (e) {
+    showToast('Error marking sold', 'error');
   }
 };
 
