@@ -4215,6 +4215,11 @@ router.post('/admin/business', authenticate, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Invalid category selected' });
     }
 
+    const catExists = await Category.findById(category);
+    if (!catExists) {
+      return res.status(400).json({ message: 'Category not found' });
+    }
+
     const business = await Business.create({
       name: name.trim(),
       address: address.trim(),

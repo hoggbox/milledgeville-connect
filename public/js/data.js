@@ -4738,7 +4738,9 @@ async function ensureDirCategories() {
   if (window._dirCategories.length) return;
   try {
     const data = await apiGet('/directory');
-    window._dirCategories = (data.categories || []).map(c => ({ name: c.name, icon: c.icon || '📁' }));
+    // Keep _id so other consumers of window._dirCategories (e.g. the admin
+    // add-business form) can still build valid <option value="_id"> entries.
+    window._dirCategories = (data.categories || []).map(c => ({ _id: c._id, name: c.name, icon: c.icon || '📁' }));
   } catch (e) { /* fail silently */ }
 }
 
@@ -6472,12 +6474,26 @@ window.deleteOwnerDeal = async function (id) {
 
 window.addOwnerEvent = async function() {
   const title = document.getElementById('eventTitle').value.trim();
-  const date = document.getElementById('eventDate').value;
+  const dateInput = document.getElementById('eventDate').value;
   const location = document.getElementById('eventLocation').value.trim();
   const desc = document.getElementById('eventDesc').value.trim();
   const category = document.getElementById('eventCategory').value;
 
-  if (!title || !date) return showToast('Title and date required', 'error');
+  if (!title || !dateInput) return showToast('Title and date required', 'error');
+
+  // <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm" with NO timezone
+  // info. That raw string was being sent straight to the server, where
+  // new Date(...) parses an offset-less string using the SERVER's local
+  // timezone (not the browser's). If the server runs in UTC and the admin
+  // is in US Central, picking 7:00 PM got stored as 19:00 UTC — which then
+  // displays back as 2:00 PM Central. Building the Date here (in the
+  // browser, using the browser's local timezone) and converting to a real
+  // UTC ISO string before sending removes that ambiguity.
+  const [datePart, timePart] = dateInput.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [hh, mm] = timePart.split(':').map(Number);
+  const localDate = new Date(y, m - 1, d, hh, mm);
+  const date = localDate.toISOString();
 
   try {
     const res = await apiPost('/owner/events', {
@@ -10101,7 +10117,14 @@ window.filterAdminBusinesses = function() {
 };
 
 window.showAddBusinessModal = async function() {
-  if (!window._dirCategories || window._dirCategories.length === 0) {
+  // Refetch if we have no categories cached, OR if the cached ones are
+  // missing _id (can happen if another part of the app, e.g. the events
+  // page, populated window._dirCategories with a stripped-down shape).
+  const needsFetch = !window._dirCategories
+    || window._dirCategories.length === 0
+    || window._dirCategories.some(c => !c._id);
+
+  if (needsFetch) {
     try {
       const data = await apiGet('/directory');
       window._dirCategories = data.categories || [];
