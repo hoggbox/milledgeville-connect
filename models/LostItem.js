@@ -20,6 +20,7 @@ const lostItemSchema = new mongoose.Schema({
   owner:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   authorName: String,
   status:     { type: String, enum: ['active', 'resolved'], default: 'active' },
+  resolvedAt: { type: Date, default: null },
   hidden:     { type: Boolean, default: false },
   comments:   [commentSchema],
 

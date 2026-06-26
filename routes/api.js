@@ -1520,13 +1520,13 @@ router.get('/lostitems', optionalAuth, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const [items, total] = await Promise.all([
-      LostItem.find({ $or: [{ status: { $exists: false } }, { status: { $nin: ['resolved'] } }] })
+      LostItem.find({ status: { $ne: 'resolved' } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .select('-images')
         .populate('owner', 'name avatar profilePhoto'),
-      LostItem.countDocuments({ $or: [{ status: { $exists: false } }, { status: { $nin: ['resolved'] } }] })
+      LostItem.countDocuments({ status: { $ne: 'resolved' } })
     ]);
 
     res.json({
@@ -1702,8 +1702,8 @@ router.put('/lostitems/:id/resolve', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
 
     lost.status = 'resolved';
+    lost.resolvedAt = new Date();
     await lost.save();
-    await LostItem.collection.updateOne({ _id: lost._id }, { $set: { resolvedAt: new Date() } });
 
     // Award reputation
     const owner = await User.findById(req.userId);
@@ -2026,9 +2026,8 @@ router.put('/marketplace/:id/sold', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
 
     item.status = 'sold';
+    item.soldAt = new Date();
     await item.save();
-    // Stamp soldAt outside strict-mode schema (safe even if field not in schema)
-    await MarketplaceItem.collection.updateOne({ _id: item._id }, { $set: { soldAt: new Date() } });
 
     // Award reputation
     const seller = await User.findById(req.userId);
@@ -2264,8 +2263,17 @@ router.post('/lostitems/:id/resolve', authenticate, async (req, res) => {
     if (!lost) return res.status(404).json({ message: 'Not found' });
     if (lost.owner.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     lost.status = 'resolved';
+    lost.resolvedAt = new Date();
     await lost.save();
-    await LostItem.collection.updateOne({ _id: lost._id }, { $set: { resolvedAt: new Date() } });
+
+    // Award reputation
+    const owner = await User.findById(req.userId);
+    if (owner) {
+      owner.reputation = (owner.reputation || 0) + 15;
+      owner.repHistory.push({ action: 'Lost Item Resolved', amount: 15, sourceId: lost._id });
+      await owner.save();
+    }
+
     res.json({ message: 'Marked as resolved', item: lost });
   } catch (err) {
     const statusCode = err.status || 500;
@@ -2279,8 +2287,17 @@ router.post('/marketplace/:id/sold', authenticate, async (req, res) => {
     if (!item) return res.status(404).json({ message: 'Not found' });
     if (item.seller.toString() !== req.userId) return res.status(403).json({ message: 'Not authorized' });
     item.status = 'sold';
+    item.soldAt = new Date();
     await item.save();
-    await MarketplaceItem.collection.updateOne({ _id: item._id }, { $set: { soldAt: new Date() } });
+
+    // Award reputation
+    const seller = await User.findById(req.userId);
+    if (seller) {
+      seller.reputation = (seller.reputation || 0) + 15;
+      seller.repHistory.push({ action: 'Item Sold', amount: 15, sourceId: item._id });
+      await seller.save();
+    }
+
     res.json({ message: 'Marked as sold', item });
   } catch (err) {
     const statusCode = err.status || 500;

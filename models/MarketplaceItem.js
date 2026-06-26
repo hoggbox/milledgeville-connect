@@ -18,6 +18,7 @@ const marketplaceItemSchema = new mongoose.Schema({
   category:   { type: String, default: '' },
   condition:  { type: String, enum: ['new', 'like-new', 'used', 'fair'], default: 'used' },
   status:     { type: String, enum: ['available', 'sold'], default: 'available' },
+  soldAt:     { type: Date, default: null },
   hidden:     { type: Boolean, default: false },
   comments:   [commentSchema],
 
