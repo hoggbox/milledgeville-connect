@@ -188,6 +188,23 @@ function getSnapshotText(doc, type) {
   return `${doc.title || doc.text || ''}`.substring(0, 300);
 }
 
+// ─── HELPER: push-notification "teaser" text ──────────────────────────────
+// Gives just enough to hook the reader, then forces them into the app for
+// the rest — cuts off after a word count instead of a raw character count
+// so it doesn't chop words in half, and always ends with a "read more" hook.
+function makeTeaserBody(text, wordLimit = 8) {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return '📷 Photo posted — tap to view';
+
+  const words = trimmed.split(/\s+/);
+  if (words.length <= wordLimit) {
+    // Short post — showing it all is fine, still nudge them to tap in for replies/context
+    return `${trimmed} 👉 Tap to view`;
+  }
+
+  return `${words.slice(0, wordLimit).join(' ')}… 👉 Tap to read more`;
+}
+
 // =============================================================================
 // 1.  UNIVERSAL FLAG ENDPOINT
 //     POST /api/flag
@@ -540,9 +557,7 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
       ? `https://www.milledgevilleconnect.com/api/shoutout-thumb/${shoutout._id}`
       : null;
 
-    const pushBody = safeText
-      ? (safeText.length > 80 ? safeText.substring(0, 77) + '...' : safeText)
-      : '📷 Shared a photo';
+    const pushBody = makeTeaserBody(safeText);
 
     // Delay push 3s so the DB write is fully committed before FCM fetches the thumb URL.
     // Without this, FCM can hit /api/shoutout-thumb/:id before Mongo returns the doc → no image.
