@@ -5,6 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>D and D Trucking and Grading | Trucking & Excavation – Milledgeville, GA</title>
   <meta name="description" content="D and D Trucking and Grading — locally owned trucking and excavation company serving Central Georgia since 2018. Free estimates. Call (478) 456-3393.">
+
+  <!-- ── FAVICON ── -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- ── OPEN GRAPH / SOCIAL SHARE PREVIEW ──
+       ⚠️ UPDATE: replace https://www.example.com with your real domain once it's live,
+       and swap og:image to a real photo of your equipment (1200x630px recommended). -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="D and D Trucking and Grading">
+  <meta property="og:title" content="D and D Trucking and Grading | Trucking & Excavation – Milledgeville, GA">
+  <meta property="og:description" content="Locally owned trucking and excavation company serving Central Georgia since 2018. Free estimates. Call (478) 456-3393.">
+  <meta property="og:image" content="https://www.example.com/media/619386860_122152806194805852_2683866192620336985_n.jpg">
+  <meta property="og:url" content="https://www.example.com/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="D and D Trucking and Grading | Trucking & Excavation – Milledgeville, GA">
+  <meta name="twitter:description" content="Locally owned trucking and excavation company serving Central Georgia since 2018. Free estimates.">
+  <meta name="twitter:image" content="https://www.example.com/media/619386860_122152806194805852_2683866192620336985_n.jpg">
+
+  <!-- ── LOCAL BUSINESS SCHEMA (helps Google show hours, phone, reviews in search) ──
+       ⚠️ UPDATE: "url" once the real domain is live. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "D and D Trucking and Grading",
+    "description": "Locally owned trucking and excavation company serving Central Georgia since 2018.",
+    "telephone": "+14784563393",
+    "url": "https://www.example.com/",
+    "sameAs": ["https://www.facebook.com/d.and.d.trucking.and.grading"],
+    "areaServed": {
+      "@type": "City",
+      "name": "Milledgeville, Georgia"
+    },
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Milledgeville",
+      "addressRegion": "GA",
+      "addressCountry": "US"
+    },
+    "openingHoursSpecification": [
+      {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
+        "opens": "07:00",
+        "closes": "18:00"
+      },
+      {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Saturday"],
+        "description": "By appointment"
+      }
+    ],
+    "priceRange": "$$"
+  }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1438,7 +1494,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Phone Number *</label>
-            <input type="tel" class="form-input" placeholder="(478) 555-0100" required>
+            <input type="tel" class="form-input" placeholder="(478) 555-0100" pattern="^[\d\s\(\)\-\+\.]{7,20}$" title="Enter a valid phone number" required>
           </div>
           <div class="form-group">
             <label class="form-label">Email Address</label>
@@ -1551,7 +1607,7 @@
 
 <!-- ── LIGHTBOX ────────────────────────────────────────── -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
-  <button class="lightbox-close" onclick="closeLightbox(event)">×</button>
+  <button class="lightbox-close" onclick="closeLightbox(event)" aria-label="Close">×</button>
   <img id="lightboxImg" src="" alt="" style="display:none">
   <video id="lightboxVideo" controls style="display:none;max-width:90vw;max-height:90vh;border-radius:8px"></video>
 </div>
@@ -1589,7 +1645,7 @@
     'Licensed & Insured', 'Free Estimates', 'Same Day Response',
     'Trucking & Hauling', 'Pond Excavation', 'Land Clearing',
     'Central Georgia', 'Since 2018', 'Family Owned',
-    'Serving 12+ Counties', 'No Job Too Big', 'Honest Pricing'
+    'No Job Too Big', 'Honest Pricing'
   ];
   const track = document.getElementById('tickerTrack');
   const html = items.map(t => `<div class="ticker-item"><span class="ticker-dot">◆</span>${t}</div>`).join('');
