@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D and D Trucking and Grading | Trucking & Excavation – Milledgeville, GA</title>
+  <meta name="description" content="D and D Trucking and Grading — locally owned trucking and excavation company serving Central Georgia since 2018. Free estimates. Call (478) 456-3393.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <style>
+    /* ─── TOKENS ────────────────────────────────────── */
+    :root {
+      --soil:   #2a1f14;
+      --bark:   #3d2b1a;
+      --moss:   #1e3a24;
+      --leaf:   #2d6a35;
+      --lime:   #7cbf3f;
+      --straw:  #c8a96e;
+      --cream:  #f5efe4;
+      --fog:    #d4cfc6;
+      --white:  #ffffff;
+      --shadow: rgba(0,0,0,0.55);
+      --ease:   cubic-bezier(0.22,1,0.36,1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--soil);
+      color: var(--cream);
+      overflow-x: hidden;
+    }
+
+    /* ─── SCROLLBAR ──────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--soil); }
+    ::-webkit-scrollbar-thumb { background: var(--leaf); border-radius: 3px; }
+
+    /* ─── NAV ────────────────────────────────────────── */
+    #navbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 0 2rem;
+      transition: background 0.4s var(--ease), box-shadow 0.4s;
+    }
+    #navbar.scrolled {
+      background: rgba(26, 16, 8, 0.97);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 24px rgba(0,0,0,0.6);
+    }
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+    .nav-logo-mark {
+      width: 42px; height: 42px;
+      background: var(--leaf);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      color: white;
+      letter-spacing: -1px;
+      flex-shrink: 0;
+    }
+    .nav-brand-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--white);
+      line-height: 1.1;
+    }
+    .nav-brand-text span {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 400;
+      color: var(--lime);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .nav-links {
+      display: flex;
+      list-style: none;
+      gap: 2.5rem;
+      align-items: center;
+    }
+    .nav-links a {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 1.05rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--fog);
+      text-decoration: none;
+      position: relative;
+      transition: color 0.25s;
+    }
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px; left: 0;
+      width: 0; height: 2px;
+      background: var(--lime);
+      transition: width 0.3s var(--ease);
+    }
+    .nav-links a:hover { color: var(--white); }
+    .nav-links a:hover::after { width: 100%; }
+    .nav-cta {
+      background: var(--lime) !important;
+      color: var(--soil) !important;
+      padding: 0.5rem 1.25rem !important;
+      border-radius: 6px !important;
+      font-weight: 700 !important;
+    }
+    .nav-cta::after { display: none !important; }
+    .nav-cta:hover { background: #8fd44e !important; }
+
+    /* hamburger */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 4px;
+      background: none;
+      border: none;
+    }
+    .hamburger span {
+      display: block;
+      width: 26px; height: 2px;
+      background: var(--white);
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+    .hamburger.open span:nth-child(1) { transform: rotate(45deg) translate(5px,5px); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: rotate(-45deg) translate(5px,-5px); }
+
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 72px; left: 0; right: 0;
+      background: rgba(20,12,6,0.98);
+      backdrop-filter: blur(16px);
+      padding: 1.5rem 2rem 2rem;
+      z-index: 999;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .mobile-menu.open { display: block; }
+    .mobile-menu a {
+      display: block;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--cream);
+      text-decoration: none;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      transition: color 0.2s;
+    }
+    .mobile-menu a:hover { color: var(--lime); }
+    .mobile-menu .mob-cta {
+      display: block;
+      margin-top: 1.25rem;
+      background: var(--lime);
+      color: var(--soil);
+      text-align: center;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 1.4rem;
+      border-bottom: none;
+    }
+
+    /* ─── HERO ───────────────────────────────────────── */
+    #hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+    .hero-bg-img {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(160deg, rgba(20,30,10,0.82) 0%, rgba(10,18,6,0.7) 60%, rgba(0,0,0,0.85) 100%),
+        url('media/618816717_122152806146805852_5473619412418488187_n.jpg');
+      background-size: cover;
+      background-position: center 30%;
+      will-change: transform;
+    }
+    .hero-inner {
+      position: relative;
+      z-index: 2;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 9rem 2rem 6rem;
+      width: 100%;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(124,191,63,0.15);
+      border: 1px solid rgba(124,191,63,0.4);
+      color: var(--lime);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.9rem;
+      border-radius: 100px;
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.6s var(--ease) 0.1s both;
+    }
+    .hero-eyebrow i { font-size: 0.7rem; }
+    .hero-headline {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: clamp(3.5rem, 9vw, 8rem);
+      line-height: 0.92;
+      letter-spacing: -0.01em;
+      color: var(--white);
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.7s var(--ease) 0.2s both;
+    }
+    .hero-headline em {
+      font-style: normal;
+      color: var(--lime);
+      display: block;
+    }
+    .hero-sub {
+      font-size: 1.2rem;
+      color: var(--fog);
+      max-width: 520px;
+      line-height: 1.65;
+      margin-bottom: 2.5rem;
+      animation: fadeUp 0.7s var(--ease) 0.35s both;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      animation: fadeUp 0.7s var(--ease) 0.45s both;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--lime);
+      color: var(--soil);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: background 0.25s, transform 0.2s, box-shadow 0.25s;
+      box-shadow: 0 4px 20px rgba(124,191,63,0.35);
+    }
+    .btn-primary:hover {
+      background: #8fd44e;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(124,191,63,0.5);
+    }
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: transparent;
+      color: var(--white);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 1.1rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      border: 2px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .btn-outline:hover {
+      border-color: var(--white);
+      background: rgba(255,255,255,0.08);
+    }
+    .hero-trust {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-top: 4rem;
+      animation: fadeUp 0.7s var(--ease) 0.55s both;
+    }
+    .trust-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.88rem;
+      color: rgba(255,255,255,0.65);
+    }
+    .trust-pill i { color: var(--lime); font-size: 0.8rem; }
+
+    /* ─── TICKER ─────────────────────────────────────── */
+    .ticker-wrap {
+      background: var(--leaf);
+      overflow: hidden;
+      white-space: nowrap;
+      padding: 0.75rem 0;
+    }
+    .ticker-track {
+      display: inline-flex;
+      gap: 0;
+      animation: ticker 28s linear infinite;
+    }
+    .ticker-track:hover { animation-play-state: paused; }
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 2.5rem;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: white;
+    }
+    .ticker-dot { color: var(--lime); font-size: 1rem; }
+    @keyframes ticker {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ─── STATS ──────────────────────────────────────── */
+    .stats-strip {
+      background: var(--bark);
+      padding: 4rem 2rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stats-grid {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2rem;
+      text-align: center;
+    }
+    .stat-item { }
+    .stat-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      color: var(--lime);
+      line-height: 1;
+      display: block;
+    }
+    .stat-label {
+      font-size: 0.9rem;
+      color: var(--fog);
+      margin-top: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .stat-divider {
+      width: 1px;
+      background: rgba(255,255,255,0.1);
+      margin: 0 auto;
+    }
+
+    /* ─── SECTION BASE ───────────────────────────────── */
+    section { padding: 6rem 2rem; }
+    .section-label {
+      display: inline-block;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 0.78rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--lime);
+      margin-bottom: 1rem;
+    }
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: clamp(2.5rem, 5vw, 4.5rem);
+      line-height: 0.95;
+      color: var(--white);
+      letter-spacing: -0.01em;
+    }
+    .section-title .accent { color: var(--lime); }
+    .section-body {
+      font-size: 1.05rem;
+      color: var(--fog);
+      line-height: 1.7;
+      max-width: 540px;
+    }
+
+    /* ─── ABOUT ──────────────────────────────────────── */
+    #about {
+      background: var(--moss);
+    }
+    .about-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: center;
+    }
+    .about-img-stack {
+      position: relative;
+    }
+    .about-img-main {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      border-radius: 16px;
+      display: block;
+    }
+    .about-img-accent {
+      position: absolute;
+      bottom: -2rem;
+      right: -2rem;
+      width: 48%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 4px solid var(--moss);
+    }
+    .about-badge {
+      position: absolute;
+      top: 1.5rem;
+      left: -1.5rem;
+      background: var(--lime);
+      color: var(--soil);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: 0.9rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .about-badge strong { font-size: 2.2rem; line-height: 1; }
+    .about-text { padding-top: 1rem; }
+    .about-text .section-title { margin-bottom: 1.25rem; }
+    .about-text .section-body { margin-bottom: 2rem; }
+    .owner-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .owner-avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--leaf);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: 1.1rem;
+      color: white;
+      flex-shrink: 0;
+    }
+    .owner-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--white);
+    }
+    .owner-title { font-size: 0.85rem; color: var(--straw); }
+
+    /* ─── SERVICES ───────────────────────────────────── */
+    #services {
+      background: var(--soil);
+    }
+    .services-header {
+      max-width: 1200px;
+      margin: 0 auto 3.5rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .services-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    .svc-card {
+      background: var(--bark);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      position: relative;
+      overflow: hidden;
+      cursor: default;
+      transition: transform 0.35s var(--ease), border-color 0.35s, box-shadow 0.35s;
+    }
+    .svc-card::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--lime);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.4s var(--ease);
+    }
+    .svc-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(124,191,63,0.25);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .svc-card:hover::before { transform: scaleX(1); }
+    .svc-icon {
+      width: 60px; height: 60px;
+      border-radius: 14px;
+      background: rgba(124,191,63,0.12);
+      border: 1px solid rgba(124,191,63,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem;
+      margin-bottom: 1.5rem;
+      transition: background 0.3s;
+    }
+    .svc-card:hover .svc-icon { background: rgba(124,191,63,0.22); }
+    .svc-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--white);
+      margin-bottom: 0.75rem;
+    }
+    .svc-desc { font-size: 0.92rem; color: var(--fog); line-height: 1.65; margin-bottom: 1.5rem; }
+    .svc-list { list-style: none; }
+    .svc-list li {
+      font-size: 0.88rem;
+      color: rgba(255,255,255,0.55);
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .svc-list li:last-child { border-bottom: none; }
+    .svc-list li i { color: var(--lime); font-size: 0.7rem; }
+
+    /* ─── WHY US ──────────────────────────────────────── */
+    #why {
+      background: linear-gradient(180deg, var(--bark) 0%, var(--soil) 100%);
+      padding-top: 5rem; padding-bottom: 5rem;
+    }
+    .why-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: center;
+    }
+    .why-list { margin-top: 2.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .why-item {
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+      padding: 1.5rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .why-item:hover {
+      background: rgba(124,191,63,0.06);
+      border-color: rgba(124,191,63,0.2);
+    }
+    .why-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: 2rem;
+      color: rgba(124,191,63,0.25);
+      line-height: 1;
+      min-width: 2.5rem;
+    }
+    .why-item-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--white);
+      margin-bottom: 0.35rem;
+    }
+    .why-item-body { font-size: 0.9rem; color: var(--fog); line-height: 1.6; }
+    .why-visual {
+      position: relative;
+    }
+    .why-img {
+      width: 100%;
+      aspect-ratio: 3/4;
+      object-fit: cover;
+      border-radius: 20px;
+    }
+    .why-overlay-card {
+      position: absolute;
+      bottom: 2rem;
+      left: -2rem;
+      background: var(--leaf);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      max-width: 220px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    }
+    .why-overlay-big {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: 2.5rem;
+      color: white;
+      line-height: 1;
+    }
+    .why-overlay-sub { font-size: 0.82rem; color: rgba(255,255,255,0.75); margin-top: 0.25rem; }
+
+    /* ─── GALLERY ────────────────────────────────────── */
+    #gallery {
+      background: var(--soil);
+    }
+    .gallery-header {
+      max-width: 1200px;
+      margin: 0 auto 3rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+    .gallery-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .g-item {
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      cursor: zoom-in;
+      background: linear-gradient(135deg, var(--bark), var(--moss));
+      aspect-ratio: 4 / 3;
+    }
+    .g-item.img-broken .g-overlay { opacity: 1; background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 100%); }
+    .g-item.img-broken img { display: none; }
+    .g-item img, .g-item video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.6s var(--ease);
+      display: block;
+    }
+    .g-item:hover img, .g-item:hover video { transform: scale(1.08); }
+    .g-play-icon {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.55);
+      border: 2px solid rgba(255,255,255,0.85);
+      display: flex; align-items: center; justify-content: center;
+      color: white;
+      font-size: 1.2rem;
+      pointer-events: none;
+      transition: background 0.25s;
+    }
+    .g-item:hover .g-play-icon { background: var(--leaf); }
+    .g-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 55%);
+      opacity: 0;
+      transition: opacity 0.35s;
+      display: flex;
+      align-items: flex-end;
+      padding: 1.25rem;
+    }
+    .g-item:hover .g-overlay { opacity: 1; }
+    .g-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: white;
+    }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.3s;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 1.5rem; right: 2rem;
+      font-size: 2.5rem;
+      color: white;
+      cursor: pointer;
+      line-height: 1;
+      background: none; border: none;
+    }
+
+    /* ─── TESTIMONIALS ───────────────────────────────── */
+    #testimonials {
+      background: var(--moss);
+      overflow: hidden;
+    }
+    .testi-header {
+      max-width: 1200px;
+      margin: 0 auto 3rem;
+      text-align: center;
+    }
+    .testi-carousel {
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .testi-track {
+      display: flex;
+      gap: 1.5rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2rem;
+      scroll-snap-type: x mandatory;
+    }
+    .testi-track::-webkit-scrollbar { display: none; }
+    .testi-card {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 2rem;
+      min-width: 340px;
+      max-width: 340px;
+      flex-shrink: 0;
+      scroll-snap-align: start;
+    }
+    .testi-stars { color: var(--straw); font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 1rem; }
+    .testi-text { font-size: 0.97rem; color: var(--fog); line-height: 1.7; margin-bottom: 1.5rem; }
+    .testi-author {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .testi-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--leaf);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: white;
+      flex-shrink: 0;
+    }
+    .testi-name { font-weight: 600; font-size: 0.92rem; color: var(--white); }
+    .testi-loc { font-size: 0.8rem; color: rgba(255,255,255,0.45); }
+    .carousel-btns {
+      display: flex; gap: 0.75rem; margin-top: 1.5rem; justify-content: center;
+    }
+    .carousel-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: transparent;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .carousel-btn:hover { background: var(--lime); border-color: var(--lime); color: var(--soil); }
+
+    /* ─── CONTACT ────────────────────────────────────── */
+    #contact {
+      background: var(--soil);
+    }
+    .contact-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: start;
+    }
+    .contact-form-wrap {
+      background: var(--bark);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+      padding: 3rem;
+    }
+    .form-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.8rem;
+      color: var(--white);
+      margin-bottom: 0.5rem;
+    }
+    .form-sub { font-size: 0.92rem; color: var(--fog); margin-bottom: 2rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .form-group { margin-bottom: 1rem; position: relative; }
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 0.5rem;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--white);
+      padding: 0.85rem 1rem;
+      border-radius: 10px;
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.97rem;
+      outline: none;
+      transition: border-color 0.25s, background 0.25s;
+      -webkit-appearance: none;
+    }
+    .form-select option { background: #2a1f14; }
+    .form-input::placeholder, .form-textarea::placeholder { color: rgba(255,255,255,0.3); }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--lime);
+      background: rgba(124,191,63,0.06);
+    }
+    .form-textarea { resize: vertical; min-height: 120px; }
+    .form-submit {
+      width: 100%;
+      background: var(--lime);
+      color: var(--soil);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 1.05rem;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.25s, transform 0.2s;
+      margin-top: 0.5rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .form-submit:hover { background: #8fd44e; transform: translateY(-1px); }
+    .form-submit:active { transform: translateY(0); }
+    .form-success {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+    }
+    .form-success i { font-size: 3rem; color: var(--lime); margin-bottom: 1rem; display: block; }
+    .form-success h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .form-success p { color: var(--fog); }
+
+    /* contact info side */
+    .contact-info { }
+    .contact-info .section-title { margin-bottom: 0.75rem; }
+    .contact-info .section-body { margin-bottom: 2.5rem; }
+    .info-cards { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem; }
+    .info-card {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      padding: 1.25rem 1.5rem;
+      background: var(--bark);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      text-decoration: none;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .info-card:hover { border-color: rgba(124,191,63,0.3); background: rgba(124,191,63,0.05); }
+    .info-card-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      background: rgba(124,191,63,0.12);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--lime);
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .info-card-label { font-size: 0.78rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+    .info-card-val { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--white); }
+    .map-embed {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .map-embed iframe {
+      width: 100%;
+      height: 260px;
+      display: block;
+      border: none;
+      filter: saturate(0.5) brightness(0.85);
+    }
+
+    /* ─── FOOTER ─────────────────────────────────────── */
+    footer {
+      background: #0e0a06;
+      padding: 3rem 2rem 2rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .footer-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+    .footer-brand { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 1.4rem; color: var(--white); }
+    .footer-brand span { color: var(--lime); }
+    .footer-links { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .footer-links a {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--lime); }
+    .footer-copy { font-size: 0.8rem; color: rgba(255,255,255,0.3); margin-top: 1.5rem; text-align: center; }
+
+    /* ─── STICKY CTA ──────────────────────────────────── */
+    .sticky-cta {
+      position: fixed;
+      bottom: 1.5rem; right: 1.5rem;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: flex-end;
+      transition: opacity 0.3s;
+    }
+    .sticky-cta.hidden { opacity: 0; pointer-events: none; }
+    .sticky-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.8rem 1.25rem;
+      border-radius: 100px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      text-transform: uppercase;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .sticky-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(0,0,0,0.6); }
+    .sticky-phone { background: var(--lime); color: var(--soil); }
+    .sticky-quote { background: var(--leaf); color: white; border: 1px solid rgba(255,255,255,0.15); }
+
+    /* ─── REVEAL ANIMATIONS ──────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(124,191,63,0.5); }
+      70%  { box-shadow: 0 0 0 12px rgba(124,191,63,0); }
+      100% { box-shadow: 0 0 0 0 rgba(124,191,63,0); }
+    }
+    .pulse { animation: pulse-ring 2s infinite; }
+
+    /* ─── RESPONSIVE ─────────────────────────────────── */
+    @media (max-width: 1024px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .about-grid { grid-template-columns: 1fr; gap: 3rem; }
+      .about-img-stack { max-width: 600px; margin: 0 auto; }
+      .services-grid { grid-template-columns: repeat(2, 1fr); }
+      .why-inner { grid-template-columns: 1fr; }
+      .why-visual { display: none; }
+      .contact-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+      section { padding: 4rem 1.25rem; }
+      .services-grid { grid-template-columns: 1fr; }
+      .gallery-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+      }
+      .g-item { grid-column: span 1 !important; height: 200px; }
+      .g-item:nth-child(3) { grid-column: span 2 !important; }
+      .form-row { grid-template-columns: 1fr; }
+      .testi-card { min-width: 280px; max-width: 280px; }
+      .footer-inner { flex-direction: column; text-align: center; }
+      .footer-links { justify-content: center; }
+      .sticky-btn span { display: none; }
+      .sticky-btn { padding: 1rem; border-radius: 50%; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 2rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────── -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <a href="#hero" class="nav-brand">
+      <div class="nav-logo-mark">D&D</div>
+      <div class="nav-brand-text">
+        D and D Trucking and Grading
+        <span>Trucking · Excavation</span>
+      </div>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#about">About</a></li>
+      <li><a href="#services">Services</a></li>
+      <li><a href="#gallery">Gallery</a></li>
+      <li><a href="#testimonials">Reviews</a></li>
+      <li><a href="https://www.facebook.com/d.and.d.trucking.and.grading" target="_blank" rel="noopener" aria-label="Facebook"><i class="fab fa-facebook"></i></a></li>
+      <li><a href="#contact" class="nav-cta">Free Quote</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#about" class="mob-link">About</a>
+  <a href="#services" class="mob-link">Services</a>
+  <a href="#gallery" class="mob-link">Gallery</a>
+  <a href="#testimonials" class="mob-link">Reviews</a>
+  <a href="https://www.facebook.com/d.and.d.trucking.and.grading" target="_blank" rel="noopener" class="mob-link"><i class="fab fa-facebook"></i> Facebook</a>
+  <a href="tel:4784563393" class="mob-cta">📞 (478) 456-3393</a>
+</div>
+
+<!-- ── HERO ─────────────────────────────────────────── -->
+<section id="hero">
+  <div class="hero-bg-img" id="heroBg"></div>
+  <div class="hero-inner">
+    <div class="hero-eyebrow">
+      <i class="fas fa-map-marker-alt"></i>
+      Milledgeville, GA · Serving Central Georgia Since 2018
+    </div>
+    <h1 class="hero-headline">
+      Built for<br>
+      <em>Georgia Land.</em>
+    </h1>
+    <p class="hero-sub">
+      Trucking and excavation done right — by Dusty & Duane Fountain, people you can trust with your property.
+    </p>
+    <div class="hero-actions">
+      <a href="tel:4784563393" class="btn-primary pulse">
+        <i class="fas fa-phone"></i>
+        Call (478) 456-3393
+      </a>
+      <a href="#contact" class="btn-outline">
+        <i class="fas fa-file-alt"></i>
+        Free Estimate
+      </a>
+    </div>
+    <div class="hero-trust">
+      <div class="trust-pill"><i class="fas fa-check-circle"></i> Licensed & Insured</div>
+      <div class="trust-pill"><i class="fas fa-check-circle"></i> Free Estimates</div>
+      <div class="trust-pill"><i class="fas fa-check-circle"></i> Same-Day Response</div>
+      <div class="trust-pill"><i class="fas fa-check-circle"></i> No Job Too Big or Small</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TICKER ────────────────────────────────────────── -->
+<div class="ticker-wrap">
+  <div class="ticker-track" id="tickerTrack"></div>
+</div>
+
+<!-- ── STATS ─────────────────────────────────────────── -->
+<div class="stats-strip">
+  <div class="stats-grid">
+    <div class="stat-item reveal">
+      <span class="stat-num" data-count="6">0</span>
+      <span class="stat-label">Years in Business</span>
+    </div>
+    <div class="stat-item reveal reveal-delay-1">
+      <span class="stat-num" data-count="500" data-suffix="+">0</span>
+      <span class="stat-label">Projects Completed</span>
+    </div>
+    <div class="stat-item reveal reveal-delay-2">
+      <span class="stat-num" data-count="12">0</span>
+      <span class="stat-label">Counties Served</span>
+    </div>
+    <div class="stat-item reveal reveal-delay-3">
+      <span class="stat-num" data-count="100" data-suffix="%">0</span>
+      <span class="stat-label">Satisfaction Rate</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── ABOUT ─────────────────────────────────────────── -->
+<section id="about">
+  <div class="about-grid">
+    <div class="about-img-stack reveal">
+      <img src="media/619386860_122152806194805852_2683866192620336985_n.jpg" class="about-img-main" alt="D and D Trucking and Grading equipment at work">
+      <img src="media/727788070_4431961600419159_7771221136869027714_n.jpg" class="about-img-accent" alt="Equipment loaded for hauling">
+      <div class="about-badge">
+        <strong>2018</strong>
+        Est.
+      </div>
+    </div>
+    <div class="about-text reveal reveal-delay-1">
+      <span class="section-label">Who We Are</span>
+      <h2 class="section-title">Local people.<br><span class="accent">Local pride.</span></h2>
+      <p class="section-body">
+        D and D Trucking and Grading is a family-owned operation built from the ground up. Dusty and Duane Fountain started this company because they believed Central Georgia deserved dependable, honest land-work — no shortcuts, no excuses.
+      </p>
+      <p class="section-body" style="margin-top: 1rem;">
+        From a single lawn mower to a full fleet of equipment, we've grown by doing the work right the first time. Our neighbors trust us — and that means everything.
+      </p>
+      <div class="owner-row">
+        <div class="owner-avatar">D&D</div>
+        <div>
+          <div class="owner-name">Dusty & Duane Fountain</div>
+          <div class="owner-title">Owners, D and D Trucking and Grading</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SERVICES ───────────────────────────────────────── -->
+<section id="services">
+  <div class="services-header">
+    <div>
+      <span class="section-label">What We Do</span>
+      <h2 class="section-title">Our <span class="accent">Services</span></h2>
+    </div>
+    <a href="#contact" class="btn-outline" style="white-space:nowrap">Get a Quote →</a>
+  </div>
+  <div class="services-grid">
+    <div class="svc-card reveal">
+      <div class="svc-icon">🚜</div>
+      <div class="svc-name">Trucking & Hauling</div>
+      <div class="svc-desc">Heavy hauling and material delivery across Central Georgia — fast, reliable, and properly equipped.</div>
+      <ul class="svc-list">
+        <li><i class="fas fa-leaf"></i> Dirt, Gravel & Sand Delivery</li>
+        <li><i class="fas fa-leaf"></i> Junk & Debris Removal</li>
+        <li><i class="fas fa-leaf"></i> Heavy Equipment Transport</li>
+        <li><i class="fas fa-leaf"></i> Farm Support Services</li>
+        <li><i class="fas fa-leaf"></i> Commercial & Residential</li>
+      </ul>
+    </div>
+    <div class="svc-card reveal reveal-delay-2">
+      <div class="svc-icon">🏗️</div>
+      <div class="svc-name">Excavation & Dirt Work</div>
+      <div class="svc-desc">Land clearing, pond excavation, grading, and site prep — we move earth so you can build.</div>
+      <ul class="svc-list">
+        <li><i class="fas fa-leaf"></i> Pond Excavation & Shaping</li>
+        <li><i class="fas fa-leaf"></i> Land Clearing</li>
+        <li><i class="fas fa-leaf"></i> Site Grading & Leveling</li>
+        <li><i class="fas fa-leaf"></i> Culvert & Driveway Work</li>
+        <li><i class="fas fa-leaf"></i> Farm & Field Prep</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── WHY US ──────────────────────────────────────────── -->
+<section id="why">
+  <div class="why-inner">
+    <div>
+      <span class="section-label">Why Choose Us</span>
+      <h2 class="section-title reveal">The D & D<br><span class="accent">Difference</span></h2>
+      <div class="why-list">
+        <div class="why-item reveal reveal-delay-1">
+          <div class="why-num">01</div>
+          <div>
+            <div class="why-item-title">We Show Up</div>
+            <div class="why-item-body">No ghosting. No excuses. If we say we'll be there, we'll be there — on time and ready to work.</div>
+          </div>
+        </div>
+        <div class="why-item reveal reveal-delay-2">
+          <div class="why-num">02</div>
+          <div>
+            <div class="why-item-title">Fair, Honest Pricing</div>
+            <div class="why-item-body">Every quote is transparent and straightforward. Free estimates, no hidden fees, no surprises on the invoice.</div>
+          </div>
+        </div>
+        <div class="why-item reveal reveal-delay-3">
+          <div class="why-num">03</div>
+          <div>
+            <div class="why-item-title">Licensed & Fully Insured</div>
+            <div class="why-item-body">Your property is protected. We carry full liability coverage so you have complete peace of mind.</div>
+          </div>
+        </div>
+        <div class="why-item reveal reveal-delay-4">
+          <div class="why-num">04</div>
+          <div>
+            <div class="why-item-title">Deep Local Roots</div>
+            <div class="why-item-body">We know Georgia land. We live here, we work here — this isn't a franchise, it's our community.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="why-visual reveal">
+      <img src="media/618816717_122152806146805852_5473619412418488187_n.jpg" class="why-img" alt="Heavy equipment at work">
+      <div class="why-overlay-card">
+        <div class="why-overlay-big">A+</div>
+        <div class="why-overlay-sub">5-Star Local Reputation</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── GALLERY ────────────────────────────────────────── -->
+<section id="gallery">
+  <div class="gallery-header">
+    <div>
+      <span class="section-label">Our Work</span>
+      <h2 class="section-title reveal">Results that <span class="accent">Speak</span></h2>
+    </div>
+    <p class="section-body reveal" style="max-width:340px">Real projects from across Central Georgia — trucking, excavation, and farm work.</p>
+  </div>
+  <div class="gallery-grid">
+    <div class="g-item reveal" onclick="openLightbox(this)">
+      <img src="media/618816717_122152806146805852_5473619412418488187_n.jpg" alt="Land clearing with skid steer" loading="lazy" onerror="this.closest('.g-item').classList.add('img-broken')">
+      <div class="g-overlay"><span class="g-label">Land Clearing</span></div>
+    </div>
+    <div class="g-item reveal reveal-delay-1" onclick="openLightbox(this)">
+      <img src="media/619386860_122152806194805852_2683866192620336985_n.jpg" alt="Skid steer with rake attachment" loading="lazy" onerror="this.closest('.g-item').classList.add('img-broken')">
+      <div class="g-overlay"><span class="g-label">Grading & Rake Work</span></div>
+    </div>
+    <div class="g-item reveal reveal-delay-2" onclick="openLightbox(this)">
+      <img src="media/727788070_4431961600419159_7771221136869027714_n.jpg" alt="Equipment loaded on trailer for hauling" loading="lazy" onerror="this.closest('.g-item').classList.add('img-broken')">
+      <div class="g-overlay"><span class="g-label">Equipment Hauling</span></div>
+    </div>
+    <div class="g-item reveal" onclick="openLightbox(this)">
+      <video muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()">
+        <source src="media/AQMJG_n4oAZqVNFB7k7CTOX85u4b0O92vx8Z58XtrCsskULrAVil7i0KA2DQiEcKbT6EVGUbuTFjWSaVR9ve1ktTtwiHfeEw29g.mp4" type="video/mp4">
+      </video>
+      <div class="g-play-icon"><i class="fas fa-play"></i></div>
+      <div class="g-overlay"><span class="g-label">On The Job</span></div>
+    </div>
+    <div class="g-item reveal reveal-delay-1" onclick="openLightbox(this)">
+      <video muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()">
+        <source src="media/AQMUXr3VMBLJEn0LgpD2g4V8Y83lr4nq7SAs02I69sAX8GTcFuIDsHm2eFyPIUmTNB9ojQ6yWwoX2PgTk518wMR7HzR70_tWNNAtjJXjiA.mp4" type="video/mp4">
+      </video>
+      <div class="g-play-icon"><i class="fas fa-play"></i></div>
+      <div class="g-overlay"><span class="g-label">On The Job</span></div>
+    </div>
+    <div class="g-item reveal reveal-delay-2" onclick="openLightbox(this)">
+      <video muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()">
+        <source src="media/AQMuzGRFdATVJbFNrvTHnyjGhRh5PqfI_ym66aQatMOgozjORviHlfbyKCY4OVM8MFhJFvmtOjrPOPnExMVY0v2LA99Akvqcfut5eMZZxw.mp4" type="video/mp4">
+      </video>
+      <div class="g-play-icon"><i class="fas fa-play"></i></div>
+      <div class="g-overlay"><span class="g-label">On The Job</span></div>
+    </div>
+    <div class="g-item reveal" onclick="openLightbox(this)">
+      <video muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()">
+        <source src="media/AQNLMLzV_xqoRXLANJurvLkRYta9BD6IPYGzf9EPoveE-VvzK0dDxOIc4lv6JzCKkNcIvNz_O0a5GK3wCwwRLX_BSPNvEKC1iRAIGZxZJQ.mp4" type="video/mp4">
+      </video>
+      <div class="g-play-icon"><i class="fas fa-play"></i></div>
+      <div class="g-overlay"><span class="g-label">On The Job</span></div>
+    </div>
+    <div class="g-item reveal reveal-delay-1" onclick="openLightbox(this)">
+      <video muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()">
+        <source src="media/AQNu_itD6DlxzjpnGoHzbLXpGat6BSdCcgjFJOeWAevaizBYJPt96NtGQ4PgiHfHGyQ26BUko2VkUntzHrjVQA.mp4" type="video/mp4">
+      </video>
+      <div class="g-play-icon"><i class="fas fa-play"></i></div>
+      <div class="g-overlay"><span class="g-label">On The Job</span></div>
+    </div>
+    <div class="g-item reveal reveal-delay-2" onclick="openLightbox(this)">
+      <video muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()">
+        <source src="media/AQOzhLK40vggUda3WOftZKCcFr4Xefs4tH6HcJPCZp94VjgNOiI4jWtTlQtabtFTl_WTKURoV_pjIHitu13QDxLT.mp4" type="video/mp4">
+      </video>
+      <div class="g-play-icon"><i class="fas fa-play"></i></div>
+      <div class="g-overlay"><span class="g-label">On The Job</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TESTIMONIALS ───────────────────────────────────── -->
+<section id="testimonials">
+  <div class="testi-header">
+    <span class="section-label">What People Say</span>
+    <h2 class="section-title reveal">Trusted by <span class="accent">Neighbors</span></h2>
+  </div>
+  <div class="testi-carousel">
+    <div class="testi-track" id="testiTrack">
+      <div class="testi-card reveal">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Dusty and Duane came out same day to look at our drainage problem. Had it fixed within the week. Honest pricing, great work — we use them for everything now."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">MR</div>
+          <div>
+            <div class="testi-name">Mike R.</div>
+            <div class="testi-loc">Milledgeville, GA</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card reveal reveal-delay-1">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Had them haul off a pile of debris and clear half an acre. Quick turnaround, showed up when they said they would, and left the place cleaner than they found it."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">SJ</div>
+          <div>
+            <div class="testi-name">Sarah J.</div>
+            <div class="testi-loc">Gray, GA</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card reveal reveal-delay-2">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"These guys dug our pond and graded our whole back field. Couldn't be happier — it looks exactly like we wanted. Very fair price for the work involved."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">TW</div>
+          <div>
+            <div class="testi-name">Tommy W.</div>
+            <div class="testi-loc">Eatonton, GA</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card reveal reveal-delay-3">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Hired them to clear and grade a section of our property for a new build site. The work was incredible. They listened to what we wanted and delivered above and beyond expectations."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">LB</div>
+          <div>
+            <div class="testi-name">Lisa B.</div>
+            <div class="testi-loc">Milledgeville, GA</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card reveal">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Called about hauling some gravel out to our farm. They were out there the next morning. Competitive price and they didn't tear up our driveway. Will definitely use again."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">JH</div>
+          <div>
+            <div class="testi-name">James H.</div>
+            <div class="testi-loc">Sandersville, GA</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="carousel-btns">
+      <button class="carousel-btn" id="carPrev" aria-label="Previous"><i class="fas fa-arrow-left"></i></button>
+      <button class="carousel-btn" id="carNext" aria-label="Next"><i class="fas fa-arrow-right"></i></button>
+    </div>
+  </div>
+</section>
+
+<!-- ── CONTACT ────────────────────────────────────────── -->
+<section id="contact">
+  <div class="contact-grid">
+    <div class="contact-form-wrap reveal">
+      <div id="formBody">
+        <div class="form-title">Request a Free Estimate</div>
+        <div class="form-sub">We'll get back to you the same day — usually within the hour.</div>
+        <form id="contactForm" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">First Name</label>
+              <input type="text" class="form-input" placeholder="John" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Last Name</label>
+              <input type="text" class="form-input" placeholder="Smith">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number *</label>
+            <input type="tel" class="form-input" placeholder="(478) 555-0100" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email Address</label>
+            <input type="email" class="form-input" placeholder="you@email.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Service Needed</label>
+            <select class="form-select">
+              <option value="">— Select a Service —</option>
+              <option>Trucking / Hauling</option>
+              <option>Excavation / Dirt Work</option>
+              <option>Multiple Services</option>
+              <option>Other / Not Sure</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tell Us About Your Project</label>
+            <textarea class="form-textarea" placeholder="Describe what you need — location, size, timeline, anything helpful..."></textarea>
+          </div>
+          <button type="submit" class="form-submit">
+            <i class="fas fa-paper-plane"></i>
+            Send My Request
+          </button>
+        </form>
+      </div>
+      <div class="form-success" id="formSuccess">
+        <i class="fas fa-check-circle"></i>
+        <h3>Request Sent!</h3>
+        <p>Dusty or Duane will reach out to you shortly — usually the same day.</p>
+      </div>
+    </div>
+
+    <div class="contact-info reveal reveal-delay-1">
+      <span class="section-label">Contact Us</span>
+      <h2 class="section-title">Let's Talk<br><span class="accent">Business</span></h2>
+      <p class="section-body">Ready to get started? Call or text us — or fill out the form for a same-day response.</p>
+      <div class="info-cards">
+        <a href="tel:4784563393" class="info-card">
+          <div class="info-card-icon"><i class="fas fa-phone"></i></div>
+          <div>
+            <div class="info-card-label">Call or Text</div>
+            <div class="info-card-val">(478) 456-3393</div>
+          </div>
+        </a>
+        <a href="https://www.facebook.com/d.and.d.trucking.and.grading" target="_blank" rel="noopener" class="info-card">
+          <div class="info-card-icon"><i class="fab fa-facebook"></i></div>
+          <div>
+            <div class="info-card-label">Follow Us</div>
+            <div class="info-card-val">Facebook</div>
+          </div>
+        </a>
+        <div class="info-card">
+          <div class="info-card-icon"><i class="fas fa-map-marker-alt"></i></div>
+          <div>
+            <div class="info-card-label">Based In</div>
+            <div class="info-card-val">Milledgeville, Georgia</div>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-icon"><i class="fas fa-clock"></i></div>
+          <div>
+            <div class="info-card-label">Hours</div>
+            <div class="info-card-val">Mon–Fri 7AM–6PM · Sat by Appt</div>
+          </div>
+        </div>
+      </div>
+      <div class="map-embed">
+        <iframe
+          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d53194.18!2d-83.2321!3d33.0801!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x88f49fb5d3bc7f49%3A0x1bd3a79e0a5c3f7d!2sMilledgeville%2C%20GA!5e0!3m2!1sen!2sus!4v1700000000000"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+          title="D and D Trucking and Grading service area">
+        </iframe>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">D and D <span>Trucking and Grading</span></div>
+      <div style="font-size:0.82rem;color:rgba(255,255,255,0.35);margin-top:0.25rem">Milledgeville, Georgia · Est. 2018</div>
+    </div>
+    <div class="footer-links">
+      <a href="#about">About</a>
+      <a href="#services">Services</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#testimonials">Reviews</a>
+      <a href="#contact">Contact</a>
+      <a href="tel:4784563393">(478) 456-3393</a>
+    </div>
+  </div>
+  <div class="footer-copy">© 2024 D and D Trucking and Grading · All Rights Reserved · Licensed & Insured</div>
+  <div class="footer-copy" style="margin-top:0.35rem"><a href="https://www.facebook.com/d.and.d.trucking.and.grading" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Follow us on Facebook</a></div>
+</footer>
+
+<!-- ── STICKY CTA ──────────────────────────────────────── -->
+<div class="sticky-cta hidden" id="stickyCta">
+  <a href="#contact" class="sticky-btn sticky-quote">
+    <i class="fas fa-file-alt"></i>
+    <span>Free Quote</span>
+  </a>
+  <a href="tel:4784563393" class="sticky-btn sticky-phone">
+    <i class="fas fa-phone"></i>
+    <span>Call Now</span>
+  </a>
+</div>
+
+<!-- ── LIGHTBOX ────────────────────────────────────────── -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox(event)">×</button>
+  <img id="lightboxImg" src="" alt="" style="display:none">
+  <video id="lightboxVideo" controls style="display:none;max-width:90vw;max-height:90vh;border-radius:8px"></video>
+</div>
+
+<script>
+  /* ── NAV SCROLL ─────────────────────────── */
+  const navbar = document.getElementById('navbar');
+  const stickyCta = document.getElementById('stickyCta');
+  window.addEventListener('scroll', () => {
+    const scrolled = window.scrollY > 60;
+    navbar.classList.toggle('scrolled', scrolled);
+    stickyCta.classList.toggle('hidden', window.scrollY < 300);
+  }, { passive: true });
+
+  /* ── HAMBURGER ──────────────────────────── */
+  const ham = document.getElementById('hamburger');
+  const mob = document.getElementById('mobileMenu');
+  ham.addEventListener('click', () => {
+    ham.classList.toggle('open');
+    mob.classList.toggle('open');
+  });
+  mob.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    ham.classList.remove('open');
+    mob.classList.remove('open');
+  }));
+
+  /* ── PARALLAX HERO ──────────────────────── */
+  const heroBg = document.getElementById('heroBg');
+  window.addEventListener('scroll', () => {
+    heroBg.style.transform = `translateY(${window.scrollY * 0.35}px)`;
+  }, { passive: true });
+
+  /* ── TICKER ─────────────────────────────── */
+  const items = [
+    'Licensed & Insured', 'Free Estimates', 'Same Day Response',
+    'Trucking & Hauling', 'Pond Excavation', 'Land Clearing',
+    'Central Georgia', 'Since 2018', 'Family Owned',
+    'Serving 12+ Counties', 'No Job Too Big', 'Honest Pricing'
+  ];
+  const track = document.getElementById('tickerTrack');
+  const html = items.map(t => `<div class="ticker-item"><span class="ticker-dot">◆</span>${t}</div>`).join('');
+  track.innerHTML = html + html; // duplicate for seamless loop
+
+  /* ── COUNTER ANIMATION ──────────────────── */
+  function animateCount(el) {
+    const target = parseInt(el.dataset.count);
+    const suffix = el.dataset.suffix || '';
+    let current = 0;
+    const duration = 1800;
+    const step = target / (duration / 16);
+    const timer = setInterval(() => {
+      current = Math.min(current + step, target);
+      el.textContent = Math.round(current) + suffix;
+      if (current >= target) clearInterval(timer);
+    }, 16);
+  }
+
+  /* ── INTERSECTION OBSERVER ──────────────── */
+  const revealObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        revealObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+  const counterObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        animateCount(e.target);
+        counterObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('[data-count]').forEach(el => counterObs.observe(el));
+
+  /* ── TESTIMONIAL CAROUSEL ───────────────── */
+  const track2 = document.getElementById('testiTrack');
+  document.getElementById('carNext').addEventListener('click', () => {
+    track2.scrollBy({ left: 360, behavior: 'smooth' });
+  });
+  document.getElementById('carPrev').addEventListener('click', () => {
+    track2.scrollBy({ left: -360, behavior: 'smooth' });
+  });
+
+  /* ── LIGHTBOX ───────────────────────────── */
+  function openLightbox(el) {
+    if (el.classList.contains('img-broken')) return;
+    const lbImg = document.getElementById('lightboxImg');
+    const lbVid = document.getElementById('lightboxVideo');
+    const vid = el.querySelector('video');
+    if (vid) {
+      lbVid.src = vid.querySelector('source') ? vid.querySelector('source').src : vid.src;
+      lbVid.style.display = 'block';
+      lbImg.style.display = 'none';
+      lbVid.play().catch(()=>{});
+    } else {
+      const img = el.querySelector('img');
+      lbImg.src = img.src;
+      lbImg.style.display = 'block';
+      lbVid.style.display = 'none';
+      lbVid.pause();
+      lbVid.removeAttribute('src');
+      lbVid.load();
+    }
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLightbox(e) {
+    if (e && e.target.tagName === 'VIDEO') return;
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+    const lbVid = document.getElementById('lightboxVideo');
+    lbVid.pause();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  /* ── CONTACT FORM ───────────────────────── */
+  document.getElementById('contactForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    document.getElementById('formBody').style.display = 'none';
+    document.getElementById('formSuccess').style.display = 'block';
+  });
+
+  /* ── SMOOTH SCROLL FOR ALL HASH LINKS ─── */
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        const offset = 80;
+        const top = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    });
+  });
+</script>
+</body>
+</html>
