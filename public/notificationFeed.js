@@ -132,7 +132,30 @@ function _togglePanel(origin) {
   _nfItems   = [];
   _nfCursor  = null;
   _nfHasMore = true;
-  _loadNotifications();
+  _loadNotifications().then(_markSeenOnOpen);
+}
+
+// ─── Opening the bell counts as "checking" it ────────────────────────────────
+// The red badge count should clear as soon as the feed is viewed, not only
+// when the user explicitly hits "✓ All read". Runs right after the list
+// finishes loading; silent (no toast) so it doesn't spam every open.
+async function _markSeenOnOpen() {
+  const hadUnread = _nfUnread > 0 || _nfItems.some(n => !n.read);
+  if (!hadUnread) return;
+
+  _nfUnread = 0;
+  _updateBadge(0);
+  _nfItems.forEach(n => { n.read = true; });
+
+  const list = document.getElementById('nf-list');
+  if (list) _renderList(list);
+
+  try {
+    await apiPost('/notifications/read', { all: true });
+  } catch (_) {
+    // Badge is already cleared client-side; the next 30s poll will
+    // resync from the server if this call happened to fail.
+  }
 }
 
 // Expose for the nav.js bridge (called by the bell buttons rendered in renderNav)
@@ -299,12 +322,14 @@ async function _handleItemClick(id, page, itemId, anchor) {
 
   // Find and update locally
   const notif = _nfItems.find(n => n._id === id);
+  const wasUnread = notif && !notif.read;
   if (notif) notif.read = true;
 
   // Re-render
   const list = document.getElementById('nf-list');
   if (list) _renderList(list);
-  _updateBadge(Math.max(0, _nfUnread - 1));
+  if (wasUnread) _nfUnread = Math.max(0, _nfUnread - 1);
+  _updateBadge(_nfUnread);
 
   // Close panel
   document.getElementById('nf-panel')?.remove();

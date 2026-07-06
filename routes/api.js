@@ -529,10 +529,10 @@ if (!isRateLimitExempt && user.lastPostAt && (Date.now() - user.lastPostAt) < 45
     }
 
     // ── All checks passed — create the shoutout ────────────────────────────────
-    // TTL AUTO-DELETE TEMPORARILY DISABLED — was: now + 8 * 60 * 60 * 1000
-    // To re-enable the 8-hour auto-delete, swap the line below back to:
-    //   const expiresAt = new Date(now + 8 * 60 * 60 * 1000);
-    const expiresAt = new Date(now + 10 * 365 * 24 * 60 * 60 * 1000);
+    // TTL AUTO-DELETE: Traffic Alerts posts auto-delete 48 hours after creation.
+    // Mongo's TTL index (see `expiresAt` in Shoutout.js) sweeps and removes
+    // expired docs automatically — no manual purge job needed.
+    const expiresAt = new Date(now + 48 * 60 * 60 * 1000);
 
     const safeText = (text || '').trim();
 
