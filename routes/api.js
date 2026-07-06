@@ -1988,7 +1988,9 @@ router.delete('/lostitems/:id', authenticate, async (req, res) => {
 // GET /api/marketplace/:id — fetch single marketplace item by ID
 router.get('/marketplace/:id', optionalAuth, async (req, res) => {
   try {
-    const item = await MarketplaceItem.findById(req.params.id);
+    const item = await MarketplaceItem.findById(req.params.id)
+      .populate('comments.authorId', 'name avatar profilePhoto')
+      .populate('comments.replies.authorId', 'name avatar profilePhoto');
     if (!item) return res.status(404).json({ message: 'Item not found' });
     res.json(item);
   } catch (err) {
@@ -2003,16 +2005,30 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
     const item = await MarketplaceItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Not found' });
 
-    const comment = { 
-    text: (req.body.text || '').trim(), 
-    author: user.name, 
-    authorId: user._id 
-  };
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+
+    // image may be a GIF URL (from Giphy picker) or a base64 data-URL (photo upload)
+    const commentImage = (clean.image || req.body.image || '').trim() || undefined;
+
+    const comment = {
+      text: (clean.text || '').trim(),
+      author: user.name,
+      authorId: user._id,
+      ...(commentImage ? { image: commentImage } : {})
+    };
+
+    // Guard: comment must have text or an image
+    if (!comment.text && !commentImage) {
+      return res.status(400).json({ message: 'Comment must have text or an image' });
+    }
+
     item.comments.push(comment);
     await item.save();
 
+    const savedComment = item.comments[item.comments.length - 1];
+
     if (item.seller && item.seller.toString() !== req.userId) {
-      const commentText = (req.body.text || '').trim();
+      const commentText = comment.text;
       const sellerUser = await User.findById(item.seller).select('notificationPreferences');
       // Opt-in: only send if the user has the global "Comments" toggle turned ON (defaults to OFF)
       if (sellerUser && sellerUser.notificationPreferences?.comments === true) {
@@ -2038,12 +2054,195 @@ router.post('/marketplace/:id/comments', authenticate, async (req, res) => {
         body:        commentText.substring(0, 120),
         linkPage:    'marketplace',
         linkItemId:  item._id.toString(),
+        linkAnchor:  `comment-${savedComment._id}`,
       });
     }
-    res.json(item.comments[item.comments.length - 1]);
+    res.json(savedComment);
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── EDIT / DELETE MARKETPLACE COMMENT ──────────────────────────────────────
+router.delete('/marketplace/:id/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const comment = item.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+    comment.deleteOne();
+    await item.save();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.put('/marketplace/:id/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const comment = item.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const isAuthor = comment.authorId && comment.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const newText = (clean.text !== undefined) ? clean.text.trim() : comment.text;
+
+    if (!newText && !comment.image) {
+      return res.status(400).json({ message: 'Comment must have text or an image' });
+    }
+
+    comment.text = newText;
+    comment.edited = true;
+    comment.editedAt = new Date();
+    await item.save();
+
+    res.json(comment);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.post('/marketplace/:id/comments/:commentId/like', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const comment = item.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const uid   = item._id.constructor(req.userId);
+    const idx   = comment.likes.findIndex(l => l.toString() === req.userId);
+    const liked = idx === -1;
+    if (liked) comment.likes.push(uid); else comment.likes.splice(idx, 1);
+    await item.save();
+    res.json({ liked, likes: comment.likes.length });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.post('/marketplace/:id/comments/:commentId/replies', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const comment = item.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const reply = {
+      text: (clean.text || '').trim(),
+      author: user.name,
+      authorId: user._id
+    };
+    if (!reply.text) return res.status(400).json({ message: 'Reply cannot be empty' });
+
+    comment.replies.push(reply);
+    await item.save();
+
+    if (comment.authorId && comment.authorId.toString() !== req.userId) {
+      const commentAuthor = await User.findById(comment.authorId).select('notificationPreferences');
+      if (commentAuthor && commentAuthor.notificationPreferences?.comments === true) {
+        sendPushToUser(
+          comment.authorId,
+          '↩️ New Reply',
+          `${user.name} replied to your comment`,
+          { page: 'marketplace', id: req.params.id, url: `/marketplace/${req.params.id}` }
+        );
+      }
+      createNotification({
+        recipient:   comment.authorId,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || user.avatar || null,
+        type:        'reply',
+        title:       `${user.name} replied to your comment`,
+        body:        reply.text.substring(0, 120),
+        linkPage:    'marketplace',
+        linkItemId:  req.params.id,
+        linkAnchor:  `comment-${req.params.commentId}`,
+      });
+    }
+
+    // Also notify the listing's seller when a reply lands, if distinct from the comment author
+    if (
+      item.seller &&
+      item.seller.toString() !== req.userId &&
+      (!comment.authorId || item.seller.toString() !== comment.authorId.toString())
+    ) {
+      createNotification({
+        recipient:   item.seller,
+        actor:       user._id,
+        actorName:   user.name,
+        actorAvatar: user.profilePhoto || user.avatar || null,
+        type:        'reply',
+        title:       `${user.name} replied to a comment on your Marketplace listing`,
+        body:        reply.text.substring(0, 120),
+        linkPage:    'marketplace',
+        linkItemId:  req.params.id,
+        linkAnchor:  `comment-${req.params.commentId}`,
+      });
+    }
+
+    res.json(comment.replies[comment.replies.length - 1]);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.delete('/marketplace/:id/comments/:commentId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const comment = item.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+    const isAuthor = reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+    reply.deleteOne();
+    await item.save();
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.put('/marketplace/:id/comments/:commentId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const item = await MarketplaceItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Not found' });
+    const user = await User.findById(req.userId);
+    const isAdmin = ADMIN_EMAILS.has(user.email);
+    const comment = item.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+    const isAuthor = reply.authorId && reply.authorId.toString() === req.userId;
+    if (!isAdmin && !isAuthor) return res.status(403).json({ message: 'Not authorized' });
+
+    const clean = sanitizeContent(req.body, { userId: req.userId });
+    const newText = (clean.text || '').trim();
+    if (!newText) return res.status(400).json({ message: 'Reply cannot be empty' });
+
+    reply.text = newText;
+    reply.edited = true;
+    reply.editedAt = new Date();
+    await item.save();
+
+    res.json(reply);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
   }
 });
 

@@ -3998,9 +3998,15 @@ window.toggleLike = async function (shoutoutId) {
   }
 };
 
+// Registry mapping a card/item id -> its REST base path, so the shared
+// Facebook-style comment functions below work for shoutouts, marketplace, etc.
+// without duplicating this whole system per content type.
+if (!window._commentApiBase) window._commentApiBase = {}; // id -> '/shoutouts' | '/marketplace' | ...
+function _commentBase(id) { return window._commentApiBase[id] || '/shoutouts'; }
+
 window.likeComment = async function(shoutoutId, commentId) {
   if (!requireAuth('Sign in to like comments.')) return;
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/like`, {});
+  const res = await apiPost(`${_commentBase(shoutoutId)}/${shoutoutId}/comments/${commentId}/like`, {});
   if (res.likes !== undefined) {
     const icon  = document.getElementById(`comment-like-icon-${commentId}`);
     const count = document.getElementById(`comment-like-count-${commentId}`);
@@ -4127,7 +4133,7 @@ const gp = document.getElementById(`comment-gif-panel-${shoutoutId}`);
 if (ep) ep.style.display = 'none';
 if (gp) gp.style.display = 'none';
 
-const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
+const res = await apiPost(`${_commentBase(shoutoutId)}/${shoutoutId}/comments`, { text, image });
     if (res._id) {
       // Build a synthetic comment object from the API response and append it
       // to the DOM without reloading the whole page (which would collapse comments).
@@ -4480,7 +4486,7 @@ window.submitReply = async function (shoutoutId, commentId) {
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
   input.value = '';
-  const res = await apiPost(`/shoutouts/${shoutoutId}/comments/${commentId}/replies`, { text });
+  const res = await apiPost(`${_commentBase(shoutoutId)}/${shoutoutId}/comments/${commentId}/replies`, { text });
   if (res._id) {
     // Update the reply in the cache
     const cache = window._commentDataCache[shoutoutId] || [];
@@ -4503,7 +4509,7 @@ window.submitReply = async function (shoutoutId, commentId) {
 
 window.deleteComment = async function (shoutoutId, commentId) {
   if (!confirm('Delete this comment?')) return;
-  const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}`);
+  const res = await apiDelete(`${_commentBase(shoutoutId)}/${shoutoutId}/comments/${commentId}`);
   if (res.message === 'Deleted') {
     // Remove from cache
     if (window._commentDataCache[shoutoutId]) {
@@ -4543,7 +4549,7 @@ window.saveEditComment = async function (shoutoutId, commentId) {
   const input = document.getElementById(`comment-edit-input-${commentId}`);
   if (!input) return;
   const newText = input.value.trim();
-  const res = await apiPut(`/shoutouts/${shoutoutId}/comments/${commentId}`, { text: newText });
+  const res = await apiPut(`${_commentBase(shoutoutId)}/${shoutoutId}/comments/${commentId}`, { text: newText });
   if (res._id) {
     const cache = window._commentDataCache[shoutoutId] || [];
     const comment = cache.find(c => c._id === commentId);
@@ -4561,7 +4567,7 @@ window.saveEditComment = async function (shoutoutId, commentId) {
 // ─── DELETE / EDIT reply ────────────────────────────────────────────────────
 window.deleteReply = async function (shoutoutId, commentId, replyId) {
   if (!confirm('Delete this reply?')) return;
-  const res = await apiDelete(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`);
+  const res = await apiDelete(`${_commentBase(shoutoutId)}/${shoutoutId}/comments/${commentId}/replies/${replyId}`);
   if (res.message === 'Deleted') {
     const cache = window._commentDataCache[shoutoutId] || [];
     const comment = cache.find(c => c._id === commentId);
@@ -4599,7 +4605,7 @@ window.saveEditReply = async function (shoutoutId, commentId, replyId) {
     showToast('Reply cannot be empty', 'error');
     return;
   }
-  const res = await apiPut(`/shoutouts/${shoutoutId}/comments/${commentId}/replies/${replyId}`, { text: newText });
+  const res = await apiPut(`${_commentBase(shoutoutId)}/${shoutoutId}/comments/${commentId}/replies/${replyId}`, { text: newText });
   if (res._id) {
     const cache = window._commentDataCache[shoutoutId] || [];
     const comment = cache.find(c => c._id === commentId);
@@ -7552,31 +7558,6 @@ window.hideMarketModal = function() {
   if (modal) modal.remove();
 };
 
-window.postMarketplaceComment = async function(itemId) {
-  const input = document.getElementById('marketCommentInput');
-  if (!input) return;
-
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!requireAuth('Sign in to comment')) return;
-
-  try {
-    await apiPost(`/marketplace/${itemId}/comments`, { text });
-    input.value = '';
-    showToast('Comment posted');
-
-    // Refresh comments
-    const res = await apiGet(`/marketplace/${itemId}`);
-    const container = document.getElementById('marketCommentsContainer');
-    if (container && res.comments) {
-      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
-    }
-  } catch (e) {
-    showToast('Failed to post comment', 'error');
-  }
-};
-
 window.postMarketplaceItem = async function() {
   const category  = document.getElementById('marketCategory')?.value;
   const title     = document.getElementById('marketTitle')?.value.trim();
@@ -7728,25 +7709,8 @@ window.showMarketplaceDetail = async function(id) {
               <span class="text-white/40">${timeAgo(item.createdAt)}</span>
             </div>
 
-            <!-- Comments Section -->
-            <div class="mt-8">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-semibold text-lg">💬 Comments</h3>
-              </div>
-
-              <!-- Comment Input -->
-              <div class="flex gap-2 mb-4">
-                <input id="marketCommentInput" type="text" placeholder="Write a comment..." 
-                       class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-500"
-                       onkeypress="if(event.key === 'Enter') postMarketplaceComment('${item._id}')">
-                <button onclick="postMarketplaceComment('${item._id}')" 
-                        class="bg-emerald-600 hover:bg-emerald-700 px-6 rounded-2xl text-sm font-semibold transition">
-                  Post
-                </button>
-              </div>
-
-              <div id="marketCommentsContainer" class="space-y-4"></div>
-            </div>
+            <!-- Comments Section (Facebook-style) -->
+            <div class="mt-8" id="mkt-comment-wrap-${item._id}"></div>
           </div>
 
           <!-- Seller Actions -->
@@ -7783,7 +7747,7 @@ window.showMarketplaceDetail = async function(id) {
       </div>`;
 
     document.body.insertAdjacentHTML('beforeend', html);
-    renderComments(item.comments || [], 'marketCommentsContainer', 'market', item._id);
+    initMarketCommentSection(item);
 
   } catch (e) {
     console.error(e);
@@ -7795,6 +7759,99 @@ window.hideMarketDetailModal = function() {
   const modal = document.getElementById('marketDetailModal');
   if (modal) modal.remove();
 };
+
+// ─── Facebook-style comment section for a Marketplace listing ───────────────
+// Reuses the same shared comment engine (renderCommentRow, likeComment,
+// submitComment, submitReply, delete/edit comment+reply, emoji/gif/photo
+// composer) that powers Traffic Alert (shoutout) comments — just registered
+// against the /marketplace REST routes instead of /shoutouts, and rendered
+// always-expanded (no toggle button) since it lives inside the detail modal.
+function initMarketCommentSection(item) {
+  const id = item._id;
+  window._commentApiBase[id]  = '/marketplace';
+  window._commentDataCache[id] = item.comments || [];
+  if (!window._commentSortState[id]) window._commentSortState[id] = 'relevant';
+
+  const wrap = document.getElementById(`mkt-comment-wrap-${id}`);
+  if (!wrap) return;
+
+  wrap.innerHTML = `
+    <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;">
+      <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.5);padding:0 2px 8px;">
+        💬 Comments <span id="mkt-comment-count-${id}">${(item.comments || []).length}</span>
+      </h3>
+      <!-- Sort tabs -->
+      <div id="comment-tabs-${id}" style="display:flex;align-items:center;gap:2px;padding:8px 4px 4px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <span style="font-size:11px;color:rgba(255,255,255,0.4);margin-right:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Sort:</span>
+        <button onclick="setCommentSort('${id}','relevant')" id="csort-relevant-${id}"
+                style="background:rgba(52,211,153,0.18);border:none;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;color:#34d399;cursor:pointer;">Top</button>
+        <button onclick="setCommentSort('${id}','newest')" id="csort-newest-${id}"
+                style="background:rgba(255,255,255,0.06);border:none;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);cursor:pointer;">Newest</button>
+        <button onclick="setCommentSort('${id}','all')" id="csort-all-${id}"
+                style="background:rgba(255,255,255,0.06);border:none;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);cursor:pointer;">All</button>
+      </div>
+      <!-- Comment list -->
+      <div id="comment-list-${id}" style="padding:4px 0 0;"></div>
+      <!-- View more button (shown when collapsed) -->
+      <div id="comment-more-${id}" style="display:none;padding:4px 4px 8px;">
+        <button onclick="expandComments('${id}')"
+                style="background:none;border:none;color:#34d399;font-size:13px;font-weight:700;cursor:pointer;padding:4px 0;">
+          ▾ View more comments
+        </button>
+      </div>
+      <!-- Compose -->
+      ${currentUser ? `
+        <div style="display:flex;flex-direction:column;gap:6px;padding:8px 4px 10px;border-top:1px solid rgba(255,255,255,0.06);">
+          <div style="display:flex;align-items:flex-start;gap:8px;">
+            <div style="width:30px;height:30px;flex-shrink:0;margin-top:2px;">${avatarHtml(currentUser.name, currentUser.avatar, '30px', '50%', '#059669')}</div>
+            <div style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 12px;transition:border-color 0.2s;"
+                 onfocus="this.style.borderColor='rgba(52,211,153,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+              <input id="commentinput-${id}" type="text" placeholder="Write a comment…"
+                     style="width:100%;background:none;border:none;color:#fff;font-size:14px;outline:none;display:block;"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${id}');}">
+              <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                <button type="button" onclick="toggleCommentEmoji('${id}',event)"
+                        style="background:none;border:none;font-size:18px;cursor:pointer;padding:0;line-height:1;opacity:0.7;" title="Emoji">😊</button>
+                <button type="button" onclick="toggleCommentGif('${id}',event)"
+                        style="background:rgba(255,255,255,0.1);border:none;border-radius:6px;padding:2px 6px;font-size:10px;font-weight:800;color:#34d399;cursor:pointer;letter-spacing:.5px;">GIF</button>
+                <label style="cursor:pointer;font-size:16px;opacity:0.7;" title="Photo">
+                  📷<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="handleCommentImage('${id}',this)">
+                </label>
+                <div id="comment-img-preview-${id}" style="display:none;position:relative;">
+                  <img id="comment-img-thumb-${id}" style="height:28px;width:28px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
+                  <button onclick="clearCommentImage('${id}')"
+                          style="position:absolute;top:-5px;right:-5px;background:#ef4444;border:none;border-radius:50%;width:14px;height:14px;font-size:8px;color:#fff;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;">✕</button>
+                </div>
+                <div style="flex:1;"></div>
+                <button onclick="submitComment('${id}')"
+                        style="background:#059669;border:none;border-radius:14px;padding:4px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Post</button>
+              </div>
+            </div>
+          </div>
+          <div id="comment-emoji-panel-${id}" style="display:none;padding-left:38px;">
+            <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;max-height:180px;overflow:hidden;">
+              <input type="text" placeholder="Search emoji…" oninput="filterCommentEmoji('${id}',this.value)"
+                     style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+              <div id="comment-emoji-cats-${id}" style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto;padding-bottom:2px;"></div>
+              <div id="comment-emoji-grid-${id}" style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:2px;max-height:100px;overflow-y:auto;"></div>
+            </div>
+          </div>
+          <div id="comment-gif-panel-${id}" style="display:none;padding-left:38px;">
+            <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;">
+              <input type="text" placeholder="Search GIFs…" oninput="searchCommentGif('${id}',this.value)"
+                     style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+              <div id="comment-gif-grid-${id}" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:160px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>` : `
+        <div style="padding:10px 4px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.4);"><button onclick="showAuthModal()" style="background:none;border:none;color:#34d399;cursor:pointer;font-weight:700;padding:0;">Sign in</button> to comment</p>
+        </div>`}
+    </div>`;
+
+  _renderCommentList(id);
+  window.setCommentSort(id, window._commentSortState[id]);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EDIT MARKETPLACE LISTING
@@ -8178,56 +8235,6 @@ window.deleteMyMarketItem = async function(id) {
     navigate('marketplace');
   } catch (e) {
     showToast('Failed to delete listing', 'error');
-  }
-};
-
-function renderMarketComments(item) {
-  const container = document.getElementById('marketCommentsContainer');
-  if (!container) return;
-
-  const comments = item.comments || [];
-  if (!comments.length) {
-    container.innerHTML = `<p class="text-slate-400 text-center py-8">No comments yet — be the first!</p>`;
-    return;
-  }
-
-  container.innerHTML = comments.map(c => {
-    const authorId = c.authorId?._id || c.authorId;
-    return `
-      <div class="bg-slate-100 rounded-2xl p-4">
-        <p onclick="event.stopImmediatePropagation(); showUserProfileModal('${authorId}')" 
-           class="font-medium cursor-pointer hover:underline">${esc(c.author || 'Anonymous')}</p>
-        <p class="text-slate-700 mt-1">${esc(c.text || '')}</p>
-      </div>`;
-  }).join('');
-}
-
-window.postMarketplaceComment = async function(itemId) {
-  const input = document.getElementById('marketCommentInput');
-  if (!input) {
-    showToast('Comment input not found', 'error');
-    return;
-  }
-
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!requireAuth('Sign in to comment')) return;
-
-  try {
-    await apiPost(`/marketplace/${itemId}/comments`, { text });
-    input.value = '';
-    showToast('Comment posted!', 'success');
-
-    // Refresh just the comments section
-    const res = await apiGet(`/marketplace/${itemId}`);
-    const container = document.getElementById('marketCommentsContainer');
-    if (container && res.comments) {
-      renderComments(res.comments, 'marketCommentsContainer', 'market', itemId);
-    }
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to post comment', 'error');
   }
 };
 
