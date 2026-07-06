@@ -1554,6 +1554,7 @@ if (!window._newsCommentSortState) window._newsCommentSortState = {};
 if (!window._newsCommentDataCache) window._newsCommentDataCache = {};
 if (!window._newsCommentImages)    window._newsCommentImages    = {};
 const NEWS_COMMENT_PREVIEW = 3;
+const NEWS_COMMENT_BATCH   = 5; // additional comments revealed per "View more" click
 
 function renderNewsCommentRow(c, articleId) {
   const cAvatar = c.authorId?.avatar || c.authorId?.profilePhoto || null;
@@ -1667,9 +1668,9 @@ function _renderNewsCommentList(articleId) {
     sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
-  const expanded = listEl.dataset.expanded === '1';
-  const visible  = expanded ? sorted : sorted.slice(0, NEWS_COMMENT_PREVIEW);
-  const hidden   = sorted.length - visible.length;
+  const shownCount = parseInt(listEl.dataset.visibleCount, 10) || NEWS_COMMENT_PREVIEW;
+  const visible    = sorted.slice(0, shownCount);
+  const hidden     = sorted.length - visible.length;
 
   listEl.innerHTML = visible.map(c => renderNewsCommentRow(c, articleId)).join('');
 
@@ -1686,6 +1687,8 @@ function _renderNewsCommentList(articleId) {
 
 window.setNewsCommentSort = function(articleId, sort) {
   window._newsCommentSortState[articleId] = sort;
+  const listEl = document.getElementById(`news-comment-list-${articleId}`);
+  if (listEl) listEl.dataset.visibleCount = String(NEWS_COMMENT_PREVIEW);
   ['relevant','newest','all'].forEach(s => {
     const btn = document.getElementById(`ncsort-${s}-${articleId}`);
     if (!btn) return;
@@ -1699,7 +1702,10 @@ window.setNewsCommentSort = function(articleId, sort) {
 
 window.expandNewsComments = function(articleId) {
   const listEl = document.getElementById(`news-comment-list-${articleId}`);
-  if (listEl) listEl.dataset.expanded = '1';
+  if (listEl) {
+    const current = parseInt(listEl.dataset.visibleCount, 10) || NEWS_COMMENT_PREVIEW;
+    listEl.dataset.visibleCount = String(current + NEWS_COMMENT_BATCH);
+  }
   _renderNewsCommentList(articleId);
 };
 
@@ -1731,7 +1737,10 @@ window.submitNewsComment = async function(articleId) {
     if (!window._newsCommentDataCache[articleId]) window._newsCommentDataCache[articleId] = [];
     window._newsCommentDataCache[articleId].push(newComment);
     const listEl = document.getElementById(`news-comment-list-${articleId}`);
-    if (listEl) listEl.dataset.expanded = '1';
+    if (listEl) {
+      const current = parseInt(listEl.dataset.visibleCount, 10) || NEWS_COMMENT_PREVIEW;
+      listEl.dataset.visibleCount = String(Math.max(current, window._newsCommentDataCache[articleId].length));
+    }
     _renderNewsCommentList(articleId);
 
     const countEl = document.getElementById(`news-comment-count-${articleId}`);
@@ -4004,6 +4013,7 @@ window.likeComment = async function(shoutoutId, commentId) {
 if (!window._commentSortState) window._commentSortState = {};   // shoutoutId → 'relevant'|'newest'|'all'
 if (!window._commentDataCache) window._commentDataCache = {};   // shoutoutId → comments array
 const COMMENT_PREVIEW = 3; // rows shown before "View more"
+const COMMENT_BATCH   = 5; // additional comments revealed per "View more" click
 
 function _renderCommentList(shoutoutId) {
   const listEl = document.getElementById(`comment-list-${shoutoutId}`);
@@ -4021,9 +4031,9 @@ function _renderCommentList(shoutoutId) {
   }
   // 'all' = insertion order (as-is from server)
 
-  const expanded = listEl.dataset.expanded === '1';
-  const visible = expanded ? sorted : sorted.slice(0, COMMENT_PREVIEW);
-  const hidden  = sorted.length - visible.length;
+  const shownCount = parseInt(listEl.dataset.visibleCount, 10) || COMMENT_PREVIEW;
+  const visible    = sorted.slice(0, shownCount);
+  const hidden     = sorted.length - visible.length;
 
   listEl.innerHTML = visible.map(c => renderCommentRow(c, shoutoutId)).join('');
 
@@ -4040,6 +4050,8 @@ function _renderCommentList(shoutoutId) {
 
 window.setCommentSort = function(shoutoutId, sort) {
   window._commentSortState[shoutoutId] = sort;
+  const listEl = document.getElementById(`comment-list-${shoutoutId}`);
+  if (listEl) listEl.dataset.visibleCount = String(COMMENT_PREVIEW);
   // Update tab styles
   ['relevant','newest','all'].forEach(s => {
     const btn = document.getElementById(`csort-${s}-${shoutoutId}`);
@@ -4054,7 +4066,10 @@ window.setCommentSort = function(shoutoutId, sort) {
 
 window.expandComments = function(shoutoutId) {
   const listEl = document.getElementById(`comment-list-${shoutoutId}`);
-  if (listEl) listEl.dataset.expanded = '1';
+  if (listEl) {
+    const current = parseInt(listEl.dataset.visibleCount, 10) || COMMENT_PREVIEW;
+    listEl.dataset.visibleCount = String(current + COMMENT_BATCH);
+  }
   _renderCommentList(shoutoutId);
 };
 
@@ -4138,9 +4153,12 @@ const res = await apiPost(`/shoutouts/${shoutoutId}/comments`, { text, image });
       // Ensure sort state is initialized
       if (!window._commentSortState[shoutoutId]) window._commentSortState[shoutoutId] = 'relevant';
       window._commentDataCache[shoutoutId].push(newComment);
-      // Expand so the new comment is always visible
+      // Bump visible count so the new comment is always visible, without opening the whole list
       const listEl = document.getElementById(`comment-list-${shoutoutId}`);
-      if (listEl) listEl.dataset.expanded = '1';
+      if (listEl) {
+        const current = parseInt(listEl.dataset.visibleCount, 10) || COMMENT_PREVIEW;
+        listEl.dataset.visibleCount = String(Math.max(current, window._commentDataCache[shoutoutId].length));
+      }
       _renderCommentList(shoutoutId);
 
       // Update the comment count badge — target the comment button specifically
