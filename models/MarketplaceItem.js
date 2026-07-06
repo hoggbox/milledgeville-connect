@@ -1,11 +1,32 @@
 // ── MarketplaceItem.js ────────────────────────────────────────────────────────
 const mongoose = require('mongoose');
 
-const commentSchema = new mongoose.Schema({
+const replySchema = new mongoose.Schema({
   text:      { type: String, required: true },
   author:    String,
   authorId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  edited:    { type: Boolean, default: false },
+  editedAt:  { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
+});
+
+const commentSchema = new mongoose.Schema({
+  text:      { type: String, default: '' },
+  image:     { type: String, default: null },
+  author:    String,
+  authorId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  likes:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  replies:   [replySchema],
+  edited:    { type: Boolean, default: false },
+  editedAt:  { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now }
+});
+
+commentSchema.pre('validate', function(next) {
+  if (!this.text && !this.image) {
+    return next(new Error('Comment must have text or an image'));
+  }
+  next();
 });
 
 const marketplaceItemSchema = new mongoose.Schema({
