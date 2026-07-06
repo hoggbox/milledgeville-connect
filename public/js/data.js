@@ -1473,6 +1473,11 @@ window.openNewsArticle = async function (articleId) {
                      onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewsComment('${article._id}');}">
               <button type="button" onclick="toggleNewsCommentEmoji('${article._id}',event)"
                       style="background:none;border:none;cursor:pointer;font-size:16px;padding:0;line-height:1;" title="Emoji">😊</button>
+              <button type="button" onclick="toggleNewsCommentGif('${article._id}',event)"
+                      style="background:rgba(255,255,255,0.1);border:none;border-radius:6px;padding:2px 6px;font-size:10px;font-weight:800;color:#34d399;cursor:pointer;letter-spacing:.5px;">GIF</button>
+              <label style="cursor:pointer;font-size:16px;opacity:0.7;" title="Photo">
+                📷<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="handleNewsCommentImage('${article._id}',this)">
+              </label>
               <div id="news-comment-img-preview-${article._id}" style="display:none;position:relative;align-items:center;">
                 <img id="news-comment-img-thumb-${article._id}" style="height:28px;width:28px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.2);">
                 <button onclick="clearNewsCommentImage('${article._id}')"
@@ -1487,6 +1492,13 @@ window.openNewsArticle = async function (articleId) {
                        style="width:100%;background:rgba(255,255,255,0.06);border:none;border-radius:8px;padding:5px 8px;color:white;font-size:11px;outline:none;margin-bottom:6px;box-sizing:border-box;">
                 <div id="news-comment-emoji-cats-${article._id}" style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto;padding-bottom:2px;"></div>
                 <div id="news-comment-emoji-grid-${article._id}" style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:2px;max-height:100px;overflow-y:auto;"></div>
+              </div>
+            </div>
+            <div id="news-comment-gif-panel-${article._id}" style="display:none;padding-left:38px;margin-top:6px;">
+              <div style="background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:8px;">
+                <input type="text" placeholder="Search GIFs…" oninput="searchNewsCommentGif('${article._id}',this.value)"
+                       style="width:100%;background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:5px 8px;color:#fff;font-size:12px;margin-bottom:6px;box-sizing:border-box;outline:none;">
+                <div id="news-comment-gif-grid-${article._id}" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:160px;overflow-y:auto;"></div>
               </div>
             </div>` : `
             <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.4);"><button onclick="showAuthModal()" style="background:none;border:none;color:#34d399;cursor:pointer;font-weight:700;padding:0;">Sign in</button> to comment</p>`}
@@ -1981,10 +1993,85 @@ window.clearNewsCommentImage = function(articleId) {
   if (thumb) thumb.src = '';
 };
 
-// Close news comment emoji panels when clicking outside
+// ── News comment GIF (Giphy) ─────────────────────────────────────────────────
+let _newsGifSearchTimer = null;
+
+window.toggleNewsCommentGif = function(articleId, e) {
+  e.stopPropagation();
+  const gp = document.getElementById(`news-comment-gif-panel-${articleId}`);
+  const ep = document.getElementById(`news-comment-emoji-panel-${articleId}`);
+  if (!gp) return;
+  const opening = gp.style.display === 'none' || gp.style.display === '';
+  gp.style.display = opening ? 'block' : 'none';
+  if (ep) ep.style.display = 'none';
+  if (opening) searchNewsCommentGif(articleId, '');
+};
+
+window.searchNewsCommentGif = function(articleId, query) {
+  clearTimeout(_newsGifSearchTimer);
+  _newsGifSearchTimer = setTimeout(async () => {
+    const grid = document.getElementById(`news-comment-gif-grid-${articleId}`);
+    if (!grid) return;
+    grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:11px;text-align:center;padding:8px;">Loading…</p>';
+    try {
+      const endpoint = !query
+        ? `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_KEY}&limit=12&rating=pg`
+        : `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(query)}&limit=12&rating=pg`;
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      const results = data.data || [];
+      if (!results.length) { grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:11px;text-align:center;padding:8px;">No results</p>'; return; }
+      grid.innerHTML = results.map(r => {
+        const url = r.images?.original?.url || '';
+        const preview = r.images?.fixed_height_small?.url || url;
+        return `<img src="${preview}" alt="gif" loading="lazy"
+                     onclick="pickNewsCommentGif('${articleId}','${url}')"
+                     style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;">`;
+      }).join('');
+    } catch(err) {
+      grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:11px;text-align:center;padding:8px;">Could not load GIFs</p>';
+    }
+  }, 400);
+};
+
+window.pickNewsCommentGif = function(articleId, gifUrl) {
+  if (!window._newsCommentImages) window._newsCommentImages = {};
+  window._newsCommentImages[articleId] = gifUrl;
+  const preview = document.getElementById(`news-comment-img-preview-${articleId}`);
+  const thumb = document.getElementById(`news-comment-img-thumb-${articleId}`);
+  if (preview && thumb) { thumb.src = gifUrl; preview.style.display = 'flex'; }
+  const gp = document.getElementById(`news-comment-gif-panel-${articleId}`);
+  if (gp) gp.style.display = 'none';
+};
+
+// ── News comment photo upload ────────────────────────────────────────────────
+window.handleNewsCommentImage = async function(articleId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { showToast('Image too large (max 8MB)', 'error'); return; }
+  showToast('Compressing…', 'success');
+  try {
+    const compressed = await compressImage(file, 900, 0.70);
+    const base64 = await new Promise(resolve => {
+      const r = new FileReader(); r.onload = e => resolve(e.target.result); r.readAsDataURL(compressed);
+    });
+    if (!window._newsCommentImages) window._newsCommentImages = {};
+    window._newsCommentImages[articleId] = base64;
+    const preview = document.getElementById(`news-comment-img-preview-${articleId}`);
+    const thumb = document.getElementById(`news-comment-img-thumb-${articleId}`);
+    if (preview && thumb) { thumb.src = base64; preview.style.display = 'flex'; }
+  } catch(err) { showToast('Could not process image', 'error'); }
+};
+
+// Close news comment emoji/gif panels when clicking outside
 document.addEventListener('click', function(e) {
   document.querySelectorAll('[id^="news-comment-emoji-panel-"]').forEach(panel => {
     if (!panel.contains(e.target) && !e.target.closest('[onclick*="toggleNewsCommentEmoji"]')) {
+      panel.style.display = 'none';
+    }
+  });
+  document.querySelectorAll('[id^="news-comment-gif-panel-"]').forEach(panel => {
+    if (!panel.contains(e.target) && !e.target.closest('[onclick*="toggleNewsCommentGif"]')) {
       panel.style.display = 'none';
     }
   });
