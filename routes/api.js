@@ -2595,14 +2595,8 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
     const business = await Business.findById(user.verifiedBusiness).select('name');
     const bizName  = business?.name || user.name;
 
-    // Deduct 2 credits — works for both free-tier owners (5 starter) and pro owners (12/mo)
-    const deducted = await deductNotificationCredit(req.userId);
-    if (!deducted) {
-      return res.status(403).json({
-        message: 'Not enough notification credits. Upgrade to Business Pro ($29.99/mo) to get 12 credits per month.',
-        outOfCredits: true
-      });
-    }
+    // Credit system is dead — always send. Per the preferences UI, custom business
+    // notifications "cannot be turned off", so broadcastPush's 'custom' case sends to all.
 
     // Prepend business name to the body so recipients always know who sent it
     const stampedBody = `${bizName} · ${body.trim()}`;
@@ -2649,9 +2643,7 @@ router.post('/owner/custom-notification', authenticate, async (req, res) => {
       { type: 'custom', imageUrl: notifImageUrl }
     );
 
-    // Return updated credit balance so the frontend can refresh the display
-    const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ success: true, message: 'Notification sent', credits: updated.notificationCredits ?? 0 });
+    res.json({ success: true, message: 'Notification sent' });
   } catch (err) {
     console.error('Custom notification error:', err);
     res.status(500).json({ message: 'Failed to send notification' });
@@ -4159,26 +4151,26 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       category: resolvedCategory || ''
     });
 
-    // Push notification costs 1 credit — deal saves regardless, push skipped if out of credits
-    const deducted = await deductNotificationCredit(req.userId);
-    if (deducted) {
-      broadcastPush(
-        '🔥 New Deal Available!',
-        title,
-        {
-          page: 'deals',
-          id: deal._id.toString(),
-          url: `/deals/${deal._id}`
-        },
-        { type: 'deal' }
-      );
-    }
+    // Credit system is dead for owner posts — always notify users who have
+    // deal notifications turned on (broadcastPush still filters by prefs.deals).
+    broadcastPush(
+      '🔥 New Deal Available!',
+      title,
+      {
+        page: 'deals',
+        id: deal._id.toString(),
+        url: `/deals/${deal._id}`
+      },
+      { type: 'deal' }
+    );
 
-    // ── In-app feed notification fan-out (always, regardless of push credits) ─
+    // ── In-app feed notification fan-out — only to users who haven't
+    // toggled deal notifications off, so it matches push behavior. ─────────
     {
-      const _dealUserIds = await User.find({}, '_id').lean();
+      const _dealUserIds = await User.find({}, '_id notificationPreferences').lean();
       const _dealFeedDocs = _dealUserIds
         .filter(u => u._id.toString() !== req.userId)
+        .filter(u => u.notificationPreferences?.deals !== false)
         .map(u => ({
           recipient:   u._id,
           actor:       user._id,
@@ -4193,8 +4185,7 @@ router.post('/owner/deals', authenticate, async (req, res) => {
       createNotification(_dealFeedDocs);
     }
 
-    const updatedUser = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...deal.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
+    res.json(deal.toObject());
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
@@ -4237,26 +4228,26 @@ router.post('/owner/events', authenticate, async (req, res) => {
       owner: req.userId, category: resolvedCategory || ''
     });
 
-    // Push notification costs 1 credit — event saves regardless, push skipped if out of credits
-    const deducted = await deductNotificationCredit(req.userId);
-    if (deducted) {
-      broadcastPush(
-        '📅 New Event Posted!',
-        title + (location ? ` · ${location}` : ''),
-        {
-          page: 'events',
-          id: event._id.toString(),
-          url: `/events/${event._id}`
-        },
-        { type: 'event' }
-      );
-    }
+    // Credit system is dead for owner posts — always notify users who have
+    // event notifications turned on (broadcastPush still filters by prefs.events).
+    broadcastPush(
+      '📅 New Event Posted!',
+      title + (location ? ` · ${location}` : ''),
+      {
+        page: 'events',
+        id: event._id.toString(),
+        url: `/events/${event._id}`
+      },
+      { type: 'event' }
+    );
 
-    // ── In-app feed notification fan-out (always, regardless of push credits) ─
+    // ── In-app feed notification fan-out — only to users who haven't
+    // toggled event notifications off, so it matches push behavior. ────────
     {
-      const _evtUserIds = await User.find({}, '_id').lean();
+      const _evtUserIds = await User.find({}, '_id notificationPreferences').lean();
       const _evtFeedDocs = _evtUserIds
         .filter(u => u._id.toString() !== req.userId)
+        .filter(u => u.notificationPreferences?.events !== false)
         .map(u => ({
           recipient:   u._id,
           actor:       user._id,
@@ -4271,8 +4262,7 @@ router.post('/owner/events', authenticate, async (req, res) => {
       createNotification(_evtFeedDocs);
     }
 
-    const updatedUser = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...event.toObject(), credits: updatedUser?.notificationCredits ?? 0 });
+    res.json(event.toObject());
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
@@ -4340,25 +4330,23 @@ router.post('/owner/homes', authenticate, async (req, res) => {
       address:     address || ''
     });
 
-    // Optional push notification — costs 2 credits
-if (sendNotify) {
-  const deducted = await deductNotificationCredit(req.userId, 2, false);
-  if (deducted) {
-    broadcastPush(
-      `🏠 New Home Listing`,
-      `${bizName} posted: ${title}`,
-      { 
-        page: 'marketplace', 
-        id: item._id.toString() 
-      },
-      { 
-        type: 'marketplace', 
-        subCategory: 'Homes',     // ← Important
-        imageUrl: item.images?.length ? `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}` : null
-      }
-    );
-  }
-}
+    // Optional push notification — credit system is dead, always send if requested.
+    // broadcastPush still filters recipients by prefs.marketplace.homes.
+    if (sendNotify) {
+      broadcastPush(
+        `🏠 New Home Listing`,
+        `${bizName} posted: ${title}`,
+        { 
+          page: 'marketplace', 
+          id: item._id.toString() 
+        },
+        { 
+          type: 'marketplace', 
+          subCategory: 'Homes',     // ← Important
+          imageUrl: item.images?.length ? `https://www.milledgevilleconnect.com/api/marketplace-thumb/${item._id}` : null
+        }
+      );
+    }
 
     res.json(item);
   } catch (err) {
@@ -5129,107 +5117,35 @@ function sanitizeContent(fields = {}, meta = {}) {
   return out;
 }
 
-// ─── OWNER SUBSCRIPTION / CREDITS ───────────────────────────────────────────
+// ─── OWNER SUBSCRIPTION / CREDITS (DEAD — kept as a no-op for old app builds) ──
+// The credit/Pro system was removed from the frontend (see data.js:
+// checkNotificationCredits() is hardcoded true, dashboard credit UI removed).
+// This route stays alive purely so any old client still polling it gets a
+// clean response instead of a hard error — it no longer reads/writes credits.
 router.get('/owner/subscription', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Normal users (no verified business) have zero access to credits
-    if (!user.verifiedBusiness) {
-      return res.json({
-        tier: 'free',
-        credits: 0,
-        expires: null
-      });
-    }
-
-    // Verified business owners start with 5 free credits if field was never set.
-    // Grant those 5 credits now and persist so we don't keep re-granting.
-    if (user.notificationCredits === undefined || user.notificationCredits === null) {
-      user.notificationCredits = 5;
-      await user.save();
-    }
-
-    res.json({
-      tier: user.subscriptionTier || 'free',
-      credits: user.notificationCredits,
-      expires: user.subscriptionExpiry
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
+  res.json({
+    tier: 'free',
+    credits: 0,
+    expires: null,
+    deprecated: true
+  });
 });
 
-// ─── GOOGLE PLAY SUBSCRIPTION VALIDATION ────────────────────────────────────
-// Called by the Android app after a purchase/renewal to verify with Google
-// and activate / refresh the user's Pro tier + 12 monthly credits.
+// ─── GOOGLE PLAY SUBSCRIPTION VALIDATION (DISABLED) ─────────────────────────
+// No longer calls the Google Play API and no longer grants Pro tier/credits.
+// NOTE: this only stops the app from granting entitlements on validation —
+// it does NOT cancel any live Google Play subscription product. If
+// pro_monthly_29_99 was ever actually published/sold in Play Console, that
+// needs to be unpublished/disabled separately or customers keep being charged
+// for a feature that no longer does anything.
 router.post('/owner/validate-subscription', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Must be a verified business owner to have a subscription
-    if (!user.verifiedBusiness) {
-      return res.status(403).json({ message: 'Only verified business owners can subscribe' });
-    }
-
-    const { purchaseToken } = req.body;
-    if (!purchaseToken) {
-      return res.status(400).json({ message: 'purchaseToken required' });
-    }
-
-    const packageName  = 'com.ghogg.milledgevilleconnect';
-    const productId    = 'pro_monthly_29_99';
-
-    const response = await fetch(
-      `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GOOGLE_PLAY_ACCESS_TOKEN}`
-        }
-      }
-    );
-
-    const data = await response.json();
-
-    if (data.expiryTimeMillis && parseInt(data.expiryTimeMillis) > Date.now()) {
-      // Subscription is active — upgrade user and grant 12 credits for this cycle
-      const newExpiry = new Date(parseInt(data.expiryTimeMillis));
-
-      // Only reset credits when the expiry has actually rolled forward
-      // (avoid double-granting if the app sends the token twice in the same cycle)
-      const creditReset = !user.subscriptionExpiry ||
-                          newExpiry.getTime() > new Date(user.subscriptionExpiry).getTime();
-
-      user.subscriptionTier   = 'pro';
-      user.subscriptionExpiry = newExpiry;
-      if (creditReset) user.notificationCredits = 12;
-      await user.save();
-
-      return res.json({
-        success: true,
-        tier: 'pro',
-        credits: user.notificationCredits,
-        expires: user.subscriptionExpiry
-      });
-    } else {
-      // Subscription expired or cancelled — downgrade to free, keep remaining credits
-      user.subscriptionTier = 'free';
-      await user.save();
-      return res.json({
-        success: true,
-        tier: 'free',
-        credits: user.notificationCredits
-      });
-    }
-
-  } catch (err) {
-    console.error('Subscription validation error:', err);
-    res.status(500).json({ message: 'Validation failed' });
-  }
+  res.json({
+    success: true,
+    tier: 'free',
+    credits: 0,
+    deprecated: true,
+    message: 'Subscriptions are no longer used by this app.'
+  });
 });
 
 // ─── UPDATE BUSINESS LOGO ───────────────────────────────────────────────────
@@ -5270,28 +5186,15 @@ router.post('/test-push', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── BUY CREDIT PACK (one-time purchase) ─────────────────────────────────────
+// ─── BUY CREDIT PACK (DISABLED — credit system is dead) ─────────────────────
+// No longer adds credits or touches billing. Kept as a no-op for old clients.
 router.post('/owner/buy-credits', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user || !user.verifiedBusiness) {
-      return res.status(403).json({ message: 'Only verified business owners can buy credits' });
-    }
-
-    const { credits = 10 } = req.body;
-
-    user.notificationCredits = (user.notificationCredits || 0) + Number(credits);
-    await user.save();
-
-    res.json({ 
-      success: true, 
-      credits: user.notificationCredits,
-      message: `${credits} credits added successfully`
-    });
-  } catch (err) {
-    console.error('Buy credits error:', err);
-    res.status(500).json({ message: 'Failed to add credits' });
-  }
+  res.json({
+    success: true,
+    credits: 0,
+    deprecated: true,
+    message: 'Notification credits are no longer used by this app.'
+  });
 });
 
 // VAPID Public Key route is defined earlier in the PUSH NOTIFICATION ROUTES section
@@ -5466,62 +5369,6 @@ router.delete('/user/delete-account', authenticate, async (req, res) => {
   }
 });
 
-// ─── CREDIT DEDUCTION SYSTEM ───────────────────────────────────────────────
-// All notification sends cost 2 credits regardless of tier.
-// Pro users have their 12 monthly credits refreshed each billing cycle.
-// Normal users (no verifiedBusiness) should never reach this function,
-// but we guard against it anyway.
-async function deductNotificationCredit(userId) {
-  const user = await User.findById(userId);
-  if (!user) return false;
-
-  // Non-owners cannot use notification credits at all
-  if (!user.verifiedBusiness) return false;
-
-  const cost = 2;
-
-  if ((user.notificationCredits || 0) < cost) {
-    return false; // Out of credits — blocked for both free and pro owners
-  }
-
-  user.notificationCredits -= cost;
-  await user.save();
-  return true;
-}
-
-// ─── PRO TIER MONTHLY CREDIT RESET ──────────────────────────────────────────
-// Runs daily but only resets credits for users whose subscriptionExpiry has
-// rolled over into a new billing cycle (i.e. expiry advanced since last reset).
-async function resetProCredits() {
-  try {
-    const now = new Date();
-    // Only reset users whose billing cycle just renewed:
-    // their subscriptionExpiry is in the future AND creditsLastReset is before
-    // the start of the current billing period (i.e. before their last expiry rollover).
-    const result = await User.updateMany(
-      {
-        subscriptionTier: 'pro',
-        subscriptionExpiry: { $gt: now },
-        // creditsLastReset is either unset or older than one billing period ago
-        $or: [
-          { creditsLastReset: { $exists: false } },
-          { $expr: { $lt: ['$creditsLastReset', { $subtract: ['$subscriptionExpiry', 30 * 24 * 60 * 60 * 1000] }] } }
-        ]
-      },
-      {
-        $set: { notificationCredits: 12, creditsLastReset: now }
-      }
-    );
-
-    if (result.modifiedCount > 0) {
-      console.log(`✅ Reset ${result.modifiedCount} Pro users to 12 credits (billing cycle rollover)`);
-    }
-  } catch (err) {
-    console.error('Monthly credit reset failed:', err);
-  }
-}
-
-
 // ─── APP VERSION ──────────────────────────────────────────────────────────────
 // Bump CURRENT_VERSION here on each release. The client's checkForAppUpdate()
 // compares against this — no client-side code deploy needed to show the banner.
@@ -5530,10 +5377,6 @@ const CURRENT_VERSION = '1.2.5';
 router.get('/app/version', (req, res) => {
   res.json({ latest: CURRENT_VERSION });
 });
-
-// Check daily whether any billing cycles have rolled over
-setInterval(resetProCredits, 24 * 60 * 60 * 1000); // every 24 hours
-resetProCredits(); // run once on server start
 
 // ─── BUSINESS POSTS (Photo Updates) ──────────────────────────────────────────
 // Verified business owners can create a photo post with a caption.
@@ -5570,22 +5413,18 @@ router.post('/owner/business-posts', authenticate, async (req, res) => {
       image,
     });
 
-    // Optional push notification — costs 2 credits
+    // Optional push notification — credit system is dead, always send if requested.
     if (sendNotify) {
-      const deducted = await deductNotificationCredit(req.userId);
-      if (deducted) {
-        const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
-        await broadcastPush(
-          pushTitle,
-          caption?.trim() || 'Posted a new photo update — tap to see it!',
-          { page: 'business-post', id: post._id.toString() },
-          { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
-        );
-      }
+      const pushTitle = (notifTitle || '').trim() || `📸 ${bizName}`;
+      await broadcastPush(
+        pushTitle,
+        caption?.trim() || 'Posted a new photo update — tap to see it!',
+        { page: 'business-post', id: post._id.toString() },
+        { type: 'business-post', imageUrl: `https://www.milledgevilleconnect.com/api/business-post-thumb/${post._id}` }
+      );
     }
 
-    const updated = await User.findById(req.userId).select('notificationCredits');
-    res.json({ ...post.toObject(), credits: updated.notificationCredits ?? 0 });
+    res.json(post.toObject());
   } catch (err) {
     console.error('Business post create error:', err);
     const statusCode = err.status || 500;
