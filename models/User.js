@@ -9,6 +9,11 @@ const userSchema = new mongoose.Schema({
   lastLogin:{ type: Date, default: Date.now },
   verifiedBusiness: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', default: null },
 
+  // Full list of businesses this user owns/co-owns. verifiedBusiness points to
+  // whichever one is currently "active" for the dashboard; businesses is the
+  // complete set. Backfilled automatically for older accounts by GET /owner/businesses.
+  businesses: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Business' }],
+
   bio:          { type: String, default: '', maxlength: 280 },
   phone:        { type: String, default: '' },
   neighborhood: { type: String, default: '' },

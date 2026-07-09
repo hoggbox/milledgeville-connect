@@ -2744,7 +2744,8 @@ router.post('/auth/login', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
 
     const user = await User.findOne({ email: normalizedEmail })
-                           .populate('verifiedBusiness');
+                           .populate('verifiedBusiness')
+                           .populate('businesses', 'name logo');
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid email or password' });
@@ -2787,7 +2788,7 @@ router.post('/auth/login', async (req, res) => {
 
 router.get('/auth/me', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).populate('verifiedBusiness');
+    const user = await User.findById(req.userId).populate('verifiedBusiness').populate('businesses', 'name logo');
     if (!user) return res.status(404).json({ message: 'User not found' });
     const u = sanitizeUser(user);
     u.isAdmin = ADMIN_EMAILS.has(user.email);
@@ -3732,8 +3733,11 @@ router.post('/claim/:businessId', authenticate, async (req, res) => {
       await claim.save();
       await Business.findByIdAndUpdate(business._id, { owner: req.userId, isRestaurant: !!isRestaurant });
 
+      // Add to the user's list of owned businesses (multi-business support)
+      // and make this newly-claimed business the active one in the dashboard.
       await User.findByIdAndUpdate(req.userId, {
-        verifiedBusiness: business._id
+        verifiedBusiness: business._id,
+        $addToSet: { businesses: business._id }
       });
 
       // Send a personal welcome push to the new owner
@@ -3809,6 +3813,88 @@ router.put('/owner/business', authenticate, async (req, res) => {
       { new: true }
     ).populate('category');
     res.json(business);
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// ─── MULTI-BUSINESS SUPPORT ─────────────────────────────────────────────────
+// Owners who have claimed more than one business need a way to see all of
+// them and switch which one is "active" (i.e. which one loads in My Dashboard,
+// since every existing owner endpoint reads from user.verifiedBusiness).
+
+// GET all businesses the current user owns, and self-heal older accounts
+// whose verifiedBusiness was set before the `businesses` array existed.
+router.get('/owner/businesses', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    let businessIds = (user.businesses || []).map(String);
+
+    // Migration safety net: if verifiedBusiness isn't in the array yet, add it.
+    if (user.verifiedBusiness && !businessIds.includes(String(user.verifiedBusiness))) {
+      businessIds.push(String(user.verifiedBusiness));
+      user.businesses = businessIds;
+      await user.save();
+    }
+
+    // Also pick up any businesses the Business collection says this user owns
+    // but that never made it into the array (belt-and-suspenders).
+    const ownedElsewhere = await Business.find({ owner: req.userId }).select('_id');
+    ownedElsewhere.forEach(b => {
+      if (!businessIds.includes(String(b._id))) businessIds.push(String(b._id));
+    });
+    if (businessIds.length !== (user.businesses || []).length) {
+      user.businesses = businessIds;
+      await user.save();
+    }
+
+    const businesses = await Business.find({ _id: { $in: businessIds } })
+      .select('name logo category address photos')
+      .populate('category');
+
+    res.json({
+      businesses,
+      activeBusinessId: user.verifiedBusiness ? String(user.verifiedBusiness) : null
+    });
+  } catch (err) {
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({ message: err.message });
+  }
+});
+
+// Switch which of the user's owned businesses is "active" — i.e. which one
+// shows up in My Dashboard and is used by every owner/* endpoint below.
+router.put('/owner/switch-business/:businessId', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const businessId = req.params.businessId;
+    const owned = (user.businesses || []).some(b => String(b) === String(businessId));
+
+    // Fall back to checking actual ownership on the Business doc, in case
+    // the businesses array hasn't been backfilled for this account yet.
+    let business = null;
+    if (owned) {
+      business = await Business.findById(businessId).populate('category');
+    } else {
+      business = await Business.findOne({ _id: businessId, owner: req.userId }).populate('category');
+      if (business) {
+        user.businesses = [...(user.businesses || []), business._id];
+      }
+    }
+
+    if (!business) {
+      return res.status(403).json({ message: 'You do not own this business.' });
+    }
+
+    user.verifiedBusiness = business._id;
+    await user.save();
+
+    res.json({ message: 'Switched active business', business });
   } catch (err) {
     const statusCode = err.status || 500;
     res.status(statusCode).json({ message: err.message });
@@ -4433,6 +4519,13 @@ if (decision === 'approved') {
   const user = await User.findById(claim.user._id);
   if (user) {
     user.verifiedBusiness = claim.business._id;
+
+    // Track this business alongside any others the user already owns
+    // (multi-business support) instead of only remembering the latest one.
+    user.businesses = user.businesses || [];
+    if (!user.businesses.some(b => String(b) === String(claim.business._id))) {
+      user.businesses.push(claim.business._id);
+    }
 
     await user.save();
 

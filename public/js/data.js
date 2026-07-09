@@ -5627,6 +5627,42 @@ async function loadOwnerDashboard(content) {
   const biz        = currentUser && currentUser.verifiedBusiness;
   const bizCatName = biz?.category?.name || (typeof biz?.category === 'string' ? biz.category : '') || '';
 
+  // ─── Multi-business support: fetch the list of businesses this user owns ──
+  // so we can show a switcher if they own more than one.
+  let ownedBusinesses = [];
+  try {
+    const listRes = await apiGet('/owner/businesses');
+    if (listRes && Array.isArray(listRes.businesses)) ownedBusinesses = listRes.businesses;
+  } catch (_) { /* non-fatal — just skip the switcher */ }
+
+  const activeBizId = biz?._id ? String(biz._id) : null;
+
+  const bizSwitcherHtml = ownedBusinesses.length > 1 ? `
+    <div class="px-4 pb-3">
+      <label class="block text-xs font-semibold text-white/40 mb-1.5">Managing</label>
+      <div class="flex gap-2 overflow-x-auto hide-scrollbar">
+        ${ownedBusinesses.map(b => `
+          <button onclick="switchActiveBusiness('${b._id}')"
+                  class="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all border
+                         ${String(b._id) === activeBizId
+                           ? 'bg-emerald-600 border-emerald-600 text-white'
+                           : 'bg-white/5 border-white/15 text-white/60 hover:text-white hover:bg-white/10'}">
+            ${b.logo ? `<img src="${esc(b.logo)}" class="w-5 h-5 rounded-full object-cover">` : `<span>${b.category?.icon || '🏪'}</span>`}
+            <span>${esc(b.name)}</span>
+          </button>`).join('')}
+        <button onclick="navigate('directory')"
+                class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold border border-dashed border-white/20 text-white/40 hover:text-white hover:border-white/40 transition-all">
+          <span>➕</span><span>Add Business</span>
+        </button>
+      </div>
+    </div>` : (ownedBusinesses.length === 1 ? `
+    <div class="px-4 pb-3">
+      <button onclick="navigate('directory')"
+              class="text-xs font-semibold text-emerald-400/80 hover:text-emerald-400 transition">
+        ➕ Own another business? Claim it and switch between them here.
+      </button>
+    </div>` : '');
+
   const selectStyle = 'background:#1e293b;color-scheme:dark;';
   const selectClass = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 text-white focus:outline-none focus:border-emerald-400';
   const inputClass  = 'w-full mb-3 px-5 py-4 rounded-3xl border border-white/30 bg-transparent text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400';
@@ -5668,7 +5704,10 @@ const tabs = [
         ${biz ? `<p class="text-emerald-400 text-sm font-semibold mt-0.5">${biz.name}</p>` : '<p class="text-white/40 text-sm mt-0.5">No verified business yet</p>'}
       </div>
 
+      ${bizSwitcherHtml}
+
       <!-- ─── Top Tab Bar ───────────────────────────────────────────────────── -->
+
       <div class="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur px-4 pb-3 pt-1 border-b border-white/10">
         <div class="flex gap-1 overflow-x-auto hide-scrollbar">
           ${tabs.map((t, i) => `
@@ -6472,6 +6511,30 @@ window.sendUnifiedNotification = async function() {
     showToast('Failed to send \u2014 please try again', 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCE2 Send to All Users'; }
+  }
+};
+
+// ─── MULTI-BUSINESS SUPPORT: switch which owned business is "active" ───────
+// Every owner/* endpoint (deals, events, photos, etc.) reads from the user's
+// single "active" business, so switching just repoints that pointer server-side
+// and reloads the dashboard around the newly-selected business.
+window.switchActiveBusiness = async function (businessId) {
+  if (!businessId) return;
+  const current = currentUser?.verifiedBusiness?._id ? String(currentUser.verifiedBusiness._id) : null;
+  if (current === String(businessId)) return; // already active
+
+  try {
+    showToast('Switching business…', 'loading');
+    const res = await apiPost(`/owner/switch-business/${businessId}`, {}, 'PUT');
+    if (res && res.business) {
+      currentUser.verifiedBusiness = res.business;
+      showToast(`✅ Now managing ${res.business.name}`, 'success');
+      loadOwnerDashboard(document.getElementById('content'));
+    } else {
+      showToast(res?.message || 'Could not switch businesses', 'error');
+    }
+  } catch (err) {
+    showToast('Something went wrong switching businesses', 'error');
   }
 };
 
