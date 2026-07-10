@@ -22,5 +22,8 @@
     "versionCode": 3,
     "versionName": "1.3.0",
     "googleServicesFile": "./google-services.json"
+  },
+  "ios": {
+    "googleServicesFile": "./GoogleService-Info.plist"
   }
 }
