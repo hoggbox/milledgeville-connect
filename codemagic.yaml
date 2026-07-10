@@ -1,0 +1,58 @@
+workflows:
+  android-build:
+    name: Android Build
+    max_build_duration: 30
+    environment:
+      android_signing:
+        - keystore_reference
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+      - name: Build web assets
+        script: |
+          npm run build
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+      - name: Build Android APK
+        script: |
+          cd android
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - ghogg86@gmail.com
+
+  ios-build:
+    name: iOS Build
+    max_build_duration: 60
+    environment:
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.ghogg.milledgevilleconnect
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+      - name: Build web assets
+        script: |
+          npm run build
+      - name: Sync Capacitor
+        script: |
+          npx cap sync ios
+      - name: Build iOS app
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace "ios/App/App.xcworkspace" \
+            --scheme App \
+            --archive-xcargs "-allowProvisioningUpdates"
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - imhoggbox@gmail.com
